@@ -1,65 +1,118 @@
-# pyfii
-This program enables us to write .fii files (Xiaoniaofeifei formation drone) in a more convenient way via python.It also enables us to see the simulate flying in three-view(front,right,and over),which is more clear than the original one. 
+这个软件可以让我们用python写Fii的无人机程序。
+以下是功能介绍：
+程序编写
 
-Pyfii1.0.1 is on the Pipy,you can install it via "pip install pyfii".
+FiiTest.py
+from PyFii import PyFii as f
+file=open('test.xml',"w+")
+f.takeoff(100,100,100,file)
+f.intime(3,file)
+f.move2(200,200,150,file)
+f.delay(1000,file)
+f.move2(250,250,125,file)
+f.endtime(file)
+f.intime(10,file)
+f.move2(300,300,175,file)
+f.endtime(file)
+f.end(file)
 
-pyfii1.0.1已上传pipy,可直接pip install.
+或
 
-这个库的功能是可以让我们用python写Fii的无人机程序，以解决原软件无运算能力，无循环模块，一块块拖太烦等问题。此外，这个库有三视图模拟飞行的功能，模拟飞行更方便观看。
+FiiTest2.py
+from PyFii import main
+file = open('test.xml',"w")
+d = main.Drone(file)
+d.takeoff(100,100,100)
+d.intime(3)
+d.move2(200,200,150)
+d.delay(1000)
+d.move2(250,250,125)
+d.endtime()
+d.intime(10)
+d.move2(300,300,175)
+d.endtime()
+d.end()
+print(d.outputString)
 
-使用方法:
-首先确认电脑中已经有openCV,numpy,os,time这四个库，因为pyfii会使用到这些库。
+输出均为test.xml
 
-之后如何编程：
-1、导入
-import pyfii as pf
+test.xml
+<xml xmlns="http://www.w3.org/1999/xhtml">
+  <variables></variables>
+  <block type="Goertek_Start" x="100" y="100">
+    <next>
+      <block type="block_inittime">
+        <field name="time">00:00</field>
+        <field name="color">#cccccc</field>
+        <statement name="functionIntit">
+          <block type="Goertek_UnLock">
+            <next>
+              <block type="block_delay">
+                <field name="delay">0</field>
+                <field name="time">1000</field>
+                <next>
+                  <block type="Goertek_TakeOff">
+                    <field name="alt">100</field>
+                  </block>
+                </next>
+              </block>
+            </next>
+          </block>
+        </statement>
+        <next>
+          <block type="block_inittime">
+            <field name="time">00:03</field>
+            <field name="color">#cccccc</field>
+            <statement name="functionIntit">
+              <block type="Goertek_MoveToCoord">
+                <field name="X">200</field>
+                <field name="Y">200</field>
+                <field name="Z">150</field>
+                <next>
+                  <block type="block_delay">
+                    <field name="delay">0</field>
+                    <field name="time">1000</field>
+                    <next>
+                          <block type="Goertek_MoveToCoord">
+                        <field name="X">250</field>
+                        <field name="Y">250</field>
+                        <field name="Z">125</field>
+                      </block>
+                    </next>
+                  </block>
+                </next>
+              </block>
+            </statement>
+            <next>
+              <block type="block_inittime">
+                <field name="time">00:10</field>
+                <field name="color">#cccccc</field>
+                <statement name="functionIntit">
+                  <block type="Goertek_MoveToCoord">
+                    <field name="X">300</field>
+                    <field name="Y">300</field>
+                    <field name="Z">175</field>
+                  </block>
+                </statement>
+              </block>
+            </next>
+          </block>
+        </next>
+      </block>
+    </next>
+  </block>
+</xml>
 
-2、添加无人机
-d1=pf.Drone(100,100)
-#100,100分别为起飞位置的x坐标和y坐标，想添加其他无人机如d2、d3……以此类推
+模拟飞行见cv2show.py和cv3dshow.py（可直接运行）
+效果见视频
 
-3、动作编排
-d1.takeoff(0,100)
-#第一个值是起飞时间，第二个值是起飞高度
+curve.py为半成品，为的是更方便地编写弧线飞行轨迹。
 
-d1.intime(t)# 在第几秒
+PyFii.py为原作者编写。
+main.py为原作者一位同学修改PyFii.py而成。
 
-d1. move2(x,y,z)
-#直线移动至(x,y,z)
+仅限徐汇区青少年活动中心无人机比赛项目使用。
 
-d1.delay(t)
-#等待几毫秒
+2021-6文件夹和2020-12文件夹为原作者两次参加比赛时的程序，仅供参考。
 
-d1.land()
-#降落
-
-d1.end()
-#结束时必加
-
-4、保存为.fii
-F=pf.Fii('测试',[d1,d2])#命名,[所有无人机名]
-F.save()
-
-5、模拟飞行
-读取.fii
-name='比赛现场程序'
-data,t0=pf.read_fii(name)
-pf.show(data,t0)
-#把所在文件夹的路径写下来即可
-
-直接在python中展示
-pf.show(F.dots,F.t0)
-
-可以不看展示直接知道能不能飞
-pf.show(F.dots,F.t0,show=False)
-
-保存为视频
-pf.show(F.dots,F.t0,save='ceshi')#文件名不能用中文
-
-保存为视频时可用FPS参数来调整视频质量，改变输出视频速度，如：
-pf.show(F.dots,F.t0,save='ceshi',FPS=25)
-#FPS越小，视频帧率越小，视频输出速度越快
-
-模拟飞行：空格暂停，q后退，e前进，Esc退出
-
-教学视频：https://www.bilibili.com/video/BV1Eh411t7NW/
+编写缘由：嫌原本的编程软件一块一块拖太麻烦，于是用python，并且可以实现使用函数和循环编写无人机程序，同时这程序也解决了为解锁盘而争抢的烦恼。
