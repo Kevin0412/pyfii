@@ -1,5 +1,5 @@
 # pyfii
-This program enables us to write .fii files (Xiaoniaofeifei formation drone) in a more convenient way via python.It also enables us to see the simulate flying in three-view(front,right,and over),which is more clear than the original one. 
+This program enables us to write .fii files (Xiaoniaofeifei formation drone) in a more convenient way via python.It also enables us to see the simulate flying in three-view(front,right,and over),which is clearer than the original one. 
 
 Pyfii1.0.1 is on the Pipy,you can install it via "pip install pyfii".
 
