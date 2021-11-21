@@ -1,0 +1,106 @@
+<xml xmlns="http://www.w3.org/1999/xhtml">
+  <variables></variables>
+  <block type="Goertek_Start" x="100" y="100">
+    <next>
+      <block type="block_inittime">
+        <field name="time">00:00</field>
+        <field name="color">#cccccc</field>
+        <statement name="functionIntit">
+          <block type="Goertek_UnLock">
+            <next>
+              <block type="block_delay">
+                <field name="delay">0</field>
+                <field name="time">1000</field>
+                <next>
+                  <block type="Goertek_TakeOff">
+                    <field name="alt">100</field>
+                  </block>
+                </next>
+              </block>
+            </next>
+          </block>
+        </statement>
+        <next>
+          <block type="block_inittime">
+            <field name="time">00:03</field>
+            <field name="color">#cccccc</field>
+            <statement name="functionIntit">
+              <block type="Goertek_HorizontalSpeed">
+                <field name="VH">200</field>
+                <field name="AH">400</field>
+                <next>
+                  <block type="Goertek_VerticalSpeed">
+                    <field name="VV">200</field>
+                    <field name="AV">400</field>
+                    <next>
+                          <block type="Goertek_MoveToCoord">
+                        <field name="X">200</field>
+                        <field name="Y">200</field>
+                        <field name="Z">150</field>
+                        <next>
+                          <block type="block_delay">
+                            <field name="delay">0</field>
+                            <field name="time">1000</field>
+                            <next>
+                                  <block type="Goertek_MoveToCoord">
+                                <field name="X">250</field>
+                                <field name="Y">250</field>
+                                <field name="Z">125</field>
+                              </block>
+                            </next>
+                          </block>
+                        </next>
+                      </block>
+                    </next>
+                  </block>
+                </next>
+              </block>
+            </statement>
+            <next>
+              <block type="block_inittime">
+                <field name="time">00:10</field>
+                <field name="color">#cccccc</field>
+                <statement name="functionIntit">
+                  <block type="Goertek_HorizontalAcceleration">
+                    <field name="AH">100</field>
+                    <next>
+                      <block type="Goertek_VerticalAcceleration">
+                        <field name="AV">100</field>
+                        <next>
+                          <block type="Goertek_AngularVelocity">
+                            <field name="w">120</field>
+                            <next>
+                              <block type="Goertek_TurnTo">
+                                <field name="turnDirection">l</field>
+                                <field name="angle">90</field>
+                                <next>
+                                      <block type="Goertek_MoveToCoord">
+                                    <field name="X">300</field>
+                                    <field name="Y">300</field>
+                                    <field name="Z">175</field>
+                                  </block>
+                                </next>
+                              </block>
+                            </next>
+                          </block>
+                        </next>
+                      </block>
+                    </next>
+                  </block>
+                </statement>
+                <next>
+                  <block type="block_inittime">
+                    <field name="time">00:15</field>
+                    <field name="color">#cccccc</field>
+                    <statement name="functionIntit">
+                      <block type="Goertek_Land"></block>
+                  </block>
+                </next>
+              </block>
+            </next>
+          </block>
+        </next>
+      </block>
+    </next>
+  </block>
+</xml>
