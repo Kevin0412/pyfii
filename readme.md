@@ -37,7 +37,7 @@ d1.end()
 d1.VelZ(v,a)
 #竖直速度（速度,加速度）
 
-d1.AccZ(self,a)
+d1.AccZ(a)
 #竖直加速度（加速度）
 
 d1.ARate(w)
