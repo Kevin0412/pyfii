@@ -154,7 +154,6 @@ def dots2angle(dots,warns,fps=200):#将指令转化为转圈动作
                 a-=360
             elif angle-a>180:
                 angle-=360
-        
         w1=w/fps
         if abs(a-angle)>w1:
             a+=(angle-a)/abs(angle-a)*w1
@@ -251,9 +250,9 @@ def dots2line(file,fii=[],fps=200,points={}):#将指令转换为飞行轨迹
                         z=z1
                         #dots[k][-1]='moved'
                         if len(lines)>=len(angles):
-                            lines.append((time,x1,y1,z1,angles[-1][1]))
+                            lines.append((time,x,y,z,angles[-1][1]))
                         else:
-                            lines.append((time,x1,y1,z1,angles[len(lines)][1]))
+                            lines.append((time,x,y,z,angles[len(lines)][1]))
                         #print(time)
                         break
                     if v-400/fps>0:
@@ -286,9 +285,9 @@ def dots2line(file,fii=[],fps=200,points={}):#将指令转换为飞行轨迹
                     elif dots[k][-1]=='land':
                         z=0
                     if len(lines)>=len(angles):
-                        lines.append((time,x1,y1,z1,angles[-1][1]))
+                        lines.append((time,x,y,z,angles[-1][1]))
                     else:
-                        lines.append((time,x1,y1,z1,angles[len(lines)][1]))
+                        lines.append((time,x,y,z,angles[len(lines)][1]))
                     #print('\r'+str((time,x,y,z)),end='')
                     #print(time)
                     break
