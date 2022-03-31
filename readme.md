@@ -76,7 +76,10 @@ pf.show(data,t0,music)
 pf.show(F.dots,F.t0,F.music)
 
 三维展示
-pf.show(F.dots,F.t0,F.music,ThreeD=True,imshow=[120,-15],d=(1,0),track=[])
+正交：pf.show(F.dots,F.t0,F.music,ThreeD=True,imshow=[120,-15],d=(1,0))
+评委视角透视：pf.show(F.dots,F.t0,F.music,ThreeD=True,imshow=[90,0],d=(495,330))
+无人机视角全景：pf.show(F.dots,F.t0,F.music,ThreeD=True,save='1',FPS=20,track=[0])
+定点全景：pf.show(F.dots,F.t0,F.music,ThreeD=True,save='1',FPS=20,track=(280,280,165))
 #imshow参数为初始观察视角
 #d为渲染模式，(1,0)表示正交展示，画面比例为1;(495,330)表示观察者在距画面中心495处，距观察者330处的画面比例为1
 #track：[]表示正交或透视;[1]表示以无人机2的视角，全景观察（python列表的特性）;(280,280,165)表示以这个坐标为中心进行全景观察
