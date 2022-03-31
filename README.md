@@ -99,3 +99,5 @@ pf.show(F.dots,F.t0,F.music,save='ceshi',FPS=25)
 模拟飞行：空格暂停，q后退，e前进，Esc退出，三维模拟时空格暂停后按w,a,s,d转动视角，按esc退出暂停，三维模拟中需要长按键盘操控
 
 教学视频：https://www.bilibili.com/video/BV1Eh411t7NW/
+
+3D engine三维引擎:https://github.com/Kevin0412/OpenCV_3D
