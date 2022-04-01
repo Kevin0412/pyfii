@@ -107,3 +107,7 @@ pf.show(F.dots,F.t0,F.music,save='ceshi',FPS=25)
 教学视频：https://www.bilibili.com/video/BV1Eh411t7NW/
 
 3D engine三维引擎:https://github.com/Kevin0412/OpenCV_3D
+
+项目开始时间：2021/6/16
+
+draft中有一个非常好用的获取图像坐标工具：read_img.py，它可以读取图片然后用openCV展示出来，点击哪里，它就会输出该位置的坐标
