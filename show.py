@@ -77,7 +77,7 @@ def drone3d(aixs,x,y,z,c,a):
     if int((n%765)/255)==2:
         return(x,255-n%255,n%255)'''
 
-def show(data,t0,music,show=True,save="",FPS=200,ThreeD=False,imshow=[120,-15],d=(495,330),track=[]):
+def show(data,t0,music,show=True,save="",FPS=200,ThreeD=False,imshow=[120,-15],d=(600,450),track=[]):
     t0=int(t0+0.5)+300
     if len(save)>0 and not ThreeD:
         show=False
