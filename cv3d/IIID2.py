@@ -51,6 +51,8 @@ def ring(img,aixs,color,r,center=(0,0,0),n=1):
         m=int(r/r1*180+1)
         if m<12:
             m=12
+        elif m>360:
+            m=360
         for l in range(m):
             l=l/m*2*np.pi
             plts.append((aixs[0]+r*np.cos(l),aixs[1]+r*np.sin(l),aixs[2]))
