@@ -81,12 +81,12 @@ def show(data,t0,music,show=True,save="",FPS=200,ThreeD=False,imshow=[120,-15],d
     t0=int(t0+0.5)+300
     if len(save)>0 and not ThreeD:
         show=False
-        video = cv2.VideoWriter(save+"_process.mp4", cv2.VideoWriter_fourcc('I', '4', '2', '0'), FPS,(1200,600))
+        video = cv2.VideoWriter(save+"_process.mp4", cv2.VideoWriter_fourcc('H', '2', '6', '5'), FPS,(1200,600))
     if len(save)>0 and ThreeD:
         if len(track)==0:
-            video = cv2.VideoWriter(save+"_process.mp4", cv2.VideoWriter_fourcc('I', '4', '2', '0'), FPS,(1280,720))
+            video = cv2.VideoWriter(save+"_process.mp4", cv2.VideoWriter_fourcc('H', '2', '6', '5'), FPS,(1280,720))
         else:
-            video = cv2.VideoWriter(save+"_process.mp4", cv2.VideoWriter_fourcc('I', '4', '2', '0'), FPS,(3840,1920))
+            video = cv2.VideoWriter(save+"_process.mp4", cv2.VideoWriter_fourcc('H', '2', '6', '5'), FPS,(3840,1920))
     if (show and not ThreeD) or len(save)>0:
         img=np.zeros((600,1200,3),np.uint8)
         cv2.rectangle(img,(0,0),(600,600),(255,255,255),1)
