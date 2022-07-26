@@ -19,7 +19,10 @@ class Drone:
         范围:80~250
         """
         z=int(z+0.5)
-        if z>250 or z<80 or time<1:
+        self.z =z
+        self.x,self.y=int(self.X+0.5),int(self.Y+0.5)
+        self.X,self.Y=int(self.X+0.5),int(self.Y+0.5)
+        if z>250 or z<80 or time<1 or self.X<0 or self.X>560 or self.Y<0 or self.Y>560:
             raise Warning("Out of range.超出范围。")
         time=int(time+0.5)
         '''self.times.append(time)
@@ -29,7 +32,6 @@ class Drone:
             time='0'+str(m)+':0'+str(s)
         else:
             time='0'+str(m)+':'+str(s)'''
-        self.z =z
         self.outputString+='''  <block type="Goertek_Start" x="'''+str(self.X)+'''" y="'''+str(self.Y)+'''">
     <next>
       <block type="block_inittime">
