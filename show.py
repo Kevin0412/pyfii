@@ -81,12 +81,12 @@ def show(data,t0,music,show=True,save="",FPS=200,ThreeD=False,imshow=[120,-15],d
     t0=int(t0+0.5)+300
     if len(save)>0 and not ThreeD:
         show=False
-        video = cv2.VideoWriter(save+"_process.mp4", cv2.VideoWriter_fourcc('A', 'V', 'C', '1'), FPS,(1200,600))
+        video = cv2.VideoWriter(save+"_process.mp4", cv2.VideoWriter_fourcc('M', 'P', '4', 'V'), FPS,(1200,600))
     if len(save)>0 and ThreeD:
         if len(track)==0:
-            video = cv2.VideoWriter(save+"_process.mp4", cv2.VideoWriter_fourcc('A', 'V', 'C', '1'), FPS,(1280,720))
+            video = cv2.VideoWriter(save+"_process.mp4", cv2.VideoWriter_fourcc('M', 'P', '4', 'V'), FPS,(1280,720))
         else:
-            video = cv2.VideoWriter(save+"_process.mp4", cv2.VideoWriter_fourcc('A', 'V', 'C', '1'), FPS,(3840,1920))
+            video = cv2.VideoWriter(save+"_process.mp4", cv2.VideoWriter_fourcc('M', 'P', '4', 'V'), FPS,(3840,1920))
     if (show and not ThreeD) or len(save)>0:
         img=np.zeros((600,1200,3),np.uint8)
         cv2.rectangle(img,(0,0),(600,600),(255,255,255),1)
@@ -215,9 +215,9 @@ def show(data,t0,music,show=True,save="",FPS=200,ThreeD=False,imshow=[120,-15],d
             for m in range(len(aixs)):
                 for n in range(m+1,len(aixs)):#计算距离
                     distance=((aixs[m][0]-aixs[n][0])**2+(aixs[m][1]-aixs[n][1])**2)**0.5
-                    if distance<50:
+                    if distance<51:
                         #print(t,distance,int(distance/20),m+1,n+1)#距离太近就输出错误
-                        warnings.warn('In '+str(int(t))+'s,distance between d'+str(m+1)+' and d'+str(n+1)+' is less than '+str(int(distance/10)+1)+'0cm.在'+str(int(t))+'秒，无人机'+str(m+1)+'和无人机'+str(n+1)+'之间的距离小于'+str(int(distance/10)+1)+'0厘米。',Warning,2)
+                        warnings.warn('In '+str(int(t))+'s,distance between d'+str(m+1)+' and d'+str(n+1)+' is less than '+str((int(distance/17)+1)*17)+'cm.在'+str(int(t))+'秒，无人机'+str(m+1)+'和无人机'+str(n+1)+'之间的距离小于'+str((int(distance/17)+1)*17)+'厘米。',Warning,2)
                         if show or len(save)>0:
                             cv2.circle(img2,(int(20+aixs[m][0]),int(580-aixs[m][1])),20,(0,0,255),3)
                             cv2.circle(img2,(int(620+aixs[m][0]),int(270-aixs[m][2])),20,(0,0,255),3)
@@ -317,8 +317,8 @@ def show(data,t0,music,show=True,save="",FPS=200,ThreeD=False,imshow=[120,-15],d
             for m in range(0,len(aixs),12):
                 for n in range(m+12,len(aixs),12):#计算距离
                     distance=((aixs[m][0][0]-aixs[n][0][0]+aixs[m+2][0][0]-aixs[n+2][0][0])**2+(aixs[m][0][1]-aixs[n][0][1]+aixs[m+2][0][1]-aixs[n+2][0][1])**2)**0.5/2
-                    if distance<50:
-                        warnings.warn('In '+str(int(t))+'s,distance between d'+str(int(m/12+1))+' and d'+str(int(n/12+1))+' is less than '+str(int(distance/10)+1)+'0cm.在'+str(int(t))+'秒，无人机'+str(int(m/12+1))+'和无人机'+str(int(n/12+1))+'之间的距离小于'+str(int(distance/10)+1)+'0厘米。',Warning,2)
+                    if distance<51:
+                        warnings.warn('In '+str(int(t))+'s,distance between d'+str(int(m/12+1))+' and d'+str(int(n/12+1))+' is less than '+str((int(distance/17)+1)*17)+'cm.在'+str(int(t))+'秒，无人机'+str(int(m/12+1))+'和无人机'+str(int(n/12+1))+'之间的距离小于'+str((int(distance/17)+1)*3)+'厘米。',Warning,2)
                         #print(t,distance,int(distance/20),m+1,n+1)#距离太近就输出错误
                         if len(track)==0:
                             errors.append([((aixs[m][0][0]+aixs[m+2][0][0])/2,(aixs[m][0][1]+aixs[m+2][0][1])/2,aixs[m][0][2]),(0,0,255),10,1,'sphere'])#错误红圈标记
