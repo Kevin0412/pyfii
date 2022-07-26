@@ -318,7 +318,7 @@ def show(data,t0,music,show=True,save="",FPS=200,ThreeD=False,imshow=[120,-15],d
                 for n in range(m+12,len(aixs),12):#计算距离
                     distance=((aixs[m][0][0]-aixs[n][0][0]+aixs[m+2][0][0]-aixs[n+2][0][0])**2+(aixs[m][0][1]-aixs[n][0][1]+aixs[m+2][0][1]-aixs[n+2][0][1])**2)**0.5/2
                     if distance<51:
-                        warnings.warn('In '+str(int(t))+'s,distance between d'+str(int(m/12+1))+' and d'+str(int(n/12+1))+' is less than '+str((int(distance/17)+1)*17)+'cm.在'+str(int(t))+'秒，无人机'+str(int(m/12+1))+'和无人机'+str(int(n/12+1))+'之间的距离小于'+str((int(distance/17)+1)*3)+'厘米。',Warning,2)
+                        warnings.warn('In '+str(int(t))+'s,distance between d'+str(int(m/12+1))+' and d'+str(int(n/12+1))+' is less than '+str((int(distance/17)+1)*17)+'cm.在'+str(int(t))+'秒，无人机'+str(int(m/12+1))+'和无人机'+str(int(n/12+1))+'之间的距离小于'+str((int(distance/17)+1)*17)+'厘米。',Warning,2)
                         #print(t,distance,int(distance/20),m+1,n+1)#距离太近就输出错误
                         if len(track)==0:
                             errors.append([((aixs[m][0][0]+aixs[m+2][0][0])/2,(aixs[m][0][1]+aixs[m+2][0][1])/2,aixs[m][0][2]),(0,0,255),10,1,'sphere'])#错误红圈标记
