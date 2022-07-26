@@ -1,6 +1,7 @@
 import os
 import shutil
 from .read import dots2line
+import warnings
 
 class Fii:
     def __init__(self,name,drones,music=''):
@@ -9,8 +10,14 @@ class Fii:
         self.dots=[]
         self.t0=0
         self.music=music
+        n=0
         for d in self.ds:
-            self.dots.append(dots2line(d.outputString,fii=[d.X,d.Y])[0])
+            n+=1
+            line=dots2line(d.outputString,fii=[d.X,d.Y])
+            self.dots.append(line[0])
+            if len(line[2])>0:
+                for warn in line[2]:
+                    warnings.warn('d'+str(n)+' 无人机'+str(n)+':'+warn,Warning,2)
             self.t0=max(self.t0,dots2line(d.outputString,fii=[d.X,d.Y])[1])
 
     def save(self):

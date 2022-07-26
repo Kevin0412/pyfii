@@ -172,15 +172,16 @@ def show(data,t0,music,show=True,save="",FPS=200,ThreeD=False,imshow=[120,-15],d
             img2=cv2.imread('gui.png')
         aixs=[]
         if not ThreeD:
+            t=0
             for a in range(len(data)):
                 if len(data[a])>k:
-                    t=data[a][k][0]/1000
+                    t=max(t,data[a][k][0]/1000)
                     x=data[a][k][1]
                     y=data[a][k][2]
                     z=data[a][k][3]
                     angle=data[a][k][4]
                 else:
-                    t=data[a][-1][0]/1000
+                    t=max(t,data[a][-1][0]/1000)
                     x=data[a][-1][1]
                     y=data[a][-1][2]
                     z=data[a][-1][3]
@@ -291,15 +292,16 @@ def show(data,t0,music,show=True,save="",FPS=200,ThreeD=False,imshow=[120,-15],d
         
         if ThreeD:
             texts=[]#显示的文字
+            t=0
             for a in range(len(data)):
                 if len(data[a])>k:
-                    t=data[a][k][0]/1000
+                    t=max(t,data[a][k][0]/1000)
                     x=data[a][k][1]
                     y=data[a][k][2]
                     z=data[a][k][3]
                     angle=data[a][k][4]
                 else:
-                    t=data[a][-1][0]/1000
+                    t=max(t,data[a][-1][0]/1000)
                     x=data[a][-1][1]
                     y=data[a][-1][2]
                     z=data[a][-1][3]
