@@ -61,6 +61,24 @@ d1.SimpleHarmonic2(direction,amplitude)
 d1.RoundInAir(startpos,centerpos,height,vilocity)
 #绕圈飞行 起点 startpos 圆心 centerpos 高度 height 速度 vilocity(正逆时针,负顺时针)
 
+d1.TurnOnSingle(Id,color)
+#点亮某一盏灯，颜色
+
+d1.TurnOffSingle(Id)
+#熄灭某一盏灯
+
+d1.TurnOnAll(colors)
+#点亮所有灯，颜色
+
+d1.TurnOffAll()
+#熄灭所有灯
+
+d1.BlinkSingle(Id,color)
+#闪烁某一盏灯，颜色
+
+d1.Breath(colors)
+#呼吸灯，颜色
+
 4、保存为.fii
 F=pf.Fii('测试',[d1,d2],music='xx.mp3')#命名,[所有无人机名],music选择性添加
 F.save()

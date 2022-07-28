@@ -354,7 +354,7 @@ def read_fii(name):
         #print(d.split('  ')[-1],str(len(d.split('  '))))
         xml.append(d.split('  ')[-1])
     drones=[]
-    music=[name+"\\动作组\\"]
+    music=[name+"/动作组/"]
     for k in range(len(xml)):
         #print(xml[k].split('"'))
         if xml[k][1:10]=='MusicName':
@@ -367,7 +367,7 @@ def read_fii(name):
     n=0
     points={}
     for drone in drones:
-        with open(name+'\\动作组\\'+drone+'\\webCodeAll.xml', "r",encoding='utf-8') as F:
+        with open(name+'/动作组/'+drone+'/webCodeAll.xml', "r",encoding='utf-8') as F:
             file = F.read()
         for dic in read_xml_points(file).items():
             points[dic[0]]=dic[1]
@@ -379,9 +379,12 @@ def read_fii(name):
                 elif xml[k][16]=='Y':
                     y=int(xml[k].split('"')[1].split('pos')[1])
                 #print(xml[k].split('"')[1])
-        with open(name+'\\动作组\\'+drone+'\\webCodeAll.xml', "r",encoding='utf-8') as F:
+        with open(name+'/动作组/'+drone+'/webCodeAll.xml', "r",encoding='utf-8') as F:
             file = F.read()
-        line=dots2line(file,fii=[x,y],points=points)
+        try:
+            line=dots2line(file,fii=[x,y],points=points)
+        except:
+            raise Warning('No take off place.起飞位置未定义。')
         dots.append(line[0])
         t0=max(t0,line[1])
         n+=1
