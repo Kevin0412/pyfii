@@ -186,7 +186,7 @@ def dots2line(file,fii=[],fps=200,points={}):#将指令转换为飞行轨迹
     k1=0
     while(True):
         for n in range(len(dots)):
-            if time-dots[n][0]>0:
+            if time-dots[n][0]>0 and dots[n][-1] in ['move2','move','land','moved']:
                 '''if n-k>1:
                     #warnings.warn(str(int(time/100)/10)+"s:Action isn't completed.动作未完成。",Warning,3)
                     #raise Warning(str(int(time/100)/10)+"s:Action isn't completed.动作未完成。")
@@ -301,7 +301,7 @@ def dots2line(file,fii=[],fps=200,points={}):#将指令转换为飞行轨迹
                 #print('\r'+str((time,x1,y1,z1)),end='')
                 time+=1000/fps
                 for n in range(len(dots)):
-                    if time-dots[n][0]>0:
+                    if time-dots[n][0]>0 and dots[n][-1] in ['move2','move','land','moved']:
                         if n-k>0:
                             #warnings.warn(str(int(time/100)/10)+"s:Action isn't completed.动作未完成。",Warning,3)
                             #raise Warning(str(int(time/100)/10)+"s:Action isn't completed.动作未完成。")
@@ -383,6 +383,13 @@ def read_fii(name):
             file = F.read()
         try:
             line=dots2line(file,fii=[x,y],points=points)
+            '''with open(name+'/动作组/'+drone+'line.csv','w',encoding='utf-8') as F:
+                F.write('time,x,y,z,angle\n')
+                for l in line[0]:
+                    for li in l:
+                        F.write(str(li))
+                        F.write(',')
+                    F.write('\n')'''
         except:
             raise Warning('No take off place.起飞位置未定义。')
         dots.append(line[0])
