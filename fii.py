@@ -74,12 +74,12 @@ class Fii:
                         ds+=','
                     k+=1
                 file.write('ds='+ds+'\n')
-                file.write('''for a in range(1,'''+str(k)+'''):
-    with open('动作组/动作组'+str(a)+'/pyfiiCode.py','r',encoding='utf-8') as f:
+                file.write('''for n in range(1,'''+str(k)+'''):
+    with open('动作组/动作组'+str(n)+'/pyfiiCode.py','r',encoding='utf-8') as f:
         lines=f.read()
         for line in lines.split('\\n'):
             try:
-                exec('d'+str(a)+'.'+line)
+                exec('d'+str(n)+'.'+line)
             except:
                 exec(line)
 ''')
