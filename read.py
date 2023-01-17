@@ -140,14 +140,17 @@ def dots2angle(dots,warns,fps=200):#将指令转化为转圈动作
     w=60
     angle=0
     angles=[]
+    k=0
+    k1=0
     while(True):
-        k=-1
         for n in range(len(dots)):
-            if time-dots[n][0]>0:
-                k=n
+            if time-dots[n][0]>0 and dots[n][-1] in ['turn2','turn','turned']:
+                k1=n
+        k=k1
         if dots[k][-1]=='turn':
             angle=a+dots[k][1]
             w=dots[k][2]
+            dots[k][-1]='turned'
         elif dots[k][-1]=='turn2':
             angle=dots[k][1]%360
             a=a%360
@@ -162,7 +165,7 @@ def dots2angle(dots,warns,fps=200):#将指令转化为转圈动作
         else:
             a=angle
         angles.append((time,float(a)))
-        if k==len(dots)-1:
+        if time>90000:
             break
         time+=1000/fps
     return(angles)

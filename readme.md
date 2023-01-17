@@ -102,11 +102,12 @@ pf.show(data,t0,music)
 #把所在文件夹的路径写下来即可
 
 直接在python中展示
-pf.show(F.dots,F.t0,[F.music])
+pf.show(F.dots,F.t0,[F.music],skin=1)
+#有0,1,2三种皮肤
 
 三维展示
 正交：pf.show(F.dots,F.t0,F.music,ThreeD=True,imshow=[120,-15],d=(1,0))
-评委视角透视：pf.show(F.dots,F.t0,F.music,ThreeD=True,imshow=[90,6],d=(600,450))
+评委视角透视：pf.show(F.dots,F.t0,F.music,ThreeD=True,imshow=[90,0],d=(600,450))
 无人机视角全景：pf.show(F.dots,F.t0,F.music,ThreeD=True,save='1',FPS=20,track=[0])
 定点全景：pf.show(F.dots,F.t0,F.music,ThreeD=True,save='1',FPS=20,track=(280,280,165))
 #imshow参数为初始观察视角

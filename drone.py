@@ -312,6 +312,7 @@ intime('''+str(time)+''')
         """
         转动（角度）
         单位:°（左正右负）
+        范围:-360~360
         必须在intime(time)中
         """
         spaces='  '*(self.space+self.block)
@@ -322,6 +323,8 @@ intime('''+str(time)+''')
             spaces+='  '
         if a>0:
             a=int(a+0.5)
+            if a>360:
+                raise Warning("Out of range.超出范围。")
             self.outputString += spaces+'''<block type="Goertek_Turn">
 '''+spaces+'''  <field name="turnDirection">l</field>
 '''+spaces+'''  <field name="angle">'''+str(a)+'''</field>
@@ -330,6 +333,8 @@ intime('''+str(time)+''')
 '''
         else:
             a=int(abs(a)+0.5)
+            if a>360:
+                raise Warning("Out of range.超出范围。")
             self.outputString += spaces+'''<block type="Goertek_Turn">
 '''+spaces+'''  <field name="turnDirection">r</field>
 '''+spaces+'''  <field name="angle">'''+str(a)+'''</field>
