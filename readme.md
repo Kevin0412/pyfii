@@ -71,7 +71,9 @@ d1.Breath(colors) #呼吸灯，颜色
 
 F=pf.Fii('测试',[d1,d2],music='xx.mp3')
 
-#命名,[所有无人机名],music选择性添加 F.save()
+#命名,[所有无人机名],music选择性添加 
+
+F.save()
 
 5、模拟飞行 
 
