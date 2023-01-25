@@ -164,4 +164,4 @@ F.save()
 
 tools文件夹里有实用工具
 
-example文件夹里有使用实例
+example.py为使用示例
