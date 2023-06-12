@@ -1,0 +1,78 @@
+Metadata-Version: 2.1
+Name: pyfii
+Version: 1.1.0
+Summary: 这个库可以让我们用python写Fii的无人机程序，有三视图模拟飞行的功能，模拟飞行更方便观看
+Author-email: Kevin0412 <kevin0412_xlt@qq.com>
+Project-URL: Homepage, https://github.com/Kevin0412/pyfii
+Project-URL: Bug Tracker, https://github.com/Kevin0412/pyfii/issues
+Classifier: Programming Language :: Python :: 3
+Classifier: License :: OSI Approved :: GNU General Public License v3 (GPLv3)
+Classifier: Operating System :: OS Independent
+Requires-Python: >=3.7
+Description-Content-Type: text/markdown
+License-File: LICENSE
+
+# Pyfii
+
+## 简介
+这个库的功能是可以让我们用python写Fii的无人机程序，以解决原软件无运算能力，无循环模块，一块块拖太烦等问题。
+
+此外，这个库有三视图模拟飞行的功能，模拟飞行更方便观看。
+
+## 安装
+1. 使用pip install安装
+
+    在命令行输入
+
+        pip install pyfii
+
+2. 下载源代码
+
+    在命令行输入
+
+        git clone https://github.com/Kevin0412/pyfii.git
+
+    pyfii就会被下载到当前目录下，使用时将pyfii文件夹复制到项目目录下
+
+## 使用教程
+
+请见./doc/doc_zh_CN.md
+
+## 目录结构说明
+
+    src/pyfii
+    ├── cv3d
+    │   ├── IIID2.py
+    │   ├── IIID.py
+    │   └── transfer.py
+    ├── drone.py
+    ├── fii.py
+    ├── __init__.py
+    ├── read.py
+    └── show.py
+
+项目结构(核心部分)如上图
+
+其中cv3d是使用OpenCV实现的3d图形库
+
+drone.py定义了Drone类，实现无人机的基本指令
+
+fii.py定义了Fii类，保存无人机和音乐，并能将其保存为*.fii文件
+
+read.py用来读取和转换无人机动作文件
+
+show.py用来预览无人机飞行效果
+
+## 许可证和作者
+
+- 许可证：GNU General Public License v3 (GPLv3)
+
+- 作者：
+
+    主要作者：github@Kevin0412
+
+    代码开发，无人机测试，编写说明文档，在bilibili.com上传演示视频等工作
+
+    次要作者：github@miaooo0000OOOO
+
+    上传模块到pypi，debug，无人机测试，写这个README

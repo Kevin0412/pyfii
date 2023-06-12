@@ -1,0 +1,15 @@
+LICENSE
+README.md
+pyproject.toml
+src/pyfii/__init__.py
+src/pyfii/drone.py
+src/pyfii/fii.py
+src/pyfii/read.py
+src/pyfii/show.py
+src/pyfii.egg-info/PKG-INFO
+src/pyfii.egg-info/SOURCES.txt
+src/pyfii.egg-info/dependency_links.txt
+src/pyfii.egg-info/top_level.txt
+src/pyfii/cv3d/IIID.py
+src/pyfii/cv3d/IIID2.py
+src/pyfii/cv3d/transfer.py

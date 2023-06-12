@@ -26,7 +26,7 @@
 
 ## 目录结构说明
 
-    src/pyfii_Kevin0412
+    src/pyfii
     ├── cv3d
     │   ├── IIID2.py
     │   ├── IIID.py
