@@ -12,4 +12,5 @@ src/pyfii.egg-info/dependency_links.txt
 src/pyfii.egg-info/top_level.txt
 src/pyfii/cv3d/IIID.py
 src/pyfii/cv3d/IIID2.py
+src/pyfii/cv3d/__init__.py
 src/pyfii/cv3d/transfer.py
