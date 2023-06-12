@@ -1,0 +1,14 @@
+LICENSE
+pyproject.toml
+src/pyfii_Kevin0412/__init__.py
+src/pyfii_Kevin0412/drone.py
+src/pyfii_Kevin0412/fii.py
+src/pyfii_Kevin0412/read.py
+src/pyfii_Kevin0412/show.py
+src/pyfii_Kevin0412.egg-info/PKG-INFO
+src/pyfii_Kevin0412.egg-info/SOURCES.txt
+src/pyfii_Kevin0412.egg-info/dependency_links.txt
+src/pyfii_Kevin0412.egg-info/top_level.txt
+src/pyfii_Kevin0412/cv3d/IIID.py
+src/pyfii_Kevin0412/cv3d/IIID2.py
+src/pyfii_Kevin0412/cv3d/transfer.py

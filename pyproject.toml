@@ -1,0 +1,22 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pyfii_Kevin0412"
+version = "0.1.0"
+authors = [
+  { name="Kevin0412", email="unkown@wobugaosuni.com" },
+]
+description = "这个库可以让我们用python写Fii的无人机程序，有三视图模拟飞行的功能，模拟飞行更方便观看"
+readme = "README.md"
+requires-python = ">=3.7"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: GNU General Public License v3 (GPLv3)",
+    "Operating System :: OS Independent",
+]
+
+[project.urls]
+"Homepage" = "https://github.com/Kevin0412/pyfii"
+"Bug Tracker" = "https://github.com/Kevin0412/pyfii/issues"
