@@ -1,4 +1,80 @@
 import warnings
+from typing import Any, Callable, Literal, Optional, Union
+
+class DroneAction:
+    """
+    无人机动作
+    action_closure:无人机动作闭包
+    parameter:闭包的参数
+    timestamp:用来对齐灯光，如果无人机动作和灯光动作的时间戳相等，就会自动在时间轴上对齐
+    """
+    def __init__(self,
+                 action_closure:Callable,
+                 parameter:Union[list,map],
+                 timestamp:int
+                 ):
+        self.action_closure = action_closure
+        self.parameter = parameter
+        self.timestamp = timestamp
+    
+    def take_action(self):
+        if type(self.parameter) == list:
+            self.action_closure(*self.parameter)
+        if type(self.parameter) == dict:
+            self.action_closure(**self.parameter)
+    
+class LightAction:
+    """
+    灯光动作
+    action_closure:灯光动作闭包
+    parameter:闭包的参数
+    timestamp:用来对齐灯光，如果无人机动作和灯光动作的时间戳相等，就会自动在时间轴上对齐
+    order:如果为before则灯光在动作前，如果为after则灯光在动作后
+    """
+    def __init__(self,
+                 action_closure:Callable,
+                 parameter:Union[list,map],
+                 timestamp:int,
+                 order:Literal['before', 'after']='before'
+                 ):
+        self.action_closure = action_closure
+        self.parameter = parameter
+        self.timestamp = timestamp
+        self.order = order
+    
+    def key(self):
+        """
+        字典的键，唯一定义了灯光的时间
+        """
+        return str(self.timestamp) + self.order
+
+    def take_action(self):
+        if type(self.parameter) == list:
+            self.action_closure(*self.parameter)
+        if type(self.parameter) == dict:
+            self.action_closure(**self.parameter)
+
+_T = Union[DroneAction, LightAction]
+def actionfy(
+        actions:list[list[Callable,list,int]],
+        action_type:_T,
+        ) -> list[_T]:
+    """
+    example:
+    actions = [
+        [d1.takeoff, [1,100], 100],
+        [d1.intime, [4], 200],
+        [d1.move, [200,200,100], 300],
+        [d1.move2, [100, 150, 100], 400],
+        [d1.land, [], 500],
+        [d1.end, [], 600]
+    ]
+    """
+    action_list = []
+    for action in actions:
+        action_list.append(action_type(action[0], action[1], action[2]))
+    return action_list
+
 class Drone:
     def __init__(self,x=0,y=0):
         self.space = 0
@@ -11,6 +87,49 @@ class Drone:
         self.Y=int(y+0.5)
         self.times=[]
         self.x,self.y,self.z=int(x+0.5),int(y+0.5),0
+
+        self.action_list:list[DroneAction] = []
+        self.light_actions:map[LightAction] = dict()
+
+    def take_actions(self):
+        """
+        合成动作和灯光
+        """
+        for action in self.action_list:
+            light_before:Optional[LightAction] = self.light_actions.get(str(action.timestamp)+'before')
+            light_after:Optional[LightAction] = self.light_actions.get(str(action.timestamp)+'after')
+            if light_before is not None:
+                light_before.take_action()
+            action.take_action()
+            if light_after is not None:
+                light_after.take_acion()
+
+
+    def append_action(self, action:DroneAction):
+        """
+        添加一个动作
+        """
+        self.action_list.append(action)
+    def append_actions(self,
+                       actions:list[DroneAction]
+                       ):
+        """
+        添加多个动作
+        """
+        for action in actions:
+            self.append_action(action)
+
+    def append_light(self, light:LightAction):
+        """
+        添加一个灯光动作
+        """
+        self.light_actions[light.key()] = light
+    def append_lights(self, lights:list[LightAction]):
+        """
+        添加多个灯光动作
+        """
+        for light in lights:
+            self.append_light(light)
     
     def takeoff(self,time,z):
         """

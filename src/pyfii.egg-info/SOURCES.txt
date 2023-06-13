@@ -14,3 +14,4 @@ src/pyfii/cv3d/IIID.py
 src/pyfii/cv3d/IIID2.py
 src/pyfii/cv3d/__init__.py
 src/pyfii/cv3d/transfer.py
+tests/test.py

@@ -1,3 +1,6 @@
 /dist
 .pypirc
 __token__
+**/__pycache__
+output
+测试
