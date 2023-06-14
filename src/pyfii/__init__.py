@@ -6,3 +6,4 @@ from .fii import *
 from .read import *
 from .show import *
 from .cv3d import *
+from .function import *

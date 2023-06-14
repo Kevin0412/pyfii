@@ -6,3 +6,6 @@ output
 测试
 gui.png
 *.mp3
+*.mp4
+**/output
+**/*v3*
