@@ -81,12 +81,12 @@ def show(data,t0,music,show=True,save="",FPS=200,ThreeD=False,imshow=[120,-15],d
     t0=int(t0+0.5)+300
     if len(save)>0 and not ThreeD:
         show=False
-        video = cv2.VideoWriter(save+"_process.mp4", cv2.VideoWriter_fourcc('A', 'V', 'C', '1'), FPS,(1200,600))
+        video = cv2.VideoWriter(save+"_process.mp4", cv2.VideoWriter_fourcc('M', 'P', '4', 'V'), FPS,(1200,600))
     if len(save)>0 and ThreeD:
         if len(track)==0:
-            video = cv2.VideoWriter(save+"_process.mp4", cv2.VideoWriter_fourcc('A', 'V', 'C', '1'), FPS,(1280,720))
+            video = cv2.VideoWriter(save+"_process.mp4", cv2.VideoWriter_fourcc('M', 'P', '4', 'V'), FPS,(1280,720))
         else:
-            video = cv2.VideoWriter(save+"_process.mp4", cv2.VideoWriter_fourcc('A', 'V', 'C', '1'), FPS,(3840,1920))
+            video = cv2.VideoWriter(save+"_process.mp4", cv2.VideoWriter_fourcc('M', 'P', '4', 'V'), FPS,(3840,1920))
     if (show and not ThreeD) or len(save)>0:
         img=np.zeros((600,1200,3),np.uint8)
         cv2.rectangle(img,(0,0),(600,600),(255,255,255),1)
@@ -157,6 +157,10 @@ def show(data,t0,music,show=True,save="",FPS=200,ThreeD=False,imshow=[120,-15],d
             pygame.mixer.init()
             pygame.mixer.music.load(music_name)
             pygame.mixer.music.play(start=0.0)
+        elif len(music)==1:
+            pygame.mixer.init()
+            pygame.mixer.music.load(music[0])
+            pygame.mixer.music.play(start=0.0)
     time_read=time.time()
     k=0
     K=0
@@ -168,15 +172,16 @@ def show(data,t0,music,show=True,save="",FPS=200,ThreeD=False,imshow=[120,-15],d
             img2=cv2.imread('gui.png')
         aixs=[]
         if not ThreeD:
+            t=0
             for a in range(len(data)):
                 if len(data[a])>k:
-                    t=data[a][k][0]/1000
+                    t=max(t,data[a][k][0]/1000)
                     x=data[a][k][1]
                     y=data[a][k][2]
                     z=data[a][k][3]
                     angle=data[a][k][4]
                 else:
-                    t=data[a][-1][0]/1000
+                    t=max(t,data[a][-1][0]/1000)
                     x=data[a][-1][1]
                     y=data[a][-1][2]
                     z=data[a][-1][3]
@@ -210,9 +215,9 @@ def show(data,t0,music,show=True,save="",FPS=200,ThreeD=False,imshow=[120,-15],d
             for m in range(len(aixs)):
                 for n in range(m+1,len(aixs)):#计算距离
                     distance=((aixs[m][0]-aixs[n][0])**2+(aixs[m][1]-aixs[n][1])**2)**0.5
-                    if distance<50:
+                    if distance<51:
                         #print(t,distance,int(distance/20),m+1,n+1)#距离太近就输出错误
-                        warnings.warn('In '+str(int(t))+'s,distance between d'+str(m+1)+' and d'+str(n+1)+' is less than '+str(int(distance/10)+1)+'0cm.在'+str(int(t))+'秒，无人机'+str(m+1)+'和无人机'+str(n+1)+'之间的距离小于'+str(int(distance/10)+1)+'0厘米。',Warning,2)
+                        warnings.warn('In '+str(int(t))+'s,distance between d'+str(m+1)+' and d'+str(n+1)+' is less than '+str((int(distance/17)+1)*17)+'cm.在'+str(int(t))+'秒，无人机'+str(m+1)+'和无人机'+str(n+1)+'之间的距离小于'+str((int(distance/17)+1)*17)+'厘米。',Warning,2)
                         if show or len(save)>0:
                             cv2.circle(img2,(int(20+aixs[m][0]),int(580-aixs[m][1])),20,(0,0,255),3)
                             cv2.circle(img2,(int(620+aixs[m][0]),int(270-aixs[m][2])),20,(0,0,255),3)
@@ -254,11 +259,11 @@ def show(data,t0,music,show=True,save="",FPS=200,ThreeD=False,imshow=[120,-15],d
             if key == 27:
                 break
             elif key==32:#空格暂停
-                if len(music)>1:
+                if len(music)>0:
                     pygame.mixer.music.stop()
                 cv2.waitKey(0)
                 time_read=time.time()-k/200
-                if len(music)>1:
+                if len(music)>0:
                     pygame.mixer.music.play(start=k/200)
             elif key==ord('q'):#后退
                 k-=100
@@ -267,35 +272,36 @@ def show(data,t0,music,show=True,save="",FPS=200,ThreeD=False,imshow=[120,-15],d
                     time_read=time_fps
                 if k<0:
                     k=0
-                if len(music)>1:
+                if len(music)>0:
                     pygame.mixer.music.stop()
                 cv2.waitKey(0)
                 time_read=time.time()-k/200
-                if len(music)>1:
+                if len(music)>0:
                     pygame.mixer.music.play(start=k/200)
             elif key==ord('e'):#快进
                 #time_read-=0.5
                 k+=100
-                if len(music)>1:
+                if len(music)>0:
                     pygame.mixer.music.stop()
                 cv2.waitKey(0)
                 time_read=time.time()-k/200
-                if len(music)>1:
+                if len(music)>0:
                     pygame.mixer.music.play(start=k/200)
             #time_read-=t-cv2.getTrackbarPos('time','img')
         #print('\r'+str(t)+'/'+str((t0-300)/100)+'  ',end='')
         
         if ThreeD:
             texts=[]#显示的文字
+            t=0
             for a in range(len(data)):
                 if len(data[a])>k:
-                    t=data[a][k][0]/1000
+                    t=max(t,data[a][k][0]/1000)
                     x=data[a][k][1]
                     y=data[a][k][2]
                     z=data[a][k][3]
                     angle=data[a][k][4]
                 else:
-                    t=data[a][-1][0]/1000
+                    t=max(t,data[a][-1][0]/1000)
                     x=data[a][-1][1]
                     y=data[a][-1][2]
                     z=data[a][-1][3]
@@ -311,8 +317,8 @@ def show(data,t0,music,show=True,save="",FPS=200,ThreeD=False,imshow=[120,-15],d
             for m in range(0,len(aixs),12):
                 for n in range(m+12,len(aixs),12):#计算距离
                     distance=((aixs[m][0][0]-aixs[n][0][0]+aixs[m+2][0][0]-aixs[n+2][0][0])**2+(aixs[m][0][1]-aixs[n][0][1]+aixs[m+2][0][1]-aixs[n+2][0][1])**2)**0.5/2
-                    if distance<50:
-                        warnings.warn('In '+str(int(t))+'s,distance between d'+str(int(m/12+1))+' and d'+str(int(n/12+1))+' is less than '+str(int(distance/10)+1)+'0cm.在'+str(int(t))+'秒，无人机'+str(int(m/12+1))+'和无人机'+str(int(n/12+1))+'之间的距离小于'+str(int(distance/10)+1)+'0厘米。',Warning,2)
+                    if distance<51:
+                        warnings.warn('In '+str(int(t))+'s,distance between d'+str(int(m/12+1))+' and d'+str(int(n/12+1))+' is less than '+str((int(distance/17)+1)*17)+'cm.在'+str(int(t))+'秒，无人机'+str(int(m/12+1))+'和无人机'+str(int(n/12+1))+'之间的距离小于'+str((int(distance/17)+1)*17)+'厘米。',Warning,2)
                         #print(t,distance,int(distance/20),m+1,n+1)#距离太近就输出错误
                         if len(track)==0:
                             errors.append([((aixs[m][0][0]+aixs[m+2][0][0])/2,(aixs[m][0][1]+aixs[m+2][0][1])/2,aixs[m][0][2]),(0,0,255),10,1,'sphere'])#错误红圈标记
@@ -361,12 +367,12 @@ def show(data,t0,music,show=True,save="",FPS=200,ThreeD=False,imshow=[120,-15],d
                 if key == 27:
                     break
                 elif key==32:#长按空格键暂停，暂停后可以按wasd旋转，按esc退出暂停
-                    if len(music)>1:
+                    if len(music)>0:
                         pygame.mixer.music.stop()
                     imshow[0],imshow[1]=IIID.show(aixs+lines+errors+texts,center,1280,720,[imshow[0],imshow[1],1],d)
                     i=imshow[0]-int(k/200*36+0.5)
                     time_read=time.time()-k/200
-                    if len(music)>1:
+                    if len(music)>0:
                         pygame.mixer.music.play(start=k/200)
                 elif key==ord('q'):#后退
                     k-=200
@@ -375,19 +381,19 @@ def show(data,t0,music,show=True,save="",FPS=200,ThreeD=False,imshow=[120,-15],d
                         time_read=time_fps
                     if k<0:
                         k=0
-                    if len(music)>1:
+                    if len(music)>0:
                         pygame.mixer.music.stop()
                     cv2.waitKey(0)
                     time_read=time.time()-k/200
-                    if len(music)>1:
+                    if len(music)>0:
                         pygame.mixer.music.play(start=k/200)
                 elif key==ord('e'):#快进
                     k+=200
-                    if len(music)>1:
+                    if len(music)>0:
                         pygame.mixer.music.stop()
                     cv2.waitKey(0)
                     time_read=time.time()-k/200
-                    if len(music)>1:
+                    if len(music)>0:
                         pygame.mixer.music.play(start=k/200)
             
         if not show and len(save)==0 and not ThreeD:
@@ -401,7 +407,7 @@ def show(data,t0,music,show=True,save="",FPS=200,ThreeD=False,imshow=[120,-15],d
             k=int(K+0.5)
     if (show and len(save)==0) or (ThreeD and len(save)==0):
         cv2.destroyAllWindows()
-        if len(music)>1:
+        if len(music)>0:
             pygame.mixer.music.stop()
     timer=time.time()-time_read
     print('平均帧率：'+str(int(10*f/timer+0.5)/10))
@@ -418,5 +424,11 @@ def show(data,t0,music,show=True,save="",FPS=200,ThreeD=False,imshow=[120,-15],d
             if os.path.exists(save+'.mp4'):
                 os.remove(save+'.mp4')
             video_add_audio(save+"_process.mp4",music_name,save+'.mp4')
+            os.remove(save+'_process.mp4')
+        elif len(music)==1:
+            print('音频添加中')
+            if os.path.exists(save+'.mp4'):
+                os.remove(save+'.mp4')
+            video_add_audio(save+"_process.mp4",music[0],save+'.mp4')
             os.remove(save+'_process.mp4')
         print(save+".mp4保存成功")
