@@ -11,7 +11,7 @@ class DroneAction:
     def __init__(self,
                  action_closure:Callable,
                  parameter:Union[list,map],
-                 timestamp:int
+                 timestamp:Optional[int]
                  ):
         self.action_closure = action_closure
         self.parameter = parameter
@@ -34,7 +34,7 @@ class LightAction:
     def __init__(self,
                  action_closure:Callable,
                  parameter:Union[list,map],
-                 timestamp:int,
+                 timestamp:Optional[int],
                  order:Literal['before', 'after']='before'
                  ):
         self.action_closure = action_closure
@@ -54,26 +54,26 @@ class LightAction:
         if type(self.parameter) == dict:
             self.action_closure(**self.parameter)
 
-_T = Union[DroneAction, LightAction]
-def actionfy(
-        actions:list[list[Callable,list,int]],
-        action_type:_T,
-        ) -> list[_T]:
-    """
-    example:
-    actions = [
-        [d1.takeoff, [1,100], 100],
-        [d1.intime, [4], 200],
-        [d1.move, [200,200,100], 300],
-        [d1.move2, [100, 150, 100], 400],
-        [d1.land, [], 500],
-        [d1.end, [], 600]
-    ]
-    """
-    action_list = []
-    for action in actions:
-        action_list.append(action_type(action[0], action[1], action[2]))
-    return action_list
+# _T = Union[DroneAction, LightAction]
+# def actionfy(
+#         actions:list[list[Callable,list,int]],
+#         action_type:_T,
+#         ) -> list[_T]:
+#     """
+#     example:
+#     actions = [
+#         [d1.takeoff, [1,100], 100],
+#         [d1.intime, [4], 200],
+#         [d1.move, [200,200,100], 300],
+#         [d1.move2, [100, 150, 100], 400],
+#         [d1.land, [], 500],
+#         [d1.end, [], 600]
+#     ]
+#     """
+#     action_list = []
+#     for action in actions:
+#         action_list.append(action_type(action[0], action[1], action[2]))
+#     return action_list
 
 class Drone:
     def __init__(self,x=0,y=0):
@@ -96,13 +96,16 @@ class Drone:
         合成动作和灯光
         """
         for action in self.action_list:
-            light_before:Optional[LightAction] = self.light_actions.get(str(action.timestamp)+'before')
-            light_after:Optional[LightAction] = self.light_actions.get(str(action.timestamp)+'after')
-            if light_before is not None:
-                light_before.take_action()
-            action.take_action()
-            if light_after is not None:
-                light_after.take_acion()
+            if action.timestamp is None:
+                action.take_action()
+            else:
+                light_before:Optional[LightAction] = self.light_actions.get(str(action.timestamp)+'before')
+                light_after:Optional[LightAction] = self.light_actions.get(str(action.timestamp)+'after')
+                if light_before is not None:
+                    light_before.take_action()
+                action.take_action()
+                if light_after is not None:
+                    light_after.take_action()
 
 
     def append_action(self, action:DroneAction):
@@ -131,27 +134,21 @@ class Drone:
         for light in lights:
             self.append_light(light)
     
-    def takeoff(self,time,z):
+    def takeoff(self,time,z, timestamp = None):
         """
         起飞(x坐标,y坐标,起飞高度)
         单位:cm
         范围:80~250
         """
-        z=int(z+0.5)
-        self.z =z
-        self.x,self.y=int(self.X+0.5),int(self.Y+0.5)
-        self.X,self.Y=int(self.X+0.5),int(self.Y+0.5)
-        if z>250 or z<80 or time<1 or self.X<0 or self.X>560 or self.Y<0 or self.Y>560:
-            raise Warning("Out of range.超出范围。")
-        time=int(time+0.5)
-        '''self.times.append(time)
-        m=int(time/60) #分
-        s = time%60 #秒
-        if s<10:
-            time='0'+str(m)+':0'+str(s)
-        else:
-            time='0'+str(m)+':'+str(s)'''
-        self.outputString+='''  <block type="Goertek_Start" x="'''+str(self.X)+'''" y="'''+str(self.Y)+'''">
+        def take_off_colsure(self,time,z):
+            z=int(z+0.5)
+            self.z =z
+            self.x,self.y=int(self.X+0.5),int(self.Y+0.5)
+            self.X,self.Y=int(self.X+0.5),int(self.Y+0.5)
+            if z>250 or z<80 or time<1 or self.X<0 or self.X>560 or self.Y<0 or self.Y>560:
+                raise Warning("Out of range.超出范围。")
+            time=int(time+0.5)
+            self.outputString+='''  <block type="Goertek_Start" x="'''+str(self.X)+'''" y="'''+str(self.Y)+'''">
     <next>
       <block type="block_inittime">
         <field name="time">00:00</field>
@@ -166,386 +163,425 @@ class Drone:
                   <block type="Goertek_TakeOff">
                     <field name="alt">'''+str(z)+'''</field>
 '''
-        self.block+=6
-        self.inT=True
-        self.space=4
+            self.block+=6
+            self.inT=True
+            self.space=4
+        self.append_action(DroneAction(take_off_colsure, [self, time, z], timestamp))
 
-    def intime(self,time):
+    def intime(self,time, timestamp = None):
         """
         某一时刻开始执行(时刻)
         单位:s(直接写秒数)
         """
-        for n in range(self.block-1,0,-1):
-            spaces='  '*(self.space+n)
-            if n%2==1:
-                self.outputString += spaces+'''</block>
+        def intime_colsure(self, time):
+            for n in range(self.block-1,0,-1):
+                spaces='  '*(self.space+n)
+                if n%2==1:
+                    self.outputString += spaces+'''</block>
 '''
+                else:
+                    self.outputString += spaces+'''</next>
+'''
+            self.block=0
+            spaces='  '*(self.space+self.block)
+            self.outputString += spaces+'''</statement>
+'''
+            time=int(time+0.5)
+            self.times.append(time)
+            spaces = '  '*self.space
+            m=int(time/60) #分
+            s = time%60 #秒
+            if s<10:
+                time='0'+str(m)+':0'+str(s)
             else:
-                self.outputString += spaces+'''</next>
-'''
-        self.block=0
-        spaces='  '*(self.space+self.block)
-        self.outputString += spaces+'''</statement>
-'''
-        time=int(time+0.5)
-        self.times.append(time)
-        spaces = '  '*self.space
-        m=int(time/60) #分
-        s = time%60 #秒
-        if s<10:
-            time='0'+str(m)+':0'+str(s)
-        else:
-            time='0'+str(m)+':'+str(s)
-        self.outputString += spaces+'''<next>
+                time='0'+str(m)+':'+str(s)
+            self.outputString += spaces+'''<next>
 '''+spaces+'''  <block type="block_inittime">
 '''+spaces+'''    <field name="time">'''+time+'''</field>
 '''+spaces+'''    <field name="color">#cccccc</field>
 '''+spaces+'''    <statement name="functionIntit">
 '''
-        self.space+=2
-        self.block+=1
-        self.inT=False
+            self.space+=2
+            self.block+=1
+            self.inT=False
+        self.append_action(DroneAction(intime_colsure, [self, time], timestamp))
 
-    def move(self,x,y,z):
+    def move(self,x,y,z, timestamp=None):
         """
         移动(x距离,y距离,z距离)
         单位:cm
         必须在intime(time)中
         """
-        x,y,z=int(x+0.5),int(y+0.5),int(z+0.5)
-        self.x+=x
-        self.y+=y
-        self.z+=z
-        spaces='  '*(self.space+self.block)
-        if self.inT:
-            self.outputString += spaces+'''<next>
+        def move_colsure(self, x, y, z):
+            x,y,z=int(x+0.5),int(y+0.5),int(z+0.5)
+            self.x+=x
+            self.y+=y
+            self.z+=z
+            spaces='  '*(self.space+self.block)
+            if self.inT:
+                self.outputString += spaces+'''<next>
     '''
-            self.block+=1
-            spaces+='  '
-        self.outputString += spaces+'''<block type="Goertek_Move">
+                self.block+=1
+                spaces+='  '
+            self.outputString += spaces+'''<block type="Goertek_Move">
 '''+spaces+'''  <field name="X">'''+str(x)+'''</field>
 '''+spaces+'''  <field name="Y">'''+str(y)+'''</field>
 '''+spaces+'''  <field name="Z">'''+str(z)+'''</field>
 '''
-        self.block+=1
-        self.inT=True
+            self.block+=1
+            self.inT=True
+        self.append_action(DroneAction(move_colsure, [self,x,y,z], timestamp))
 
 
-    def move2(self, x, y, z):
+    def move2(self, x, y, z, timestamp=None):
         """
         直线移动至(x坐标,y坐标,z坐标)
         单位:cm
         范围:x,y:0~560,z:80~250
         必须在intime(time)中
         """
-        x,y,z=int(x+0.5),int(y+0.5),int(z+0.5)
-        if x<0 or x>560 or y<0 or y>560 or z>250 or z<80:
-            raise Warning("Out of range.超出范围。")
-        self.x, self.y, self.z = x, y, z
-        spaces='  '*(self.space+self.block)
-        if self.inT:
-            self.outputString += spaces+'''<next>
+        def move2_colsure(self, x, y, z):
+            x,y,z=int(x+0.5),int(y+0.5),int(z+0.5)
+            if x<0 or x>560 or y<0 or y>560 or z>250 or z<80:
+                raise Warning("Out of range.超出范围。")
+            self.x, self.y, self.z = x, y, z
+            spaces='  '*(self.space+self.block)
+            if self.inT:
+                self.outputString += spaces+'''<next>
     '''
-            self.block+=1
-            spaces+='  '
-        self.outputString += spaces+'''<block type="Goertek_MoveToCoord">
+                self.block+=1
+                spaces+='  '
+            self.outputString += spaces+'''<block type="Goertek_MoveToCoord">
 '''+spaces+'''  <field name="X">'''+str(x)+'''</field>
 '''+spaces+'''  <field name="Y">'''+str(y)+'''</field>
 '''+spaces+'''  <field name="Z">'''+str(z)+'''</field>
 '''
-        self.block+=1
-        self.inT=True
+            self.block+=1
+            self.inT=True
+        self.append_action(DroneAction(move2_colsure, [self, x, y, z], timestamp))
 
-    def delay(self, time):
+    def delay(self, time, timestamp = None):
         """
         等待(时间)
         单位:ms
         必须在intime(time)中
         """
-        time=int(time+0.5)
-        spaces='  '*(self.space+self.block)
-        if self.inT:
-            self.outputString += spaces+'''<next>
+        def delay_colsure(self, time):
+            time=int(time+0.5)
+            spaces='  '*(self.space+self.block)
+            if self.inT:
+                self.outputString += spaces+'''<next>
 '''
-            self.block+=1
-            spaces+='  '
-        self.outputString += spaces+'''<block type="block_delay">
+                self.block+=1
+                spaces+='  '
+            self.outputString += spaces+'''<block type="block_delay">
 '''+spaces+'''  <field name="delay">0</field>
 '''+spaces+'''  <field name="time">'''+str(time)+'''</field>
 '''
-        self.block+=1
-        self.inT=True
+            self.block+=1
+            self.inT=True
+        self.append_action(DroneAction(delay_colsure, [self, time], timestamp))
 
-    def VelXY(self,v,a):
+    def VelXY(self,v,a, timestamp=None):
         """
         水平速度（速度,加速度）
         单位:cm/s,cm/s^2
         范围:速度:20~200,加速度:50~400
         必须在intime(time)中
         """
-        v,a=int(v+0.5),int(a+0.5)
-        if v<20 or v>200 or a<50 or a>400:
-            raise Warning("Out of range.超出范围。")
-        spaces='  '*(self.space+self.block)
-        if self.inT:
-            self.outputString += spaces+'''<next>
+        def VelXY_colsure(self, v, a):
+            v,a=int(v+0.5),int(a+0.5)
+            if v<20 or v>200 or a<50 or a>400:
+                raise Warning("Out of range.超出范围。")
+            spaces='  '*(self.space+self.block)
+            if self.inT:
+                self.outputString += spaces+'''<next>
 '''
-            self.block+=1
-            spaces+='  '
-        self.outputString += spaces+'''<block type="Goertek_HorizontalSpeed">
+                self.block+=1
+                spaces+='  '
+            self.outputString += spaces+'''<block type="Goertek_HorizontalSpeed">
 '''+spaces+'''  <field name="VH">'''+str(v)+'''</field>
 '''+spaces+'''  <field name="AH">'''+str(a)+'''</field>
 '''
-        self.block+=1
-        self.inT=True
+            self.block+=1
+            self.inT=True
+        self.append_action(DroneAction(VelXY_colsure, [self, v, a], timestamp))
 
-    def VelZ(self,v,a):
+    def VelZ(self,v,a, timestamp=None):
         """
         竖直速度（速度,加速度）
         单位:cm/s,cm/s^2
         必须在intime(time)中
         """
-        v,a=int(v+0.5),int(a+0.5)
-        spaces='  '*(self.space+self.block)
-        if self.inT:
-            self.outputString += spaces+'''<next>
+        def VelZ_colsure(self, v, a):
+            v,a=int(v+0.5),int(a+0.5)
+            spaces='  '*(self.space+self.block)
+            if self.inT:
+                self.outputString += spaces+'''<next>
 '''
-            self.block+=1
-            spaces+='  '
-        self.outputString += spaces+'''<block type="Goertek_VerticalSpeed">
+                self.block+=1
+                spaces+='  '
+            self.outputString += spaces+'''<block type="Goertek_VerticalSpeed">
 '''+spaces+'''  <field name="VV">'''+str(v)+'''</field>
 '''+spaces+'''  <field name="AV">'''+str(a)+'''</field>
 '''
-        self.block+=1
-        self.inT=True  
-        #warnings.warn("VelZ() is ignored in pyfii show.VelZ()在pyfii的模拟飞行中被忽略。",Warning,2)
+            self.block+=1
+            self.inT=True  
+            #warnings.warn("VelZ() is ignored in pyfii show.VelZ()在pyfii的模拟飞行中被忽略。",Warning,2)
+        self.append_action(DroneAction(VelZ_colsure, [self, v, a], timestamp))
 
-    def AccXY(self,a):
+    def AccXY(self,a, timestamp=None):
         """
         水平加速度（加速度）
         单位:cm/s^2
         范围:50~400
         必须在intime(time)中
         """
-        a=int(a+0.5)
-        spaces='  '*(self.space+self.block)
-        if self.inT:
-            self.outputString += spaces+'''<next>
+        def AccXY(self, a):
+            a=int(a+0.5)
+            spaces='  '*(self.space+self.block)
+            if self.inT:
+                self.outputString += spaces+'''<next>
 '''
-            self.block+=1
-            spaces+='  '
-        self.outputString += spaces+'''<block type="Goertek_HorizontalAcceleration">
+                self.block+=1
+                spaces+='  '
+            self.outputString += spaces+'''<block type="Goertek_HorizontalAcceleration">
 '''+spaces+'''  <field name="AH">'''+str(a)+'''</field>
 '''
-        self.block+=1
-        self.inT=True   
+            self.block+=1
+            self.inT=True   
+        self.append_action(DroneAction(AccXY, [self, a], timestamp))
 
-    def AccZ(self,a):
+    def AccZ(self,a, timestamp = None):
         """
         竖直加速度（加速度）
         单位:cm/s^2
         必须在intime(time)中
         """
-        a=int(a+0.5)
-        if a<50 or a>400:
-            raise Warning("Out of range.超出范围。")
-        spaces='  '*(self.space+self.block)
-        if self.inT:
-            self.outputString += spaces+'''<next>
+        def AccZ_colsure(self, a):
+            a=int(a+0.5)
+            if a<50 or a>400:
+                raise Warning("Out of range.超出范围。")
+            spaces='  '*(self.space+self.block)
+            if self.inT:
+                self.outputString += spaces+'''<next>
 '''
-            self.block+=1
-            spaces+='  '
-        self.outputString += spaces+'''<block type="Goertek_VerticalAcceleration">
+                self.block+=1
+                spaces+='  '
+            self.outputString += spaces+'''<block type="Goertek_VerticalAcceleration">
 '''+spaces+'''  <field name="AV">'''+str(a)+'''</field>
 '''
-        self.block+=1
-        self.inT=True  
-        #warnings.warn("VelZ() is ignored in pyfii show.VelZ()在pyfii的模拟飞行中被忽略。",Warning,2)
+            self.block+=1
+            self.inT=True  
+            #warnings.warn("VelZ() is ignored in pyfii show.VelZ()在pyfii的模拟飞行中被忽略。",Warning,2)
+        self.append_action(DroneAction(AccZ_colsure, [self, a], timestamp))
 
-    def ARate(self,w):
+    def ARate(self,w, timestamp = None):
         """
         角速度（角速度）
         单位:°/s
         范围:5~60
         必须在intime(time)中
         """
-        w=int(w+0.5)
-        if w<5 or w>60:
-            raise Warning("Out of range.超出范围。")
-        spaces='  '*(self.space+self.block)
-        if self.inT:
-            self.outputString += spaces+'''<next>
+        def ARate_colsure(self, w):
+            w=int(w+0.5)
+            if w<5 or w>60:
+                raise Warning("Out of range.超出范围。")
+            spaces='  '*(self.space+self.block)
+            if self.inT:
+                self.outputString += spaces+'''<next>
 '''
-            self.block+=1
-            spaces+='  '
-        self.outputString += spaces+'''<block type="Goertek_AngularVelocity">
+                self.block+=1
+                spaces+='  '
+            self.outputString += spaces+'''<block type="Goertek_AngularVelocity">
 '''+spaces+'''  <field name="w">'''+str(w)+'''</field>
 '''
-        self.block+=1
-        self.inT=True
+            self.block+=1
+            self.inT=True
+        self.append_action(DroneAction(ARate_colsure, [self, w], timestamp))
 
-    def Yaw(self,a):
+
+    def Yaw(self,a, timestamp=None):
         """
         转动（角度）
         单位:°（左正右负）
         必须在intime(time)中
         """
-        spaces='  '*(self.space+self.block)
-        if self.inT:
-            self.outputString += spaces+'''<next>
+        def Yaw_colsure(self, a):
+            spaces='  '*(self.space+self.block)
+            if self.inT:
+                self.outputString += spaces+'''<next>
 '''
-            self.block+=1
-            spaces+='  '
-        if a>0:
-            a=int(a+0.5)
-            self.outputString += spaces+'''<block type="Goertek_Turn">
+                self.block+=1
+                spaces+='  '
+            if a>0:
+                a=int(a+0.5)
+                self.outputString += spaces+'''<block type="Goertek_Turn">
 '''+spaces+'''  <field name="turnDirection">l</field>
 '''+spaces+'''  <field name="angle">'''+str(a)+'''</field>
 '''
-        else:
-            a=int(abs(a)+0.5)
-            self.outputString += spaces+'''<block type="Goertek_Turn">
+            else:
+                a=int(abs(a)+0.5)
+                self.outputString += spaces+'''<block type="Goertek_Turn">
 '''+spaces+'''  <field name="turnDirection">r</field>
 '''+spaces+'''  <field name="angle">'''+str(a)+'''</field>
 '''
-        self.block+=1
-        self.inT=True
+            self.block+=1
+            self.inT=True
+        self.append_action(DroneAction(Yaw_colsure, [self, a], timestamp))
 
-    def Yaw2(self,a):
+
+    def Yaw2(self,a, timestamp=None):
         """
         转向（角度）
         单位:°（左正右负）
         必须在intime(time)中
         """
-        spaces='  '*(self.space+self.block)
-        if self.inT:
-            self.outputString += spaces+'''<next>
+        def Yaw2_colsure(self, a):
+            spaces='  '*(self.space+self.block)
+            if self.inT:
+                self.outputString += spaces+'''<next>
 '''
-            self.block+=1
-            spaces+='  '
-        if a>0:
-            a=int(a+0.5)
-            self.outputString += spaces+'''<block type="Goertek_TurnTo">
+                self.block+=1
+                spaces+='  '
+            if a>0:
+                a=int(a+0.5)
+                self.outputString += spaces+'''<block type="Goertek_TurnTo">
 '''+spaces+'''  <field name="turnDirection">l</field>
 '''+spaces+'''  <field name="angle">'''+str(a)+'''</field>
 '''
-        else:
-            a=int(abs(a)+0.5)
-            self.outputString += spaces+'''<block type="Goertek_TurnTo">
+            else:
+                a=int(abs(a)+0.5)
+                self.outputString += spaces+'''<block type="Goertek_TurnTo">
 '''+spaces+'''  <field name="turnDirection">r</field>
 '''+spaces+'''  <field name="angle">'''+str(a)+'''</field>
 '''
-        self.block+=1
-        self.inT=True
+            self.block+=1
+            self.inT=True
+        self.append_action(DroneAction(Yaw2_colsure, [self, a], timestamp))
 
-    def land(self):
+
+    def land(self, timestamp = None):
         """
         降落
         """
-        spaces='  '*(self.space+self.block)
-        if self.inT:
-            self.outputString += spaces+'''<next>
+        def land_colsure(self):
+            spaces='  '*(self.space+self.block)
+            if self.inT:
+                self.outputString += spaces+'''<next>
+'''
+                self.block+=1
+                spaces+='  '
+            self.outputString += spaces+'''<block type="Goertek_Land">
 '''
             self.block+=1
-            spaces+='  '
-        self.outputString += spaces+'''<block type="Goertek_Land">
-'''
-        self.block+=1
-        self.inT=True
+            self.inT=True
+        self.append_action(DroneAction(land_colsure, [self], timestamp))
         
-    def end(self):
+    def end(self, timestamp=None):
         """
         结束
         """
-        for n in range(self.block-1,0,-1):
-            spaces='  '*(self.space+n)
-            if n%2==1:
-                self.outputString += spaces+'''</block>
+        def end_colsure(self):
+            for n in range(self.block-1,0,-1):
+                spaces='  '*(self.space+n)
+                if n%2==1:
+                    self.outputString += spaces+'''</block>
 '''
-            else:
-                self.outputString += spaces+'''</next>
+                else:
+                    self.outputString += spaces+'''</next>
 '''
-        self.block=0
-        spaces='  '*(self.space+self.block)
-        self.outputString += spaces+'''</statement>
+            self.block=0
+            spaces='  '*(self.space+self.block)
+            self.outputString += spaces+'''</statement>
 '''
-        for n in range(self.space-1,-1,-1):
-            spaces='  '*n
-            if n==0:
-                self.outputString += '</xml>'
-            elif n%2==1:
-                self.outputString += spaces+'''</block>
+            for n in range(self.space-1,-1,-1):
+                spaces='  '*n
+                if n==0:
+                    self.outputString += '</xml>'
+                elif n%2==1:
+                    self.outputString += spaces+'''</block>
 '''
-            else:
-                self.outputString += spaces+'''</next>
+                else:
+                    self.outputString += spaces+'''</next>
 '''
+        self.append_action(DroneAction(end_colsure, [self], timestamp))
+        self.take_actions()
 
-    def nod(self,direction,distance):
+
+    def nod(self,direction,distance, timestamp=None):
         """
         点头 沿 direction 方向急速平移 distance cm
         direction:x,-x,y,-y
         d:10~20
         """
-        d=int(distance+0.5)
-        if d<10 or d>20:
-            raise Warning("Out of range.超出范围。")
-        spaces='  '*(self.space+self.block)
-        if self.inT:
-            self.outputString += spaces+'''<next>
+        def nod_colsure(self, direction,distance):
+            d=int(distance+0.5)
+            if d<10 or d>20:
+                raise Warning("Out of range.超出范围。")
+            spaces='  '*(self.space+self.block)
+            if self.inT:
+                self.outputString += spaces+'''<next>
 '''
-            self.block+=1
-            spaces+='  '
-        self.outputString += spaces+'''<block type="Goertek_HighSpeedTranslate">
+                self.block+=1
+                spaces+='  '
+            self.outputString += spaces+'''<block type="Goertek_HighSpeedTranslate">
 '''+spaces+'''  <field name="axis">'''+str(direction)+'''</field>
 '''+spaces+'''  <field name="d">'''+str(d)+'''</field>
 '''
-        self.block+=1
-        self.inT=True
+            self.block+=1
+            self.inT=True
+        self.append_action(DroneAction(nod_colsure, [self, direction, distance], timestamp))
+
     
-    def SimpleHarmonic2(self,direction,amplitude):
+    def SimpleHarmonic2(self,direction,amplitude, timestamp=None):
         """
         波浪运动 沿 direction 方向以整幅 amplitude cm 运动
         direction:x,-x,y,-y,z,-z
         amplitude:10~50
         """
-        amplitude=int(amplitude+0.5)
-        if amplitude<10 or amplitude>50:
-            raise Warning("Out of range.超出范围。")
-        spaces='  '*(self.space+self.block)
-        if self.inT:
-            self.outputString += spaces+'''<next>
+        def SimpleHarmonic2_colsure(self, direction,amplitude):
+            amplitude=int(amplitude+0.5)
+            if amplitude<10 or amplitude>50:
+                raise Warning("Out of range.超出范围。")
+            spaces='  '*(self.space+self.block)
+            if self.inT:
+                self.outputString += spaces+'''<next>
 '''
-            self.block+=1
-            spaces+='  '
-        self.outputString += spaces+'''<block type="Goertek_SimpleHarmonicMotio">
+                self.block+=1
+                spaces+='  '
+            self.outputString += spaces+'''<block type="Goertek_SimpleHarmonicMotio">
 '''+spaces+'''  <field name="axis">'''+str(direction)+'''</field>
 '''+spaces+'''  <field name="amplitude">'''+str(amplitude)+'''</field>
 '''
-        self.block+=1
-        self.inT=True
-    
-    def RoundInAir(self,startpos,centerpos,height,vilocity):
+            self.block+=1
+            self.inT=True
+        self.append_action(DroneAction(SimpleHarmonic2_colsure, [self, direction, amplitude], timestamp))
+
+        
+    def RoundInAir(self,startpos,centerpos,height,vilocity, timestamp=None):
         """
         绕圈飞行 起点 startpos 圆心 centerpos 高度 height 速度 vilocity(正逆时针,负逆时针)
         height:80~250
         vilovity:60~180
         """
-        X=int(startpos[0]+0.5)
-        Y=int(startpos[1]+0.5)
-        Cx=int(centerpos[0]+0.5)
-        Cy=int(centerpos[1]+0.5)
-        height=int(height+0.5)
-        direction=int((abs(vilocity)/vilocity+1)/2)
-        vilocity=int(abs(vilocity)+0.5)
-        if vilocity<60 or vilocity>180 or height>250 or height<80 or X<0 or X>560 or Y<0 or Y>560 or Cx<0 or Cx>560 or Cy<0 or Cy>560:
-            raise Warning("Out of range.超出范围。")
-        spaces='  '*(self.space+self.block)
-        if self.inT:
-            self.outputString += spaces+'''<next>
+        def RoundInAir_colsure(self,startpos,centerpos,height,vilocity):
+            X=int(startpos[0]+0.5)
+            Y=int(startpos[1]+0.5)
+            Cx=int(centerpos[0]+0.5)
+            Cy=int(centerpos[1]+0.5)
+            height=int(height+0.5)
+            direction=int((abs(vilocity)/vilocity+1)/2)
+            vilocity=int(abs(vilocity)+0.5)
+            if vilocity<60 or vilocity>180 or height>250 or height<80 or X<0 or X>560 or Y<0 or Y>560 or Cx<0 or Cx>560 or Cy<0 or Cy>560:
+                raise Warning("Out of range.超出范围。")
+            spaces='  '*(self.space+self.block)
+            if self.inT:
+                self.outputString += spaces+'''<next>
 '''
-            self.block+=1
-            spaces+='  '
-        self.outputString += spaces+'''<block type="Goertek_TurnTo">
+                self.block+=1
+                spaces+='  '
+            self.outputString += spaces+'''<block type="Goertek_TurnTo">
 '''+spaces+'''  <field name="X">'''+str(X)+'''</field>
 '''+spaces+'''  <field name="Y">'''+str(Y)+'''</field>
 '''+spaces+'''  <field name="Cx">'''+str(Cx)+'''</field>
@@ -554,84 +590,115 @@ class Drone:
 '''+spaces+'''  <field name="direction">'''+str(direction)+'''</field>
 '''+spaces+'''  <field name="V">'''+str(vilocity)+'''</field>
 '''
-        self.block+=1
-        self.inT=True
-
-    def TurnOnSingle(self,Id,color):
-        spaces='  '*(self.space+self.block)
-        if self.inT:
-            self.outputString += spaces+'''<next>
-'''
             self.block+=1
-            spaces+='  '
-        self.outputString += spaces+'''<block type="Goertek_AtomicLEDOn">
+            self.inT=True
+        self.append_action(DroneAction(RoundInAir_colsure, [self, startpos,centerpos,height,vilocity], timestamp))
+
+
+    def TurnOnSingle(self,Id,color, timestamp=None, order='before'):
+        def TurnOnSingle_colsure(self,Id,color):
+            spaces='  '*(self.space+self.block)
+            if self.inT:
+                self.outputString += spaces+'''<next>
+'''
+                self.block+=1
+                spaces+='  '
+            self.outputString += spaces+'''<block type="Goertek_AtomicLEDOn">
 '''+spaces+'''  <field name="id">'''+str(Id)+'''</field>
 '''+spaces+'''  <field name="color">'''+color+'''</field>
 '''
-        self.block+=1
-        self.inT=True
-
-    def TurnOffSingle(self,Id):
-        spaces='  '*(self.space+self.block)
-        if self.inT:
-            self.outputString += spaces+'''<next>
-'''
             self.block+=1
-            spaces+='  '
-        self.outputString += spaces+'''<block type="Goertek_AtomicLEDOff">
+            self.inT=True
+        self.append_light(LightAction(TurnOnSingle_colsure, [self,Id,color], timestamp, order))
+
+    def TurnOffSingle(self,Id, timestamp=None, order='before'):
+        def TurnOffSingle_colsure(self, Id):
+            spaces='  '*(self.space+self.block)
+            if self.inT:
+                self.outputString += spaces+'''<next>
+'''
+                self.block+=1
+                spaces+='  '
+            self.outputString += spaces+'''<block type="Goertek_AtomicLEDOff">
 '''+spaces+'''  <field name="id">'''+str(Id)+'''</field>
 '''
-        self.block+=1
-        self.inT=True
-
-    def TurnOnAll(self,colors):
-        spaces='  '*(self.space+self.block)
-        if self.inT:
-            self.outputString += spaces+'''<next>
-'''
             self.block+=1
-            spaces+='  '
-        self.outputString += spaces+'''<block type="Goertek_LEDTurnOnAllSingleColor">
+            self.inT=True
+        if timestamp is None:
+            self.append_action(DroneAction(TurnOffSingle_colsure, [self, Id], timestamp))
+        else:
+            self.append_light(LightAction(TurnOffSingle_colsure, [self,Id], timestamp, order))
+
+    def TurnOnAll(self,colors, timestamp=None, order='before'):
+        def TurnOnAll_colsure(self, colors):
+            spaces='  '*(self.space+self.block)
+            if self.inT:
+                self.outputString += spaces+'''<next>
+'''
+                self.block+=1
+                spaces+='  '
+            self.outputString += spaces+'''<block type="Goertek_LEDTurnOnAllSingleColor">
 '''+spaces+'''  <field name="color1">'''+colors+'''</field>
 '''
-        self.block+=1
-        self.inT=True
+            self.block+=1
+            self.inT=True
+        if timestamp is None:
+            self.append_action(DroneAction(TurnOnAll_colsure, [self,colors], timestamp))
+        else:
+            self.append_light(LightAction(TurnOnAll_colsure, [self,colors], timestamp, order))
 
-    def TurnOffAll(self):
-        spaces='  '*(self.space+self.block)
-        if self.inT:
-            self.outputString += spaces+'''<next>
+    def TurnOffAll(self, timestamp=None, order='before'):
+        def TurnOffAll_colsure(self):
+            spaces='  '*(self.space+self.block)
+            if self.inT:
+                self.outputString += spaces+'''<next>
+'''
+                self.block+=1
+                spaces+='  '
+            self.outputString+=spaces+'''<block type="Goertek_LEDTurnOffAll">
 '''
             self.block+=1
-            spaces+='  '
-        self.outputString+=spaces+'''<block type="Goertek_LEDTurnOffAll">
-'''
-        self.block+=1
-        self.inT=True
+            self.inT=True
+        if timestamp is None:
+            self.append_action(DroneAction(TurnOffAll_colsure, [self], timestamp))
+        else:
+            self.append_light(LightAction(TurnOffAll_colsure, [self], timestamp, order))
 
-    def BlinkSingle(self,Id,color):
-        spaces='  '*(self.space+self.block)
-        if self.inT:
-            self.outputString += spaces+'''<next>
+
+    def BlinkSingle(self,Id,color, timestamp=None, order='before'):
+        def BlinkSingle_colsure(self, Id, color):
+            spaces='  '*(self.space+self.block)
+            if self.inT:
+                self.outputString += spaces+'''<next>
 '''
-            self.block+=1
-            spaces+='  '
-        self.outputString+=spaces+'''<block type="Goertek_LEDSingleBlink">
+                self.block+=1
+                spaces+='  '
+            self.outputString+=spaces+'''<block type="Goertek_LEDSingleBlink">
 '''+spaces+'''  <field name="id">'''+str(Id)+'''</field>
 '''+spaces+'''  <field name="color">'''+color+'''</field>
 '''
-        self.block+=1
-        self.inT=True
-
-    def Breath(self,colors):
-        spaces='  '*(self.space+self.block)
-        if self.inT:
-            self.outputString += spaces+'''<next>
-'''
             self.block+=1
-            spaces+='  '
-        self.outputString+=spaces+'''<block type="Goertek_LEDBreath">
+            self.inT=True
+        if timestamp is None:
+            self.append_action(DroneAction(BlinkSingle_colsure [self, Id, color], timestamp))
+        else:
+            self.append_light(LightAction(BlinkSingle_colsure, [self, Id, color], timestamp, order))
+
+
+    def Breath(self,colors, timestamp=None, order='before'):
+        def Breath_colsure(self, colors):
+            spaces='  '*(self.space+self.block)
+            if self.inT:
+                self.outputString += spaces+'''<next>
+'''
+                self.block+=1
+                spaces+='  '
+            self.outputString+=spaces+'''<block type="Goertek_LEDBreath">
 '''+spaces+'''  <field name="color">'''+colors+'''</field>
 '''
-        self.block+=1
-        self.inT=True
+            self.block+=1
+            self.inT=True
+        if timestamp is None:
+            self.append_action(DroneAction(Breath_colsure, [self, colors], timestamp))
+        else:
+            self.append_light(LightAction(Breath_colsure, [self, colors], timestamp, order))
