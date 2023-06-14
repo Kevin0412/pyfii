@@ -1,5 +1,7 @@
 import os
 import shutil
+from .read import dots2line
+import warnings
 
 class Fii:
     def __init__(self,name,drones,music=''):
@@ -8,15 +10,21 @@ class Fii:
         self.dots=[]
         self.t0=0
         self.music=music
-        '''for d in self.ds:
-            self.dots.append(dots2line(d.outputString,fii=[d.X,d.Y])[0])
-            self.t0=max(self.t0,dots2line(d.outputString,fii=[d.X,d.Y])[1])'''
+        n=0
+        for d in self.ds:
+            n+=1
+            line=dots2line(d.outputString,fii=[d.X,d.Y])
+            self.dots.append(line[0])
+            if len(line[2])>0:
+                for warn in line[2]:
+                    warnings.warn('d'+str(n)+' 无人机'+str(n)+':'+warn,Warning,2)
+            self.t0=max(self.t0,dots2line(d.outputString,fii=[d.X,d.Y])[1])
 
     def save(self):
         if not os.path.exists(self.name):
             os.makedirs(self.name)
 
-        file=open(self.name+'\\'+self.name+'.fii',"w",encoding='utf-8')
+        file=open(self.name+'/'+self.name+'.fii',"w",encoding='utf-8')
         file.write('''<?xml version="1.0" encoding="utf-8"?>
 <GoertekGraphicXml>
   <DeviceType DeviceType="F400" />
@@ -44,9 +52,9 @@ class Fii:
         file.write('</GoertekGraphicXml>')
         file.close()
         
-        if not os.path.exists(self.name+'\\动作组'):
-            os.makedirs(self.name+'\\动作组') 
-        file=open(self.name+'\\动作组\\checksums.xml',"w",encoding='utf-8')
+        if not os.path.exists(self.name+'/动作组'):
+            os.makedirs(self.name+'/动作组') 
+        file=open(self.name+'/动作组/checksums.xml',"w",encoding='utf-8')
         file.write('<?xml version="1.0" encoding="utf-8"?>')
         file.write('\n')
         file.write('<CheckSumXml>')
@@ -61,12 +69,12 @@ class Fii:
 
         k=1
         for d in self.ds:
-            if not os.path.exists(self.name+'\\动作组\\动作组'+str(k)):
-                os.makedirs(self.name+'\\动作组\\动作组'+str(k)) 
-            file=open(self.name+'\\动作组\\动作组'+str(k)+'\\webCodeAll.xml',"w",encoding='utf-8')
+            if not os.path.exists(self.name+'/动作组/动作组'+str(k)):
+                os.makedirs(self.name+'/动作组/动作组'+str(k)) 
+            file=open(self.name+'/动作组/动作组'+str(k)+'/webCodeAll.xml',"w",encoding='utf-8')
             file.write(d.outputString)
             file.close()
             k+=1
         if len(self.music)>0:
-            shutil.copyfile(self.music,self.name+'\\动作组\\'+self.music)
+            shutil.copyfile(self.music,self.name+'/动作组/'+self.music)
         print('已保存'+self.name)
