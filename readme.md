@@ -61,6 +61,24 @@ d1.SimpleHarmonic2(direction,amplitude)
 d1.RoundInAir(startpos,centerpos,height,vilocity)
 #绕圈飞行 起点 startpos 圆心 centerpos 高度 height 速度 vilocity(正逆时针,负顺时针)
 
+d1.TurnOnSingle(Id,color)
+#点亮某一盏灯，颜色
+
+d1.TurnOffSingle(Id)
+#熄灭某一盏灯
+
+d1.TurnOnAll(colors)
+#点亮所有灯，颜色
+
+d1.TurnOffAll()
+#熄灭所有灯
+
+d1.BlinkSingle(Id,color)
+#闪烁某一盏灯，颜色
+
+d1.Breath(colors)
+#呼吸灯，颜色
+
 4、保存为.fii
 F=pf.Fii('测试',[d1,d2],music='xx.mp3')#命名,[所有无人机名],music选择性添加
 F.save()
@@ -73,7 +91,7 @@ pf.show(data,t0,music)
 #把所在文件夹的路径写下来即可
 
 直接在python中展示
-pf.show(F.dots,F.t0,F.music)
+pf.show(F.dots,F.t0,[F.music])
 
 三维展示
 正交：pf.show(F.dots,F.t0,F.music,ThreeD=True,imshow=[120,-15],d=(1,0))
@@ -86,13 +104,13 @@ pf.show(F.dots,F.t0,F.music)
 #全景建议生成视频
 
 可以不看展示直接知道能不能飞
-pf.show(F.dots,F.t0,F.music,show=False)
+pf.show(F.dots,F.t0,[F.music],show=False)
 
 保存为视频
-pf.show(F.dots,F.t0,F.music,save='ceshi')#文件名不能用中文
+pf.show(F.dots,F.t0,[F.music],save='ceshi')#文件名不能用中文
 
 保存为视频时可用FPS参数来调整视频质量，改变输出视频速度，如：
-pf.show(F.dots,F.t0,F.music,save='ceshi',FPS=25)
+pf.show(F.dots,F.t0,[F.music],save='ceshi',FPS=25)
 #FPS越小，视频帧率越小，视频输出速度越快
 
 模拟飞行：空格暂停，q后退，e前进，Esc退出，三维模拟时空格暂停后按w,a,s,d转动视角，按esc退出暂停，三维模拟中需要长按键盘操控
