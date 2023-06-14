@@ -1,6 +1,6 @@
 import warnings
 class Drone:
-    def __init__(self,x,y):
+    def __init__(self,x=0,y=0):
         self.space = 0
         self.block = 0
         self.inT = False
@@ -10,6 +10,7 @@ class Drone:
         self.X=int(x+0.5)
         self.Y=int(y+0.5)
         self.times=[]
+        self.x,self.y,self.z=int(x+0.5),int(y+0.5),0
     
     def takeoff(self,time,z):
         """
@@ -18,7 +19,10 @@ class Drone:
         范围:80~250
         """
         z=int(z+0.5)
-        if z>250 or z<80 or time<1:
+        self.z =z
+        self.x,self.y=int(self.X+0.5),int(self.Y+0.5)
+        self.X,self.Y=int(self.X+0.5),int(self.Y+0.5)
+        if z>250 or z<80 or time<1 or self.X<0 or self.X>560 or self.Y<0 or self.Y>560:
             raise Warning("Out of range.超出范围。")
         time=int(time+0.5)
         '''self.times.append(time)
@@ -28,7 +32,6 @@ class Drone:
             time='0'+str(m)+':0'+str(s)
         else:
             time='0'+str(m)+':'+str(s)'''
-        self.z =z
         self.outputString+='''  <block type="Goertek_Start" x="'''+str(self.X)+'''" y="'''+str(self.Y)+'''">
     <next>
       <block type="block_inittime">
@@ -91,7 +94,9 @@ class Drone:
         必须在intime(time)中
         """
         x,y,z=int(x+0.5),int(y+0.5),int(z+0.5)
-        self.x, self.y, self.z = x, y, z
+        self.x+=x
+        self.y+=y
+        self.z+=z
         spaces='  '*(self.space+self.block)
         if self.inT:
             self.outputString += spaces+'''<next>
@@ -319,14 +324,32 @@ class Drone:
         降落
         """
         spaces='  '*(self.space+self.block)
-        self.outputString += spaces+'''<block type="Goertek_Land"></block>
+        if self.inT:
+            self.outputString += spaces+'''<next>
 '''
+            self.block+=1
+            spaces+='  '
+        self.outputString += spaces+'''<block type="Goertek_Land">
+'''
+        self.block+=1
+        self.inT=True
         
-
     def end(self):
         """
         结束
         """
+        for n in range(self.block-1,0,-1):
+            spaces='  '*(self.space+n)
+            if n%2==1:
+                self.outputString += spaces+'''</block>
+'''
+            else:
+                self.outputString += spaces+'''</next>
+'''
+        self.block=0
+        spaces='  '*(self.space+self.block)
+        self.outputString += spaces+'''</statement>
+'''
         for n in range(self.space-1,-1,-1):
             spaces='  '*n
             if n==0:
@@ -411,6 +434,85 @@ class Drone:
 '''+spaces+'''  <field name="H">'''+str(height)+'''</field>
 '''+spaces+'''  <field name="direction">'''+str(direction)+'''</field>
 '''+spaces+'''  <field name="V">'''+str(vilocity)+'''</field>
+'''
+        self.block+=1
+        self.inT=True
+
+    def TurnOnSingle(self,Id,color):
+        spaces='  '*(self.space+self.block)
+        if self.inT:
+            self.outputString += spaces+'''<next>
+'''
+            self.block+=1
+            spaces+='  '
+        self.outputString += spaces+'''<block type="Goertek_AtomicLEDOn">
+'''+spaces+'''  <field name="id">'''+str(Id)+'''</field>
+'''+spaces+'''  <field name="color">'''+color+'''</field>
+'''
+        self.block+=1
+        self.inT=True
+
+    def TurnOffSingle(self,Id):
+        spaces='  '*(self.space+self.block)
+        if self.inT:
+            self.outputString += spaces+'''<next>
+'''
+            self.block+=1
+            spaces+='  '
+        self.outputString += spaces+'''<block type="Goertek_AtomicLEDOff">
+'''+spaces+'''  <field name="id">'''+str(Id)+'''</field>
+'''
+        self.block+=1
+        self.inT=True
+
+    def TurnOnAll(self,colors):
+        spaces='  '*(self.space+self.block)
+        if self.inT:
+            self.outputString += spaces+'''<next>
+'''
+            self.block+=1
+            spaces+='  '
+        self.outputString += spaces+'''<block type="Goertek_LEDTurnOnAllSingleColor">
+'''+spaces+'''  <field name="color1">'''+colors+'''</field>
+'''
+        self.block+=1
+        self.inT=True
+
+    def TurnOffAll(self):
+        spaces='  '*(self.space+self.block)
+        if self.inT:
+            self.outputString += spaces+'''<next>
+'''
+            self.block+=1
+            spaces+='  '
+        self.outputString+=spaces+'''<block type="Goertek_LEDTurnOffAll">
+'''
+        self.block+=1
+        self.inT=True
+
+    def BlinkSingle(self,Id,color):
+        spaces='  '*(self.space+self.block)
+        if self.inT:
+            self.outputString += spaces+'''<next>
+'''
+            self.block+=1
+            spaces+='  '
+        self.outputString+=spaces+'''<block type="Goertek_LEDSingleBlink">
+'''+spaces+'''  <field name="id">'''+str(Id)+'''</field>
+'''+spaces+'''  <field name="color">'''+color+'''</field>
+'''
+        self.block+=1
+        self.inT=True
+
+    def Breath(self,colors):
+        spaces='  '*(self.space+self.block)
+        if self.inT:
+            self.outputString += spaces+'''<next>
+'''
+            self.block+=1
+            spaces+='  '
+        self.outputString+=spaces+'''<block type="Goertek_LEDBreath">
+'''+spaces+'''  <field name="color">'''+colors+'''</field>
 '''
         self.block+=1
         self.inT=True
