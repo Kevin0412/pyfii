@@ -1,6 +1,27 @@
 import warnings
 from typing import Any, Callable, Literal, Optional, Union
 
+def checkcolor(color):
+    result=False
+    if type(color)==str:
+        if color[0]=='#' and len(color)==7:
+            n=0
+            for c in range(1,7):
+                if ord(color[c]) in range(48,58) or ord(color[c]) in range(97,103):
+                    n+=1
+            result=n==6
+    return result
+
+def rgb2str(color):
+    result = '#'
+    for c in [int(color[0]),int(color[1]),int(color[2])]:
+        sc = hex(c)[2:]
+        sc = sc if len(sc)==2 else '0{}'.format(sc)
+        result += sc
+    if not checkcolor(result):
+        raise Warning('RGB out of range.rgb值超出范围。')
+    return result
+
 class DroneAction:
     """
     无人机动作
@@ -87,6 +108,7 @@ class Drone:
         self.Y=int(y+0.5)
         self.times=[]
         self.x,self.y,self.z=int(x+0.5),int(y+0.5),0
+        self.outpy=''
 
         self.action_list:list[DroneAction] = []
         self.light_actions:map[LightAction] = dict()
@@ -166,6 +188,8 @@ class Drone:
             self.block+=6
             self.inT=True
             self.space=4
+            self.outpy+='''takeoff('''+str(time)+''','''+str(z)+''')
+'''
         self.append_action(DroneAction(take_off_colsure, [self, time, z], timestamp))
 
     def intime(self,time, timestamp = None):
@@ -188,6 +212,9 @@ class Drone:
 '''
             time=int(time+0.5)
             self.times.append(time)
+            self.outpy+='''
+intime('''+str(time)+''')
+'''
             spaces = '  '*self.space
             m=int(time/60) #分
             s = time%60 #秒
@@ -230,6 +257,8 @@ class Drone:
 '''
             self.block+=1
             self.inT=True
+            self.outpy+='''move('''+str(x)+''','''+str(y)+''','''+str(z)+''')
+'''
         self.append_action(DroneAction(move_colsure, [self,x,y,z], timestamp))
 
 
@@ -258,6 +287,8 @@ class Drone:
 '''
             self.block+=1
             self.inT=True
+            self.outpy+='''move2('''+str(x)+''','''+str(y)+''','''+str(z)+''')
+'''
         self.append_action(DroneAction(move2_colsure, [self, x, y, z], timestamp))
 
     def delay(self, time, timestamp = None):
@@ -280,6 +311,8 @@ class Drone:
 '''
             self.block+=1
             self.inT=True
+            self.outpy+='''delay('''+str(time)+''')
+'''
         self.append_action(DroneAction(delay_colsure, [self, time], timestamp))
 
     def VelXY(self,v,a, timestamp=None):
@@ -305,6 +338,8 @@ class Drone:
 '''
             self.block+=1
             self.inT=True
+            self.outpy+='''VelXY('''+str(v)+''','''+str(a)+''')
+'''
         self.append_action(DroneAction(VelXY_colsure, [self, v, a], timestamp))
 
     def VelZ(self,v,a, timestamp=None):
@@ -326,7 +361,9 @@ class Drone:
 '''+spaces+'''  <field name="AV">'''+str(a)+'''</field>
 '''
             self.block+=1
-            self.inT=True  
+            self.inT=True
+            self.outpy+='''VelZ('''+str(v)+''','''+str(a)+''')
+''' 
             #warnings.warn("VelZ() is ignored in pyfii show.VelZ()在pyfii的模拟飞行中被忽略。",Warning,2)
         self.append_action(DroneAction(VelZ_colsure, [self, v, a], timestamp))
 
@@ -349,7 +386,9 @@ class Drone:
 '''+spaces+'''  <field name="AH">'''+str(a)+'''</field>
 '''
             self.block+=1
-            self.inT=True   
+            self.inT=True
+            self.outpy+='''AccXY('''+str(a)+''')
+'''
         self.append_action(DroneAction(AccXY, [self, a], timestamp))
 
     def AccZ(self,a, timestamp = None):
@@ -372,7 +411,9 @@ class Drone:
 '''+spaces+'''  <field name="AV">'''+str(a)+'''</field>
 '''
             self.block+=1
-            self.inT=True  
+            self.inT=True
+            self.outpy+='''AccZ('''+str(a)+''')
+'''
             #warnings.warn("VelZ() is ignored in pyfii show.VelZ()在pyfii的模拟飞行中被忽略。",Warning,2)
         self.append_action(DroneAction(AccZ_colsure, [self, a], timestamp))
 
@@ -387,6 +428,8 @@ class Drone:
             w=int(w+0.5)
             if w<5 or w>60:
                 raise Warning("Out of range.超出范围。")
+            self.outpy+='''ARate('''+str(w)+''')
+'''
             spaces='  '*(self.space+self.block)
             if self.inT:
                 self.outputString += spaces+'''<next>
@@ -420,14 +463,19 @@ class Drone:
 '''+spaces+'''  <field name="turnDirection">l</field>
 '''+spaces+'''  <field name="angle">'''+str(a)+'''</field>
 '''
+                self.outpy+='''Yaw('''+str(a)+''')
+'''
             else:
                 a=int(abs(a)+0.5)
                 self.outputString += spaces+'''<block type="Goertek_Turn">
 '''+spaces+'''  <field name="turnDirection">r</field>
 '''+spaces+'''  <field name="angle">'''+str(a)+'''</field>
 '''
+                self.outpy+='''Yaw(-'''+str(a)+''')
+'''
             self.block+=1
             self.inT=True
+            
         self.append_action(DroneAction(Yaw_colsure, [self, a], timestamp))
 
 
@@ -450,11 +498,15 @@ class Drone:
 '''+spaces+'''  <field name="turnDirection">l</field>
 '''+spaces+'''  <field name="angle">'''+str(a)+'''</field>
 '''
+                self.outpy+='''Yaw2('''+str(a)+''')
+'''
             else:
                 a=int(abs(a)+0.5)
                 self.outputString += spaces+'''<block type="Goertek_TurnTo">
 '''+spaces+'''  <field name="turnDirection">r</field>
 '''+spaces+'''  <field name="angle">'''+str(a)+'''</field>
+'''
+                self.outpy+='''Yaw2(-'''+str(a)+''')
 '''
             self.block+=1
             self.inT=True
@@ -476,6 +528,8 @@ class Drone:
 '''
             self.block+=1
             self.inT=True
+            self.outpy+='''land()
+'''
         self.append_action(DroneAction(land_colsure, [self], timestamp))
         
     def end(self, timestamp=None):
@@ -531,6 +585,8 @@ class Drone:
 '''
             self.block+=1
             self.inT=True
+            self.outpy+='''nod('''+str(direction)+''','''+str(d)+''')
+'''
         self.append_action(DroneAction(nod_colsure, [self, direction, distance], timestamp))
 
     
@@ -556,6 +612,8 @@ class Drone:
 '''
             self.block+=1
             self.inT=True
+            self.outpy+='''SimpleHarmonic2('''+str(direction)+''','''+str(amplitude)+''')
+'''
         self.append_action(DroneAction(SimpleHarmonic2_colsure, [self, direction, amplitude], timestamp))
 
         
@@ -592,10 +650,15 @@ class Drone:
 '''
             self.block+=1
             self.inT=True
+            self.outpy+='''RoundInAir('''+str(startpos)+''','''+str(centerpos)+''','''+str(height)+''','''+str(vilocity)+''')
+'''
         self.append_action(DroneAction(RoundInAir_colsure, [self, startpos,centerpos,height,vilocity], timestamp))
 
 
     def TurnOnSingle(self,Id,color, timestamp=None, order='before'):
+        '''
+        点亮单个灯(灯号,颜色)
+        '''
         def TurnOnSingle_colsure(self,Id,color):
             spaces='  '*(self.space+self.block)
             if self.inT:
@@ -603,15 +666,31 @@ class Drone:
 '''
                 self.block+=1
                 spaces+='  '
-            self.outputString += spaces+'''<block type="Goertek_AtomicLEDOn">
+            if type(color)==tuple:
+                color=rgb2str(color)
+            if checkcolor(color):
+                if Id in range(1,13):
+                    self.outputString += spaces+'''<block type="Goertek_AtomicLEDOn">
 '''+spaces+'''  <field name="id">'''+str(Id)+'''</field>
 '''+spaces+'''  <field name="color">'''+color+'''</field>
 '''
+                else:
+                    raise Warning('LED id out of range.灯号超范围。')
+            else:
+                raise Warning('Not a color.不是颜色。')
             self.block+=1
             self.inT=True
-        self.append_light(LightAction(TurnOnSingle_colsure, [self,Id,color], timestamp, order))
+            self.outpy+='''TurnOnSingle('''+str(Id)+''',\''''+str(color)+'''\')
+'''
+        if timestamp is None:
+            self.append_action(DroneAction(TurnOnSingle_colsure, [self, Id, color], timestamp))
+        else:
+            self.append_light(LightAction(TurnOnSingle_colsure, [self,Id,color], timestamp, order))
 
     def TurnOffSingle(self,Id, timestamp=None, order='before'):
+        '''
+        关闭单个灯(灯号)
+        '''
         def TurnOffSingle_colsure(self, Id):
             spaces='  '*(self.space+self.block)
             if self.inT:
@@ -619,8 +698,30 @@ class Drone:
 '''
                 self.block+=1
                 spaces+='  '
-            self.outputString += spaces+'''<block type="Goertek_AtomicLEDOff">
-'''+spaces+'''  <field name="id">'''+str(Id)+'''</field>
+            if type(colors)==list:
+                self.outputString += spaces+'''<block type="Goertek_LEDTurnOnAll">
+'''
+                for c in range(12):
+                    if type(colors[c%len(colors)])==tuple:
+                        colors[c%len(colors)]=rgb2str(colors[c%len(colors)])
+                    if checkcolor(colors[c%len(colors)]):
+                        self.outputString += spaces+'''  <field name="color'''+str(c+1)+'''">'''+colors[c%len(colors)]+'''</field>
+'''
+                    else:
+                        raise Warning('Not a color.不是颜色。')
+                self.outpy+='''TurnOnAll('''+str(colors)+''')
+'''            
+            else:
+                if type(colors)==tuple:
+                    colors=rgb2str(colors)
+                if checkcolor(colors):   
+                    self.outputString += spaces+'''<block type="Goertek_LEDTurnOnAllSingleColor">
+'''+spaces+'''  <field name="color1">'''+colors+'''</field>
+'''
+                else:
+                    raise Warning('Not a color.不是颜色。')
+
+                self.outpy+='''TurnOnAll(\''''+str(colors)+'''\')
 '''
             self.block+=1
             self.inT=True
@@ -630,6 +731,11 @@ class Drone:
             self.append_light(LightAction(TurnOffSingle_colsure, [self,Id], timestamp, order))
 
     def TurnOnAll(self,colors, timestamp=None, order='before'):
+        '''
+        打卡所有灯(颜色)
+        str/tuple:同色
+        list:不同色
+        '''
         def TurnOnAll_colsure(self, colors):
             spaces='  '*(self.space+self.block)
             if self.inT:
@@ -637,8 +743,30 @@ class Drone:
 '''
                 self.block+=1
                 spaces+='  '
-            self.outputString += spaces+'''<block type="Goertek_LEDTurnOnAllSingleColor">
+            if type(colors)==list:
+                self.outputString += spaces+'''<block type="Goertek_LEDTurnOnAll">
+'''
+                for c in range(12):
+                    if type(colors[c%len(colors)])==tuple:
+                        colors[c%len(colors)]=rgb2str(colors[c%len(colors)])
+                    if checkcolor(colors[c%len(colors)]):
+                        self.outputString += spaces+'''  <field name="color'''+str(c+1)+'''">'''+colors[c%len(colors)]+'''</field>
+'''
+                    else:
+                        raise Warning('Not a color.不是颜色。')
+                self.outpy+='''TurnOnAll('''+str(colors)+''')
+'''            
+            else:
+                if type(colors)==tuple:
+                    colors=rgb2str(colors)
+                if checkcolor(colors):   
+                    self.outputString += spaces+'''<block type="Goertek_LEDTurnOnAllSingleColor">
 '''+spaces+'''  <field name="color1">'''+colors+'''</field>
+'''
+                else:
+                    raise Warning('Not a color.不是颜色。')
+
+                self.outpy+='''TurnOnAll(\''''+str(colors)+'''\')
 '''
             self.block+=1
             self.inT=True
@@ -648,6 +776,9 @@ class Drone:
             self.append_light(LightAction(TurnOnAll_colsure, [self,colors], timestamp, order))
 
     def TurnOffAll(self, timestamp=None, order='before'):
+        '''
+        关闭所有灯
+        '''
         def TurnOffAll_colsure(self):
             spaces='  '*(self.space+self.block)
             if self.inT:
@@ -659,6 +790,8 @@ class Drone:
 '''
             self.block+=1
             self.inT=True
+            self.outpy+='''TurnOffAll()
+'''
         if timestamp is None:
             self.append_action(DroneAction(TurnOffAll_colsure, [self], timestamp))
         else:
@@ -666,6 +799,9 @@ class Drone:
 
 
     def BlinkSingle(self,Id,color, timestamp=None, order='before'):
+        '''
+        闪单个灯(灯号,颜色)
+        '''
         def BlinkSingle_colsure(self, Id, color):
             spaces='  '*(self.space+self.block)
             if self.inT:
@@ -673,12 +809,22 @@ class Drone:
 '''
                 self.block+=1
                 spaces+='  '
-            self.outputString+=spaces+'''<block type="Goertek_LEDSingleBlink">
+            if type(color)==tuple:
+                color=rgb2str(color)
+            if checkcolor(color):
+                if Id in range(1,13):
+                    self.outputString+=spaces+'''<block type="Goertek_LEDSingleBlink">
 '''+spaces+'''  <field name="id">'''+str(Id)+'''</field>
 '''+spaces+'''  <field name="color">'''+color+'''</field>
 '''
+                else:
+                    raise Warning('LED id out of range.灯号超范围。')
+            else:
+                raise Warning('Not a color.不是颜色。')
             self.block+=1
             self.inT=True
+            self.outpy+='''BlinkSingle('''+str(Id)+''',\''''+str(color)+'''\')
+'''
         if timestamp is None:
             self.append_action(DroneAction(BlinkSingle_colsure [self, Id, color], timestamp))
         else:
@@ -686,6 +832,9 @@ class Drone:
 
 
     def Breath(self,colors, timestamp=None, order='before'):
+        '''
+        呼吸灯(颜色)
+        '''
         def Breath_colsure(self, colors):
             spaces='  '*(self.space+self.block)
             if self.inT:
@@ -693,12 +842,110 @@ class Drone:
 '''
                 self.block+=1
                 spaces+='  '
-            self.outputString+=spaces+'''<block type="Goertek_LEDBreath">
+            if type(colors)==tuple:
+                colors=rgb2str(colors)
+            if checkcolor(colors):
+                self.outputString+=spaces+'''<block type="Goertek_LEDBreath">
 '''+spaces+'''  <field name="color">'''+colors+'''</field>
 '''
+            else:
+                raise Warning('Not a color.不是颜色。')
             self.block+=1
             self.inT=True
+            self.outpy+='''Breath(\''''+str(colors)+'''\')
+'''
         if timestamp is None:
             self.append_action(DroneAction(Breath_colsure, [self, colors], timestamp))
         else:
             self.append_light(LightAction(Breath_colsure, [self, colors], timestamp, order))
+
+    def BlinkFastAll(self, colors, timestamp=None, order='before'):
+        '''
+        快速闪烁所有灯(颜色)
+        '''
+        def BlinkFastAll_colsure(self, colors):
+            spaces='  '*(self.space+self.block)
+            if self.inT:
+                self.outputString += spaces+'''<next>
+'''
+                self.block+=1
+                spaces+='  '
+            self.outputString += spaces+'''<block type="Goertek_LEDBlinkFastAll">
+'''
+            for c in range(12):
+                if type(colors[c%len(colors)])==tuple:
+                    colors[c%len(colors)]=rgb2str(colors[c%len(colors)])
+                if checkcolor(colors[c%len(colors)]):
+                    self.outputString += spaces+'''  <field name="color'''+str(c+1)+'''">'''+colors[c%len(colors)]+'''</field>
+'''
+                else:
+                    raise Warning('Not a color.不是颜色。')
+            self.block+=1
+            self.inT=True
+            self.outpy+='''BlinkFastAll('''+str(colors)+''')
+'''
+        if timestamp is None:
+            self.append_action(DroneAction(BlinkFastAll_colsure, [self, colors], timestamp))
+        else:
+            self.append_light(LightAction(BlinkFastAll_colsure, [self, colors], timestamp, order))
+
+    def BlinkSlowAll(self, colors, timestamp=None, order='before'):
+        '''
+        慢速闪烁所有灯(颜色)
+        '''
+        def BlinkSlowAll_colsure(self, colors):
+            spaces='  '*(self.space+self.block)
+            if self.inT:
+                self.outputString += spaces+'''<next>
+'''
+                self.block+=1
+                spaces+='  '
+            self.outputString += spaces+'''<block type="Goertek_LEDBlinkSlowAll">
+'''
+            for c in range(12):
+                if type(colors[c%len(colors)])==tuple:
+                    colors[c%len(colors)]=rgb2str(colors[c%len(colors)])
+                if checkcolor(colors[c%len(colors)]):
+                    self.outputString += spaces+'''  <field name="color'''+str(c+1)+'''">'''+colors[c%len(colors)]+'''</field>
+'''
+                else:
+                    raise Warning('Not a color.不是颜色。')
+            self.block+=1
+            self.inT=True
+            self.outpy+='''BlinkSlowAll('''+str(colors)+''')
+'''
+        if timestamp is None:
+            self.append_action(DroneAction(BlinkSlowAll_colsure, [self, colors], timestamp))
+        else:
+            self.append_light(LightAction(BlinkSlowAll_colsure, [self, colors], timestamp, order))
+    
+    def HorseRace(self,colors, timestamp=None, order='before'):
+        '''
+        走马灯(颜色)
+        '''
+        def HorseRace_colsure(self, colors):
+            spaces='  '*(self.space+self.block)
+            if self.inT:
+                self.outputString += spaces+'''<next>
+    '''
+                self.block+=1
+                spaces+='  '
+            self.outputString += spaces+'''<block type="Goertek_LEDHorseRacel">
+    '''
+            for c in range(12):
+                if type(colors[c%len(colors)])==tuple:
+                    colors[c%len(colors)]=rgb2str(colors[c%len(colors)])
+                if checkcolor(colors[c%len(colors)]):
+                    self.outputString += spaces+'''  <field name="color'''+str(c+1)+'''">'''+colors[c%len(colors)]+'''</field>
+    '''
+                else:
+                    raise Warning('Not a color.不是颜色。')
+            self.block+=1
+            self.inT=True
+            self.outpy+='''HorseRace('''+str(colors)+''')
+    '''
+        if timestamp is None:
+            self.append_action(DroneAction(HorseRace_colsure, [self, colors], timestamp))
+        else:
+            self.append_light(LightAction(HorseRace_colsure, [self, colors], timestamp, order))
+    

@@ -39,6 +39,6 @@ d1.TurnOffAll(A, 'after')
 d1.end()
 #结束时必加
 
-F=pf.Fii('测试',[d1])#命名,[所有无人机名],music选择性添加
+F=pf.Fii('测试',[d1], 'test.mp3')#命名,[所有无人机名],music选择性添加
 
 F.save()

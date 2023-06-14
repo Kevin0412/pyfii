@@ -1,3 +1,4 @@
+import cmath
 import os
 import time
 import uuid
@@ -8,7 +9,8 @@ import numpy as np
 import pygame
 from ffmpy import FFmpeg
 
-from .cv3d import IIID,IIID2
+from .cv3d import IIID, IIID2
+
 
 # 视频添加音频
 def video_add_audio(video_path: str, audio_path: str,output_path:str):
@@ -43,21 +45,51 @@ def color(n,m=0):
     img=cv2.cvtColor(img,cv2.COLOR_HSV2BGR)
     return(int(img[0][0][0]),int(img[0][0][1]),int(img[0][0][2]))
 
-def draw_drone(img,x,y,color,a=0,up=False):
-    if up:
-        cv2.circle(img,(int(x-21/2*np.cos(np.pi/4+a)),int(y+21/2*np.sin(np.pi/4+a))),8,color,1)
-        cv2.circle(img,(int(x-21/2*np.cos(3*np.pi/4+a)),int(y+21/2*np.sin(3*np.pi/4+a))),8,color,1)
-        cv2.circle(img,(int(x-21/2*np.cos(-3*np.pi/4+a)),int(y+21/2*np.sin(-3*np.pi/4+a))),8,color,1)
-        cv2.circle(img,(int(x-21/2*np.cos(-np.pi/4+a)),int(y+21/2*np.sin(-np.pi/4+a))),8,color,1)
-        cv2.line(img,(int(x-21/2*np.cos(np.pi/4+a)),int(y+21/2*np.sin(np.pi/4+a))),(int(x-21/2*np.cos(-3*np.pi/4+a)),int(y+21/2*np.sin(-3*np.pi/4+a))),color,1)
-        cv2.line(img,(int(x-21/2*np.cos(-np.pi/4+a)),int(y+21/2*np.sin(-np.pi/4+a))),(int(x-21/2*np.cos(3*np.pi/4+a)),int(y+21/2*np.sin(3*np.pi/4+a))),color,1)
-    else:
-        cv2.ellipse(img,(int(x+21/(2**0.5)/2),int(y-1/4*7.6)),(8,2),0,0,360,color,1)
-        cv2.ellipse(img,(int(x-21/(2**0.5)/2),int(y-1/4*7.6)),(8,2),0,0,360,color,1)
-        cv2.ellipse(img,(int(x-21/(2**0.5)/2),int(y-3/4*7.6)),(8,2),0,0,360,color,1)
-        cv2.ellipse(img,(int(x+21/(2**0.5)/2),int(y-3/4*7.6)),(8,2),0,0,360,color,1)
-        cv2.line(img,(int(x+21/(2**0.5)/2),int(y-1/4*7.6)),(int(x-21/(2**0.5)/2),int(y-3/4*7.6)),color,1)
-        cv2.line(img,(int(x-21/(2**0.5)/2),int(y-1/4*7.6)),(int(x+21/(2**0.5)/2),int(y-3/4*7.6)),color,1)
+def draw_drone(img,x,y,color,a=0,up=False,skin=1):
+    if skin==0:
+        if up:
+            cv2.circle(img,(int(x),int(y)),15,color,-1)
+        else:
+            cv2.rectangle(img2,(int(x)-15,int(y)+5),(int(x)+15,int(y)-5),color,-1)
+    elif skin==1:
+        if up:
+            cv2.circle(img,(int(x-21/2*np.cos(np.pi/4+a)),int(y+21/2*np.sin(np.pi/4+a))),8,color,1)
+            cv2.circle(img,(int(x-21/2*np.cos(3*np.pi/4+a)),int(y+21/2*np.sin(3*np.pi/4+a))),8,color,1)
+            cv2.circle(img,(int(x-21/2*np.cos(-3*np.pi/4+a)),int(y+21/2*np.sin(-3*np.pi/4+a))),8,color,1)
+            cv2.circle(img,(int(x-21/2*np.cos(-np.pi/4+a)),int(y+21/2*np.sin(-np.pi/4+a))),8,color,1)
+            cv2.line(img,(int(x-21/2*np.cos(np.pi/4+a)),int(y+21/2*np.sin(np.pi/4+a))),(int(x-21/2*np.cos(-3*np.pi/4+a)),int(y+21/2*np.sin(-3*np.pi/4+a))),color,1)
+            cv2.line(img,(int(x-21/2*np.cos(-np.pi/4+a)),int(y+21/2*np.sin(-np.pi/4+a))),(int(x-21/2*np.cos(3*np.pi/4+a)),int(y+21/2*np.sin(3*np.pi/4+a))),color,1)
+        else:
+            cv2.ellipse(img,(int(x+21/(2**0.5)/2),int(y-1/4*7.6)),(8,2),0,0,360,color,1)
+            cv2.ellipse(img,(int(x-21/(2**0.5)/2),int(y-1/4*7.6)),(8,2),0,0,360,color,1)
+            cv2.ellipse(img,(int(x-21/(2**0.5)/2),int(y-3/4*7.6)),(8,2),0,0,360,color,1)
+            cv2.ellipse(img,(int(x+21/(2**0.5)/2),int(y-3/4*7.6)),(8,2),0,0,360,color,1)
+            cv2.line(img,(int(x+21/(2**0.5)/2),int(y-1/4*7.6)),(int(x-21/(2**0.5)/2),int(y-3/4*7.6)),color,1)
+            cv2.line(img,(int(x-21/(2**0.5)/2),int(y-1/4*7.6)),(int(x+21/(2**0.5)/2),int(y-3/4*7.6)),color,1)
+    elif skin==2:
+        if up:
+            red_square=np.array([[x+16*np.cos(a),y+16*np.sin(a)],[x+16*np.cos(a+np.pi/2),y+16*np.sin(a+np.pi/2)],[x+16*np.cos(a+np.pi),y+16*np.sin(a+np.pi)],[x+16*np.cos(a-np.pi/2),y+16*np.sin(a-np.pi/2)]],np.int32)
+            fu=[np.array([[x+((-7-6j)*cmath.e**(a*1j)).real,y+((-7-6j)*cmath.e**(a*1j)).imag],[x+((-6-5j)*cmath.e**(a*1j)).real,y+((-6-5j)*cmath.e**(a*1j)).imag]],np.int32),
+            np.array([[x+((-8-2j)*cmath.e**(a*1j)).real,y+((-8-2j)*cmath.e**(a*1j)).imag],[x+((-5-3j)*cmath.e**(a*1j)).real,y+((-5-3j)*cmath.e**(a*1j)).imag]],np.int32),
+            np.array([[x+((-5-3j)*cmath.e**(a*1j)).real,y+((-5-3j)*cmath.e**(a*1j)).imag],[x+((-8+3j)*cmath.e**(a*1j)).real,y+((-8+3j)*cmath.e**(a*1j)).imag]],np.int32),
+            np.array([[x+((-6-0j)*cmath.e**(a*1j)).real,y+((-6-0j)*cmath.e**(a*1j)).imag],[x+((-6+6j)*cmath.e**(a*1j)).real,y+((-6+6j)*cmath.e**(a*1j)).imag]],np.int32),
+            np.array([[x+((-6+1j)*cmath.e**(a*1j)).real,y+((-6+1j)*cmath.e**(a*1j)).imag],[x+((-5+2j)*cmath.e**(a*1j)).real,y+((-5+2j)*cmath.e**(a*1j)).imag]],np.int32),
+            np.array([[x+((-3-5j)*cmath.e**(a*1j)).real,y+((-3-5j)*cmath.e**(a*1j)).imag],[x+((5-5j)*cmath.e**(a*1j)).real,y+((5-5j)*cmath.e**(a*1j)).imag]],np.int32),
+            np.array([[x+((-2-3j)*cmath.e**(a*1j)).real,y+((-2-3j)*cmath.e**(a*1j)).imag],[x+((4-3j)*cmath.e**(a*1j)).real,y+((4-3j)*cmath.e**(a*1j)).imag],
+            [x+((4-1j)*cmath.e**(a*1j)).real,y+((4-1j)*cmath.e**(a*1j)).imag],[x+((-2-1j)*cmath.e**(a*1j)).real,y+((-2-1j)*cmath.e**(a*1j)).imag]],np.int32),
+            np.array([[x+((-3+1j)*cmath.e**(a*1j)).real,y+((-3+1j)*cmath.e**(a*1j)).imag],[x+((5+1j)*cmath.e**(a*1j)).real,y+((5+1j)*cmath.e**(a*1j)).imag],
+            [x+((5+5j)*cmath.e**(a*1j)).real,y+((5+5j)*cmath.e**(a*1j)).imag],[x+((-3+5j)*cmath.e**(a*1j)).real,y+((-3+5j)*cmath.e**(a*1j)).imag]],np.int32),
+            np.array([[x+((-3+3j)*cmath.e**(a*1j)).real,y+((-3+3j)*cmath.e**(a*1j)).imag],[x+((5+3j)*cmath.e**(a*1j)).real,y+((5+3j)*cmath.e**(a*1j)).imag]],np.int32),
+            np.array([[x+((1+1j)*cmath.e**(a*1j)).real,y+((1+1j)*cmath.e**(a*1j)).imag],[(x+(1+5j)*cmath.e**(a*1j)).real,y+((1+5j)*cmath.e**(a*1j)).imag]],np.int32)]
+            img=cv2.fillPoly(img,[red_square],color=[0,0,255])
+            img=cv2.polylines(img,fu,isClosed=True,color=[0,0,0],thickness=1)
+        else:
+            cv2.ellipse(img,(int(x+21/(2**0.5)/2),int(y-1/4*7.6)),(8,2),0,0,360,color,1)
+            cv2.ellipse(img,(int(x-21/(2**0.5)/2),int(y-1/4*7.6)),(8,2),0,0,360,color,1)
+            cv2.ellipse(img,(int(x-21/(2**0.5)/2),int(y-3/4*7.6)),(8,2),0,0,360,color,1)
+            cv2.ellipse(img,(int(x+21/(2**0.5)/2),int(y-3/4*7.6)),(8,2),0,0,360,color,1)
+            cv2.line(img,(int(x+21/(2**0.5)/2),int(y-1/4*7.6)),(int(x-21/(2**0.5)/2),int(y-3/4*7.6)),color,1)
+            cv2.line(img,(int(x-21/(2**0.5)/2),int(y-1/4*7.6)),(int(x+21/(2**0.5)/2),int(y-3/4*7.6)),color,1)
 
 def drone3d(aixs,x,y,z,c,a):
     aixs.append([(x+21/2*np.cos(np.pi/4+a),y+21/2*np.sin(np.pi/4+a),z),c,(14.9-21/4*2**0.5),1,'ring'])
@@ -77,7 +109,7 @@ def drone3d(aixs,x,y,z,c,a):
     if int((n%765)/255)==2:
         return(x,255-n%255,n%255)'''
 
-def show(data,t0,music,show=True,save="",FPS=200,ThreeD=False,imshow=[120,-15],d=(600,450),track=[]):
+def show(data,t0,music,show=True,save="",FPS=200,ThreeD=False,imshow=[120,-15],d=(600,450),track=[],skin=1):
     t0=int(t0+0.5)+300
     if len(save)>0 and not ThreeD:
         show=False
@@ -201,13 +233,13 @@ def show(data,t0,music,show=True,save="",FPS=200,ThreeD=False,imshow=[120,-15],d
             Zs=sorted(aixs,key=lambda x:x[2])
             #根据距离远近渲染
             for X in Xs:
-                draw_drone(img2,620+X[1],540-X[2],color(X[4],(X[0]-280)/280*125))
+                draw_drone(img2,620+X[1],540-X[2],color(X[4],(X[0]-280)/280*125),skin=skin)
                 #cv2.rectangle(img2,(int(560+X[1]-15),int(500-X[2]+5)),(int(560+X[1]+15),int(500-X[2]-5)),color(X[3],(X[0]-280)/280*125),-1)
             for Y in Ys:
-                draw_drone(img2,620+Y[0],270-Y[2],color(Y[4],(Y[1]-280)/280*125))
+                draw_drone(img2,620+Y[0],270-Y[2],color(Y[4],(Y[1]-280)/280*125),skin=skin)
                 #cv2.rectangle(img2,(int(560+Y[0]-15),int(250-Y[2]+5)),(int(560+Y[0]+15),int(250-Y[2]-5)),color(Y[3],(280-Y[1])/280*125),-1)
             for Z in Zs:
-                draw_drone(img2,20+Z[0],580-Z[1],color(Z[4],(Z[2]-125)/125*125),a=Z[3]/180*np.pi,up=True)
+                draw_drone(img2,20+Z[0],580-Z[1],color(Z[4],(Z[2]-125)/125*125),a=Z[3]/180*np.pi,up=True,skin=skin)
                 #cv2.circle(img2,(Z[0],560-Z[1]),15,color(Z[3],(Z[2]-125)/125*125),-1)
         #print(Xs)
         #print(aixs)
