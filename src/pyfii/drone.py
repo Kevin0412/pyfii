@@ -96,8 +96,24 @@ class LightAction:
 #         action_list.append(action_type(action[0], action[1], action[2]))
 #     return action_list
 
+drone_config_6m={
+    'xyRange':(0,560),
+    'zRange':(80,250),
+    'velRange':(20,200),
+    'accRange':(50,400),
+    'ArateRange':(5,60),
+}
+
+drone_config_4m={
+    'xyRange':(0,360),
+    'zRange':(80,250),
+    'velRange':(20,200),
+    'accRange':(50,400),
+    'ArateRange':(5,60),
+}
+
 class Drone:
-    def __init__(self,x=0,y=0):
+    def __init__(self,x=0,y=0,config=drone_config_6m):
         self.space = 0
         self.block = 0
         self.inT = False
@@ -112,6 +128,10 @@ class Drone:
 
         self.action_list:list[DroneAction] = []
         self.light_actions:map[LightAction] = dict()
+        self.config=config
+
+    def outRange(self,n,nRange):
+        return n>self.config[nRange][1] or n<self.config[nRange][0]
 
     def take_actions(self):
         """
@@ -175,7 +195,7 @@ class Drone:
             self.z =z
             self.x,self.y=int(self.X+0.5),int(self.Y+0.5)
             self.X,self.Y=int(self.X+0.5),int(self.Y+0.5)
-            if z>250 or z<80 or time<1 or self.X<0 or self.X>560 or self.Y<0 or self.Y>560:
+            if self.outRange(z,'zRange') or self.outRange(self.X,'xyRange') or self.outRange(self.Y,'xyRange') or time<1:
                 raise Warning("Out of range.超出范围。")
             time=int(time+0.5)
             self.outputString+='''  <block type="Goertek_Start" x="'''+str(self.X)+'''" y="'''+str(self.Y)+'''">
@@ -284,7 +304,7 @@ intime('''+str(time)+''')
         必须在intime(time)中
         """
         x,y,z=int(x+0.5),int(y+0.5),int(z+0.5)
-        if x<0 or x>560 or y<0 or y>560 or z>250 or z<80:
+        if self.outRange(x,'xyRange') or self.outRange(y,'xyRange') or self.outRange(z,'zRange'):
             raise Warning("Out of range.超出范围。")
         self.x, self.y, self.z = x, y, z
         def move2_closure(self, x, y, z):
@@ -305,6 +325,7 @@ intime('''+str(time)+''')
             self.inT=True
             self.outpy+='''move2('''+str(x)+''','''+str(y)+''','''+str(z)+''')
 '''
+        self.append_action(DroneAction(move2_closure, [self, x,y,z], timestamp))
 
     def delay(self, time, timestamp = None):
         """
@@ -341,7 +362,7 @@ intime('''+str(time)+''')
 
     def VelXY_closure(self, v, a):
         v,a=int(v+0.5),int(a+0.5)
-        if v<20 or v>200 or a<50 or a>400:
+        if self.outRange(v,'velRange') or self.outRange(a,'accRange'):
             raise Warning("Out of range.超出范围。")
         spaces='  '*(self.space+self.block)
         if self.inT:
@@ -416,7 +437,7 @@ intime('''+str(time)+''')
         """
         def AccZ_closure(self, a):
             a=int(a+0.5)
-            if a<50 or a>400:
+            if self.outRange(a,'accRange'):
                 raise Warning("Out of range.超出范围。")
             spaces='  '*(self.space+self.block)
             if self.inT:
@@ -443,7 +464,7 @@ intime('''+str(time)+''')
         """
         def ARate_closure(self, w):
             w=int(w+0.5)
-            if w<5 or w>60:
+            if self.outRange(w,'ArateRange'):
                 raise Warning("Out of range.超出范围。")
             self.outpy+='''ARate('''+str(w)+''')
 '''
