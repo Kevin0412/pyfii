@@ -13,3 +13,4 @@ gui.png
 /tests/*v3*.py
 **/output
 **/*v3*
+4m_tests

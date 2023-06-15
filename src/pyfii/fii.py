@@ -23,7 +23,7 @@ class Fii:
             except:
                 print('empty fii!')
 
-    def save(self,infii=False,addlights=False):
+    def save(self,infii=False,addlights=False,feild=6):
         if addlights:
             pass
         else:
@@ -36,8 +36,8 @@ class Fii:
             file.write('''<?xml version="1.0" encoding="utf-8"?>
 <GoertekGraphicXml>
   <DeviceType DeviceType="F400" />
-  <AreaL AreaL="600" />
-  <AreaW AreaW="600" />
+  <AreaL AreaL="'''+str(feild)+'''00" />
+  <AreaW AreaW="'''+str(feild)+'''00" />
   <AreaH AreaH="300" />
 ''')
             if len(self.music)>0:

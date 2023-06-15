@@ -3,6 +3,7 @@ import os
 import time
 import uuid
 import warnings
+import shutil
 
 import cv2
 import numpy as np
@@ -17,17 +18,19 @@ def video_add_audio(video_path: str, audio_path: str,output_path:str):
     _ext_video = os.path.basename(video_path).strip().split('.')[-1]
     _ext_audio = os.path.basename(audio_path).strip().split('.')[-1]
     if _ext_audio not in ['mp3', 'wav']:
-        raise Exception('audio format not support')
-    _codec = 'copy'
-    if _ext_audio == 'wav':
-        _codec = 'aac'
-    result =output_path.format(uuid.uuid4(), _ext_video)
-    ff = FFmpeg(
-        inputs={video_path: None, audio_path: None},
-        outputs={result: '-map 0:v -map 1:a -c:v copy -c:a {} -shortest'.format(_codec)})
-    print(ff.cmd)
-    ff.run()
-    return result
+        print('No music!')
+        shutil.copy(video_path,video_path[0:-12]+'.mp4')
+    else:
+        _codec = 'copy'
+        if _ext_audio == 'wav':
+            _codec = 'aac'
+        result =output_path.format(uuid.uuid4(), _ext_video)
+        ff = FFmpeg(
+            inputs={video_path: None, audio_path: None},
+            outputs={result: '-map 0:v -map 1:a -c:v copy -c:a {} -shortest'.format(_codec)})
+        print(ff.cmd)
+        ff.run()
+        return result
 
 '''def nothing(x):
     pass'''
@@ -109,7 +112,7 @@ def drone3d(aixs,x,y,z,c,a):
     if int((n%765)/255)==2:
         return(x,255-n%255,n%255)'''
 
-def show(data,t0,music,show=True,save="",FPS=200,ThreeD=False,imshow=[120,-15],d=(600,450),track=[],skin=1):
+def show(data,t0,music,feild=6,show=True,save="",FPS=200,ThreeD=False,imshow=[120,-15],d=(600,450),track=[],skin=1):
     t0=int(t0+0.5)+300
     if len(save)>0 and not ThreeD:
         show=False
@@ -151,34 +154,61 @@ def show(data,t0,music,show=True,save="",FPS=200,ThreeD=False,imshow=[120,-15],d
             cv2.rectangle(img,(600+x*150,540),(750+x*150,570),(255,255,255),1)
             cv2.rectangle(img,(600+x*150,570),(750+x*150,600),(255,255,255),1)
         cv2.rectangle(img,(1120,570),(1200,600),(255,255,255),1)
+        if feild==4:
+            cv2.rectangle(img,(20,580),(380,220),(255,255,255),1)
+            cv2.rectangle(img,(1000,0),(1000,540),(255,255,255),1)
         font=cv2.FONT_HERSHEY_SIMPLEX
         cv2.putText(img,'front',(600,260), font, 1,(255,255,255),1)
         cv2.putText(img,'right',(600,530), font, 1,(255,255,255),1)
         cv2.imwrite('gui.png',img)
         #生成可视化界面↑
     if ThreeD:
-        center=(280,280,165)#三维渲染旋转中心
+        if feild==6:
+            center=(280,280,165)#三维渲染旋转中心
+        if feild==4:
+            center=(180,180,165)#三维渲染旋转中心
         lines=[]#三维渲染的线
-        lines.append([(0,0,0),(600,0,0),(0,0,255),1,8,'line'])
-        lines.append([(0,0,0),(0,600,0),(0,255,0),1,8,'line'])
-        lines.append([(0,0,0),(0,0,300),(255,0,0),1,8,'line'])
+        if feild==6:
+            lines.append([(-20,-20,0),(580,-20,0),(0,0,255),1,8,'line'])
+            lines.append([(-20,-20,0),(-20,580,0),(0,255,0),1,8,'line'])
+            lines.append([(-20,-20,0),(-20,-20,300),(255,0,0),1,8,'line'])
+            lines.append([(-20,-20,0),(580,-20,0),(0,0,255),1,8,'line'])
+            lines.append([(-20,-20,0),(-20,580,0),(0,255,0),1,8,'line'])
+            lines.append([(-20,-20,0),(-20,-20,300),(255,0,0),1,8,'line'])
+            lines.append([(0,0,0),(560,0,0),(255,255,255),1,8,'line'])
+            lines.append([(0,0,0),(0,560,0),(255,255,255),1,8,'line'])
+            lines.append([(0,560,0),(560,560,0),(255,255,255),1,8,'line'])
+            lines.append([(560,0,0),(560,560,0),(255,255,255),1,8,'line'])
+        if feild==4:
+            lines.append([(-20,-20,0),(380,-20,0),(0,0,255),1,8,'line'])
+            lines.append([(-20,-20,0),(-20,380,0),(0,255,0),1,8,'line'])
+            lines.append([(-20,-20,0),(-20,-20,300),(255,0,0),1,8,'line'])
+            lines.append([(-20,-20,0),(380,-20,0),(0,0,255),1,8,'line'])
+            lines.append([(-20,-20,0),(-20,380,0),(0,255,0),1,8,'line'])
+            lines.append([(-20,-20,0),(-20,-20,300),(255,0,0),1,8,'line'])
+            lines.append([(0,0,0),(360,0,0),(255,255,255),1,8,'line'])
+            lines.append([(0,0,0),(0,360,0),(255,255,255),1,8,'line'])
+            lines.append([(0,360,0),(360,360,0),(255,255,255),1,8,'line'])
+            lines.append([(360,0,0),(360,360,0),(255,255,255),1,8,'line'])
         for x in range(1,57):
+            if feild==4 and x>36:
+                break
             if x%10==5:
-                lines.append([(x*10,0,0),(x*10,40,40),(255,255,0),1,8,'line'])
-                lines.append([(0,x*10,0),(40,x*10,40),(255,0,255),1,8,'line'])
+                lines.append([(x*10,-20,0),(x*10,20,40),(255,255,0),1,8,'line'])
+                lines.append([(-20,x*10,0),(20,x*10,40),(255,0,255),1,8,'line'])
             elif x%10==0:
-                lines.append([(x*10,0,0),(x*10,50,50),(255,255,0),1,8,'line'])
-                lines.append([(0,x*10,0),(50,x*10,50),(255,0,255),1,8,'line'])
+                lines.append([(x*10,-20,0),(x*10,30,50),(255,255,0),1,8,'line'])
+                lines.append([(-20,x*10,0),(30,x*10,50),(255,0,255),1,8,'line'])
             else:
-                lines.append([(x*10,0,0),(x*10,30,30),(255,255,0),1,8,'line'])
-                lines.append([(0,x*10,0),(30,x*10,30),(255,0,255),1,8,'line'])
+                lines.append([(x*10,-20,0),(x*10,10,30),(255,255,0),1,8,'line'])
+                lines.append([(-20,x*10,0),(10,x*10,30),(255,0,255),1,8,'line'])
         for x in range(8,26):
             if x%10==5:
-                lines.append([(0,0,x*10),(40,40,x*10),(0,255,255),1,8,'line'])
+                lines.append([(-20,-20,x*10),(20,20,x*10),(0,255,255),1,8,'line'])
             elif x%10==0:
-                lines.append([(0,0,x*10),(50,50,x*10),(0,255,255),1,8,'line'])
+                lines.append([(-20,-20,x*10),(30,30,x*10),(0,255,255),1,8,'line'])
             else:
-                lines.append([(0,0,x*10),(30,30,x*10),(0,255,255),1,8,'line'])
+                lines.append([(-20,-20,x*10),(10,10,x*10),(0,255,255),1,8,'line'])
         i=imshow[0]
     if (show and len(save)==0) or (ThreeD and len(save)==0):
         if len(music)>1:
