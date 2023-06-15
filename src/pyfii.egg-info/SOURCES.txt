@@ -4,7 +4,6 @@ pyproject.toml
 src/pyfii/__init__.py
 src/pyfii/drone.py
 src/pyfii/fii.py
-src/pyfii/function.py
 src/pyfii/read.py
 src/pyfii/show.py
 src/pyfii.egg-info/PKG-INFO

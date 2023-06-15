@@ -170,7 +170,7 @@ class Drone:
         self.z =z
         self.x,self.y=int(self.X+0.5),int(self.Y+0.5)
         self.X,self.Y=int(self.X+0.5),int(self.Y+0.5)
-        def take_off_colsure(self,time,z):
+        def take_off_closure(self,time,z):
             z=int(z+0.5)
             self.z =z
             self.x,self.y=int(self.X+0.5),int(self.Y+0.5)
@@ -254,7 +254,7 @@ intime('''+str(time)+''')
         self.x+=x
         self.y+=y
         self.z+=z
-        def move_colsure(self, x, y, z):
+        def move_closure(self, x, y, z):
             x,y,z=int(x+0.5),int(y+0.5),int(z+0.5)
             self.x+=x
             self.y+=y
@@ -287,7 +287,7 @@ intime('''+str(time)+''')
         if x<0 or x>560 or y<0 or y>560 or z>250 or z<80:
             raise Warning("Out of range.超出范围。")
         self.x, self.y, self.z = x, y, z
-        def move2_colsure(self, x, y, z):
+        def move2_closure(self, x, y, z):
             x,y,z=int(x+0.5),int(y+0.5),int(z+0.5)
             self.x, self.y, self.z = x, y, z
             spaces='  '*(self.space+self.block)
