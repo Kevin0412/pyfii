@@ -162,6 +162,10 @@ class Drone:
         单位:cm
         范围:80~250
         """
+        z=int(z+0.5)
+        self.z =z
+        self.x,self.y=int(self.X+0.5),int(self.Y+0.5)
+        self.X,self.Y=int(self.X+0.5),int(self.Y+0.5)
         def take_off_colsure(self,time,z):
             z=int(z+0.5)
             self.z =z
@@ -233,12 +237,19 @@ intime('''+str(time)+''')
             self.inT=False
         self.append_action(DroneAction(intime_colsure, [self, time], timestamp))
 
+    def inittime(self,time, timestamp = None):
+        self.intime(time, timestamp)
+
     def move(self,x,y,z, timestamp=None):
         """
         移动(x距离,y距离,z距离)
         单位:cm
         必须在intime(time)中
         """
+        x,y,z=int(x+0.5),int(y+0.5),int(z+0.5)
+        self.x+=x
+        self.y+=y
+        self.z+=z
         def move_colsure(self, x, y, z):
             x,y,z=int(x+0.5),int(y+0.5),int(z+0.5)
             self.x+=x
@@ -269,10 +280,12 @@ intime('''+str(time)+''')
         范围:x,y:0~560,z:80~250
         必须在intime(time)中
         """
+        x,y,z=int(x+0.5),int(y+0.5),int(z+0.5)
+        if x<0 or x>560 or y<0 or y>560 or z>250 or z<80:
+            raise Warning("Out of range.超出范围。")
+        self.x, self.y, self.z = x, y, z
         def move2_colsure(self, x, y, z):
             x,y,z=int(x+0.5),int(y+0.5),int(z+0.5)
-            if x<0 or x>560 or y<0 or y>560 or z>250 or z<80:
-                raise Warning("Out of range.超出范围。")
             self.x, self.y, self.z = x, y, z
             spaces='  '*(self.space+self.block)
             if self.inT:

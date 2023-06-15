@@ -6,3 +6,9 @@ output
 测试
 gui.png
 *.mp3
+*.mp4
+output
+.vscode
+/tests/f*c*.py
+/tests/gui_4m.py
+/tests/*v3*.py
