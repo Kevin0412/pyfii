@@ -367,22 +367,22 @@ intime('''+str(time)+''')
         self.append_action(DroneAction(self.VelZ_closure, [v, a], timestamp))
     
     def VelZ_closure(self, v, a):
-            v,a=int(v+0.5),int(a+0.5)
-            spaces='  '*(self.space+self.block)
-            if self.inT:
-                self.outputString += spaces+'''<next>
+        v,a=int(v+0.5),int(a+0.5)
+        spaces='  '*(self.space+self.block)
+        if self.inT:
+            self.outputString += spaces+'''<next>
 '''
-                self.block+=1
-                spaces+='  '
-            self.outputString += spaces+'''<block type="Goertek_VerticalSpeed">
+            self.block+=1
+            spaces+='  '
+        self.outputString += spaces+'''<block type="Goertek_VerticalSpeed">
 '''+spaces+'''  <field name="VV">'''+str(v)+'''</field>
 '''+spaces+'''  <field name="AV">'''+str(a)+'''</field>
 '''
-            self.block+=1
-            self.inT=True
-            self.outpy+='''VelZ('''+str(v)+''','''+str(a)+''')
+        self.block+=1
+        self.inT=True
+        self.outpy+='''VelZ('''+str(v)+''','''+str(a)+''')
 ''' 
-        #warnings.warn("VelZ() is ignored in pyfii show.VelZ()在pyfii的模拟飞行中被忽略。",Warning,2)
+    #warnings.warn("VelZ() is ignored in pyfii show.VelZ()在pyfii的模拟飞行中被忽略。",Warning,2)
 
     def AccXY(self,a, timestamp=None):
         """
