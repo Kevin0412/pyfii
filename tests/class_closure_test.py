@@ -18,8 +18,16 @@ def test():
     cl(A.f, {'self':a, 'x':3})
     # cl(a.g, {'x':4}) error
     cl(A.g, {'x':5})
-    cl(A.g, [6])
+    # cl(A.g, [6]) error
+    print('-------')
+    def f():
+        print('f1')
+    l = [[f,dict()]]
+    def f():
+        print('f2')
+    l.append([f,dict()])
+    for (f,p) in l:
+        cl(f,p)
 
-    
 
 test()
