@@ -44,7 +44,7 @@ d1.land()
 
 d1.end()
 
-name='group_flight_4m_1'
+name='group_flight_6m_1'
 F=pf.Fii(name,[d1])
 F.save(feild=6)
 
