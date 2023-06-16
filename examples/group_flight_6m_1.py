@@ -29,7 +29,7 @@ d1.TurnOnAll([
     (255,0,0),(255,0,0),(255,0,0),(255,0,0)
 ])
 
-d1.inittime(8)
+d1.inittime(9)
 d1.BlinkFastAll(['#ff0000',(255,255,0),'#00ff00'])
 '''
 相当于
@@ -50,7 +50,7 @@ F.save(feild=6)
 
 data,t0,music,feild=pf.read_fii(name,getfeild=True)
 pf.show(data,t0,music,feild=feild,save=name,FPS=25)
-pf.show(data,t0,music,feild=feild,save=name+'_3D',ThreeD=True,imshow=[90,0],d=(600,550),FPS=25)
+pf.show(data,t0,music,feild=feild,save=name+'_3D',ThreeD=True,imshow=[90,0],d=(600,450),FPS=25)
 
 '''
 单机飞行示例，
