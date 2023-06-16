@@ -5,17 +5,21 @@ sys.path.append(path)
 
 import pyfii as pf
 
-# 三架F400,4m毯
-d1=pf.Drone(0,0,pf.drone_config_4m)
-d2=pf.Drone(0,0,pf.drone_config_4m)
-d3=pf.Drone(0,0,pf.drone_config_4m)
+# 七架F400,6m毯
+d1=pf.Drone(0,0,pf.drone_config_6m)
+d2=pf.Drone(0,0,pf.drone_config_6m)
+d3=pf.Drone(0,0,pf.drone_config_6m)
+d4=pf.Drone(0,0,pf.drone_config_6m)
+d5=pf.Drone(0,0,pf.drone_config_6m)
+d6=pf.Drone(0,0,pf.drone_config_6m)
+d7=pf.Drone(0,0,pf.drone_config_6m)
 
 # 无人机列表
-ds=[d1,d2,d3]
+ds=[d1,d2,d3,d4,d5,d6,d7]
 
-for d,y in zip(ds,range(60,360,120)):
+for d,y in zip(ds,range(40,560,80)):
     # 定义起飞位置
-    d.X=20
+    d.X=40
     d.Y=y
     
     # 起飞
@@ -29,7 +33,7 @@ for d,y in zip(ds,range(60,360,120)):
     # 建议竖直速度加速度与水平速度加速度统一
     d.VelZ(200,400)
     # 移动至(340,y,250)
-    d.move2(340,y,250)
+    d.move2(520,y,250)
     # 全部亮黄灯
     d.TurnOnAll('#ffff00')
     # 等待500ms
@@ -40,9 +44,9 @@ for d,y in zip(ds,range(60,360,120)):
     # 等待1312ms
     # t = s_匀速 / v = ( s_总 - s_加速 - s_减速 ) / v
     # = ( sqrt( ( x_1 - x_0 ) ^ 2 + ( y_1 - y_0 ) ^ 2 + ( z_1 - z_0 ) ^ 2 ) - v ^ 2 / a ) / v
-    # = ( sqrt ( ( 340cm - 20cm ) ^ 2 + ( y - y ) ^2 + ( 250cm - 80cm ) ^ 2 ) - 200cm/s ^ 2 / 400cm/s^2 ) / 200cm/s
-    # = 1.312s = 1312ms
-    d.delay(1312)
+    # = ( sqrt ( ( 520cm - 40cm ) ^ 2 + ( y - y ) ^2 + ( 250cm - 80cm ) ^ 2 ) - 200cm/s ^ 2 / 400cm/s^2 ) / 200cm/s
+    # = 2.046s = 2046ms
+    d.delay(2046)
     # 全部亮黄灯
     d.TurnOnAll([
         '#ffff00','#ffff00','#ffff00','#ffff00',
@@ -59,8 +63,8 @@ for d,y in zip(ds,range(60,360,120)):
         (255,0,0),(255,0,0),(255,0,0),(255,0,0)
     ])
 
-    # 8秒开始动作
-    d.inittime(8)
+    # 9秒开始动作
+    d.inittime(9)
     # 快速闪烁所有灯(红黄绿交替)
     d.BlinkFastAll(['#ff0000',(255,255,0),'#00ff00'])
     '''
@@ -79,16 +83,16 @@ for d,y in zip(ds,range(60,360,120)):
     d.end()
 
 # 保存
-name='group_flight_4m_2'
+name='group_flight_6m_2'
 F=pf.Fii(name,ds)
-F.save(feild=4)
+F.save(feild=6)
 
 # 读取
 data,t0,music,feild=pf.read_fii(name,getfeild=True)
 # 储存二维模拟视频
 pf.show(data,t0,music,feild=feild,save=name,FPS=25)
 # 储存三维模拟视频
-pf.show(data,t0,music,feild=feild,save=name+'_3D',ThreeD=True,imshow=[90,0],d=(600,550),FPS=25)
+pf.show(data,t0,music,feild=feild,save=name+'_3D',ThreeD=True,imshow=[90,0],d=(600,450),FPS=25)
 
 '''
 如果在实际飞行中三架无人机保持在一条直线上，
