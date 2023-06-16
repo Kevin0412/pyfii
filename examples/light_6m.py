@@ -1,3 +1,8 @@
+import sys, os
+
+path = os.getcwd() + r'/src'
+sys.path.append(path)
+
 import pyfii as pf
 
 A,B,C,D,E,F = [i for i in range(6)]
