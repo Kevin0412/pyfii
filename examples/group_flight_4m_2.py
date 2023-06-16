@@ -60,7 +60,7 @@ for d,y in zip(ds,range(60,360,120)):
     ])
 
     # 7秒开始动作
-    d.inittime(7)
+    d.inittime(8)
     # 快速闪烁所有灯(红黄绿交替)
     d.BlinkFastAll(['#ff0000',(255,255,0),'#00ff00'])
     '''
