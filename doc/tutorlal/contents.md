@@ -3,3 +3,4 @@
 * [脚本模式](script_mode.md)
 * [内部原理](principle.md)
 * [进阶用法](more.md)
+* [灯光编写](light.md)
