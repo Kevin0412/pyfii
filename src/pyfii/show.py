@@ -219,7 +219,7 @@ def show(data,t0,music,feild=6,show=True,save="",FPS=200,ThreeD=False,imshow=[12
             pygame.mixer.init()
             pygame.mixer.music.load(music_name)
             pygame.mixer.music.play(start=0.0)
-        elif len(music)==1:
+        elif len(music)==1 and music[0].split('.')[-1] in ['mp3','wav']:
             pygame.mixer.init()
             pygame.mixer.music.load(music[0])
             pygame.mixer.music.play(start=0.0)
@@ -429,12 +429,12 @@ def show(data,t0,music,feild=6,show=True,save="",FPS=200,ThreeD=False,imshow=[12
                 if key == 27:
                     break
                 elif key==32:#长按空格键暂停，暂停后可以按wasd旋转，按esc退出暂停
-                    if len(music)>0:
+                    if len(music)>1 or (len(music)==1 and music[0].split('.')[-1] in ['mp3','wav']):
                         pygame.mixer.music.stop()
                     imshow[0],imshow[1]=IIID.show(aixs+lines+errors+texts,center,1280,720,[imshow[0],imshow[1],1],d)
                     i=imshow[0]-int(k/200*36+0.5)
                     time_read=time.time()-k/200
-                    if len(music)>0:
+                    if len(music)>1 or (len(music)==1 and music[0].split('.')[-1] in ['mp3','wav']):
                         pygame.mixer.music.play(start=k/200)
                 elif key==ord('q'):#后退
                     k-=200
@@ -443,19 +443,19 @@ def show(data,t0,music,feild=6,show=True,save="",FPS=200,ThreeD=False,imshow=[12
                         time_read=time_fps
                     if k<0:
                         k=0
-                    if len(music)>0:
+                    if len(music)>1 or (len(music)==1 and music[0].split('.')[-1] in ['mp3','wav']):
                         pygame.mixer.music.stop()
                     cv2.waitKey(0)
                     time_read=time.time()-k/200
-                    if len(music)>0:
+                    if len(music)>1 or (len(music)==1 and music[0].split('.')[-1] in ['mp3','wav']):
                         pygame.mixer.music.play(start=k/200)
                 elif key==ord('e'):#快进
                     k+=200
-                    if len(music)>0:
+                    if len(music)>1 or (len(music)==1 and music[0].split('.')[-1] in ['mp3','wav']):
                         pygame.mixer.music.stop()
                     cv2.waitKey(0)
                     time_read=time.time()-k/200
-                    if len(music)>0:
+                    if len(music)>1 or (len(music)==1 and music[0].split('.')[-1] in ['mp3','wav']):
                         pygame.mixer.music.play(start=k/200)
             
         if not show and len(save)==0 and not ThreeD:
@@ -469,7 +469,7 @@ def show(data,t0,music,feild=6,show=True,save="",FPS=200,ThreeD=False,imshow=[12
             k=int(K+0.5)
     if (show and len(save)==0) or (ThreeD and len(save)==0):
         cv2.destroyAllWindows()
-        if len(music)>0:
+        if len(music)>1 or (len(music)==1 and music[0].split('.')[-1] in ['mp3','wav']):
             pygame.mixer.music.stop()
     timer=time.time()-time_read
     print('平均帧率：'+str(int(10*f/timer+0.5)/10))
