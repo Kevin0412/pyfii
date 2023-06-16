@@ -21,7 +21,7 @@ for d,y in zip(ds,range(60,360,120)):
     # 起飞
     d.takeoff(1,80)
 
-    # 4秒开始做动作
+    # 4秒开始动作
     d.inittime(4)
     # 水平速度200cm/s 加速度400cm/s^2
     d.VelXY(200,400)
@@ -59,7 +59,9 @@ for d,y in zip(ds,range(60,360,120)):
         (255,0,0),(255,0,0),(255,0,0),(255,0,0)
     ])
 
+    # 7秒开始动作
     d.inittime(7)
+    # 快速闪烁所有灯(红黄绿交替)
     d.BlinkFastAll(['#ff0000',(255,255,0),'#00ff00'])
     '''
     相当于
@@ -70,14 +72,27 @@ for d,y in zip(ds,range(60,360,120)):
         '#ff0000',(255,255,0),'#00ff00'
     ])
     '''
+    # 降落
     d.land()
 
+    # 结束
     d.end()
 
+# 保存
 name='group_flight_4m_2'
 F=pf.Fii(name,ds)
 F.save(feild=4)
 
+# 读取
 data,t0,music,feild=pf.read_fii(name,getfeild=True)
+# 储存二维模拟视频
 pf.show(data,t0,music,feild=feild,save=name,FPS=25)
+# 储存三维模拟视频
 pf.show(data,t0,music,feild=feild,save=name+'_3D',ThreeD=True,imshow=[90,0],d=(600,550),FPS=25)
+
+'''
+如果在实际飞行中三架无人机保持在一条直线上，
+且灯光与无人接运动状态相符，
+说明无人机性能良好，
+且能达到设置的速度加速度。
+'''
