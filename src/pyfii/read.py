@@ -344,6 +344,10 @@ def dots2line(file,fii=[],fps=200,points={}):#将指令转换为飞行轨迹
     return(lines,time*fps/1000,warns)
 
 def read_fii(name,getfeild=False):
+    '''
+    读入.fii文件
+    name 所在文件夹的路径
+    '''
     time_start=time.time()
     for root, dirs, files in os.walk(name):
         for file in files:
@@ -369,6 +373,8 @@ def read_fii(name,getfeild=False):
             drones.append(xml[k].split('"')[1])
         if xml[k][1:6]=='AreaL':
             feild=int(xml[k].split('"')[1][0])
+    if len(music)==1:
+        music=[]
     dots=[]
     t0=0
     n=0

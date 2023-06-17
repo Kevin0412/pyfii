@@ -52,7 +52,7 @@
         │   └── xxx.mp3
         └── test.fii
 
-    pyfii-1.1.1和pyfii-1.5.0及后续版本，加入了脚本模式
+    pyfii-1.1.1和pyfii-1.5.0及后续版本，加入了[脚本模式](script_mode.md)
 
         test
         ├── 动作组
@@ -68,4 +68,42 @@
         ├── readme.md
         ├── test.md
         └── test.py
+    
+3. pyfii模拟
+
+    1. 读入文件
+
+        ```python
+        data,t0,music,feild=pf.read_fii(name,getfeild=True)
+        ```
+
+        其中
+
+        data是一个列表，列表的长度是无人机数，每一个元素也是列表
+
+        data[n]列表储存了第n+1架无人机飞行轨迹及旋转数据，每一个元素是长度为5的元组
+
+        ```python
+        data=[
+            [(time,x,y,z,degree),(time,x,y,z,degree),...],
+            [(time,x,y,z,degree),(time,x,y,z,degree),...],
+            ...
+        ]
+        # time单位为ms，每隔5ms一个动作数据采样
+        # x,y,z单位为cm
+        # degree单位为°
+        ```
+        
+        t0表示模拟结束的帧数（t0/200即动作时长多少秒）
+
+        music表示音乐，数据类型为列表，长度为1或2，元素的数据类型为字符串
+
+        ```python
+        music=[musicdir,musicname] # musicname不需要后缀
+        
+        music=[musicname] # musicname为音乐的完整路径
+        ```
+
+        feild表示地毯大小，4表示4米毯，6表示6米毯
+
     

@@ -113,7 +113,7 @@ def drone3d(aixs,x,y,z,c,a):
         return(x,255-n%255,n%255)'''
 
 def show(data,t0,music,feild=6,show=True,save="",FPS=200,ThreeD=False,imshow=[120,-15],d=(600,450),track=[],skin=1):
-    t0=int(t0+0.5)+300
+    t0=int(t0+0.5)+600
     if len(save)>0 and not ThreeD:
         show=False
         video = cv2.VideoWriter(save+"_process.mp4", cv2.VideoWriter_fourcc('M', 'P', '4', 'V'), FPS,(1200,600))
@@ -219,7 +219,7 @@ def show(data,t0,music,feild=6,show=True,save="",FPS=200,ThreeD=False,imshow=[12
             pygame.mixer.init()
             pygame.mixer.music.load(music_name)
             pygame.mixer.music.play(start=0.0)
-        elif len(music)==1 and music[0].split('.')[-1] in ['mp3','wav']:
+        elif len(music)==1:
             pygame.mixer.init()
             pygame.mixer.music.load(music[0])
             pygame.mixer.music.play(start=0.0)
@@ -429,12 +429,12 @@ def show(data,t0,music,feild=6,show=True,save="",FPS=200,ThreeD=False,imshow=[12
                 if key == 27:
                     break
                 elif key==32:#长按空格键暂停，暂停后可以按wasd旋转，按esc退出暂停
-                    if len(music)>1 or (len(music)==1 and music[0].split('.')[-1] in ['mp3','wav']):
+                    if len(music)>0:
                         pygame.mixer.music.stop()
                     imshow[0],imshow[1]=IIID.show(aixs+lines+errors+texts,center,1280,720,[imshow[0],imshow[1],1],d)
                     i=imshow[0]-int(k/200*36+0.5)
                     time_read=time.time()-k/200
-                    if len(music)>1 or (len(music)==1 and music[0].split('.')[-1] in ['mp3','wav']):
+                    if len(music)>0:
                         pygame.mixer.music.play(start=k/200)
                 elif key==ord('q'):#后退
                     k-=200
@@ -443,19 +443,19 @@ def show(data,t0,music,feild=6,show=True,save="",FPS=200,ThreeD=False,imshow=[12
                         time_read=time_fps
                     if k<0:
                         k=0
-                    if len(music)>1 or (len(music)==1 and music[0].split('.')[-1] in ['mp3','wav']):
+                    if len(music)>0:
                         pygame.mixer.music.stop()
                     cv2.waitKey(0)
                     time_read=time.time()-k/200
-                    if len(music)>1 or (len(music)==1 and music[0].split('.')[-1] in ['mp3','wav']):
+                    if len(music)>0:
                         pygame.mixer.music.play(start=k/200)
                 elif key==ord('e'):#快进
                     k+=200
-                    if len(music)>1 or (len(music)==1 and music[0].split('.')[-1] in ['mp3','wav']):
+                    if len(music)>0:
                         pygame.mixer.music.stop()
                     cv2.waitKey(0)
                     time_read=time.time()-k/200
-                    if len(music)>1 or (len(music)==1 and music[0].split('.')[-1] in ['mp3','wav']):
+                    if len(music)>0:
                         pygame.mixer.music.play(start=k/200)
             
         if not show and len(save)==0 and not ThreeD:
@@ -486,11 +486,13 @@ def show(data,t0,music,feild=6,show=True,save="",FPS=200,ThreeD=False,imshow=[12
             if os.path.exists(save+'.mp4'):
                 os.remove(save+'.mp4')
             video_add_audio(save+"_process.mp4",music_name,save+'.mp4')
-            os.remove(save+'_process.mp4')
         elif len(music)==1:
             print('音频添加中')
             if os.path.exists(save+'.mp4'):
                 os.remove(save+'.mp4')
             video_add_audio(save+"_process.mp4",music[0],save+'.mp4')
-            os.remove(save+'_process.mp4')
+        else:
+            print('No music!')
+            shutil.copy(save+"_process.mp4",save+'.mp4')
+        os.remove(save+'_process.mp4')
         print(save+".mp4保存成功")
