@@ -20,7 +20,7 @@ d1.move2(520,520,250, A)
 d1.delay(500, B)
 d1.delay(2999, C)
 d1.delay(500, D)
-d1.inittime(8)
+d1.inittime(9)
 d1.land(E)
 
 # 独立编写灯光
@@ -41,7 +41,7 @@ d1.BlinkFastAll(['#ff0000',(255,255,0),'#00ff00'], E, BEFORE)
 
 d1.end()    # 整合动作和灯光
 
-name='group_flight_6m_1'
+name='light_6m'
 F=pf.Fii(name,[d1])
 F.save(feild=6)
 
