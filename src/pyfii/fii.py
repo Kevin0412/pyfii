@@ -186,13 +186,13 @@ show(F.dots,F.t0,[F.music],save=\''''+self.name+'''\',FPS=25)''')
         if len(self.music)>0:
             if not infii:
                 shutil.copyfile(self.music,self.name+'/动作组/'+self.music.split('/')[-1])
-        if not infii:
+        '''if not infii:
             try:
                 if os.path.exists(self.name+'/pyfii'):
                     shutil.rmtree(self.name+'/pyfii', ignore_errors=True)
                 shutil.copytree('pyfii',self.name+'/pyfii')
             except:
-                print('Is pyfii installed by pip?')
+                print('Is pyfii installed by pip?')'''
         if not (infii or addlights):
             file=open(self.name+'/readme.md','w',encoding='utf-8')
             file.write('''运行与.fii文件在一个目录下的.py文件可以保存动作，进行动作模拟
