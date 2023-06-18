@@ -25,40 +25,40 @@ def rgb2str(color):
 class DroneAction:
     """
     无人机动作
-    action_closure:无人机动作闭包
-    parameter:闭包的参数
+    action_callback:无人机动作回调函数
+    parameter:回调函数的参数
     timestamp:用来对齐灯光，如果无人机动作和灯光动作的时间戳相等，就会自动在时间轴上对齐
     """
     def __init__(self,
-                 action_closure:Callable,
+                 action_callback:Callable,
                  parameter:Union[list,map],
                  timestamp:Optional[int]=None
                  ):
-        self.action_closure = action_closure
+        self.action_callback = action_callback
         self.parameter = parameter
         self.timestamp = timestamp
     
     def take_action(self):
         if type(self.parameter) == list:
-            self.action_closure(*self.parameter)
+            self.action_callback(*self.parameter)
         if type(self.parameter) == dict:
-            self.action_closure(**self.parameter)
+            self.action_callback(**self.parameter)
     
 class LightAction:
     """
     灯光动作
-    action_closure:灯光动作闭包
-    parameter:闭包的参数
+    action_callback:灯光动作回调函数
+    parameter:回调函数的参数
     timestamp:用来对齐灯光，如果无人机动作和灯光动作的时间戳相等，就会自动在时间轴上对齐
     order:如果为before则灯光在动作前，如果为after则灯光在动作后
     """
     def __init__(self,
-                 action_closure:Callable,
+                 action_callback:Callable,
                  parameter:Union[list,map],
                  timestamp:Optional[int],
                  order:Literal['before', 'after']='before'
                  ):
-        self.action_closure = action_closure
+        self.action_callback = action_callback
         self.parameter = parameter
         self.timestamp = timestamp
         self.order = order
@@ -71,9 +71,9 @@ class LightAction:
 
     def take_action(self):
         if type(self.parameter) == list:
-            self.action_closure(*self.parameter)
+            self.action_callback(*self.parameter)
         if type(self.parameter) == dict:
-            self.action_closure(**self.parameter)
+            self.action_callback(**self.parameter)
 
 # _T = Union[DroneAction, LightAction]
 # def actionfy(
@@ -156,8 +156,8 @@ class Drone:
         """
         self.action_list.append(action)
     
-    def append_action_simple(self, action_closure, parameter):
-        self.append_action(DroneAction(action_closure, parameter))
+    def append_action_simple(self, action_callback, parameter):
+        self.append_action(DroneAction(action_callback, parameter))
         
     def append_actions(self,
                        actions:list[DroneAction]
@@ -190,7 +190,7 @@ class Drone:
         self.z =z
         self.x,self.y=int(self.X+0.5),int(self.Y+0.5)
         self.X,self.Y=int(self.X+0.5),int(self.Y+0.5)
-        def take_off_closure(self,time,z):
+        def take_off_callback(self,time,z):
             z=int(z+0.5)
             self.z =z
             self.x,self.y=int(self.X+0.5),int(self.Y+0.5)
@@ -218,14 +218,14 @@ class Drone:
             self.space=4
             self.outpy+='''takeoff('''+str(time)+''','''+str(z)+''')
 '''
-        self.append_action(DroneAction(take_off_closure, [self, time, z], timestamp))
+        self.append_action(DroneAction(take_off_callback, [self, time, z], timestamp))
 
     def intime(self,time, timestamp = None):
         """
         某一时刻开始执行(时刻)
         单位:s(直接写秒数)
         """
-        def intime_closure(self, time):
+        def intime_callback(self, time):
             for n in range(self.block-1,0,-1):
                 spaces='  '*(self.space+n)
                 if n%2==1:
@@ -259,7 +259,7 @@ intime('''+str(time)+''')
             self.space+=2
             self.block+=1
             self.inT=False
-        self.append_action(DroneAction(intime_closure, [self, time], timestamp))
+        self.append_action(DroneAction(intime_callback, [self, time], timestamp))
 
     def inittime(self,time, timestamp = None):
         self.intime(time, timestamp)
@@ -274,7 +274,7 @@ intime('''+str(time)+''')
         self.x+=x
         self.y+=y
         self.z+=z
-        def move_closure(self, x, y, z):
+        def move_callback(self, x, y, z):
             x,y,z=int(x+0.5),int(y+0.5),int(z+0.5)
             self.x+=x
             self.y+=y
@@ -294,7 +294,7 @@ intime('''+str(time)+''')
             self.inT=True
             self.outpy+='''move('''+str(x)+''','''+str(y)+''','''+str(z)+''')
 '''
-        self.append_action(DroneAction(move_closure, [self,x,y,z], timestamp))
+        self.append_action(DroneAction(move_callback, [self,x,y,z], timestamp))
 
     def move2(self, x, y, z, timestamp=None):
         """
@@ -307,7 +307,7 @@ intime('''+str(time)+''')
         if self.outRange(x,'xyRange') or self.outRange(y,'xyRange') or self.outRange(z,'zRange'):
             raise Warning("Out of range.超出范围。")
         self.x, self.y, self.z = x, y, z
-        def move2_closure(self, x, y, z):
+        def move2_callback(self, x, y, z):
             x,y,z=int(x+0.5),int(y+0.5),int(z+0.5)
             self.x, self.y, self.z = x, y, z
             spaces='  '*(self.space+self.block)
@@ -325,7 +325,7 @@ intime('''+str(time)+''')
             self.inT=True
             self.outpy+='''move2('''+str(x)+''','''+str(y)+''','''+str(z)+''')
 '''
-        self.append_action(DroneAction(move2_closure, [self, x,y,z], timestamp))
+        self.append_action(DroneAction(move2_callback, [self, x,y,z], timestamp))
 
     def delay(self, time, timestamp = None):
         """
@@ -333,7 +333,7 @@ intime('''+str(time)+''')
         单位:ms
         必须在intime(time)中
         """
-        def delay_closure(self, time):
+        def delay_callback(self, time):
             time=int(time+0.5)
             spaces='  '*(self.space+self.block)
             if self.inT:
@@ -349,7 +349,7 @@ intime('''+str(time)+''')
             self.inT=True
             self.outpy+='''delay('''+str(time)+''')
 '''
-        self.append_action(DroneAction(delay_closure, [self, time], timestamp))
+        self.append_action(DroneAction(delay_callback, [self, time], timestamp))
 
     def VelXY(self,v,a, timestamp=None):
         """
@@ -358,9 +358,9 @@ intime('''+str(time)+''')
         范围:速度:20~200,加速度:50~400
         必须在intime(time)中
         """
-        self.append_action(DroneAction(self.VelXY_closure, [v, a], timestamp))
+        self.append_action(DroneAction(self.VelXY_callback, [v, a], timestamp))
 
-    def VelXY_closure(self, v, a):
+    def VelXY_callback(self, v, a):
         v,a=int(v+0.5),int(a+0.5)
         if self.outRange(v,'velRange') or self.outRange(a,'accRange'):
             raise Warning("Out of range.超出范围。")
@@ -385,9 +385,9 @@ intime('''+str(time)+''')
         单位:cm/s,cm/s^2
         必须在intime(time)中
         """
-        self.append_action(DroneAction(self.VelZ_closure, [v, a], timestamp))
+        self.append_action(DroneAction(self.VelZ_callback, [v, a], timestamp))
     
-    def VelZ_closure(self, v, a):
+    def VelZ_callback(self, v, a):
         v,a=int(v+0.5),int(a+0.5)
         spaces='  '*(self.space+self.block)
         if self.inT:
@@ -435,7 +435,7 @@ intime('''+str(time)+''')
         单位:cm/s^2
         必须在intime(time)中
         """
-        def AccZ_closure(self, a):
+        def AccZ_callback(self, a):
             a=int(a+0.5)
             if self.outRange(a,'accRange'):
                 raise Warning("Out of range.超出范围。")
@@ -453,7 +453,7 @@ intime('''+str(time)+''')
             self.outpy+='''AccZ('''+str(a)+''')
 '''
             #warnings.warn("VelZ() is ignored in pyfii show.VelZ()在pyfii的模拟飞行中被忽略。",Warning,2)
-        self.append_action(DroneAction(AccZ_closure, [self, a], timestamp))
+        self.append_action(DroneAction(AccZ_callback, [self, a], timestamp))
 
     def ARate(self,w, timestamp = None):
         """
@@ -462,7 +462,7 @@ intime('''+str(time)+''')
         范围:5~60
         必须在intime(time)中
         """
-        def ARate_closure(self, w):
+        def ARate_callback(self, w):
             w=int(w+0.5)
             if self.outRange(w,'ArateRange'):
                 raise Warning("Out of range.超出范围。")
@@ -479,7 +479,7 @@ intime('''+str(time)+''')
 '''
             self.block+=1
             self.inT=True
-        self.append_action(DroneAction(ARate_closure, [self, w], timestamp))
+        self.append_action(DroneAction(ARate_callback, [self, w], timestamp))
 
 
     def Yaw(self,a, timestamp=None):
@@ -488,7 +488,7 @@ intime('''+str(time)+''')
         单位:°（左正右负）
         必须在intime(time)中
         """
-        def Yaw_closure(self, a):
+        def Yaw_callback(self, a):
             spaces='  '*(self.space+self.block)
             if self.inT:
                 self.outputString += spaces+'''<next>
@@ -514,7 +514,7 @@ intime('''+str(time)+''')
             self.block+=1
             self.inT=True
             
-        self.append_action(DroneAction(Yaw_closure, [self, a], timestamp))
+        self.append_action(DroneAction(Yaw_callback, [self, a], timestamp))
 
 
     def Yaw2(self,a, timestamp=None):
@@ -523,7 +523,7 @@ intime('''+str(time)+''')
         单位:°（左正右负）
         必须在intime(time)中
         """
-        def Yaw2_closure(self, a):
+        def Yaw2_callback(self, a):
             spaces='  '*(self.space+self.block)
             if self.inT:
                 self.outputString += spaces+'''<next>
@@ -548,14 +548,14 @@ intime('''+str(time)+''')
 '''
             self.block+=1
             self.inT=True
-        self.append_action(DroneAction(Yaw2_closure, [self, a], timestamp))
+        self.append_action(DroneAction(Yaw2_callback, [self, a], timestamp))
 
 
     def land(self, timestamp = None):
         """
         降落
         """
-        def land_closure(self):
+        def land_callback(self):
             spaces='  '*(self.space+self.block)
             if self.inT:
                 self.outputString += spaces+'''<next>
@@ -568,13 +568,13 @@ intime('''+str(time)+''')
             self.inT=True
             self.outpy+='''land()
 '''
-        self.append_action(DroneAction(land_closure, [self], timestamp))
+        self.append_action(DroneAction(land_callback, [self], timestamp))
         
     def end(self, timestamp=None):
         """
         结束
         """
-        def end_closure(self):
+        def end_callback(self):
             for n in range(self.block-1,0,-1):
                 spaces='  '*(self.space+n)
                 if n%2==1:
@@ -597,7 +597,7 @@ intime('''+str(time)+''')
                 else:
                     self.outputString += spaces+'''</next>
 '''
-        self.append_action(DroneAction(end_closure, [self], timestamp))
+        self.append_action(DroneAction(end_callback, [self], timestamp))
         self.take_actions()
 
 
@@ -607,7 +607,7 @@ intime('''+str(time)+''')
         direction:x,-x,y,-y
         d:10~20
         """
-        def nod_closure(self, direction,distance):
+        def nod_callback(self, direction,distance):
             d=int(distance+0.5)
             if d<10 or d>20:
                 raise Warning("Out of range.超出范围。")
@@ -625,7 +625,7 @@ intime('''+str(time)+''')
             self.inT=True
             self.outpy+='''nod('''+str(direction)+''','''+str(d)+''')
 '''
-        self.append_action(DroneAction(nod_closure, [self, direction, distance], timestamp))
+        self.append_action(DroneAction(nod_callback, [self, direction, distance], timestamp))
 
     
     def SimpleHarmonic2(self,direction,amplitude, timestamp=None):
@@ -634,7 +634,7 @@ intime('''+str(time)+''')
         direction:x,-x,y,-y,z,-z
         amplitude:10~50
         """
-        def SimpleHarmonic2_closure(self, direction,amplitude):
+        def SimpleHarmonic2_callback(self, direction,amplitude):
             amplitude=int(amplitude+0.5)
             if amplitude<10 or amplitude>50:
                 raise Warning("Out of range.超出范围。")
@@ -652,7 +652,7 @@ intime('''+str(time)+''')
             self.inT=True
             self.outpy+='''SimpleHarmonic2('''+str(direction)+''','''+str(amplitude)+''')
 '''
-        self.append_action(DroneAction(SimpleHarmonic2_closure, [self, direction, amplitude], timestamp))
+        self.append_action(DroneAction(SimpleHarmonic2_callback, [self, direction, amplitude], timestamp))
 
         
     def RoundInAir(self,startpos,centerpos,height,vilocity, timestamp=None):
@@ -661,7 +661,7 @@ intime('''+str(time)+''')
         height:80~250
         vilovity:60~180
         """
-        def RoundInAir_closure(self,startpos,centerpos,height,vilocity):
+        def RoundInAir_callback(self,startpos,centerpos,height,vilocity):
             X=int(startpos[0]+0.5)
             Y=int(startpos[1]+0.5)
             Cx=int(centerpos[0]+0.5)
@@ -690,14 +690,14 @@ intime('''+str(time)+''')
             self.inT=True
             self.outpy+='''RoundInAir('''+str(startpos)+''','''+str(centerpos)+''','''+str(height)+''','''+str(vilocity)+''')
 '''
-        self.append_action(DroneAction(RoundInAir_closure, [self, startpos,centerpos,height,vilocity], timestamp))
+        self.append_action(DroneAction(RoundInAir_callback, [self, startpos,centerpos,height,vilocity], timestamp))
 
 
     def TurnOnSingle(self,Id,color, timestamp=None, order='before'):
         '''
         点亮单个灯(灯号,颜色)
         '''
-        def TurnOnSingle_closure(self,Id,color):
+        def TurnOnSingle_callback(self,Id,color):
             spaces='  '*(self.space+self.block)
             if self.inT:
                 self.outputString += spaces+'''<next>
@@ -721,15 +721,15 @@ intime('''+str(time)+''')
             self.outpy+='''TurnOnSingle('''+str(Id)+''',\''''+str(color)+'''\')
 '''
         if timestamp is None:
-            self.append_action(DroneAction(TurnOnSingle_closure, [self, Id, color], timestamp))
+            self.append_action(DroneAction(TurnOnSingle_callback, [self, Id, color], timestamp))
         else:
-            self.append_light(LightAction(TurnOnSingle_closure, [self,Id,color], timestamp, order))
+            self.append_light(LightAction(TurnOnSingle_callback, [self,Id,color], timestamp, order))
 
     def TurnOffSingle(self,Id, timestamp=None, order='before'):
         '''
         关闭单个灯(灯号)
         '''
-        def TurnOffSingle_closure(self, Id):
+        def TurnOffSingle_callback(self, Id):
             spaces='  '*(self.space+self.block)
             if self.inT:
                 self.outputString += spaces+'''<next>
@@ -764,9 +764,9 @@ intime('''+str(time)+''')
             self.block+=1
             self.inT=True
         if timestamp is None:
-            self.append_action(DroneAction(TurnOffSingle_closure, [self, Id], timestamp))
+            self.append_action(DroneAction(TurnOffSingle_callback, [self, Id], timestamp))
         else:
-            self.append_light(LightAction(TurnOffSingle_closure, [self,Id], timestamp, order))
+            self.append_light(LightAction(TurnOffSingle_callback, [self,Id], timestamp, order))
 
     def TurnOnAll(self,colors, timestamp=None, order='before'):
         '''
@@ -774,7 +774,7 @@ intime('''+str(time)+''')
         str/tuple:同色
         list:不同色
         '''
-        def TurnOnAll_closure(self, colors):
+        def TurnOnAll_callback(self, colors):
             spaces='  '*(self.space+self.block)
             if self.inT:
                 self.outputString += spaces+'''<next>
@@ -809,15 +809,15 @@ intime('''+str(time)+''')
             self.block+=1
             self.inT=True
         if timestamp is None:
-            self.append_action(DroneAction(TurnOnAll_closure, [self,colors], timestamp))
+            self.append_action(DroneAction(TurnOnAll_callback, [self,colors], timestamp))
         else:
-            self.append_light(LightAction(TurnOnAll_closure, [self,colors], timestamp, order))
+            self.append_light(LightAction(TurnOnAll_callback, [self,colors], timestamp, order))
 
     def TurnOffAll(self, timestamp=None, order='before'):
         '''
         关闭所有灯
         '''
-        def TurnOffAll_closure(self):
+        def TurnOffAll_callback(self):
             spaces='  '*(self.space+self.block)
             if self.inT:
                 self.outputString += spaces+'''<next>
@@ -831,16 +831,16 @@ intime('''+str(time)+''')
             self.outpy+='''TurnOffAll()
 '''
         if timestamp is None:
-            self.append_action(DroneAction(TurnOffAll_closure, [self], timestamp))
+            self.append_action(DroneAction(TurnOffAll_callback, [self], timestamp))
         else:
-            self.append_light(LightAction(TurnOffAll_closure, [self], timestamp, order))
+            self.append_light(LightAction(TurnOffAll_callback, [self], timestamp, order))
 
 
     def BlinkSingle(self,Id,color, timestamp=None, order='before'):
         '''
         闪单个灯(灯号,颜色)
         '''
-        def BlinkSingle_closure(self, Id, color):
+        def BlinkSingle_callback(self, Id, color):
             spaces='  '*(self.space+self.block)
             if self.inT:
                 self.outputString += spaces+'''<next>
@@ -864,16 +864,16 @@ intime('''+str(time)+''')
             self.outpy+='''BlinkSingle('''+str(Id)+''',\''''+str(color)+'''\')
 '''
         if timestamp is None:
-            self.append_action(DroneAction(BlinkSingle_closure [self, Id, color], timestamp))
+            self.append_action(DroneAction(BlinkSingle_callback [self, Id, color], timestamp))
         else:
-            self.append_light(LightAction(BlinkSingle_closure, [self, Id, color], timestamp, order))
+            self.append_light(LightAction(BlinkSingle_callback, [self, Id, color], timestamp, order))
 
 
     def Breath(self,colors, timestamp=None, order='before'):
         '''
         呼吸灯(颜色)
         '''
-        def Breath_closure(self, colors):
+        def Breath_callback(self, colors):
             spaces='  '*(self.space+self.block)
             if self.inT:
                 self.outputString += spaces+'''<next>
@@ -893,15 +893,15 @@ intime('''+str(time)+''')
             self.outpy+='''Breath(\''''+str(colors)+'''\')
 '''
         if timestamp is None:
-            self.append_action(DroneAction(Breath_closure, [self, colors], timestamp))
+            self.append_action(DroneAction(Breath_callback, [self, colors], timestamp))
         else:
-            self.append_light(LightAction(Breath_closure, [self, colors], timestamp, order))
+            self.append_light(LightAction(Breath_callback, [self, colors], timestamp, order))
 
     def BlinkFastAll(self, colors, timestamp=None, order='before'):
         '''
         快速闪烁所有灯(颜色)
         '''
-        def BlinkFastAll_closure(self, colors):
+        def BlinkFastAll_callback(self, colors):
             spaces='  '*(self.space+self.block)
             if self.inT:
                 self.outputString += spaces+'''<next>
@@ -923,15 +923,15 @@ intime('''+str(time)+''')
             self.outpy+='''BlinkFastAll('''+str(colors)+''')
 '''
         if timestamp is None:
-            self.append_action(DroneAction(BlinkFastAll_closure, [self, colors], timestamp))
+            self.append_action(DroneAction(BlinkFastAll_callback, [self, colors], timestamp))
         else:
-            self.append_light(LightAction(BlinkFastAll_closure, [self, colors], timestamp, order))
+            self.append_light(LightAction(BlinkFastAll_callback, [self, colors], timestamp, order))
 
     def BlinkSlowAll(self, colors, timestamp=None, order='before'):
         '''
         慢速闪烁所有灯(颜色)
         '''
-        def BlinkSlowAll_closure(self, colors):
+        def BlinkSlowAll_callback(self, colors):
             spaces='  '*(self.space+self.block)
             if self.inT:
                 self.outputString += spaces+'''<next>
@@ -953,15 +953,15 @@ intime('''+str(time)+''')
             self.outpy+='''BlinkSlowAll('''+str(colors)+''')
 '''
         if timestamp is None:
-            self.append_action(DroneAction(BlinkSlowAll_closure, [self, colors], timestamp))
+            self.append_action(DroneAction(BlinkSlowAll_callback, [self, colors], timestamp))
         else:
-            self.append_light(LightAction(BlinkSlowAll_closure, [self, colors], timestamp, order))
+            self.append_light(LightAction(BlinkSlowAll_callback, [self, colors], timestamp, order))
     
     def HorseRace(self,colors, timestamp=None, order='before'):
         '''
         走马灯(颜色)
         '''
-        def HorseRace_closure(self, colors):
+        def HorseRace_callback(self, colors):
             spaces='  '*(self.space+self.block)
             if self.inT:
                 self.outputString += spaces+'''<next>
@@ -983,7 +983,7 @@ intime('''+str(time)+''')
             self.outpy+='''HorseRace('''+str(colors)+''')
     '''
         if timestamp is None:
-            self.append_action(DroneAction(HorseRace_closure, [self, colors], timestamp))
+            self.append_action(DroneAction(HorseRace_callback, [self, colors], timestamp))
         else:
-            self.append_light(LightAction(HorseRace_closure, [self, colors], timestamp, order))
+            self.append_light(LightAction(HorseRace_callback, [self, colors], timestamp, order))
     
