@@ -98,7 +98,7 @@
         # degree单位为°
         ```
         
-        ```t0```表示模拟结束的帧数（```t0/200```即动作时长多少秒）
+        ```t0```表示模拟结束的帧数（即动作时长```t0/200```秒）
 
         ```music```表示音乐，数据类型为列表，长度为1或2，元素的数据类型为字符串
 
@@ -132,22 +132,22 @@
 
         这里参数比较多，需要一一介绍
 
-        ```data,t0,music,feild```这四个在上文接受过了，这里不多赘述
+        ```data,t0,music,feild```这四个在上文介绍过了，这里不多赘述
 
         ```show=False```时，直接打印是否存在距离过近的情况，没有图像渲染
 
         ```python
-        pf.show(dots,t0,music,feild,show=False)
+        pf.show(data,t0,music,feild,show=False)
         ```
 
-        ```show=True```时，要分类讨论，```show```默认为```True```，不用写
+        ```show==True```时，要分类讨论，```show```默认为```True```，不用写
 
         二维模拟：
 
         二维模拟时，需要的参数有```skin```，因为只有二维模拟时有皮肤
 
         ```python
-        pf.show(dots,t0,music,feild,skin=1)
+        pf.show(data,t0,music,feild,skin=1)
         #有0,1,2三种皮肤
         ```
 
@@ -156,9 +156,9 @@
         三维模拟时，需要的参数有```ThreeD,imshow,d```
 
         ```python
-        pf.show(dots,t0,music,feild,ThreeD=True,imshow=[120,-15],d=(1,0))
+        pf.show(data,t0,music,feild,ThreeD=True,imshow=[120,-15],d=(1,0))
         # 正交
-        pf.show(dots,t0,music,feild,ThreeD=True,imshow=[90,0],d=(600,450))
+        pf.show(data,t0,music,feild,ThreeD=True,imshow=[90,0],d=(600,450))
         # 透视
         ```
 
@@ -178,6 +178,8 @@
 
         推荐透视模拟6米毯时，```d=(600,450)```，4米毯时，```d=(600,550)```
 
+        为了便于理解，我讲一讲小鸟飞飞官方软件模拟所涉及的参数。官方的三维模拟涉及了三个可由用户调整的参数，分别是方位角、俯仰角和距离。
+
         上述模拟都会跳出一个窗口，窗口可由键盘控制
 
         二维模拟时，按空格暂停或继续，长按q后退，长按e前进，按esc退出
@@ -189,20 +191,27 @@
         此外，如果在上述模拟的参数不变的前提下，加入```save,FPS```参数，就会生成视频，此时不会跳出窗口
 
         ```python
-        pf.show(dots,t0,music,feild,save='test',FPS=25)
+        pf.show(data,t0,music,feild,save='test',FPS=25)
         # skin默认值为1，可不写
         ```
         这就是生成二维模拟的视频的方法，输出的视频为```test.mp4```，25帧/秒
 
         三维视频以次类推
 
+         ```python
+        pf.show(data,t0,music,feild,save='test',FPS=25,ThreeD=True,imshow=[120,-15],d=(1,0))
+        # 正交
+        pf.show(data,t0,music,feild,save='test',FPS=25,ThreeD=True,imshow=[90,0],d=(600,450))
+        # 透视
+        ```
+
         例外，
 
         全景模式不能跳出窗口，只能生成视频，这里需要```ThreeD,save,FPS,track```四个参数
         ```python
-        pf.show(dots,t0,music,feild,ThreeD=True,save='test',FPS=20,track=[0])
+        pf.show(data,t0,music,feild,ThreeD=True,save='test',FPS=20,track=[0])
         # 无人机1的视角全景
-        pf.show(dots,t0,music,feild,ThreeD=True,save='test',FPS=20,track=(280,280,165))
+        pf.show(data,t0,music,feild,ThreeD=True,save='test',FPS=20,track=(280,280,165))
         # (280,280,165)为中心的视角全景
         ```
 
@@ -211,3 +220,9 @@
         当它为长度为1的列表```[n]```时，表示以第n+1架无人机的视角生成全景视频
 
         当它为元组```(x,y,z)```时，表示以(x,y,z)为中心的视角生成全景视频
+
+        原理是用openCV渲染图像，pygame播放音乐，生成视频时，用openCV生成视频，之后用FFmpeg将背景音乐加到视频中。
+
+        在渲染过程中，pyfii会计算两架无人机之间在xy平面上投影的距离，以51cm、34cm和17cm为界，分别对应官方模拟中的轻微警告、一般警告和严重警告
+
+        注意：模拟是理想状态，一切以实际为准
