@@ -44,10 +44,10 @@
         test
         ├── 动作组
         │   ├── 动作组1
-        |   |   └── webCodeAll.xml
-        |   ├── 动作组2
-        |   |   └── webCodeAll.xml
-        |   ...
+        │   │   └── webCodeAll.xml
+        │   ├── 动作组2
+        │   │   └── webCodeAll.xml
+        │    ...
         │   ├── checksums.xml
         │   └── xxx.mp3
         └── test.fii
@@ -57,12 +57,12 @@
         test
         ├── 动作组
         │   ├── 动作组1
-        |   |   ├── pyfiiCode.py
-        |   |   └── webCodeAll.xml
-        |   ├── 动作组2
-        |   |   ├── pyfiiCode.py
-        |   |   └── webCodeAll.xml
-        |   ...
+        │   │   ├── pyfiiCode.py
+        │   │   └── webCodeAll.xml
+        │   ├── 动作组2
+        │   │   ├── pyfiiCode.py
+        │   │   └── webCodeAll.xml
+        │   ...
         │   ├── checksums.xml
         │   └── xxx.mp3
         ├── readme.md
@@ -117,6 +117,8 @@
         如果在一半位移处未到达最高速度，则直接开始减速
 
         对于无人机未到达目标点时有新的移动指令时，pyfii会提示你动作未完成，让无人机以最大加速度（400cm/s^2）减速至速度为零，再执行移动到目标点的动作，这一操作会与实际存在一定偏差
+
+        对于速度加速度未定义的情况，pyfii将使用默认值，默认值存在误差，建议起飞后移动前先定义速度加速度
 
         对于旋转与移动是否存在冲突，并未有研究，在pyfii模拟中，认为旋转与移动不冲突，且未引入角加速度
 
@@ -291,103 +293,244 @@
         d1.VelXY(200,400)
         d1.VelZ(200,400)
         d1.move2(250,250,250)
+
+        d1.end()
         ```
 
         在第4秒
+
         水平速度200cm/s
+
         水平加速度400cm/s
+
         竖直速度200cm/s
+
         竖直加速度400cm/s
+
         直线移动至(250,250,250)
 
------
-1. DroneAction类和LightAction类
+        ```python
+        d1.inittime(7）
+        d1.land()
+        ```
 
-    在解释DroneAction类和LightAction类的原理之前，你可能需要一些关于回调函数(callback)的知识
+        在第7秒
 
-    你可以查看tests/class_callback_test.py来了解回调函数的行为
+        降落
 
-    使用回调函数，是为了延迟函数或方法的执行。可以实现写一段代码（即回调函数），但不立即执行，之后可以对回调函数进行重新排序，在需要的时间被调用。
+        ```python
+        d1.end()
+        ```
 
-    为了实现独立编写灯光和动作的目的，Drone对象有action_list和light_actions两个属性，用来记录动作和灯光的回调函数，为了能在时间轴上对齐动作和灯光，封装了DroneAction类和LightAction类，引入timestamp并将其与回调函数打包在一起，为了协调动作和灯光的前后顺序，在LightAction类中加入了order属性
+        结束
+        
+        以上是一个示例，下文将介绍```drone```类pyfii1.1.1中的所有模块
 
-    在drone.end()操作之后，Drone类会使用timestamp和order属性对齐动作和灯光，这时调用封装在动作类和灯光类里的回调函数，Drone类才真正开始处理输出到webCodeAll.xml和pyfiiCode.py里的字符串，即将pyfii代码转化为fii工程文件
+        ```python
+        d1.takeoff(1,100)
+        # 第一个值是起飞时间，第二个值是起飞高度，必须等待1秒后再起飞
 
-    实际情况还要复杂一些。实际上，无人机的动作方法在被调用的时候没有立即将pyfii代码转为fii工程文件，而是将其作为回调函数封装到DroneAction中，但是修改无人机坐标的操作却立即执行了，因为在pyfii编程过程中，有些时候想要知道无人机当前的位置来进行相对移动。
+        d1.inittime(t)
+        # 在第几秒
 
-    以上叙述可能理解起来比较复杂，这里举个例子：
+        d1.move(x,y,z)
+        # 移动距离(x,y,z)
 
-    ```python
-    # Drone类中
-        def move2(self, x, y, z, timestamp=None):
-            # 代码段 1
-            x,y,z=int(x+0.5),int(y+0.5),int(z+0.5)
-            if self.outRange(x,'xyRange') or self.outRange(y,'xyRange') or self.outRange(z,'zRange'):   # 超出范围提醒
-                raise Warning("Out of range.超出范围。")
-            self.x, self.y, self.z = x, y, z
-            # 代码段 1 结束
-            def move2_callback(self, x, y, z):
-                # 代码段 2
+        d1.move2(x,y,z)
+        # 直线移动至(x,y,z)
+
+        d1.delay(t)
+        # 等待几毫秒
+
+        d1.VelXY(v,a)
+        # 速度加速度为多少
+
+        d1.AccXY(a)
+        # 加速度为多少
+
+        d1.ARate(w)
+        # 角速度（角速度）
+
+        d1.Yaw(a)
+        # 转动（角度）正逆负顺
+
+        d1.Yaw2(a)
+        # 转向（角度）正逆负顺
+
+        d1.land()
+        # 降落
+
+        d1.end()
+        # 结束时必加
+        ```
+
+        以上动作支持pyfii模拟飞行，此外由于未对其运动轨迹进行研究，有部分动作不支持pyfii中的模拟飞行，但会保存在```.fii```中
+
+        ```python
+        d1.VelZ(v,a)
+        # 竖直速度（速度,加速度）
+
+        d1.AccZ(a)
+        # 竖直加速度（加速度）
+
+        d1.nod(direction,distance)
+        # 点头 沿 direction 方向急速平移 distance cm
+
+        d1.SimpleHarmonic2(direction,amplitude)
+        # 波浪运动 沿 direction 方向以整幅 amplitude cm 运动
+
+        d1.RoundInAir(startpos,centerpos,height,vilocity)
+        # 绕圈飞行 起点 startpos 圆心 centerpos 高度 height 速度 vilocity(正逆时针,负顺时针)
+
+        d1.TurnOnSingle(Id,color)
+        # 点亮某一盏灯，颜色
+
+        d1.TurnOffSingle(Id)
+        # 熄灭某一盏灯
+
+        d1.TurnOnAll(colors)
+        # 点亮所有灯，颜色
+
+        d1.TurnOffAll()
+        # 熄灭所有灯
+
+        d1.BlinkSingle(Id,color)
+        # 闪烁某一盏灯，颜色
+
+        d1.Breath(colors)
+        # 呼吸灯，颜色
+
+        d1.BlinkFastAll(colors)
+        # 快速闪烁所有灯(颜色)
+
+        d1.BlinkSlowAll(colors)
+        # 慢速闪烁所有灯(颜色)
+
+        d1.HorseRace(colors)
+        # 走马灯(颜色)
+        ```
+
+        在编写移动时，建议使用```d1.move2(x,y,z)```，如果想要使用```d1.move(x,y,z)```，可以使用```d1.move2(d1.x+x,d1.y+y,d1.z+z)```代替
+
+        ```d1.outputString```表示写入```webCodeAll.xml```的内容
+
+        ```d1.outpy```表示写入```pyfiiCode.py```的内容
+
+    2. ```Fii```类
+
+        ```python
+        F=pf.Fii(name,drones,music)
+        ```
+
+        ```name```为字符串，即文件名
+
+        ```drones```为一个列表，列表里每一个元素都是```drone```类
+
+        ```Fii```类的功能是整合多个```drone```类
+
+        ```music```是一个字符串，是音乐的文件名，如```"xxx.mp3"```，如果不写```music```就是没音乐
+
+        ```python
+        F.save(feild=4)
+        ```
+
+        这就是储存文件
+
+        ```feild```为地毯大小
+
+        在这里面，
+        
+        ```inFii```参数为脚本模式使用
+
+        ```addlights```暂未实现，功能是覆写灯光
+
+    3. DroneAction类和LightAction类
+
+        在解释DroneAction类和LightAction类的原理之前，你可能需要一些关于回调函数(callback)的知识
+
+        你可以查看tests/class_callback_test.py来了解回调函数的行为
+
+        使用回调函数，是为了延迟函数或方法的执行。可以实现写一段代码（即回调函数），但不立即执行，之后可以对回调函数进行重新排序，在需要的时间被调用。
+
+        为了实现独立编写灯光和动作的目的，Drone对象有action_list和light_actions两个属性，用来记录动作和灯光的回调函数，为了能在时间轴上对齐动作和灯光，封装了DroneAction类和LightAction类，引入timestamp并将其与回调函数打包在一起，为了协调动作和灯光的前后顺序，在LightAction类中加入了order属性
+
+        在drone.end()操作之后，Drone类会使用timestamp和order属性对齐动作和灯光，这时调用封装在动作类和灯光类里的回调函数，Drone类才真正开始处理输出到webCodeAll.xml和pyfiiCode.py里的字符串，即将pyfii代码转化为fii工程文件
+
+        实际情况还要复杂一些。实际上，无人机的动作方法在被调用的时候没有立即将pyfii代码转为fii工程文件，而是将其作为回调函数封装到DroneAction中，但是修改无人机坐标的操作却立即执行了，因为在pyfii编程过程中，有些时候想要知道无人机当前的位置来进行相对移动。
+
+        以上叙述可能理解起来比较复杂，这里举个例子：
+
+        ```python
+        # Drone类中
+            def move2(self, x, y, z, timestamp=None):
+                # 代码段 1
                 x,y,z=int(x+0.5),int(y+0.5),int(z+0.5)
+                if self.outRange(x,'xyRange') or self.outRange(y,'xyRange') or self.outRange(z,'zRange'):   # 超出范围提醒
+                    raise Warning("Out of range.超出范围。")
                 self.x, self.y, self.z = x, y, z
-                # 代码段 2 结束
-                # 代码段 3
-                spaces='  '*(self.space+self.block)
-                if self.inT:
-                    self.outputString += spaces+'''<next>
+                # 代码段 1 结束
+                def move2_callback(self, x, y, z):
+                    # 代码段 2
+                    x,y,z=int(x+0.5),int(y+0.5),int(z+0.5)
+                    self.x, self.y, self.z = x, y, z
+                    # 代码段 2 结束
+                    # 代码段 3
+                    spaces='  '*(self.space+self.block)
+                    if self.inT:
+                        self.outputString += spaces+'''<next>
+            '''
+                        self.block+=1
+                        spaces+='  '
+                    self.outputString += spaces+'''<block type="Goertek_MoveToCoord">
+        '''+spaces+'''  <field name="X">'''+str(x)+'''</field>
+        '''+spaces+'''  <field name="Y">'''+str(y)+'''</field>
+        '''+spaces+'''  <field name="Z">'''+str(z)+'''</field>
         '''
                     self.block+=1
-                    spaces+='  '
-                self.outputString += spaces+'''<block type="Goertek_MoveToCoord">
-    '''+spaces+'''  <field name="X">'''+str(x)+'''</field>
-    '''+spaces+'''  <field name="Y">'''+str(y)+'''</field>
-    '''+spaces+'''  <field name="Z">'''+str(z)+'''</field>
-    '''
-                self.block+=1
-                self.inT=True
-                self.outpy+='''move2('''+str(x)+''','''+str(y)+''','''+str(z)+''')
-    '''
-                # 代码段 3 结束
-            self.append_action(DroneAction(move2_callback, [self, x,y,z], timestamp))   # 将动作添加到动作列表里去
+                    self.inT=True
+                    self.outpy+='''move2('''+str(x)+''','''+str(y)+''','''+str(z)+''')
+        '''
+                    # 代码段 3 结束
+                self.append_action(DroneAction(move2_callback, [self, x,y,z], timestamp))   # 将动作添加到动作列表里去
 
-    ```
-    示例代码是移动无人机到特定位置的代码，代码段1计算了无人机位置（self.x, self.y, self.z储存无人机当前位置），同时给出超出范围提醒。代码段23在move2_callback这个回调函数当中，代码段2又重复了一遍代码段1的操作，但是没有超出范围提醒，因为在合并动作和灯光时，会将无人机放回起始位置，之后重复一遍位置计算，这是因为第一次位置计算用来方便用户调取drone.x，drone.y, drone.z的位置信息，第二次位置计算用来生成fii工程。
+        ```
+        示例代码是移动无人机到特定位置的代码，代码段1计算了无人机位置（self.x, self.y, self.z储存无人机当前位置），同时给出超出范围提醒。代码段23在move2_callback这个回调函数当中，代码段2又重复了一遍代码段1的操作，但是没有超出范围提醒，因为在合并动作和灯光时，会将无人机放回起始位置，之后重复一遍位置计算，这是因为第一次位置计算用来方便用户调取drone.x，drone.y, drone.z的位置信息，第二次位置计算用来生成fii工程。
 
-    代码段3主要修改了self.outputString和self.outpy，这两个变量分别写入到webCodeAll.xml和pyfiiCode.py中，self.inT和self.block主要来满足xml文件的格式要求。
+        代码段3主要修改了self.outputString和self.outpy，这两个变量分别写入到webCodeAll.xml和pyfiiCode.py中，self.inT和self.block主要来满足xml文件的格式要求。
 
-    最后一行代码创建了一个DroneAction对象，其定义如下：
+        最后一行代码创建了一个DroneAction对象，其定义如下：
 
-    ```python
-    DroneAction(self, action_callback, parameter, timestamp)
-    ```
+        ```python
+        DroneAction(self, action_callback, parameter, timestamp)
+        ```
 
-    这是DroneActon的构造函数，action_callback是无人机动作回调函数，parameter是回调函数的参数，timestamp是时间戳。
+        这是DroneActon的构造函数，action_callback是无人机动作回调函数，parameter是回调函数的参数，timestamp是时间戳。
 
-    可见最后一段代码创建了一个无人机动作并将其添加到无人机动作列表里。
+        可见最后一段代码创建了一个无人机动作并将其添加到无人机动作列表里。
 
-    观察Drone类的无人机动作方法，大致如下：
+        观察Drone类的无人机动作方法，大致如下：
 
-    ```python
+        ```python
 
-    def action(self, ..., timestamp):
-        # 首先计算位置
+        def action(self, ..., timestamp):
+            # 首先计算位置
 
-        # 再输出提示信息
+            # 再输出提示信息
 
-        def action_callback(self, ...):
-            # 相同的计算位置
+            def action_callback(self, ...):
+                # 相同的计算位置
 
-            # 但是没有提示信息
+                # 但是没有提示信息
 
-            # 在fii工程文件变量里添加动作对应的字符串
-        
-        self.append_action(DroneAction(action_callback, [self, ...], timestamp))
-        # 把动作添加到无人机动作列表
+                # 在fii工程文件变量里添加动作对应的字符串
+            
+            self.append_action(DroneAction(action_callback, [self, ...], timestamp))
+            # 把动作添加到无人机动作列表
 
-    ```
+        ```
 
-    灯光的原理也类似，只不过没有计算位置这一步。但是灯光没有填timestamp参数时是按序执行的，因此如果不分开编写，灯光方法其实等同于动作，只有分开编写时，灯光才会放到drone.light_actions字典里。
+        灯光的原理也类似，只不过没有计算位置这一步。但是灯光没有填timestamp参数时是按序执行的，因此如果不分开编写，灯光方法其实等同于动作，只有分开编写时，灯光才会放到drone.light_actions字典里。
 
-    使用字典存储灯光动作使查询的时间复杂度为O(1)，字典的键是timestamp和order共同组成的，字典的值是这个timestamp和oreder对应的灯光动作，之后将动作的timestamp分别加上before和after在字典中查询是否有灯光就行了。
+        使用字典存储灯光动作使查询的时间复杂度为O(1)，字典的键是timestamp和order共同组成的，字典的值是这个timestamp和oreder对应的灯光动作，之后将动作的timestamp分别加上before和after在字典中查询是否有灯光就行了。
 
-    drone.end方法就是这样查找一个动作有没有和其对应的灯光，并拼接为正确的顺序。
+        drone.end方法就是这样查找一个动作有没有和其对应的灯光，并拼接为正确的顺序。

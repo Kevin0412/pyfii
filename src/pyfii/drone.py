@@ -97,11 +97,11 @@ class LightAction:
 #     return action_list
 
 drone_config_6m={
-    'xyRange':(0,560),
-    'zRange':(80,250),
-    'velRange':(20,200),
-    'accRange':(50,400),
-    'ArateRange':(5,60),
+    'xyRange':(0,560), # xy坐标范围，单位cm
+    'zRange':(80,250), # z坐标范围，单位cm
+    'velRange':(20,200), # 速度范围，单位cm/s
+    'accRange':(50,400), # 加速度范围，单位cm/s^2
+    'ArateRange':(5,60), # 角速度范围，单位°/s
 }
 
 drone_config_4m={
