@@ -87,7 +87,7 @@ class Fii:
     d.end()
 ''')
                 file.write('''F=Fii(\''''+self.name+'''\',ds,music=\'动作组/'''+self.music+'''\')\n''')
-                file.write('''F.save(True)
+                file.write('''F.save(True,feild='''+str(feild)+''')
 show(F.dots,F.t0,[F.music],save=\''''+self.name+'''\',FPS=25)''')
 
             if infii:
