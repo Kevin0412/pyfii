@@ -5,18 +5,18 @@
         test
         ├── 动作组
         │   ├── 动作组1
-        |   │   ├── transfile
-        |   |   |   └── 1001.ls
-        |   |   ├── offlineExcuteScript.py
-        |   |   ├── webCodeAll.py
-        |   |   └── webCodeAll.xml
-        |   ├── 动作组2
-        |   │   ├── transfile
-        |   |   |   └── 2002.ls
-        |   |   ├── offlineExcuteScript.py
-        |   |   ├── webCodeAll.py
-        |   |   └── webCodeAll.xml
-        |   ...
+        │   │   ├── transfile
+        │   │   │   └── 1001.ls
+        │   │   ├── offlineExcuteScript.py
+        │   │   ├── webCodeAll.py
+        │   │   └── webCodeAll.xml
+        │   ├── 动作组2
+        │   │   ├── transfile
+        │   │   │   └── 2002.ls
+        │   │   ├── offlineExcuteScript.py
+        │   │   ├── webCodeAll.py
+        │   │   └── webCodeAll.xml
+        │   ...
         │   ├── checksums.xml
         │   └── xxx.mp3
         └── test.fii
@@ -286,7 +286,7 @@
         d1.takeoff(1,100)
         ```
 
-        1秒时，起飞，高毒100cm
+        1秒时，起飞，高度100cm
 
         ```python
         d1.inittime(4)
