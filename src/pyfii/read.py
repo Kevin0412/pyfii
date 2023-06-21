@@ -132,6 +132,13 @@ def read_xml(data,fii=[],time=0,x=0,y=0,z=0,vel=0,acc=0,w=0,points={}):#格式�
             elif xml[k].split('"')[1][0:23]=='Goertek_AngularVelocity':
                 w=int(xml[k+1][16:-8])
                 #print(w)
+            elif "Goertek_LEDTurnOnAllSingleColor" in xml[k]:
+                color = xml[k+1].split('>')[1].split('<')[0]
+                dots.append([time, color, 'TurnOnAllSingleColor'])
+            elif "Goertek_LEDTurnOnAll" in xml[k]:
+                # color为1号灯的颜色
+                color = color = xml[k+1].split('>')[1].split('<')[0]
+                dots.append([time, color, 'TurnOnAll'])
     return(dots,warns,time)
 
 def dots2angle(dots,warns,fps=200):#将指令转化为转圈动作
