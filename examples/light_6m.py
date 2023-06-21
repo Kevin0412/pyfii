@@ -41,10 +41,10 @@ d1.BlinkFastAll(['#ff0000',(255,255,0),'#00ff00'], E, BEFORE)
 
 d1.end()    # 整合动作和灯光
 
-name='light_6m'
-F=pf.Fii(name,[d1])
+path='output/light_6m'
+F=pf.Fii(path,[d1])
 F.save(feild=6)
 
-data,t0,music,feild=pf.read_fii(name,getfeild=True)
-pf.show(data,t0,music,feild=feild,save=name,FPS=25)
-pf.show(data,t0,music,feild=feild,save=name+'_3D',ThreeD=True,imshow=[90,0],d=(600,550),FPS=25)
+data,t0,music,feild=pf.read_fii(path,getfeild=True)
+pf.show(data,t0,music,feild=feild,save=path,FPS=25)
+pf.show(data,t0,music,feild=feild,save=path+'_3D',ThreeD=True,imshow=[90,0],d=(600,550),FPS=25)

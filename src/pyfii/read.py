@@ -343,17 +343,17 @@ def dots2line(file,fii=[],fps=200,points={}):#将指令转换为飞行轨迹
         lines.append((time+t,x,y,z))'''
     return(lines,time*fps/1000,warns)
 
-def read_fii(name,getfeild=False):
+def read_fii(path,getfeild=False):
     '''
     读入.fii文件
-    name 所在文件夹的路径
+    path 所在文件夹的路径
     '''
     time_start=time.time()
-    for root, dirs, files in os.walk(name):
+    for root, dirs, files in os.walk(path):
         for file in files:
             if os.path.splitext(file)[1] == '.fii':
-                fii_name=(os.path.join(root , file))
-    with open(fii_name, "r",encoding='utf-8') as F:
+                fii_path=(os.path.join(root , file))
+    with open(fii_path, "r",encoding='utf-8') as F:
         data = F.read()
     data=data.split('\n')
     xml=[]
@@ -363,7 +363,7 @@ def read_fii(name,getfeild=False):
         #print(d.split('  ')[-1],str(len(d.split('  '))))
         xml.append(d.split('  ')[-1])
     drones=[]
-    music=[name+"/动作组/"]
+    music=[path+"/动作组/"]
     for k in range(len(xml)):
         #print(xml[k].split('"'))
         if xml[k][1:10]=='MusicName':
@@ -380,7 +380,7 @@ def read_fii(name,getfeild=False):
     n=0
     points={}
     for drone in drones:
-        with open(name+'/动作组/'+drone+'/webCodeAll.xml', "r",encoding='utf-8') as F:
+        with open(path+'/动作组/'+drone+'/webCodeAll.xml', "r",encoding='utf-8') as F:
             file = F.read()
         for dic in read_xml_points(file).items():
             points[dic[0]]=dic[1]
@@ -392,7 +392,7 @@ def read_fii(name,getfeild=False):
                 elif xml[k][16]=='Y':
                     y=int(xml[k].split('"')[1].split('pos')[1])
                 #print(xml[k].split('"')[1])
-        with open(name+'/动作组/'+drone+'/webCodeAll.xml', "r",encoding='utf-8') as F:
+        with open(path+'/动作组/'+drone+'/webCodeAll.xml', "r",encoding='utf-8') as F:
             file = F.read()
         try:
             line=dots2line(file,fii=[x,y],points=points)

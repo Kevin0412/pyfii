@@ -5,8 +5,9 @@ import warnings
 import logging
 
 class Fii:
-    def __init__(self,name,drones,music=''):
-        self.name=name
+    def __init__(self,path,drones,music=''):
+        self.path = path
+        self.dir, self.name = os.path.split(path)
         self.ds=drones
         self.dots=[]
         self.t0=0
@@ -31,9 +32,9 @@ class Fii:
             if infii:
                 file=open(self.name+'.fii',"w",encoding='utf-8')
             else:
-                if not os.path.exists(self.name):
-                    os.makedirs(self.name)
-                file=open(self.name+'/'+self.name+'.fii',"w",encoding='utf-8')
+                if not os.path.exists(self.path):
+                    os.makedirs(self.path)
+                file=open(self.path+'/'+self.name+'.fii',"w",encoding='utf-8')
             file.write('''<?xml version="1.0" encoding="utf-8"?>
 <GoertekGraphicXml>
   <DeviceType DeviceType="F400" />
@@ -62,7 +63,7 @@ class Fii:
             file.close()
 
             if not infii:
-                file=open(self.name+'/'+self.name+'.py',"w",encoding='utf-8')
+                file=open(self.path+'/'+self.name+'.py',"w",encoding='utf-8')
                 file.write('from pyfii import *\n')
                 k=1
                 ds='['
@@ -87,18 +88,18 @@ class Fii:
                 file.write('''for d in ds:
     d.end()
 ''')
-                file.write('''F=Fii(\''''+self.name+'''\',ds,music=\'动作组/'''+self.music+'''\')\n''')
+                file.write('''F=Fii(\''''+self.path+'''\',ds,music=\'动作组/'''+self.music+'''\')\n''')
                 file.write('''F.save(True,feild='''+str(feild)+''')
-show(F.dots,F.t0,[F.music],save=\''''+self.name+'''\',FPS=25)''')
+show(F.dots,F.t0,[F.music],save=\''''+self.path+'''\',FPS=25)''')
 
             if infii:
                 if not os.path.exists('动作组'):
                     os.makedirs('动作组') 
                 file=open('动作组/checksums.xml',"w",encoding='utf-8')
             else:
-                if not os.path.exists(self.name+'/动作组'):
-                    os.makedirs(self.name+'/动作组') 
-                file=open(self.name+'/动作组/checksums.xml',"w",encoding='utf-8')
+                if not os.path.exists(self.path+'/动作组'):
+                    os.makedirs(self.path+'/动作组') 
+                file=open(self.path+'/动作组/checksums.xml',"w",encoding='utf-8')
             file.write('<?xml version="1.0" encoding="utf-8"?>')
             file.write('\n')
             file.write('<CheckSumXml>')
@@ -171,22 +172,22 @@ show(F.dots,F.t0,[F.music],save=\''''+self.name+'''\',FPS=25)''')
                             elif da.split('(')[0]=='delay':
                                 newcode+='delay('+str(time1-ledtime)+')\n'
                             time=time1
-                    with open(self.name+'/动作组/动作组'+str(k)+'/pyfiiCode.py',"w",encoding='utf-8') as f:
+                    with open(self.path+'/动作组/动作组'+str(k)+'/pyfiiCode.py',"w",encoding='utf-8') as f:
                         f.write(newcode)
 
                 else:
-                    if not os.path.exists(self.name+'/动作组/动作组'+str(k)):
-                        os.makedirs(self.name+'/动作组/动作组'+str(k)) 
-                    file=open(self.name+'/动作组/动作组'+str(k)+'/webCodeAll.xml',"w",encoding='utf-8')
+                    if not os.path.exists(self.path+'/动作组/动作组'+str(k)):
+                        os.makedirs(self.path+'/动作组/动作组'+str(k)) 
+                    file=open(self.path+'/动作组/动作组'+str(k)+'/webCodeAll.xml',"w",encoding='utf-8')
                     file.write(d.outputString)
                     file.close()                
-                    file=open(self.name+'/动作组/动作组'+str(k)+'/pyfiiCode.py',"w",encoding='utf-8')
+                    file=open(self.path+'/动作组/动作组'+str(k)+'/pyfiiCode.py',"w",encoding='utf-8')
                     file.write(d.outpy)
                     file.close()
             k+=1
         if len(self.music)>0:
             if not infii:
-                shutil.copyfile(self.music,self.name+'/动作组/'+self.music.split('/')[-1])
+                shutil.copyfile(self.music,self.path+'/动作组/'+self.music.split('/')[-1])
         '''if not infii:
             try:
                 if os.path.exists(self.name+'/pyfii'):
@@ -195,7 +196,7 @@ show(F.dots,F.t0,[F.music],save=\''''+self.name+'''\',FPS=25)''')
             except:
                 print('Is pyfii installed by pip?')'''
         if not (infii or addlights):
-            file=open(self.name+'/readme.md','w',encoding='utf-8')
+            file=open(self.path+'/readme.md','w',encoding='utf-8')
             file.write('''运行与.fii文件在一个目录下的.py文件可以保存动作，进行动作模拟
 
 编辑该.py文件可以修改起飞位置，修改动作模拟形式
@@ -281,6 +282,9 @@ HorseRace(colors)
             file.close()
 
         elif addlights:
-            os.system("cd "+self.name+" & "+"python "+self.name+".py")
+            os.system("cd "+self.path+" & "+"python "+self.name+".py")
 
-        print('已保存'+self.name)
+        if self.dir == '':
+            print('已保存'+self.name+'于'+'当前目录')
+        else:
+            print('已保存'+self.name+'于'+self.dir+'文件夹下')
