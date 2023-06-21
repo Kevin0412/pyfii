@@ -66,7 +66,7 @@ class Fii:
                 k=1
                 ds='['
                 for d in self.ds:
-                    file.write('d'+str(k)+'=Drone('+str(d.X)+','+str(d.Y)+')\n')
+                    file.write('d'+str(k)+'=Drone('+str(d.X)+','+str(d.Y)+','+str(d.config)+')\n')
                     ds+='d'+str(k)
                     if k==len(self.ds):
                         ds+=']'
