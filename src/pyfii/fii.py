@@ -2,6 +2,7 @@ import os
 import shutil
 from .read import dots2line
 import warnings
+import logging
 
 class Fii:
     def __init__(self,name,drones,music=''):
@@ -11,6 +12,8 @@ class Fii:
         self.t0=0
         self.music=music
         n=0
+        if len(self.ds)==0:
+            raise Exception('empty fii!\nmaybe you forgot drone.end()')
         for d in self.ds:
             n+=1
             try:
@@ -20,8 +23,8 @@ class Fii:
                     for warn in line[2]:
                         warnings.warn('d'+str(n)+' 无人机'+str(n)+':'+warn,Warning,2)
                 self.t0=max(self.t0,dots2line(d.outputString,fii=[d.X,d.Y])[1])
-            except:
-                print('empty fii!')
+            except Exception as e:
+                logging.exception(e)
 
     def save(self,infii=False,addlights=False,feild=6):
         if not addlights:

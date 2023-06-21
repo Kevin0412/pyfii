@@ -190,13 +190,13 @@ class Drone:
         self.z =z
         self.x,self.y=int(self.X+0.5),int(self.Y+0.5)
         self.X,self.Y=int(self.X+0.5),int(self.Y+0.5)
+        if self.outRange(z,'zRange') or self.outRange(self.X,'xyRange') or self.outRange(self.Y,'xyRange') or time<1:
+            raise Warning("Out of range.超出范围。")
         def take_off_callback(self,time,z):
             z=int(z+0.5)
             self.z =z
             self.x,self.y=int(self.X+0.5),int(self.Y+0.5)
             self.X,self.Y=int(self.X+0.5),int(self.Y+0.5)
-            if self.outRange(z,'zRange') or self.outRange(self.X,'xyRange') or self.outRange(self.Y,'xyRange') or time<1:
-                raise Warning("Out of range.超出范围。")
             time=int(time+0.5)
             self.outputString+='''  <block type="Goertek_Start" x="'''+str(self.X)+'''" y="'''+str(self.Y)+'''">
     <next>
