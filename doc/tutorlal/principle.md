@@ -442,7 +442,17 @@
         
         ```inFii```参数为脚本模式使用
 
-        ```addlights```暂未实现，功能是覆写灯光
+        ```addlights```功能是覆写灯光
+
+        如
+
+        ```python
+        F.save(addlights=True,feild=6)
+        ```
+
+        此时，pyfii会删去原来的灯光，覆写上新的
+
+        具体原理是读入脚本模式的脚本，删去原来的灯光，写入新的灯光，运行脚本，完成覆写
 
     3. DroneAction类和LightAction类
 

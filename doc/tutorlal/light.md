@@ -180,6 +180,46 @@
     timestamp = hash(f'action_name {i}')
     ```
 
+    此外，动作与灯光分开编写还有第二种方法
 
+    新建一个python文件，不用写动作（起飞除外），只需要写灯光即可
+
+    例如
+
+    ```python
+    import pyfii as pf
+
+    # 七架F400,6m毯
+    d1=pf.Drone(0,0,pf.drone_config_6m)
+    d2=pf.Drone(0,0,pf.drone_config_6m)
+    d3=pf.Drone(0,0,pf.drone_config_6m)
+    d4=pf.Drone(0,0,pf.drone_config_6m)
+    d5=pf.Drone(0,0,pf.drone_config_6m)
+    d6=pf.Drone(0,0,pf.drone_config_6m)
+    d7=pf.Drone(0,0,pf.drone_config_6m)
+
+    ds=[d1,d2,d3,d4,d5,d6,d7]
+
+    for d in ds:
+        d.takeoff(1,80)
+
+        d.inittime(4)
+        d.TurnOnAll((255,255,255))
+
+        d.end()
+
+    # 保存
+    name='group_flight_6m_2'
+    F=pf.Fii(name,ds)
+    F.save(addlights=True,feild=6)
+    ```
+
+    其中，最关键的一行是
+
+    ```python
+    F.save(addlights=True,feild=6)
+    ```
+
+    运行结果就是原来的灯光被删除，新的灯光被加入了进去
 
 
