@@ -129,6 +129,7 @@ class Drone:
         self.action_list:list[DroneAction] = []
         self.light_actions:map[LightAction] = dict()
         self.config=config
+        self.time=0
 
     def outRange(self,n,nRange):
         return n>self.config[nRange][1] or n<self.config[nRange][0]
@@ -186,6 +187,8 @@ class Drone:
         单位:cm
         范围:80~250
         """
+        time=int(time+0.5)
+        self.time=time*1000
         z=int(z+0.5)
         self.z =z
         self.x,self.y=int(self.X+0.5),int(self.Y+0.5)
@@ -197,7 +200,6 @@ class Drone:
             self.X,self.Y=int(self.X+0.5),int(self.Y+0.5)
             if self.outRange(z,'zRange') or self.outRange(self.X,'xyRange') or self.outRange(self.Y,'xyRange') or time<1:
                 raise Warning("Out of range.超出范围。")
-            time=int(time+0.5)
             self.outputString+='''  <block type="Goertek_Start" x="'''+str(self.X)+'''" y="'''+str(self.Y)+'''">
     <next>
       <block type="block_inittime">
@@ -225,6 +227,10 @@ class Drone:
         某一时刻开始执行(时刻)
         单位:s(直接写秒数)
         """
+        time=int(time+0.5)
+        if self.time>time*1000:
+            raise Warning("Time arrangement error.时间编排出错。")
+        self.time=time*1000
         def intime_callback(self, time):
             for n in range(self.block-1,0,-1):
                 spaces='  '*(self.space+n)
@@ -238,7 +244,6 @@ class Drone:
             spaces='  '*(self.space+self.block)
             self.outputString += spaces+'''</statement>
 '''
-            time=int(time+0.5)
             self.times.append(time)
             self.outpy+='''
 intime('''+str(time)+''')
@@ -333,8 +338,9 @@ intime('''+str(time)+''')
         单位:ms
         必须在intime(time)中
         """
+        time=int(time+0.5)
+        self.time+=time
         def delay_callback(self, time):
-            time=int(time+0.5)
             spaces='  '*(self.space+self.block)
             if self.inT:
                 self.outputString += spaces+'''<next>
