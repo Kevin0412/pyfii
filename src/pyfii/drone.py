@@ -2,24 +2,36 @@ import warnings
 from typing import Any, Callable, Literal, Optional, Union
 
 def checkcolor(color):
-    result=False
+    is_color = True
     if type(color)==str:
-        if color[0]=='#' and len(color)==7:
-            n=0
-            for c in range(1,7):
-                if ord(color[c]) in range(48,58) or ord(color[c]) in range(97,103):
-                    n+=1
-            result=n==6
-    return result
+        if not(len(color)==7 and color[0]=='#' and all([char in '0123456789abcedfABCDEF' for char in color[1:]])):
+            is_color = False
+    elif type(color)==tuple:
+        if not(len(color)==3 and all([type(item)==int and 0<=item<=255 for item in color])):
+            is_color = False
+    else:
+        is_color = False
+    if not is_color:
+        raise Exception('Not a color.不是颜色。')
+    
+def normalize_colors(colors):
+    for color in colors:
+        checkcolor(color)
+    for c in range(12):
+        if type(colors[c%len(colors)])==tuple:
+            colors[c%len(colors)]=rgb2str(colors[c%len(colors)])
+
+def check_light_id(light_id):
+    if light_id not in range(1, 13):
+        Exception('LED id out of range.灯号超范围。')
 
 def rgb2str(color):
+    checkcolor(color)
     result = '#'
     for c in [int(color[0]),int(color[1]),int(color[2])]:
         sc = hex(c)[2:]
         sc = sc if len(sc)==2 else '0{}'.format(sc)
         result += sc
-    if not checkcolor(result):
-        raise Warning('RGB out of range.rgb值超出范围。')
     return result
 
 class DroneAction:
@@ -194,7 +206,7 @@ class Drone:
         self.x,self.y=int(self.X+0.5),int(self.Y+0.5)
         self.X,self.Y=int(self.X+0.5),int(self.Y+0.5)
         if self.outRange(z,'zRange') or self.outRange(self.X,'xyRange') or self.outRange(self.Y,'xyRange') or time<1:
-            raise Warning("Out of range.超出范围。")
+            raise Exception("Out of range.超出范围。")
         def take_off_callback(self,time,z):
             z=int(z+0.5)
             self.z =z
@@ -229,7 +241,7 @@ class Drone:
         """
         time=int(time+0.5)
         if self.time>time*1000:
-            raise Warning("Time arrangement error.时间编排出错。")
+            raise Exception("Time arrangement error.时间编排出错。")
         self.time=time*1000
         def intime_callback(self, time):
             for n in range(self.block-1,0,-1):
@@ -310,7 +322,7 @@ intime('''+str(time)+''')
         """
         x,y,z=int(x+0.5),int(y+0.5),int(z+0.5)
         if self.outRange(x,'xyRange') or self.outRange(y,'xyRange') or self.outRange(z,'zRange'):
-            raise Warning("Out of range.超出范围。")
+            raise Exception("Out of range.超出范围。")
         self.x, self.y, self.z = x, y, z
         def move2_callback(self, x, y, z):
             x,y,z=int(x+0.5),int(y+0.5),int(z+0.5)
@@ -369,7 +381,7 @@ intime('''+str(time)+''')
     def VelXY_callback(self, v, a):
         v,a=int(v+0.5),int(a+0.5)
         if self.outRange(v,'velRange') or self.outRange(a,'accRange'):
-            raise Warning("Out of range.超出范围。")
+            raise Exception("Out of range.超出范围。")
         spaces='  '*(self.space+self.block)
         if self.inT:
             self.outputString += spaces+'''<next>
@@ -443,7 +455,7 @@ intime('''+str(time)+''')
         """
         a=int(a+0.5)
         if self.outRange(a,'accRange'):
-            raise Warning("Out of range.超出范围。")
+            raise Exception("Out of range.超出范围。")
         def AccZ_callback(self, a):
             spaces='  '*(self.space+self.block)
             if self.inT:
@@ -470,7 +482,7 @@ intime('''+str(time)+''')
         """
         w=int(w+0.5)
         if self.outRange(w,'ArateRange'):
-            raise Warning("Out of range.超出范围。")
+            raise Exception("Out of range.超出范围。")
         def ARate_callback(self, w):
             self.outpy+='''ARate('''+str(w)+''')
 '''
@@ -615,7 +627,7 @@ intime('''+str(time)+''')
         """
         distance=int(distance+0.5)
         if distance<10 or distance>20:
-            raise Warning("Out of range.超出范围。")
+            raise Exception("Out of range.超出范围。")
         def nod_callback(self, direction,distance):
             spaces='  '*(self.space+self.block)
             if self.inT:
@@ -642,7 +654,7 @@ intime('''+str(time)+''')
         """
         amplitude=int(amplitude+0.5)
         if amplitude<10 or amplitude>50:
-            raise Warning("Out of range.超出范围。")
+            raise Exception("Out of range.超出范围。")
         def SimpleHarmonic2_callback(self, direction,amplitude):
             spaces='  '*(self.space+self.block)
             if self.inT:
@@ -674,7 +686,7 @@ intime('''+str(time)+''')
         height=int(height+0.5)
         vilocity=int(abs(vilocity)+0.5)
         if vilocity<60 or vilocity>180 or height>250 or height<80 or X<0 or X>560 or Y<0 or Y>560 or Cx<0 or Cx>560 or Cy<0 or Cy>560:
-            raise Warning("Out of range.超出范围。")
+            raise Exception("Out of range.超出范围。")
         def RoundInAir_callback(self,startpos,centerpos,height,vilocity):
             X=int(startpos[0]+0.5)
             Y=int(startpos[1]+0.5)
@@ -709,6 +721,8 @@ intime('''+str(time)+''')
         '''
         点亮单个灯(灯号,颜色)
         '''
+        checkcolor(color)
+        check_light_id(Id)
         def TurnOnSingle_callback(self,Id,color):
             spaces='  '*(self.space+self.block)
             if self.inT:
@@ -718,16 +732,10 @@ intime('''+str(time)+''')
                 spaces+='  '
             if type(color)==tuple:
                 color=rgb2str(color)
-            if checkcolor(color):
-                if Id in range(1,13):
-                    self.outputString += spaces+'''<block type="Goertek_AtomicLEDOn">
+            self.outputString += spaces+'''<block type="Goertek_AtomicLEDOn">
 '''+spaces+'''  <field name="id">'''+str(Id)+'''</field>
 '''+spaces+'''  <field name="color">'''+color+'''</field>
 '''
-                else:
-                    raise Warning('LED id out of range.灯号超范围。')
-            else:
-                raise Warning('Not a color.不是颜色。')
             self.block+=1
             self.inT=True
             self.outpy+='''TurnOnSingle('''+str(Id)+''',\''''+str(color)+'''\')
@@ -741,6 +749,7 @@ intime('''+str(time)+''')
         '''
         关闭单个灯(灯号)
         '''
+        check_light_id(Id)
         def TurnOffSingle_callback(self, Id):
             spaces='  '*(self.space+self.block)
             if self.inT:
@@ -748,33 +757,14 @@ intime('''+str(time)+''')
 '''
                 self.block+=1
                 spaces+='  '
-            if type(colors)==list:
-                self.outputString += spaces+'''<block type="Goertek_LEDTurnOnAll">
-'''
-                for c in range(12):
-                    if type(colors[c%len(colors)])==tuple:
-                        colors[c%len(colors)]=rgb2str(colors[c%len(colors)])
-                    if checkcolor(colors[c%len(colors)]):
-                        self.outputString += spaces+'''  <field name="color'''+str(c+1)+'''">'''+colors[c%len(colors)]+'''</field>
-'''
-                    else:
-                        raise Warning('Not a color.不是颜色。')
-                self.outpy+='''TurnOnAll('''+str(colors)+''')
-'''            
-            else:
-                if type(colors)==tuple:
-                    colors=rgb2str(colors)
-                if checkcolor(colors):   
-                    self.outputString += spaces+'''<block type="Goertek_LEDTurnOnAllSingleColor">
-'''+spaces+'''  <field name="color1">'''+colors+'''</field>
-'''
-                else:
-                    raise Warning('Not a color.不是颜色。')
-
-                self.outpy+='''TurnOnAll(\''''+str(colors)+'''\')
+            
+            self.outputString += spaces+'''<block type="Goertek_AtomicLEDOff">
+'''+spaces+'''  <field name="id">'''+str(Id)+'''</field>
 '''
             self.block+=1
             self.inT=True
+            self.outpy+='''TurnOffSingle('''+str(Id)+''')
+'''
         if timestamp is None:
             self.append_action(DroneAction(TurnOffSingle_callback, [self, Id], timestamp))
         else:
@@ -786,6 +776,14 @@ intime('''+str(time)+''')
         str/tuple:同色
         list:不同色
         '''
+        if type(colors)==list:
+            for color in colors:
+                checkcolor(color)
+            for c in range(12):
+                if type(colors[c%len(colors)])==tuple:
+                    colors[c%len(colors)]=rgb2str(colors[c%len(colors)])
+        else:
+            checkcolor(colors)
         def TurnOnAll_callback(self, colors):
             spaces='  '*(self.space+self.block)
             if self.inT:
@@ -797,25 +795,16 @@ intime('''+str(time)+''')
                 self.outputString += spaces+'''<block type="Goertek_LEDTurnOnAll">
 '''
                 for c in range(12):
-                    if type(colors[c%len(colors)])==tuple:
-                        colors[c%len(colors)]=rgb2str(colors[c%len(colors)])
-                    if checkcolor(colors[c%len(colors)]):
-                        self.outputString += spaces+'''  <field name="color'''+str(c+1)+'''">'''+colors[c%len(colors)]+'''</field>
+                    self.outputString += spaces+'''  <field name="color'''+str(c+1)+'''">'''+colors[c%len(colors)]+'''</field>
 '''
-                    else:
-                        raise Warning('Not a color.不是颜色。')
                 self.outpy+='''TurnOnAll('''+str(colors)+''')
 '''            
             else:
                 if type(colors)==tuple:
                     colors=rgb2str(colors)
-                if checkcolor(colors):   
-                    self.outputString += spaces+'''<block type="Goertek_LEDTurnOnAllSingleColor">
+                self.outputString += spaces+'''<block type="Goertek_LEDTurnOnAllSingleColor">
 '''+spaces+'''  <field name="color1">'''+colors+'''</field>
 '''
-                else:
-                    raise Warning('Not a color.不是颜色。')
-
                 self.outpy+='''TurnOnAll(\''''+str(colors)+'''\')
 '''
             self.block+=1
@@ -852,6 +841,10 @@ intime('''+str(time)+''')
         '''
         闪单个灯(灯号,颜色)
         '''
+        if type(color)==tuple:
+            color=rgb2str(color)
+        checkcolor(color)
+        check_light_id(Id)
         def BlinkSingle_callback(self, Id, color):
             spaces='  '*(self.space+self.block)
             if self.inT:
@@ -859,18 +852,10 @@ intime('''+str(time)+''')
 '''
                 self.block+=1
                 spaces+='  '
-            if type(color)==tuple:
-                color=rgb2str(color)
-            if checkcolor(color):
-                if Id in range(1,13):
-                    self.outputString+=spaces+'''<block type="Goertek_LEDSingleBlink">
+            self.outputString+=spaces+'''<block type="Goertek_LEDSingleBlink">
 '''+spaces+'''  <field name="id">'''+str(Id)+'''</field>
 '''+spaces+'''  <field name="color">'''+color+'''</field>
 '''
-                else:
-                    raise Warning('LED id out of range.灯号超范围。')
-            else:
-                raise Warning('Not a color.不是颜色。')
             self.block+=1
             self.inT=True
             self.outpy+='''BlinkSingle('''+str(Id)+''',\''''+str(color)+'''\')
@@ -881,38 +866,37 @@ intime('''+str(time)+''')
             self.append_light(LightAction(BlinkSingle_callback, [self, Id, color], timestamp, order))
 
 
-    def Breath(self,colors, timestamp=None, order='before'):
+    def Breath(self,color, timestamp=None, order='before'):
         '''
         呼吸灯(颜色)
         '''
-        def Breath_callback(self, colors):
+        if type(color)==tuple:
+            color=rgb2str(color)
+        checkcolor(color)
+        def Breath_callback(self, color):
             spaces='  '*(self.space+self.block)
             if self.inT:
                 self.outputString += spaces+'''<next>
 '''
                 self.block+=1
                 spaces+='  '
-            if type(colors)==tuple:
-                colors=rgb2str(colors)
-            if checkcolor(colors):
-                self.outputString+=spaces+'''<block type="Goertek_LEDBreath">
-'''+spaces+'''  <field name="color">'''+colors+'''</field>
+            self.outputString+=spaces+'''<block type="Goertek_LEDBreath">
+'''+spaces+'''  <field name="color">'''+color+'''</field>
 '''
-            else:
-                raise Warning('Not a color.不是颜色。')
             self.block+=1
             self.inT=True
-            self.outpy+='''Breath(\''''+str(colors)+'''\')
+            self.outpy+='''Breath(\''''+str(color)+'''\')
 '''
         if timestamp is None:
-            self.append_action(DroneAction(Breath_callback, [self, colors], timestamp))
+            self.append_action(DroneAction(Breath_callback, [self, color], timestamp))
         else:
-            self.append_light(LightAction(Breath_callback, [self, colors], timestamp, order))
+            self.append_light(LightAction(Breath_callback, [self, color], timestamp, order))
 
     def BlinkFastAll(self, colors, timestamp=None, order='before'):
         '''
         快速闪烁所有灯(颜色)
         '''
+        normalize_colors(colors)
         def BlinkFastAll_callback(self, colors):
             spaces='  '*(self.space+self.block)
             if self.inT:
@@ -923,13 +907,8 @@ intime('''+str(time)+''')
             self.outputString += spaces+'''<block type="Goertek_LEDBlinkFastAll">
 '''
             for c in range(12):
-                if type(colors[c%len(colors)])==tuple:
-                    colors[c%len(colors)]=rgb2str(colors[c%len(colors)])
-                if checkcolor(colors[c%len(colors)]):
-                    self.outputString += spaces+'''  <field name="color'''+str(c+1)+'''">'''+colors[c%len(colors)]+'''</field>
+                self.outputString += spaces+'''  <field name="color'''+str(c+1)+'''">'''+colors[c%len(colors)]+'''</field>
 '''
-                else:
-                    raise Warning('Not a color.不是颜色。')
             self.block+=1
             self.inT=True
             self.outpy+='''BlinkFastAll('''+str(colors)+''')
@@ -943,6 +922,7 @@ intime('''+str(time)+''')
         '''
         慢速闪烁所有灯(颜色)
         '''
+        normalize_colors(colors)
         def BlinkSlowAll_callback(self, colors):
             spaces='  '*(self.space+self.block)
             if self.inT:
@@ -953,13 +933,8 @@ intime('''+str(time)+''')
             self.outputString += spaces+'''<block type="Goertek_LEDBlinkSlowAll">
 '''
             for c in range(12):
-                if type(colors[c%len(colors)])==tuple:
-                    colors[c%len(colors)]=rgb2str(colors[c%len(colors)])
-                if checkcolor(colors[c%len(colors)]):
-                    self.outputString += spaces+'''  <field name="color'''+str(c+1)+'''">'''+colors[c%len(colors)]+'''</field>
+                self.outputString += spaces+'''  <field name="color'''+str(c+1)+'''">'''+colors[c%len(colors)]+'''</field>
 '''
-                else:
-                    raise Warning('Not a color.不是颜色。')
             self.block+=1
             self.inT=True
             self.outpy+='''BlinkSlowAll('''+str(colors)+''')
@@ -973,6 +948,7 @@ intime('''+str(time)+''')
         '''
         走马灯(颜色)
         '''
+        normalize_colors(colors)
         def HorseRace_callback(self, colors):
             spaces='  '*(self.space+self.block)
             if self.inT:
@@ -983,13 +959,8 @@ intime('''+str(time)+''')
             self.outputString += spaces+'''<block type="Goertek_LEDHorseRacel">
     '''
             for c in range(12):
-                if type(colors[c%len(colors)])==tuple:
-                    colors[c%len(colors)]=rgb2str(colors[c%len(colors)])
-                if checkcolor(colors[c%len(colors)]):
-                    self.outputString += spaces+'''  <field name="color'''+str(c+1)+'''">'''+colors[c%len(colors)]+'''</field>
+                self.outputString += spaces+'''  <field name="color'''+str(c+1)+'''">'''+colors[c%len(colors)]+'''</field>
     '''
-                else:
-                    raise Warning('Not a color.不是颜色。')
             self.block+=1
             self.inT=True
             self.outpy+='''HorseRace('''+str(colors)+''')
