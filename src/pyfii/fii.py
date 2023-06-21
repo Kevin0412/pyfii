@@ -278,4 +278,8 @@ BlinkSlowAll(colors)
 HorseRace(colors)
 #走马灯(颜色)''')
             file.close()
+
+        elif addlights:
+            os.system("cd "+self.name+" & "+"python "+self.name+".py")
+
         print('已保存'+self.name)
