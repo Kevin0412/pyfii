@@ -24,9 +24,7 @@ class Fii:
                 print('empty fii!')
 
     def save(self,infii=False,addlights=False,feild=6):
-        if addlights:
-            pass
-        else:
+        if not addlights:
             if infii:
                 file=open(self.name+'.fii',"w",encoding='utf-8')
             else:
