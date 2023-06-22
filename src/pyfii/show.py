@@ -53,7 +53,7 @@ def draw_drone(img,x,y,color,a=0,led=(-1,-1,-1),up=False,skin=1):
         if up:
             cv2.circle(img,(int(x),int(y)),15,color,-1)
         else:
-            cv2.rectangle(img2,(int(x)-15,int(y)+5),(int(x)+15,int(y)-5),color,-1)
+            cv2.rectangle(img,(int(x)-15,int(y)+5),(int(x)+15,int(y)-5),color,-1)
     elif skin==1:
         if up:
             cv2.circle(img,(int(x-21/2*np.cos(np.pi/4+a)),int(y+21/2*np.sin(np.pi/4+a))),8,color,1)

@@ -25,6 +25,6 @@ for d in ds:
     d.end()
 
 # 保存
-name='output/group_flight_6m_2'
-F=pf.Fii(name,ds)
+path='output/group_flight_6m_2'
+F=pf.Fii(path,ds)
 F.save(addlights=True,feild=6)
