@@ -278,7 +278,7 @@ def show(data,t0,music,feild=6,show=True,save="",FPS=200,ThreeD=False,imshow=[12
                 draw_drone(img2,620+X[1],540-X[2],color(X[5],(X[0]-280)/280*125),led=X[4],skin=skin)
                 #cv2.rectangle(img2,(int(560+X[1]-15),int(500-X[2]+5)),(int(560+X[1]+15),int(500-X[2]-5)),color(X[3],(X[0]-280)/280*125),-1)
             for Y in Ys:
-                draw_drone(img2,620+Y[0],270-Y[2],color(Y[5],(Y[1]-280)/280*125),led=Y[4],skin=skin)
+                draw_drone(img2,620+Y[0],270-Y[2],color(Y[5],(280-Y[1])/280*125),led=Y[4],skin=skin)
                 #cv2.rectangle(img2,(int(560+Y[0]-15),int(250-Y[2]+5)),(int(560+Y[0]+15),int(250-Y[2]-5)),color(Y[3],(280-Y[1])/280*125),-1)
             for Z in Zs:
                 draw_drone(img2,20+Z[0],580-Z[1],color(Z[5],(Z[2]-125)/125*125),a=Z[3]/180*np.pi,led=Z[4],up=True,skin=skin)
