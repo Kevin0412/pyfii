@@ -135,7 +135,7 @@ show(F.dots,F.t0,[F.music],save=\''''+self.path+'''\',FPS=25)''')
                             time=int(float(da.split('(')[1].split(')')[0])*1000+0.5)
                         elif da.split('(')[0]=='delay':
                             time+=int(da.split('(')[1].split(')')[0])
-                    with open(self.name+'/动作组/动作组'+str(k)+'/pyfiiCode.py',"r",encoding='utf-8') as f:
+                    with open(self.path+'/动作组/动作组'+str(k)+'/pyfiiCode.py',"r",encoding='utf-8') as f:
                         data=(f.read().split('\n'))
                         newcode=''
                         time=0
