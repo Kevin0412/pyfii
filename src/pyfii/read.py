@@ -29,6 +29,7 @@ def read_xml(data,fii=[],time=0,x=0,y=0,z=0,vel=0,acc=0,w=0,points={}):#格式�
         lenxml.append(len(d.split('  ')))
     dots=[]
     warns=[]
+    end=time
     for k in range(len(xml)):
         if xml[k][1:6]=='block':
             #print(xml[k].split('"')[1])
@@ -51,6 +52,7 @@ def read_xml(data,fii=[],time=0,x=0,y=0,z=0,vel=0,acc=0,w=0,points={}):#格式�
                 y=int(xml[k+2][16:-8])
                 #print(time,x,y,int(xml[k+3][16:-8]))
                 dots.append([time,x,y,int(xml[k+3][16:-8]),vel,acc,"move2"])
+                end=max(time,end)
             elif xml[k].split('"')[1][0:13]=='Goertek_Start':
                 if len(fii)==0:
                     x=int(xml[k].split('"')[3])
@@ -60,12 +62,15 @@ def read_xml(data,fii=[],time=0,x=0,y=0,z=0,vel=0,acc=0,w=0,points={}):#格式�
                     y=fii[1]
                 #print(time,x,y,0)
                 dots.append([time,x,y,0,200,400,"move2"])
+                end=max(time,end)
             elif xml[k].split('"')[1][0:15]=='Goertek_TakeOff':
                 #print(time,x,y,int(xml[k+1][18:-8]))
                 dots.append([time,x,y,int(xml[k+1][18:-8]),200,400,"move2"])
+                end=max(time,end)
             elif xml[k].split('"')[1][0:12]=='Goertek_Land':
                 #print(time,x,y,0)
                 dots.append([time,"land"])
+                end=max(time,end)
             elif xml[k].split('"')[1][0:23]=='Goertek_HorizontalSpeed':
                 vel=int(xml[k+1][17:-8])
                 acc=int(xml[k+2][17:-8])
@@ -81,6 +86,7 @@ def read_xml(data,fii=[],time=0,x=0,y=0,z=0,vel=0,acc=0,w=0,points={}):#格式�
                 x=points[xml[k+1][20:-8]][0]
                 y=points[xml[k+1][20:-8]][1]
                 dots.append([time,x,y,points[xml[k+1][20:-8]][2],vel,acc,"move2"])
+                end=max(time,end)
             elif xml[k].split('"')[1][0:15]=='controls_repeat':
                 newxml=''
                 for g in range(k+3,len(lenxml)):
@@ -97,6 +103,7 @@ def read_xml(data,fii=[],time=0,x=0,y=0,z=0,vel=0,acc=0,w=0,points={}):#格式�
                     for warn in repeat[1]:
                         warns.append(warn)
                     time=repeat[2]
+                    end=repeat[3]
             elif xml[k].split('"')[1][0:12]=='Goertek_Move':
                 if vel==0:
                     vel=60
@@ -107,6 +114,7 @@ def read_xml(data,fii=[],time=0,x=0,y=0,z=0,vel=0,acc=0,w=0,points={}):#格式�
                 x=int(xml[k+1][16:-8])
                 y=int(xml[k+2][16:-8])
                 dots.append([time,x,y,int(xml[k+3][16:-8]),vel,acc,"move"])
+                end=max(time,end)
                 #raise Warning("Goertek_Move is not recommended.方向移动不建议使用。")
             elif xml[k].split('"')[1][0:14]=='Goertek_TurnTo':
                 if w==0:
@@ -115,9 +123,11 @@ def read_xml(data,fii=[],time=0,x=0,y=0,z=0,vel=0,acc=0,w=0,points={}):#格式�
                 if xml[k+1][28]=='l':
                     angle=int(xml[k+2][20:-8])
                     dots.append([time,angle,w,"turn2"])
+                    end=max(time,end)
                 elif xml[k+1][28]=='r':
                     angle=-int(xml[k+2][20:-8])
                     dots.append([time,angle,w,"turn2"])
+                    end=max(time,end)
                 #print(angle)
             elif xml[k].split('"')[1][0:12]=='Goertek_Turn':
                 if w==0:
@@ -128,6 +138,7 @@ def read_xml(data,fii=[],time=0,x=0,y=0,z=0,vel=0,acc=0,w=0,points={}):#格式�
                 elif xml[k+1][28]=='r':
                     angle=-int(xml[k+2][20:-8])
                 dots.append([time,angle,w,"turn"])
+                end=max(time,end)
                 #print(angle)
             elif xml[k].split('"')[1][0:23]=='Goertek_AngularVelocity':
                 w=int(xml[k+1][16:-8])
@@ -135,13 +146,15 @@ def read_xml(data,fii=[],time=0,x=0,y=0,z=0,vel=0,acc=0,w=0,points={}):#格式�
             elif "Goertek_LEDTurnOnAllSingleColor" in xml[k]:
                 color = xml[k+1].split('>')[1].split('<')[0]
                 dots.append([time, color, 'TurnOnAllSingleColor'])
+                end=max(time,end)
             elif "Goertek_LEDTurnOnAll" in xml[k]:
                 # color为1号灯的颜色
                 color = color = xml[k+1].split('>')[1].split('<')[0]
                 dots.append([time, color, 'TurnOnAll'])
-    return(dots,warns,time)
+                end=max(time,end)
+    return(dots,warns,time,ends)
 
-def dots2angle(dots,warns,fps=200):#将指令转化为转圈动作
+def dots2angle(dots,warns,end,fps=200):#将指令转化为转圈动作
     time=0
     a=0
     w=60
@@ -172,18 +185,18 @@ def dots2angle(dots,warns,fps=200):#将指令转化为转圈动作
         else:
             a=angle
         angles.append((time,float(a)))
-        if time>90000:
+        if time>end:
             break
         time+=1000/fps
     return(angles)
 
 def dots2line(file,fii=[],fps=200,points={}):#将指令转换为飞行轨迹
-    dots,warns,time=read_xml(file,fii,points=points)
+    dots,warns,time,end=read_xml(file,fii,points=points)
     '''for dot in dots:
         print(dot)
     #print(dots,len(dots))
     #time.sleep(1000)'''
-    angles=dots2angle(dots,warns,fps)
+    angles=dots2angle(dots,warns,end,fps)
     '''for a in angles:
         print(a)'''
     x=float(dots[0][1])
@@ -339,7 +352,7 @@ def dots2line(file,fii=[],fps=200,points={}):#将指令转换为飞行轨迹
             y+=Y/R*v
             z+=Z/R*v
         #print(time/1000,x,y,z)'''
-        if k==len(dots)-1:
+        if k==len(dots)-1 or time>end:
             if len(dots[-1])>3:
                 if z==dots[-1][3]:
                     break
