@@ -48,12 +48,12 @@ def color(n,m=0):
     img=cv2.cvtColor(img,cv2.COLOR_HSV2BGR)
     return(int(img[0][0][0]),int(img[0][0][1]),int(img[0][0][2]))
 
-def draw_drone(img,x,y,color,a=0,up=False,skin=1):
+def draw_drone(img,x,y,color,a=0,led=(-1,-1,-1),up=False,skin=1):
     if skin==0:
         if up:
             cv2.circle(img,(int(x),int(y)),15,color,-1)
         else:
-            cv2.rectangle(img2,(int(x)-15,int(y)+5),(int(x)+15,int(y)-5),color,-1)
+            cv2.rectangle(img,(int(x)-15,int(y)+5),(int(x)+15,int(y)-5),color,-1)
     elif skin==1:
         if up:
             cv2.circle(img,(int(x-21/2*np.cos(np.pi/4+a)),int(y+21/2*np.sin(np.pi/4+a))),8,color,1)
@@ -62,6 +62,8 @@ def draw_drone(img,x,y,color,a=0,up=False,skin=1):
             cv2.circle(img,(int(x-21/2*np.cos(-np.pi/4+a)),int(y+21/2*np.sin(-np.pi/4+a))),8,color,1)
             cv2.line(img,(int(x-21/2*np.cos(np.pi/4+a)),int(y+21/2*np.sin(np.pi/4+a))),(int(x-21/2*np.cos(-3*np.pi/4+a)),int(y+21/2*np.sin(-3*np.pi/4+a))),color,1)
             cv2.line(img,(int(x-21/2*np.cos(-np.pi/4+a)),int(y+21/2*np.sin(-np.pi/4+a))),(int(x-21/2*np.cos(3*np.pi/4+a)),int(y+21/2*np.sin(3*np.pi/4+a))),color,1)
+            if led[0]>-1:
+                cv2.circle(img,(int(x),int(y)),5,led,-1)
         else:
             cv2.ellipse(img,(int(x+21/(2**0.5)/2),int(y-1/4*7.6)),(8,2),0,0,360,color,1)
             cv2.ellipse(img,(int(x-21/(2**0.5)/2),int(y-1/4*7.6)),(8,2),0,0,360,color,1)
@@ -69,6 +71,8 @@ def draw_drone(img,x,y,color,a=0,up=False,skin=1):
             cv2.ellipse(img,(int(x+21/(2**0.5)/2),int(y-3/4*7.6)),(8,2),0,0,360,color,1)
             cv2.line(img,(int(x+21/(2**0.5)/2),int(y-1/4*7.6)),(int(x-21/(2**0.5)/2),int(y-3/4*7.6)),color,1)
             cv2.line(img,(int(x-21/(2**0.5)/2),int(y-1/4*7.6)),(int(x+21/(2**0.5)/2),int(y-3/4*7.6)),color,1)
+            if led[0]>-1:
+                cv2.circle(img,(int(x),int(y-1/2*7.6)),5,led,-1)
     elif skin==2:
         if up:
             red_square=np.array([[x+16*np.cos(a),y+16*np.sin(a)],[x+16*np.cos(a+np.pi/2),y+16*np.sin(a+np.pi/2)],[x+16*np.cos(a+np.pi),y+16*np.sin(a+np.pi)],[x+16*np.cos(a-np.pi/2),y+16*np.sin(a-np.pi/2)]],np.int32)
@@ -93,6 +97,8 @@ def draw_drone(img,x,y,color,a=0,up=False,skin=1):
             cv2.ellipse(img,(int(x+21/(2**0.5)/2),int(y-3/4*7.6)),(8,2),0,0,360,color,1)
             cv2.line(img,(int(x+21/(2**0.5)/2),int(y-1/4*7.6)),(int(x-21/(2**0.5)/2),int(y-3/4*7.6)),color,1)
             cv2.line(img,(int(x-21/(2**0.5)/2),int(y-1/4*7.6)),(int(x+21/(2**0.5)/2),int(y-3/4*7.6)),color,1)
+            if led[0]>-1:
+                cv2.circle(img,(int(x),int(y-1/2*7.6)),5,led,-1)
 
 def drone3d(aixs,x,y,z,c,a):
     aixs.append([(x+21/2*np.cos(np.pi/4+a),y+21/2*np.sin(np.pi/4+a),z),c,(14.9-21/4*2**0.5),1,'ring'])
@@ -242,12 +248,14 @@ def show(data,t0,music,feild=6,show=True,save="",FPS=200,ThreeD=False,imshow=[12
                     y=data[a][k][2]
                     z=data[a][k][3]
                     angle=data[a][k][4]
+                    led=data[a][k][5]
                 else:
                     t=max(t,data[a][-1][0]/1000)
                     x=data[a][-1][1]
                     y=data[a][-1][2]
                     z=data[a][-1][3]
                     angle=data[a][-1][4]
+                    led=data[a][-1][5]
                 '''cv2.circle(img2,(x,560-y),15,color(a),-1)
                 cv2.rectangle(img2,(560+x-15,250-z+5),(560+x+15,250-z-5),color(a),-1)
                 cv2.rectangle(img2,(560+y-15,500-z+5),(560+y+15,500-z-5),color(a),-1)'''
@@ -256,20 +264,20 @@ def show(data,t0,music,feild=6,show=True,save="",FPS=200,ThreeD=False,imshow=[12
                         cv2.putText(img2,str(a+1)+' ('+str(int(x*1+0.5))+','+str(int(y*1+0.5))+','+str(int(z*1+0.5))+')',(600+a*150,560), font, 0.5,(255,255,255),1)
                     else:
                         cv2.putText(img2,str(a+1)+' ('+str(int(x*1+0.5))+','+str(int(y*1+0.5))+','+str(int(z*1+0.5))+')',(a*150,590), font, 0.5,(255,255,255),1)#在img2上画出无人机的位置并显示坐标
-                aixs.append((x,y,z,angle,a))
+                aixs.append((x,y,z,angle,led,a))
         if (show or len(save)>0) and not ThreeD:
             Xs=sorted(aixs,key=lambda x:x[0])
             Ys=sorted(aixs,key=lambda x:x[1],reverse=True)
             Zs=sorted(aixs,key=lambda x:x[2])
             #根据距离远近渲染
             for X in Xs:
-                draw_drone(img2,620+X[1],540-X[2],color(X[4],(X[0]-280)/280*125),skin=skin)
+                draw_drone(img2,620+X[1],540-X[2],color(X[5],(X[0]-280)/280*125),led=X[4],skin=skin)
                 #cv2.rectangle(img2,(int(560+X[1]-15),int(500-X[2]+5)),(int(560+X[1]+15),int(500-X[2]-5)),color(X[3],(X[0]-280)/280*125),-1)
             for Y in Ys:
-                draw_drone(img2,620+Y[0],270-Y[2],color(Y[4],(Y[1]-280)/280*125),skin=skin)
+                draw_drone(img2,620+Y[0],270-Y[2],color(Y[5],(Y[1]-280)/280*125),led=Y[4],skin=skin)
                 #cv2.rectangle(img2,(int(560+Y[0]-15),int(250-Y[2]+5)),(int(560+Y[0]+15),int(250-Y[2]-5)),color(Y[3],(280-Y[1])/280*125),-1)
             for Z in Zs:
-                draw_drone(img2,20+Z[0],580-Z[1],color(Z[4],(Z[2]-125)/125*125),a=Z[3]/180*np.pi,up=True,skin=skin)
+                draw_drone(img2,20+Z[0],580-Z[1],color(Z[5],(Z[2]-125)/125*125),a=Z[3]/180*np.pi,led=Z[4],up=True,skin=skin)
                 #cv2.circle(img2,(Z[0],560-Z[1]),15,color(Z[3],(Z[2]-125)/125*125),-1)
         #print(Xs)
         #print(aixs)
@@ -362,12 +370,14 @@ def show(data,t0,music,feild=6,show=True,save="",FPS=200,ThreeD=False,imshow=[12
                     y=data[a][k][2]
                     z=data[a][k][3]
                     angle=data[a][k][4]
+                    led=data[a][k][5]
                 else:
                     t=max(t,data[a][-1][0]/1000)
                     x=data[a][-1][1]
                     y=data[a][-1][2]
                     z=data[a][-1][3]
                     angle=data[a][-1][4]
+                    led=data[a][-1][5]
                 c=color(a)
                 #aixs.append([(x,y,z),c,5,1,'ring'])
                 #drone.append([x,y,z,c])
