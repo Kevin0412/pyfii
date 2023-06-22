@@ -79,7 +79,7 @@ for d,y in zip(ds,range(60,360,120)):
     d.end()
 
 # 保存
-name='group_flight_4m_2'
+name='output/group_flight_4m_2'
 F=pf.Fii(name,ds)
 F.save(feild=4)
 

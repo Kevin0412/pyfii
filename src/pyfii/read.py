@@ -2,6 +2,9 @@ import os
 import time
 import warnings
 
+def str2bgr(color):
+    return (int(color[5:7],16),int(color[3:5],16),int(color[1:3],16))
+
 def read_xml_points(data):
     data=data.split('\n')
     xml=[]
@@ -144,15 +147,13 @@ def read_xml(data,fii=[],time=0,x=0,y=0,z=0,vel=0,acc=0,w=0,points={}):#格式�
                 w=int(xml[k+1][16:-8])
                 #print(w)
             elif "Goertek_LEDTurnOnAllSingleColor" in xml[k]:
-                color = xml[k+1].split('>')[1].split('<')[0]
+                color = str2bgr(xml[k+1].split('>')[1].split('<')[0])
                 dots.append([time, color, 'TurnOnAllSingleColor'])
                 end=max(time,end)
-            elif "Goertek_LEDTurnOnAll" in xml[k]:
-                # color为1号灯的颜色
-                color = color = xml[k+1].split('>')[1].split('<')[0]
-                dots.append([time, color, 'TurnOnAll'])
+            elif "Goertek_LEDTurnOffAll" in xml[k]:
+                dots.append([time,'TurnOffAll'])
                 end=max(time,end)
-    return(dots,warns,time,ends)
+    return(dots,warns,time,end)
 
 def dots2angle(dots,warns,end,fps=200):#将指令转化为转圈动作
     time=0
@@ -190,6 +191,28 @@ def dots2angle(dots,warns,end,fps=200):#将指令转化为转圈动作
         time+=1000/fps
     return(angles)
 
+def dots2led(dots,warns,end,fps=200):#将指令转化为灯光
+    time=0
+    led=(-1,-1,-1)
+    leds=[]
+    k=0
+    k1=0
+    while(True):
+        for n in range(len(dots)):
+            if time-dots[n][0]>0 and dots[n][-1] in ['TurnOnAllSingleColor','TurnOffAll']:
+                k1=n
+        k=k1
+        if dots[k][-1]=='TurnOnAllSingleColor':
+            led=dots[k][1]
+        elif dots[k][-1]=='TurnOffAll':
+            led=(-1,-1,-1)
+        leds.append((time,led))
+        if time>end:
+            break
+        time+=1000/fps
+    return(leds)
+
+
 def dots2line(file,fii=[],fps=200,points={}):#将指令转换为飞行轨迹
     dots,warns,time,end=read_xml(file,fii,points=points)
     '''for dot in dots:
@@ -197,6 +220,7 @@ def dots2line(file,fii=[],fps=200,points={}):#将指令转换为飞行轨迹
     #print(dots,len(dots))
     #time.sleep(1000)'''
     angles=dots2angle(dots,warns,end,fps)
+    leds=dots2led(dots,warns,end,fps)
     '''for a in angles:
         print(a)'''
     x=float(dots[0][1])
@@ -248,9 +272,14 @@ def dots2line(file,fii=[],fps=200,points={}):#将指令转换为飞行轨迹
         if R==0:
             moving=False
             if len(lines)>=len(angles):
-                lines.append((time,x,y,z,angles[-1][1]))
+                angle=angles[-1][1]
             else:
-                lines.append((time,x,y,z,angles[len(lines)][1]))
+                angle=angles[len(lines)][1]
+            if len(lines)>=len(leds):
+                led=leds[-1][1]
+            else:
+                led=leds[len(lines)][1]
+            lines.append((time,x,y,z,angle,led))
             #print('\r'+str((time,x,y,z)),end='')
             a=0
         if a==0 and R!=0:#静止初始状态
@@ -275,9 +304,14 @@ def dots2line(file,fii=[],fps=200,points={}):#将指令转换为飞行轨迹
                         z=z1
                         #dots[k][-1]='moved'
                         if len(lines)>=len(angles):
-                            lines.append((time,x,y,z,angles[-1][1]))
+                            angle=angles[-1][1]
                         else:
-                            lines.append((time,x,y,z,angles[len(lines)][1]))
+                            angle=angles[len(lines)][1]
+                        if len(lines)>=len(leds):
+                            led=leds[-1][1]
+                        else:
+                            led=leds[len(lines)][1]
+                        lines.append((time,x,y,z,angle,led))
                         #print(time)
                         break
                     if v-400/fps>0:
@@ -310,9 +344,14 @@ def dots2line(file,fii=[],fps=200,points={}):#将指令转换为飞行轨迹
                     elif dots[k][-1]=='land':
                         z=0
                     if len(lines)>=len(angles):
-                        lines.append((time,x,y,z,angles[-1][1]))
+                        angle=angles[-1][1]
                     else:
-                        lines.append((time,x,y,z,angles[len(lines)][1]))
+                        angle=angles[len(lines)][1]
+                    if len(lines)>=len(leds):
+                        led=leds[-1][1]
+                    else:
+                        led=leds[len(lines)][1]
+                    lines.append((time,x,y,z,angle,led))
                     #print('\r'+str((time,x,y,z)),end='')
                     #print(time)
                     break
@@ -320,9 +359,14 @@ def dots2line(file,fii=[],fps=200,points={}):#将指令转换为飞行轨迹
                 y1=y+r*Y/R
                 z1=z+r*Z/R
                 if len(lines)>=len(angles):
-                    lines.append((time,x1,y1,z1,angles[-1][1]))
+                    angle=angles[-1][1]
                 else:
-                    lines.append((time,x1,y1,z1,angles[len(lines)][1]))
+                    angle=angles[len(lines)][1]
+                if len(lines)>=len(leds):
+                    led=leds[-1][1]
+                else:
+                    led=leds[len(lines)][1]
+                lines.append((time,x1,y1,z1,angle,led))
                 #print('\r'+str((time,x1,y1,z1)),end='')
                 time+=1000/fps
                 for n in range(len(dots)):
@@ -353,10 +397,17 @@ def dots2line(file,fii=[],fps=200,points={}):#将指令转换为飞行轨迹
             z+=Z/R*v
         #print(time/1000,x,y,z)'''
         if k==len(dots)-1 or time>end:
-            if len(dots[-1])>3:
-                if z==dots[-1][3]:
+            m=-1
+            breakable=False
+            while True:
+                if len(dots[m])>3:
+                    if z==dots[m][3]:
+                        breakable=True
                     break
-            elif z==0:
+                m-=1
+            if breakable:
+                break
+            if z==0:
                 break
         time+=1000/fps
     '''for t in range(10,120000,10):
