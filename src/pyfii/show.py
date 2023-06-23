@@ -100,13 +100,17 @@ def draw_drone(img,x,y,color,a=0,led=(-1,-1,-1),up=False,skin=1):
             if led[0]>-1:
                 cv2.circle(img,(int(x),int(y-1/2*7.6)),5,led,-1)
 
-def drone3d(aixs,x,y,z,c,a):
+def drone3d(aixs,x,y,z,c,a,led=(-1,-1,-1)):
     aixs.append([(x+21/2*np.cos(np.pi/4+a),y+21/2*np.sin(np.pi/4+a),z),c,(14.9-21/4*2**0.5),1,'ring'])
     aixs.append([(x+21/2*np.cos(3*np.pi/4+a),y+21/2*np.sin(3*np.pi/4+a),z),c,(14.9-21/4*2**0.5),1,'ring'])
     aixs.append([(x+21/2*np.cos(-3*np.pi/4+a),y+21/2*np.sin(-3*np.pi/4+a),z),c,(14.9-21/4*2**0.5),1,'ring'])
     aixs.append([(x+21/2*np.cos(-np.pi/4+a),y+21/2*np.sin(-np.pi/4+a),z),c,(14.9-21/4*2**0.5),1,'ring'])
     aixs.append([(x+21/2*np.cos(np.pi/4+a),y+21/2*np.sin(np.pi/4+a),z),(x+21/2*np.cos(-3*np.pi/4+a),y+21/2*np.sin(-3*np.pi/4+a),z),c,1,8,'line'])
     aixs.append([(x+21/2*np.cos(-np.pi/4+a),y+21/2*np.sin(-np.pi/4+a),z),(x+21/2*np.cos(3*np.pi/4+a),y+21/2*np.sin(3*np.pi/4+a),z),c,1,8,'line'])
+    if led[0]>-1:
+        aixs.append([(x,y,z),led,5,-1,'sphere'])
+    else:
+        aixs.append([(x,y,z),c,1,-1,'sphere'])
 
 '''def color(n):
     n=n*180/7
@@ -274,7 +278,7 @@ def show(data,t0,music,feild=6,show=True,save="",FPS=200,ThreeD=False,imshow=[12
                 draw_drone(img2,620+X[1],540-X[2],color(X[5],(X[0]-280)/280*125),led=X[4],skin=skin)
                 #cv2.rectangle(img2,(int(560+X[1]-15),int(500-X[2]+5)),(int(560+X[1]+15),int(500-X[2]-5)),color(X[3],(X[0]-280)/280*125),-1)
             for Y in Ys:
-                draw_drone(img2,620+Y[0],270-Y[2],color(Y[5],(Y[1]-280)/280*125),led=Y[4],skin=skin)
+                draw_drone(img2,620+Y[0],270-Y[2],color(Y[5],(280-Y[1])/280*125),led=Y[4],skin=skin)
                 #cv2.rectangle(img2,(int(560+Y[0]-15),int(250-Y[2]+5)),(int(560+Y[0]+15),int(250-Y[2]-5)),color(Y[3],(280-Y[1])/280*125),-1)
             for Z in Zs:
                 draw_drone(img2,20+Z[0],580-Z[1],color(Z[5],(Z[2]-125)/125*125),a=Z[3]/180*np.pi,led=Z[4],up=True,skin=skin)
@@ -381,13 +385,13 @@ def show(data,t0,music,feild=6,show=True,save="",FPS=200,ThreeD=False,imshow=[12
                 c=color(a)
                 #aixs.append([(x,y,z),c,5,1,'ring'])
                 #drone.append([x,y,z,c])
-                drone3d(aixs,x,y,z,color(a,127),angle/180*np.pi)
+                drone3d(aixs,x,y,z,color(a,127),angle/180*np.pi,led)
                 drone3d(aixs,x,y,0,color(a,-127),angle/180*np.pi)
                 texts.append([str(a+1)+'('+str(int(x+0.5))+','+str(int(y+0.5))+','+str(int(z+0.5))+')',(0,140+30*a),0.5,c,1,'text'])
             texts.append(['T+'+str(t),(0,80),0.5,(255,255,255),1,'text'])
             errors=[]#圈出错误的飞机
-            for m in range(0,len(aixs),12):
-                for n in range(m+12,len(aixs),12):#计算距离
+            for m in range(0,len(aixs),14):
+                for n in range(m+14,len(aixs),14):#计算距离
                     distance=((aixs[m][0][0]-aixs[n][0][0]+aixs[m+2][0][0]-aixs[n+2][0][0])**2+(aixs[m][0][1]-aixs[n][0][1]+aixs[m+2][0][1]-aixs[n+2][0][1])**2)**0.5/2
                     if distance<51:
                         warnings.warn('In '+str(int(t))+'s,distance between d'+str(int(m/12+1))+' and d'+str(int(n/12+1))+' is less than '+str((int(distance/17)+1)*17)+'cm.在'+str(int(t))+'秒，无人机'+str(int(m/12+1))+'和无人机'+str(int(n/12+1))+'之间的距离小于'+str((int(distance/17)+1)*17)+'厘米。',Warning,2)

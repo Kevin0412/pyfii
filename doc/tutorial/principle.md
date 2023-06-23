@@ -360,6 +360,12 @@
         d1.land()
         # 降落
 
+        d1.TurnOnAll(colors)
+        # 点亮所有灯，颜色
+
+        d1.TurnOffAll()
+        # 熄灭所有灯
+
         d1.end()
         # 结束时必加
         ```
@@ -387,12 +393,6 @@
 
         d1.TurnOffSingle(Id)
         # 熄灭某一盏灯
-
-        d1.TurnOnAll(colors)
-        # 点亮所有灯，颜色
-
-        d1.TurnOffAll()
-        # 熄灭所有灯
 
         d1.BlinkSingle(Id,color)
         # 闪烁某一盏灯，颜色
