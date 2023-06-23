@@ -25,7 +25,7 @@
     
     ```test.fii```文件记录了起飞位置、无人机ip、无人机型号、地毯尺寸、音乐文件名称和inittime的时间
 
-    ```checksums.xml```文件暂不清楚它的用处
+    ```checksums.xml```文件暂不清楚它的用处，猜测保存了每架无人机的主机地址
 
     ```xxx.mp3```就是你的音乐
 
@@ -397,7 +397,7 @@
         d1.BlinkSingle(Id,color)
         # 闪烁某一盏灯，颜色
 
-        d1.Breath(colors)
+        d1.Breath(color)
         # 呼吸灯，颜色
 
         d1.BlinkFastAll(colors)
@@ -409,6 +409,7 @@
         d1.HorseRace(colors)
         # 走马灯(颜色)
         ```
+        pyfii 1.5.0及后续版本中加入了灯光模拟支持，但是只支持显示点灯和灭灯，不支持闪烁和走马灯，如果12个灯颜色不一致，模拟视频会显示第一个灯的颜色
 
         在编写移动时，建议使用```d1.move2(x,y,z)```，如果想要使用```d1.move(x,y,z)```，可以使用```d1.move2(d1.x+x,d1.y+y,d1.z+z)```代替
 
@@ -458,15 +459,15 @@
 
         在解释DroneAction类和LightAction类的原理之前，你可能需要一些关于回调函数(callback)的知识
 
-        你可以查看tests/class_callback_test.py来了解回调函数的行为
+        你可以查看[tests/class_callback_test.py](../../tests/class_callback_test.py)来了解回调函数的行为
 
         使用回调函数，是为了延迟函数或方法的执行。可以实现写一段代码（即回调函数），但不立即执行，之后可以对回调函数进行重新排序，在需要的时间被调用。
 
-        为了实现独立编写灯光和动作的目的，Drone对象有action_list和light_actions两个属性，用来记录动作和灯光的回调函数，为了能在时间轴上对齐动作和灯光，封装了DroneAction类和LightAction类，引入timestamp并将其与回调函数打包在一起，为了协调动作和灯光的前后顺序，在LightAction类中加入了order属性
+        为了实现独立编写灯光和动作的目的，`Drone`对象有`action_list`和`light_actions`两个属性，用来记录动作和灯光的回调函数，为了能在时间轴上对齐动作和灯光，封装了`DroneAction`类和`LightAction`类，引入`timestamp`并将其与回调函数打包在一起，为了协调动作和灯光的前后顺序，在`LightAction`类中加入了`order`属性
 
-        在drone.end()操作之后，Drone类会使用timestamp和order属性对齐动作和灯光，这时调用封装在动作类和灯光类里的回调函数，Drone类才真正开始处理输出到webCodeAll.xml和pyfiiCode.py里的字符串，即将pyfii代码转化为fii工程文件
+        在d`rone.end()`操作之后，`Drone`类会使用`timestamp`和`order`属性对齐动作和灯光，这时调用封装在动作类和灯光类里的回调函数，`Drone`类才真正开始处理输出到`webCodeAll.xml`和`pyfiiCode.py`里的字符串，即将pyfii代码转化为fii工程文件
 
-        实际情况还要复杂一些。实际上，无人机的动作方法在被调用的时候没有立即将pyfii代码转为fii工程文件，而是将其作为回调函数封装到DroneAction中，但是修改无人机坐标的操作却立即执行了，因为在pyfii编程过程中，有些时候想要知道无人机当前的位置来进行相对移动。
+        实际情况还要复杂一些。实际上，无人机的动作方法在被调用的时候没有立即将pyfii代码转为fii工程文件，而是将其作为回调函数封装到`DroneAction`中，但是修改无人机坐标的操作却立即执行了，因为在pyfii编程过程中，有些时候想要知道无人机当前的位置来进行相对移动。
 
         以上叙述可能理解起来比较复杂，这里举个例子：
 
@@ -504,21 +505,21 @@
                 self.append_action(DroneAction(move2_callback, [self, x,y,z], timestamp))   # 将动作添加到动作列表里去
 
         ```
-        示例代码是移动无人机到特定位置的代码，代码段1计算了无人机位置（self.x, self.y, self.z储存无人机当前位置），同时给出超出范围提醒。代码段23在move2_callback这个回调函数当中，代码段2又重复了一遍代码段1的操作，但是没有超出范围提醒，因为在合并动作和灯光时，会将无人机放回起始位置，之后重复一遍位置计算，这是因为第一次位置计算用来方便用户调取drone.x，drone.y, drone.z的位置信息，第二次位置计算用来生成fii工程。
+        示例代码是移动无人机到特定位置的代码，代码段1计算了无人机位置（`self.x, self.y, self.z`储存无人机当前位置），同时给出超出范围提醒。代码段23在`move2_callback`这个回调函数当中，代码段2又重复了一遍代码段1的操作，但是没有超出范围提醒，因为在合并动作和灯光时，会将无人机放回起始位置，之后重复一遍位置计算，这是因为第一次位置计算用来方便用户调取d`rone.x，drone.y, drone.z`的位置信息，第二次位置计算用来生成fii工程。
 
-        代码段3主要修改了self.outputString和self.outpy，这两个变量分别写入到webCodeAll.xml和pyfiiCode.py中，self.inT和self.block主要来满足xml文件的格式要求。
+        代码段3主要修改了`self.outputString`和`self.outpy`，这两个变量分别写入到`webCodeAll.xml`和`pyfiiCode.py`中，`self.inT`和`self.block`主要来满足xml文件的格式要求。
 
-        最后一行代码创建了一个DroneAction对象，其定义如下：
+        最后一行代码创建了一个`DroneAction`对象，其定义如下：
 
         ```python
         DroneAction(self, action_callback, parameter, timestamp)
         ```
 
-        这是DroneActon的构造函数，action_callback是无人机动作回调函数，parameter是回调函数的参数，timestamp是时间戳。
+        这是`DroneActon`的构造函数，`action_callback`是无人机动作回调函数，`parameter`是回调函数的参数，`timestamp`是时间戳。
 
         可见最后一段代码创建了一个无人机动作并将其添加到无人机动作列表里。
 
-        观察Drone类的无人机动作方法，大致如下：
+        观察`Drone`类的无人机动作方法，大致如下：
 
         ```python
 
@@ -539,8 +540,8 @@
 
         ```
 
-        灯光的原理也类似，只不过没有计算位置这一步。但是灯光没有填timestamp参数时是按序执行的，因此如果不分开编写，灯光方法其实等同于动作，只有分开编写时，灯光才会放到drone.light_actions字典里。
+        灯光的原理也类似，只不过没有计算位置这一步。但是灯光没有填`timestamp`参数时是按序执行的，因此如果不分开编写，灯光方法其实等同于动作，只有分开编写时，灯光才会放到`drone.light_actions`字典里。
 
-        使用字典存储灯光动作使查询的时间复杂度为O(1)，字典的键是timestamp和order共同组成的，字典的值是这个timestamp和oreder对应的灯光动作，之后将动作的timestamp分别加上before和after在字典中查询是否有灯光就行了。
+        使用字典存储灯光动作使查询的时间复杂度为O(1)，字典的键是`timestamp`和`order`共同组成的，字典的值是这个`timestamp`和`order`对应的灯光动作，之后将动作的`timestamp`分别加上`before`和`after`在字典中查询是否有灯光就行了。
 
-        drone.end方法就是这样查找一个动作有没有和其对应的灯光，并拼接为正确的顺序。
+        `drone.end`方法就是这样查找一个动作有没有和其对应的灯光，并拼接为正确的顺序。

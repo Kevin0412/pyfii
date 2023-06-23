@@ -51,6 +51,9 @@
     ```
 
     以上动作支持pyfii模拟飞行，此外由于未对其运动轨迹进行研究，有部分动作不支持pyfii中的模拟飞行，但会保存在```.fii```中
+
+    pyfii 1.5.0及后续版本中加入了灯光模拟支持，但是只支持显示点灯和灭灯，不支持闪烁和走马灯，如果12个灯颜色不一致，模拟视频会显示第一个灯的颜色
+
     ```python
     d1.VelZ(v,a)
     #竖直速度（速度,加速度）
@@ -82,7 +85,7 @@
     d1.BlinkSingle(Id,color)
     #闪烁某一盏灯，颜色
 
-    d1.Breath(colors)
+    d1.Breath(color)
     #呼吸灯，颜色
 
     d1.BlinkFastAll(colors)

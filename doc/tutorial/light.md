@@ -18,7 +18,7 @@
     d1.BlinkSingle(Id,color)
     #闪烁某一盏灯，颜色
 
-    d1.Breath(colors)
+    d1.Breath(color)
     #呼吸灯，颜色
 
     d1.BlinkFastAll(colors)
@@ -153,6 +153,7 @@
 
 
     d1.end()    # 整合动作和灯光，必须在灯光和动作之后
+    # ...
     ```
     这两个程序等效
 

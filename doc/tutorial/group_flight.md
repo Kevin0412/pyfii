@@ -90,7 +90,7 @@
 
     4. 保存
         ```python
-        name='group_flight_6m_2'
+        name='output/group_flight_6m_2'
         F=pf.Fii(name,ds)
         F.save(feild=6)
         ```
@@ -193,7 +193,7 @@
 
     4. 保存
         ```python
-        name='group_flight_4m_2'
+        name='output/group_flight_4m_2'
         F=pf.Fii(name,ds)
         F.save(feild=4)
         ```

@@ -268,7 +268,7 @@ TurnOffAll()
 BlinkSingle(Id,color)
 #闪烁某一盏灯，颜色
 
-Breath(colors)
+Breath(color)
 #呼吸灯，颜色
 
 BlinkFastAll(colors)
