@@ -414,7 +414,7 @@ def dots2line(file,fii=[],fps=200,points={}):#将指令转换为飞行轨迹
         lines.append((time+t,x,y,z))'''
     return(lines,time*fps/1000,warns)
 
-def read_fii(path,getfeild=False):
+def read_fii(path,getfeild=False,fps=200):
     '''
     读入.fii文件
     path 所在文件夹的路径
@@ -466,7 +466,7 @@ def read_fii(path,getfeild=False):
         with open(path+'/动作组/'+drone+'/webCodeAll.xml', "r",encoding='utf-8') as F:
             file = F.read()
         try:
-            line=dots2line(file,fii=[x,y],points=points)
+            line=dots2line(file,fii=[x,y],fps=fps,points=points)
             '''with open(name+'/动作组/'+drone+'line.csv','w',encoding='utf-8') as F:
                 F.write('time,x,y,z,angle\n')
                 for l in line[0]:

@@ -122,8 +122,8 @@ def drone3d(aixs,x,y,z,c,a,led=(-1,-1,-1)):
     if int((n%765)/255)==2:
         return(x,255-n%255,n%255)'''
 
-def show(data,t0,music,feild=6,show=True,save="",FPS=200,ThreeD=False,imshow=[120,-15],d=(600,450),track=[],skin=1):
-    t0=int(t0+0.5)+600
+def show(data,t0,music,feild=6,show=True,save="",FPS=200,max_fps=200,ThreeD=False,imshow=[120,-15],d=(600,450),track=[],skin=1):
+    t0=int(t0+0.5)+3*max_fps
     if len(save)>0 and not ThreeD:
         show=False
         video = cv2.VideoWriter(save+"_process.mp4", cv2.VideoWriter_fourcc('M', 'P', '4', 'V'), FPS,(1200,600))
@@ -300,10 +300,10 @@ def show(data,t0,music,feild=6,show=True,save="",FPS=200,ThreeD=False,imshow=[12
                             cv2.circle(img2,(int(620+aixs[n][0]),int(270-aixs[n][2])),20,(0,0,255),3)
                             cv2.circle(img2,(int(620+aixs[n][1]),int(540-aixs[n][2])),20,(0,0,255),3)#错误红点标记
         if (show or len(save)>0) and not ThreeD:
-            cv2.putText(img2,str(t),(1050,590),font,0.5,(255,255,255),1)#在img2上显示时间
+            cv2.putText(img2,str(int(t*1000)/1000),(1050,590),font,0.5,(255,255,255),1)#在img2上显示时间
         time_fps=time.time()
         if len(save)==0 and show or (ThreeD and len(save)==0):
-            k=int((time_fps-time_read)*200)
+            k=int((time_fps-time_read)*max_fps)
         if show and not ThreeD:
             f+=1
             if f==1:
@@ -312,8 +312,8 @@ def show(data,t0,music,feild=6,show=True,save="",FPS=200,ThreeD=False,imshow=[12
                     fps=str(int(10/(time_fps-time_FPS)+0.5)/10)
                     fs=int(float(fps)/10+0.5)*10
                 except:
-                    fps='200.0'
-                    fs=200
+                    fps=str(float(max_fps))
+                    fs=max_fps
                 if fs==0:
                     fs=10
             elif f%fs==0:
@@ -336,11 +336,11 @@ def show(data,t0,music,feild=6,show=True,save="",FPS=200,ThreeD=False,imshow=[12
                 if len(music)>0:
                     pygame.mixer.music.stop()
                 cv2.waitKey(0)
-                time_read=time.time()-k/200
+                time_read=time.time()-k/max_fps
                 if len(music)>0:
-                    pygame.mixer.music.play(start=k/200)
+                    pygame.mixer.music.play(start=k/max_fps)
             elif key==ord('q'):#后退
-                k-=100
+                k-=max_fps
                 #time_read+=0.5
                 if time_read>time_fps:
                     time_read=time_fps
@@ -349,18 +349,18 @@ def show(data,t0,music,feild=6,show=True,save="",FPS=200,ThreeD=False,imshow=[12
                 if len(music)>0:
                     pygame.mixer.music.stop()
                 cv2.waitKey(0)
-                time_read=time.time()-k/200
+                time_read=time.time()-k/max_fps
                 if len(music)>0:
-                    pygame.mixer.music.play(start=k/200)
+                    pygame.mixer.music.play(start=k/max_fps)
             elif key==ord('e'):#快进
                 #time_read-=0.5
-                k+=100
+                k+=max_fps
                 if len(music)>0:
                     pygame.mixer.music.stop()
                 cv2.waitKey(0)
-                time_read=time.time()-k/200
+                time_read=time.time()-k/max_fps
                 if len(music)>0:
-                    pygame.mixer.music.play(start=k/200)
+                    pygame.mixer.music.play(start=k/max_fps)
             #time_read-=t-cv2.getTrackbarPos('time','img')
         #print('\r'+str(t)+'/'+str((t0-300)/100)+'  ',end='')
         
@@ -388,7 +388,7 @@ def show(data,t0,music,feild=6,show=True,save="",FPS=200,ThreeD=False,imshow=[12
                 drone3d(aixs,x,y,z,color(a,127),angle/180*np.pi,led)
                 drone3d(aixs,x,y,0,color(a,-127),angle/180*np.pi)
                 texts.append([str(a+1)+'('+str(int(x+0.5))+','+str(int(y+0.5))+','+str(int(z+0.5))+')',(0,140+30*a),0.5,c,1,'text'])
-            texts.append(['T+'+str(t),(0,80),0.5,(255,255,255),1,'text'])
+            texts.append(['T+'+str(int(t*1000)/1000),(0,80),0.5,(255,255,255),1,'text'])
             errors=[]#圈出错误的飞机
             for m in range(0,len(aixs),14):
                 for n in range(m+14,len(aixs),14):#计算距离
@@ -410,8 +410,8 @@ def show(data,t0,music,feild=6,show=True,save="",FPS=200,ThreeD=False,imshow=[12
                     fps=str(int(10/(time_fps-time_FPS)+0.5)/10)
                     fs=int(float(fps)/10+0.5)*10
                 except:
-                    fps='200.0'
-                    fs=200
+                    fps=str(float(max_fps))
+                    fs=max_fps
                 if fs==0:
                     fs=10
             elif f%fs==0:
@@ -446,12 +446,12 @@ def show(data,t0,music,feild=6,show=True,save="",FPS=200,ThreeD=False,imshow=[12
                     if len(music)>0:
                         pygame.mixer.music.stop()
                     imshow[0],imshow[1]=IIID.show(aixs+lines+errors+texts,center,1280,720,[imshow[0],imshow[1],1],d)
-                    i=imshow[0]-int(k/200*36+0.5)
-                    time_read=time.time()-k/200
+                    i=imshow[0]-int(k/max_fps*36+0.5)
+                    time_read=time.time()-k/max_fps
                     if len(music)>0:
-                        pygame.mixer.music.play(start=k/200)
+                        pygame.mixer.music.play(start=k/max_fps)
                 elif key==ord('q'):#后退
-                    k-=200
+                    k-=max_fps
                     #time_read+=0.5
                     if time_read>time_fps:
                         time_read=time_fps
@@ -460,17 +460,17 @@ def show(data,t0,music,feild=6,show=True,save="",FPS=200,ThreeD=False,imshow=[12
                     if len(music)>0:
                         pygame.mixer.music.stop()
                     cv2.waitKey(0)
-                    time_read=time.time()-k/200
+                    time_read=time.time()-k/max_fps
                     if len(music)>0:
-                        pygame.mixer.music.play(start=k/200)
+                        pygame.mixer.music.play(start=k/max_fps)
                 elif key==ord('e'):#快进
-                    k+=200
+                    k+=max_fps
                     if len(music)>0:
                         pygame.mixer.music.stop()
                     cv2.waitKey(0)
-                    time_read=time.time()-k/200
+                    time_read=time.time()-k/max_fps
                     if len(music)>0:
-                        pygame.mixer.music.play(start=k/200)
+                        pygame.mixer.music.play(start=k/max_fps)
             
         if not show and len(save)==0 and not ThreeD:
             k+=1
@@ -479,7 +479,7 @@ def show(data,t0,music,feild=6,show=True,save="",FPS=200,ThreeD=False,imshow=[12
                 video.write(img)
             else:
                 video.write(img2)
-            K+=200/FPS
+            K+=max_fps/FPS
             k=int(K+0.5)
     if (show and len(save)==0) or (ThreeD and len(save)==0):
         cv2.destroyAllWindows()
