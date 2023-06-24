@@ -360,7 +360,7 @@
         d1.land()
         # 降落
 
-        d1.TurnOnAll(colors)
+        d1.TurnOnAll(color)
         # 点亮所有灯，颜色
 
         d1.TurnOffAll()
@@ -391,6 +391,9 @@
         d1.TurnOnSingle(Id,color)
         # 点亮某一盏灯，颜色
 
+        d1.TurnOnAll(colors)
+        # 点亮所有灯，颜色
+
         d1.TurnOffSingle(Id)
         # 熄灭某一盏灯
 
@@ -409,7 +412,7 @@
         d1.HorseRace(colors)
         # 走马灯(颜色)
         ```
-        pyfii 1.5.0及后续版本中加入了灯光模拟支持，但是只支持显示点灯和灭灯，不支持闪烁和走马灯，如果12个灯颜色不一致，模拟视频会显示第一个灯的颜色
+        pyfii 1.5.0及后续版本中加入了灯光模拟支持，但是只支持显示点灯和灭灯
 
         在编写移动时，建议使用```d1.move2(x,y,z)```，如果想要使用```d1.move(x,y,z)```，可以使用```d1.move2(d1.x+x,d1.y+y,d1.z+z)```代替
 
