@@ -16,7 +16,7 @@
     d1.takeoff(1,100)
     #第一个值是起飞时间，第二个值是起飞高度，必须等待1秒后再起飞
 
-    d1.intime(t)
+    d1.inittime(t)
     #在第几秒
 
     d1.move(x,y,z)
@@ -43,6 +43,12 @@
     d1.Yaw2(a)
     #转向（角度）正逆负顺
 
+    d1.TurnOnAll(color)
+    #点亮所有灯，颜色
+
+    d1.TurnOffAll()
+    #熄灭所有灯
+
     d1.land()
     #降落
 
@@ -52,7 +58,7 @@
 
     以上动作支持pyfii模拟飞行，此外由于未对其运动轨迹进行研究，有部分动作不支持pyfii中的模拟飞行，但会保存在```.fii```中
 
-    pyfii 1.5.0及后续版本中加入了灯光模拟支持，但是只支持显示点灯和灭灯，不支持闪烁和走马灯，如果12个灯颜色不一致，模拟视频会显示第一个灯的颜色
+    pyfii 1.5.0及后续版本中加入了灯光模拟支持，但是只支持显示点灯和灭灯
 
     ```python
     d1.VelZ(v,a)
@@ -73,14 +79,11 @@
     d1.TurnOnSingle(Id,color)
     #点亮某一盏灯，颜色
 
-    d1.TurnOffSingle(Id)
-    #熄灭某一盏灯
-
     d1.TurnOnAll(colors)
     #点亮所有灯，颜色
 
-    d1.TurnOffAll()
-    #熄灭所有灯
+    d1.TurnOffSingle(Id)
+    #熄灭某一盏灯
 
     d1.BlinkSingle(Id,color)
     #闪烁某一盏灯，颜色
