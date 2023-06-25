@@ -5,7 +5,6 @@ sys.path.append(path)
 
 import pyfii as pf
 
-
 name='output/1'
 data,t0,music,feild=pf.read_fii(name,getfeild=True,fps=60)
 pf.show(data,t0,music,feild=feild,save=name,FPS=60,max_fps=60)
