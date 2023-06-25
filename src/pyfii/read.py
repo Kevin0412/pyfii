@@ -400,6 +400,8 @@ def dots2line(file,fii=[],fps=200,points={}):#将指令转换为飞行轨迹
             m=-1
             breakable=False
             while True:
+                if dots[m][-1]=='land':
+                    break
                 if len(dots[m])>3:
                     if z==dots[m][3]:
                         breakable=True
