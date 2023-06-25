@@ -5,6 +5,6 @@ sys.path.append(path)
 
 import pyfii as pf
 
-name='test'
+name='output/...'
 data,t0,music=pf.read_fii(name)
 pf.show(data,t0,music)

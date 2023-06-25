@@ -475,7 +475,7 @@ def read_fii(path,getfeild=False):
                         F.write(',')
                     F.write('\n')'''
         except:
-            raise Warning('No take off place.起飞位置未定义。')
+            raise Exception('No take off place.起飞位置未定义。')
         dots.append(line[0])
         t0=max(t0,line[1])
         n+=1
