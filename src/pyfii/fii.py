@@ -88,9 +88,9 @@ class Fii:
                 file.write('''for d in ds:
     d.end()
 ''')
-                file.write('''F=Fii(\''''+self.path+'''\',ds,music=\'动作组/'''+self.music+'''\')\n''')
+                file.write('''F=Fii(\''''+self.name+'''\',ds,music=\'动作组/'''+self.music+'''\')\n''')
                 file.write('''F.save(True,feild='''+str(feild)+''')
-show(F.dots,F.t0,[F.music],save=\''''+self.path+'''\',FPS=25)''')
+show(F.dots,F.t0,[F.music],feild='''+str(feild)+''',save=\''''+self.name+'''\',FPS=25)''')
 
             if infii:
                 if not os.path.exists('动作组'):
@@ -203,6 +203,11 @@ show(F.dots,F.t0,[F.music],save=\''''+self.path+'''\',FPS=25)''')
 
 动作组中的pyfiiCode.py使用说明
 
+```python
+X=100
+Y=100
+#起飞位置(100,100)
+
 takeoff(t,h)
 #起飞(时间,高度)
 
@@ -281,7 +286,8 @@ BlinkSlowAll(colors)
 #慢速闪烁所有灯(颜色)
 
 HorseRace(colors)
-#走马灯(颜色)''')
+#走马灯(颜色)
+```''')
             file.close()
 
         elif addlights:
