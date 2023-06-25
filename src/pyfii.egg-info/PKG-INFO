@@ -1,14 +1,14 @@
 Metadata-Version: 2.1
 Name: pyfii
-Version: 1.4.0
+Version: 1.5.0
 Summary: 这个库可以让我们用python写Fii的无人机程序，有三视图模拟飞行的功能，模拟飞行更方便观看
-Author-email: Kevin0412 <kevin0412_xlt@qq.com>
+Author-email: Kevin0412 <kevin0412_xlt@qq.com>, miaooo0000OOOO <1683618861@qq.com>
 Project-URL: Homepage, https://github.com/Kevin0412/pyfii
 Project-URL: Bug Tracker, https://github.com/Kevin0412/pyfii/issues
 Classifier: Programming Language :: Python :: 3
 Classifier: License :: OSI Approved :: GNU General Public License v3 (GPLv3)
 Classifier: Operating System :: OS Independent
-Requires-Python: >=3.7
+Requires-Python: >=3.9
 Description-Content-Type: text/markdown
 License-File: LICENSE
 

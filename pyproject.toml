@@ -4,13 +4,14 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "pyfii"
-version = "1.4.0"
+version = "1.5.0"
 authors = [
   { name="Kevin0412", email="kevin0412_xlt@qq.com" },
+  { name="miaooo0000OOOO", email="1683618861@qq.com"}
 ]
 description = "这个库可以让我们用python写Fii的无人机程序，有三视图模拟飞行的功能，模拟飞行更方便观看"
 readme = "README.md"
-requires-python = ">=3.7"
+requires-python = ">=3.9"
 classifiers = [
     "Programming Language :: Python :: 3",
     "License :: OSI Approved :: GNU General Public License v3 (GPLv3)",
