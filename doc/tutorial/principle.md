@@ -74,12 +74,14 @@
     1. 读入文件并计算轨迹
 
         ```python
-        data,t0,music,feild=pf.read_fii(name,getfeild=True)
+        data,t0,music,feild=pf.read_fii(name,getfeild=True,fps=200)
         ```
 
         这一模块实现了读入小鸟飞飞文件并输出飞行轨迹的功能
 
         其中
+
+        ```fps```是能够生成视频的最大帧率，动作采样率，值越小，运行速度越快
 
         ```name```是```.fii```文件所在的文件夹
 
@@ -129,17 +131,19 @@
     2. 渲染
 
         ```python
-        show(data,t0,music,feild,show=True,save="",FPS=200,ThreeD=False,imshow=[120,-15],d=(600,450),track=[],skin=1)
+        show(data,t0,music,feild,show=True,save="",FPS=200,max_fps=200,ThreeD=False,imshow=[120,-15],d=(600,450),track=[],skin=1)
         ```
 
         这里参数比较多，需要一一介绍
 
         ```data,t0,music,feild```这四个在上文介绍过了，这里不多赘述
 
+        ```max_fps```需要与上文```read_fii()```中的```fps```一致，否则视频速率会不正常
+
         ```show=False```时，直接打印是否存在距离过近的情况，没有图像渲染
 
         ```python
-        pf.show(data,t0,music,feild,show=False)
+        pf.show(data,t0,music,feild,show=False,max_fps=200)
         ```
 
         ```show==True```时，要分类讨论，```show```默认为```True```，不用写
@@ -149,7 +153,7 @@
         二维模拟时，需要的参数有```skin```，因为只有二维模拟时有皮肤
 
         ```python
-        pf.show(data,t0,music,feild,skin=1)
+        pf.show(data,t0,music,feild,max_fps=200,skin=1)
         #有0,1,2三种皮肤
         ```
 
@@ -158,9 +162,9 @@
         三维模拟时，需要的参数有```ThreeD,imshow,d```
 
         ```python
-        pf.show(data,t0,music,feild,ThreeD=True,imshow=[120,-15],d=(1,0))
+        pf.show(data,t0,music,feild,max_fps=200,ThreeD=True,imshow=[120,-15],d=(1,0))
         # 正交
-        pf.show(data,t0,music,feild,ThreeD=True,imshow=[90,0],d=(600,450))
+        pf.show(data,t0,music,feild,max_fps=200,ThreeD=True,imshow=[90,0],d=(600,450))
         # 透视
         ```
 
@@ -193,7 +197,7 @@
         此外，如果在上述模拟的参数不变的前提下，加入```save,FPS```参数，就会生成视频，此时不会跳出窗口
 
         ```python
-        pf.show(data,t0,music,feild,save='test',FPS=25)
+        pf.show(data,t0,music,feild,max_fps=200,save='test',FPS=25)
         # skin默认值为1，可不写
         ```
         这就是生成二维模拟的视频的方法，输出的视频为```test.mp4```，25帧/秒
@@ -201,9 +205,9 @@
         三维视频以次类推
 
          ```python
-        pf.show(data,t0,music,feild,save='test',FPS=25,ThreeD=True,imshow=[120,-15],d=(1,0))
+        pf.show(data,t0,music,feild,max_fps=200,save='test',FPS=25,ThreeD=True,imshow=[120,-15],d=(1,0))
         # 正交
-        pf.show(data,t0,music,feild,save='test',FPS=25,ThreeD=True,imshow=[90,0],d=(600,450))
+        pf.show(data,t0,music,feild,max_fps=200,save='test',FPS=25,ThreeD=True,imshow=[90,0],d=(600,450))
         # 透视
         ```
 
@@ -211,9 +215,9 @@
 
         全景模式不能跳出窗口，只能生成视频，这里需要```ThreeD,save,FPS,track```四个参数
         ```python
-        pf.show(data,t0,music,feild,ThreeD=True,save='test',FPS=20,track=[0])
+        pf.show(data,t0,music,feild,max_fps=200,ThreeD=True,save='test',FPS=20,track=[0])
         # 无人机1的视角全景
-        pf.show(data,t0,music,feild,ThreeD=True,save='test',FPS=20,track=(280,280,165))
+        pf.show(data,t0,music,feild,max_fps=200,ThreeD=True,save='test',FPS=20,track=(280,280,165))
         # (280,280,165)为中心的视角全景
         ```
 
