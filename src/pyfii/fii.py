@@ -206,7 +206,7 @@ show(F.dots,F.t0,[F.music],save=\''''+self.path+'''\',FPS=25)''')
 takeoff(t,h)
 #起飞(时间,高度)
 
-intime(t)
+inittime(t)
 #在第几秒
 
 move(x,y,z)
@@ -232,6 +232,12 @@ Yaw(a)
 
 Yaw2(a)
 #转向（角度）正逆负顺
+
+TurnOnAll(color)
+#点亮所有灯，颜色
+
+TurnOffAll()
+#熄灭所有灯
 
 land()
 #降落
@@ -261,9 +267,6 @@ TurnOffSingle(Id)
 
 TurnOnAll(colors)
 #点亮所有灯，颜色
-
-TurnOffAll()
-#熄灭所有灯
 
 BlinkSingle(Id,color)
 #闪烁某一盏灯，颜色
