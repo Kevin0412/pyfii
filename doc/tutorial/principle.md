@@ -91,13 +91,14 @@
 
         ```python
         data=[
-            [(time,x,y,z,degree),(time,x,y,z,degree),...],
-            [(time,x,y,z,degree),(time,x,y,z,degree),...],
+            [(time,x,y,z,degree,(R,G,B)),(time,x,y,z,degree,(R,G,B)),...],
+            [(time,x,y,z,degree,(R,G,B)),(time,x,y,z,degree,(R,G,B)),...],
             ...
         ]
         # time单位为ms，每隔5ms一个动作数据采样
         # x,y,z单位为cm
         # degree单位为°
+        # (R,G,B)表示颜色，如果值为-1则表示不亮
         ```
         
         ```t0```表示模拟结束的帧数（即动作时长```t0/fps```秒）
