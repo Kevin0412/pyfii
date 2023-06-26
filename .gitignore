@@ -8,9 +8,6 @@ gui.png
 *.mp3
 *.mp4
 .vscode
-/tests/f*c*.py
 /tests/gui_4m.py
-/tests/*v3*.py
 **/output
-**/*v3*
 4m_tests
