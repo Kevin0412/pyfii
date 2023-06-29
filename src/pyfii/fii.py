@@ -131,7 +131,7 @@ show(F.dots,F.t0,[F.music],feild='''+str(feild)+''',save=\''''+self.name+'''\',F
                             led.append([time,da])
                         elif da.split('(')[0]=='takeoff':
                             time=int(float(da.split('(')[1].split(',')[0])*1000+0.5)
-                        elif da.split('(')[0]=='intime':
+                        elif da.split('(')[0]=='intime' or da.split('(')[0]=='inittime':
                             time=int(float(da.split('(')[1].split(')')[0])*1000+0.5)
                         elif da.split('(')[0]=='delay':
                             time+=int(da.split('(')[1].split(')')[0])
@@ -143,11 +143,11 @@ show(F.dots,F.t0,[F.music],feild='''+str(feild)+''',save=\''''+self.name+'''\',F
                         for da in data:
                             if da.split('(')[0]=='takeoff':
                                 time1=int(float(da.split('(')[1].split(',')[0])*1000+0.5)
-                            elif da.split('(')[0]=='intime':
+                            elif da.split('(')[0]=='intime' or da.split('(')[0]=='inittime':
                                 time1=int(float(da.split('(')[1].split(')')[0])*1000+0.5)
                             elif da.split('(')[0]=='delay':
                                 time1=time+int(da.split('(')[1].split(')')[0])
-                            if not (da.split('(')[0] in ['intime','delay'] or da.split('(')[0] in led_commands):
+                            if not (da.split('(')[0] in ['intime','inittime','delay'] or da.split('(')[0] in led_commands):
                                 newcode+=da
                                 newcode+='\n'
                             m=0
@@ -166,7 +166,7 @@ show(F.dots,F.t0,[F.music],feild='''+str(feild)+''',save=\''''+self.name+'''\',F
                                         newcode+='\n'
                                         ledtime=l[0]
                                     m+=1
-                            if da.split('(')[0]=='intime':
+                            if da.split('(')[0]=='intime' or da.split('(')[0]=='inittime':
                                 newcode+=da
                                 newcode+='\n'
                             elif da.split('(')[0]=='delay':
