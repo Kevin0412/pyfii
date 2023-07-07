@@ -258,7 +258,7 @@ class Drone:
 '''
             self.times.append(time)
             self.outpy+='''
-intime('''+str(time)+''')
+inittime('''+str(time)+''')
 '''
             spaces = '  '*self.space
             m=int(time/60) #分

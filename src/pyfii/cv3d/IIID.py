@@ -1,6 +1,14 @@
 import cv2
 import numpy as np
 from .transfer import *
+def eye_vector(a,b):
+    return (np.cos(np.radians(abs(a)))*np.cos(np.radians(abs(b))),np.sin(np.radians(abs(a)))*np.cos(np.radians(abs(b))),np.sin(np.radians(abs(b))))
+def eye_axis(a,b,d0):
+    return (-np.cos(np.radians(abs(a)))*np.cos(np.radians(abs(b)))*d0,-np.sin(np.radians(abs(a)))*np.cos(np.radians(abs(b)))*d0,-np.sin(np.radians(abs(b)))*d0)
+def abs_3d_vector(v):
+    return (v[0]**2+v[1]**2+v[2]**2)**0.5
+def dot_3d_v1_v2(v1,v2):
+    return v1[0]*v2[0]+v1[1]*v2[1]+v1[2]*v2[2]
 def iiid2iid(aixs,x,y,a,b,center=(0,0,0),d=(1,0)):#三维坐标点投影在二维平面的位置(三维坐标点,二维平面原点xy,观察者面朝角度ab,观察者观察的中心位置)
     a=np.radians(a)
     b=np.radians(b)
@@ -26,19 +34,27 @@ def line(img,aixs1,aixs2,x,y,a,b,color,r=1,center=(0,0,0),t=8,d=(1,0)):#在img�
     else:
         if z1>0 and z2>0:
             cv2.line(img,(int(x1),int(y1)),(int(x2),int(y2)),color,r,t)
-def ring(img,aixs,x,y,a,b,color,r,center=(0,0,0),n=1,d=(1,0)):
+def ring(img,aixs,x,y,a,b,color,r,center=(0,0,0),n=1,d=(1,0),normal_vector=(0,0,1)):
     x1,y1,z=iiid2iid(aixs,x,y,a,b,center,d)
     if d[1]==0:
-        if int(r*np.sin(np.radians(abs(b)))+0.5)<1:
+        eye_vec=eye_vector(a,b)
+        ratio_ellipse_a_b=abs(dot_3d_v1_v2(eye_vec,normal_vector)/abs_3d_vector(normal_vector))
+        if int(r*ratio_ellipse_a_b+0.5)<1:
             cv2.ellipse(img,(int(x1),int(y1)),(int(r+0.5),1),0,0,360,color,n)
         else:
-            cv2.ellipse(img,(int(x1),int(y1)),(int(r+0.5),int(r*np.sin(np.radians(abs(b)))+0.5)),0,0,360,color,n)
+            cv2.ellipse(img,(int(x1),int(y1)),(int(r+0.5),int(r*ratio_ellipse_a_b+0.5)),0,0,360,color,n)
     else:
         a=np.radians(a)
         b=np.radians(b)
         aixs=rotate3d((aixs[0]-center[0],aixs[1]-center[1],aixs[2]-center[2]),-a,-b)
+        where_eye_is=eye_axis(a,b,d[0])
+        eye_vec=(aixs[0]-where_eye_is[0],aixs[1]-where_eye_is[1],aixs[2]-where_eye_is[2])
+        ratio_ellipse_a_b=abs(dot_3d_v1_v2(eye_vec,normal_vector)/abs_3d_vector(normal_vector)/abs_3d_vector(eye_vec))
         if z>0:
-            cv2.ellipse(img,(int(x1),int(y1)),(int(r*d[1]/z+1),int(r*d[1]/z*np.sin(np.radians(abs(b+np.degrees(np.arctan(aixs[2]/(aixs[0]+d[0]))))))+1)),0,0,360,color,n)
+            if int(r*d[1]/z*ratio_ellipse_a_b+0.5)<1:
+                cv2.ellipse(img,(int(x1),int(y1)),(int(r*d[1]/z+0.5),1),0,0,360,color,n)
+            else:
+                cv2.ellipse(img,(int(x1),int(y1)),(int(r*d[1]/z+0.5),int(r*d[1]/z*ratio_ellipse_a_b+0.5)),0,0,360,color,n)
 def distance(aixs,x,y,A,B,center=(0,0,0),d=(1,0)):#计算距离
     if aixs[-1]=='text':
         return -10000
@@ -73,7 +89,10 @@ def show(aixs,center=(0,0,0),x=720,y=720,imshow=[-1],d=(1,0)):#显示(aixs：记
             elif aix[-1]=='line':
                 line(img,aix[0],aix[1],x/2,y/2,A,B,aix[2],aix[3],center,aix[4],d)
             elif aix[-1]=='ring':
-                ring(img,aix[0],x/2,y/2,A,B,aix[1],aix[2],center,aix[3],d)
+                if len(aix)==5:
+                    ring(img,aix[0],x/2,y/2,A,B,aix[1],aix[2],center,aix[3],d)
+                elif len(aix)==6:
+                    ring(img,aix[0],x/2,y/2,A,B,aix[1],aix[2],center,aix[3],d,aix[4])
             elif aix[-1]=='text':
                 cv2.putText(img,aix[0],aix[1],cv2.FONT_HERSHEY_SIMPLEX,aix[2],aix[3],aix[4])
         A=(A+180)%360-180

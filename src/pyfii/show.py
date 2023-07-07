@@ -49,6 +49,26 @@ def color(n,m=0):
     img=cv2.cvtColor(img,cv2.COLOR_HSV2BGR)
     return(int(img[0][0][0]),int(img[0][0][1]),int(img[0][0][2]))
 
+def iiid_rotate(a,g=np.array([0,0,-980])):# 无人机旋转
+    wing_force=a-g
+    unit_wing_force=wing_force/np.sqrt(wing_force[0]**2+wing_force[1]**2+wing_force[2]**2)
+    
+    x,y,z=unit_wing_force[0],unit_wing_force[1],unit_wing_force[2]
+    if x==0 and y==0:
+        rotate_matrix=np.mat([
+        [1,0,0],
+        [0,1,0],
+        [0,0,1]
+    ])
+    else:
+        rotate_matrix=np.mat([
+            [(x**2*z+y**2)/(x**2+y**2),-x*y/(z+1),x],
+            [-x*y/(z+1),(x**2+y**2*z)/(x**2+y**2),y],
+            [-x,-y,z]
+        ])
+
+    return rotate_matrix
+
 def draw_drone(img,x,y,color,a=0,led=(-1,-1,-1),up=False,skin=1):
     if skin==0:
         if up:
@@ -101,13 +121,20 @@ def draw_drone(img,x,y,color,a=0,led=(-1,-1,-1),up=False,skin=1):
             if led[0]>-1:
                 cv2.circle(img,(int(x),int(y-1/2*7.6)),5,led,-1)
 
-def drone3d(aixs,x,y,z,c,a,led=(-1,-1,-1)):
-    aixs.append([(x+21/2*np.cos(np.pi/4+a),y+21/2*np.sin(np.pi/4+a),z),c,(14.9-21/4*2**0.5),1,'ring'])
-    aixs.append([(x+21/2*np.cos(3*np.pi/4+a),y+21/2*np.sin(3*np.pi/4+a),z),c,(14.9-21/4*2**0.5),1,'ring'])
-    aixs.append([(x+21/2*np.cos(-3*np.pi/4+a),y+21/2*np.sin(-3*np.pi/4+a),z),c,(14.9-21/4*2**0.5),1,'ring'])
-    aixs.append([(x+21/2*np.cos(-np.pi/4+a),y+21/2*np.sin(-np.pi/4+a),z),c,(14.9-21/4*2**0.5),1,'ring'])
-    aixs.append([(x+21/2*np.cos(np.pi/4+a),y+21/2*np.sin(np.pi/4+a),z),(x+21/2*np.cos(-3*np.pi/4+a),y+21/2*np.sin(-3*np.pi/4+a),z),c,1,8,'line'])
-    aixs.append([(x+21/2*np.cos(-np.pi/4+a),y+21/2*np.sin(-np.pi/4+a),z),(x+21/2*np.cos(3*np.pi/4+a),y+21/2*np.sin(3*np.pi/4+a),z),c,1,8,'line'])
+def drone3d(aixs,x,y,z,c,a,led=(-1,-1,-1),acceleration=(0,0,0),g=np.array([0,0,-980])):
+    rotate_matrix=iiid_rotate(np.array([acceleration[0],acceleration[1],acceleration[2]]),g)
+    wing_force=a-g
+    unit_wing_force=wing_force/np.sqrt(wing_force[0]**2+wing_force[1]**2+wing_force[2]**2)
+    ring1=np.array(np.dot(rotate_matrix,np.array([21/2*np.cos(np.pi/4+a),21/2*np.sin(np.pi/4+a),0])))
+    ring2=np.array(np.dot(rotate_matrix,np.array([21/2*np.cos(3*np.pi/4+a),21/2*np.sin(3*np.pi/4+a),0])))
+    ring3=np.array(np.dot(rotate_matrix,np.array([21/2*np.cos(-3*np.pi/4+a),21/2*np.sin(-3*np.pi/4+a),0])))
+    ring4=np.array(np.dot(rotate_matrix,np.array([21/2*np.cos(-np.pi/4+a),21/2*np.sin(-np.pi/4+a),0])))
+    aixs.append([(x+ring1[0][0],y+ring1[0][1],z+ring1[0][2]),c,(14.9-21/4*2**0.5),1,(unit_wing_force[0],unit_wing_force[1],unit_wing_force[2]),'ring'])
+    aixs.append([(x+ring2[0][0],y+ring2[0][1],z+ring2[0][2]),c,(14.9-21/4*2**0.5),1,(unit_wing_force[0],unit_wing_force[1],unit_wing_force[2]),'ring'])
+    aixs.append([(x+ring3[0][0],y+ring3[0][1],z+ring3[0][2]),c,(14.9-21/4*2**0.5),1,(unit_wing_force[0],unit_wing_force[1],unit_wing_force[2]),'ring'])
+    aixs.append([(x+ring4[0][0],y+ring4[0][1],z+ring4[0][2]),c,(14.9-21/4*2**0.5),1,(unit_wing_force[0],unit_wing_force[1],unit_wing_force[2]),'ring'])
+    aixs.append([(x+ring1[0][0],y+ring1[0][1],z+ring1[0][2]),(x+ring3[0][0],y+ring3[0][1],z+ring3[0][2]),c,1,8,'line'])
+    aixs.append([(x+ring2[0][0],y+ring2[0][1],z+ring2[0][2]),(x+ring4[0][0],y+ring4[0][1],z+ring4[0][2]),c,1,8,'line'])
     if led[0]>-1:
         aixs.append([(x,y,z),led,5,-1,'sphere'])
     else:
@@ -384,6 +411,7 @@ def show(data,t0,music,feild=6,show=True,save="",FPS=200,max_fps=200,ThreeD=Fals
                     z=data[a][k][3]
                     angle=data[a][k][4]
                     led=data[a][k][5]
+                    acceleration=data[a][k][6]
                 else:
                     t=max(t,data[a][-1][0]/1000)
                     x=data[a][-1][1]
@@ -391,10 +419,11 @@ def show(data,t0,music,feild=6,show=True,save="",FPS=200,max_fps=200,ThreeD=Fals
                     z=data[a][-1][3]
                     angle=data[a][-1][4]
                     led=data[a][-1][5]
+                    acceleration=data[a][-1][6]
                 c=color(a)
                 #aixs.append([(x,y,z),c,5,1,'ring'])
                 #drone.append([x,y,z,c])
-                drone3d(aixs,x,y,z,color(a,127),angle/180*np.pi,led)
+                drone3d(aixs,x,y,z,color(a,127),angle/180*np.pi,led,acceleration)
                 drone3d(aixs,x,y,0,color(a,-127),angle/180*np.pi)
                 texts.append([str(a+1)+'('+str(int(x+0.5))+','+str(int(y+0.5))+','+str(int(z+0.5))+')',(0,140+30*a),0.5,c,1,'text'])
             texts.append(['T+'+str(int(t*1000)/1000),(0,80),0.5,(255,255,255),1,'text'])
