@@ -6,6 +6,7 @@ import warnings
 import shutil
 
 import cv2
+import tqdm
 import numpy as np
 import pygame
 from ffmpy import FFmpeg
@@ -124,15 +125,16 @@ def drone3d(aixs,x,y,z,c,a,led=(-1,-1,-1)):
 
 def show(data,t0,music,feild=6,show=True,save="",FPS=200,max_fps=200,ThreeD=False,imshow=[120,-15],d=(600,450),track=[],skin=1):
     t0=int(t0+0.5)+3*max_fps
-    if len(save)>0 and not ThreeD:
+    if len(save)>0 and not ThreeD:  # save 2D video
         show=False
         video = cv2.VideoWriter(save+"_process.mp4", cv2.VideoWriter_fourcc('M', 'P', '4', 'V'), FPS,(1200,600))
-    if len(save)>0 and ThreeD:
+    if len(save)>0 and ThreeD:      # save 3D video
         if len(track)==0:
             video = cv2.VideoWriter(save+"_process.mp4", cv2.VideoWriter_fourcc('M', 'P', '4', 'V'), FPS,(1280,720))
         else:
             video = cv2.VideoWriter(save+"_process.mp4", cv2.VideoWriter_fourcc('M', 'P', '4', 'V'), FPS,(3840,1920))
     if (show and not ThreeD) or len(save)>0:
+        # 生成gui.png   2D 背景图
         img=np.zeros((600,1200,3),np.uint8)
         cv2.rectangle(img,(0,0),(600,600),(255,255,255),1)
         for x in range(12):
@@ -221,6 +223,7 @@ def show(data,t0,music,feild=6,show=True,save="",FPS=200,max_fps=200,ThreeD=Fals
                 lines.append([(-20,-20,x*10),(10,10,x*10),(0,255,255),1,8,'line'])
         i=imshow[0]
     if (show and len(save)==0) or (ThreeD and len(save)==0):
+        # 添加音乐并播放
         if len(music)>1:
             for root, dirs, files in os.walk(music[0]):
                 for file in files:
@@ -238,12 +241,17 @@ def show(data,t0,music,feild=6,show=True,save="",FPS=200,max_fps=200,ThreeD=Fals
     K=0
     #print('时间\t距离\t距离程度\t错误无人机')
     time_FPS=time.time()
-    f=0#记录帧数
+    f=0     #记录帧数
+    if (show and len(save)>0):
+        # 如果保存视频，就加载渲染视频的进度条
+        pbar = tqdm.tqdm(total=t0)
+        pbar.set_description('Video Rendering')
+    k_previous = k
     while k < t0:
-        if (show or len(save)>0) and not ThreeD:
+        if (show or len(save)>0) and not ThreeD:    # 2D
             img2=cv2.imread('gui.png')
         aixs=[]
-        if not ThreeD:
+        if not ThreeD:                              # 2D
             t=0
             for a in range(len(data)):
                 if len(data[a])>k:
@@ -267,7 +275,8 @@ def show(data,t0,music,feild=6,show=True,save="",FPS=200,max_fps=200,ThreeD=Fals
                     if a<4:
                         cv2.putText(img2,str(a+1)+' ('+str(int(x*1+0.5))+','+str(int(y*1+0.5))+','+str(int(z*1+0.5))+')',(600+a*150,560), font, 0.5,(255,255,255),1)
                     else:
-                        cv2.putText(img2,str(a+1)+' ('+str(int(x*1+0.5))+','+str(int(y*1+0.5))+','+str(int(z*1+0.5))+')',(a*150,590), font, 0.5,(255,255,255),1)#在img2上画出无人机的位置并显示坐标
+                        #在img2上画出无人机的位置并显示坐标
+                        cv2.putText(img2,str(a+1)+' ('+str(int(x*1+0.5))+','+str(int(y*1+0.5))+','+str(int(z*1+0.5))+')',(a*150,590), font, 0.5,(255,255,255),1)
                 aixs.append((x,y,z,angle,led,a))
         if (show or len(save)>0) and not ThreeD:
             Xs=sorted(aixs,key=lambda x:x[0])
@@ -481,6 +490,11 @@ def show(data,t0,music,feild=6,show=True,save="",FPS=200,max_fps=200,ThreeD=Fals
                 video.write(img2)
             K+=max_fps/FPS
             k=int(K+0.5)
+        if (show and len(save)>0):  # 加载进度条
+            # k 是进度条的当前进度
+            # t0 是进度条的总进度
+            pbar.update(k - k_previous)
+            k_previous = k
     if (show and len(save)==0) or (ThreeD and len(save)==0):
         cv2.destroyAllWindows()
         if len(music)>1 or (len(music)==1 and music[0].split('.')[-1] in ['mp3','wav']):
