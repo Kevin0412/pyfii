@@ -230,6 +230,7 @@ def dots2line(file,fii=[],fps=200,points={}):#将指令转换为飞行轨迹
     #v=0
     lines=[]
     a=0#0不加速,1加速,-1减速
+    acceleration=(0,0,0)
     moving=False#是否有速度
     k=0
     k1=0
@@ -267,8 +268,8 @@ def dots2line(file,fii=[],fps=200,points={}):#将指令转换为飞行轨迹
             Z=-z
             vel=200
             acc=400
-        alenth=vel**2/(2*acc)
-        R=(X**2+Y**2+Z**2)**0.5
+        alenth=vel**2/(2*acc)#加速距离s=v^2/2a
+        R=(X**2+Y**2+Z**2)**0.5#(X,Y,Z)位移矢量
         if R==0:
             moving=False
             if len(lines)>=len(angles):
@@ -279,16 +280,16 @@ def dots2line(file,fii=[],fps=200,points={}):#将指令转换为飞行轨迹
                 led=leds[-1][1]
             else:
                 led=leds[len(lines)][1]
-            lines.append((time,x,y,z,angle,led))
+            lines.append((time,x,y,z,angle,led,acceleration))
             #print('\r'+str((time,x,y,z)),end='')
             a=0
         if a==0 and R!=0:#静止初始状态
             #Rs=[]
-            ast=time/1000#action start time
+            ast=time/1000#动作开始时间点
             if R>=2*alenth:#距离是否大于全速加速减速的前进距离
-                slenth=alenth
-                actiontime=ast+2*vel/acc+(R-2*alenth)/vel#动作总时长
-                acctime=vel/acc#加速时间
+                slenth=alenth#实际加速距离
+                actiontime=ast+2*vel/acc+(R-2*alenth)/vel#动作结束时间点
+                acctime=vel/acc#加速时长
             else:
                 slenth=R/2
                 actiontime=ast+2*(2*slenth/acc)**0.5
@@ -297,11 +298,12 @@ def dots2line(file,fii=[],fps=200,points={}):#将指令转换为飞行轨迹
             v=0
             slow=False
             while(moving):
-                if slow:
+                if slow:#出现下一指令
                     if v==0:
                         x=x1
                         y=y1
                         z=z1
+                        acceleration=(0,0,0)
                         #dots[k][-1]='moved'
                         if len(lines)>=len(angles):
                             angle=angles[-1][1]
@@ -311,25 +313,30 @@ def dots2line(file,fii=[],fps=200,points={}):#将指令转换为飞行轨迹
                             led=leds[-1][1]
                         else:
                             led=leds[len(lines)][1]
-                        lines.append((time,x,y,z,angle,led))
+                        lines.append((time,x,y,z,angle,led,acceleration))
                         #print(time)
                         break
                     if v-400/fps>0:
                         r+=v/fps-200/(fps**2)
                         v-=400/fps
+                        acceleration=(-400*X/R,-400*Y/R,-400*Z/R)
                     else:
                         r+=v**2/800
                         v=0
-                elif time/1000-ast<=acctime:
+                        acceleration=(-400*X/R,-400*Y/R,-400*Z/R)
+                elif time/1000-ast<=acctime:#加速
                     r=1/2*acc*(time/1000-ast)**2
                     v=acc*(time/1000-ast)
-                elif time/1000<actiontime-acctime:
+                    acceleration=(acc*X/R,acc*Y/R,acc*Z/R)
+                elif time/1000<actiontime-acctime:#匀速
                     r=(slenth+vel*(time/1000-ast-acctime))
                     v=vel
-                elif time/1000<actiontime:
+                    acceleration=(0,0,0)
+                elif time/1000<actiontime:#减速
                     r=R-1/2*acc*(actiontime-time/1000)**2
                     v=acc*(actiontime-time/1000)
-                else:
+                    acceleration=(-acc*X/R,-acc*Y/R,-acc*Z/R)
+                else:#停
                     r=R
                     if dots[k][-1]=='move2':
                         x=float(dots[k][1])
@@ -351,7 +358,9 @@ def dots2line(file,fii=[],fps=200,points={}):#将指令转换为飞行轨迹
                         led=leds[-1][1]
                     else:
                         led=leds[len(lines)][1]
-                    lines.append((time,x,y,z,angle,led))
+                    acceleration=(-acc*X/R,-acc*Y/R,-acc*Z/R)
+                    lines.append((time,x,y,z,angle,led,acceleration))
+                    acceleration=(0,0,0)
                     #print('\r'+str((time,x,y,z)),end='')
                     #print(time)
                     break
@@ -366,7 +375,7 @@ def dots2line(file,fii=[],fps=200,points={}):#将指令转换为飞行轨迹
                     led=leds[-1][1]
                 else:
                     led=leds[len(lines)][1]
-                lines.append((time,x1,y1,z1,angle,led))
+                lines.append((time,x1,y1,z1,angle,led,acceleration))
                 #print('\r'+str((time,x1,y1,z1)),end='')
                 time+=1000/fps
                 for n in range(len(dots)):
