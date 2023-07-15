@@ -51,15 +51,15 @@ def read_xml(data,fii=[],time=0,x=0,y=0,z=0,vel=0,acc=0,w=0,points={}):#格式�
                 if acc==0:
                     acc=100
                     warns.append("Acceleration is not defined.Default 100cm/s^2.加速度未定义。默认100cm/s^2。")
-                x=int(xml[k+1][16:-8])
-                y=int(xml[k+2][16:-8])
+                x=float(xml[k+1][16:-8])
+                y=float(xml[k+2][16:-8])
                 #print(time,x,y,int(xml[k+3][16:-8]))
-                dots.append([time,x,y,int(xml[k+3][16:-8]),vel,acc,"move2"])
+                dots.append([time,x,y,float(xml[k+3][16:-8]),vel,acc,"move2"])
                 end=max(time,end)
             elif xml[k].split('"')[1][0:13]=='Goertek_Start':
                 if len(fii)==0:
-                    x=int(xml[k].split('"')[3])
-                    y=int(xml[k].split('"')[5])
+                    x=float(xml[k].split('"')[3])
+                    y=float(xml[k].split('"')[5])
                 else:
                     x=fii[0]
                     y=fii[1]
@@ -68,17 +68,17 @@ def read_xml(data,fii=[],time=0,x=0,y=0,z=0,vel=0,acc=0,w=0,points={}):#格式�
                 end=max(time,end)
             elif xml[k].split('"')[1][0:15]=='Goertek_TakeOff':
                 #print(time,x,y,int(xml[k+1][18:-8]))
-                dots.append([time,x,y,int(xml[k+1][18:-8]),200,400,"move2"])
+                dots.append([time,x,y,float(xml[k+1][18:-8]),200,400,"move2"])
                 end=max(time,end)
             elif xml[k].split('"')[1][0:12]=='Goertek_Land':
                 #print(time,x,y,0)
                 dots.append([time,"land"])
                 end=max(time,end)
             elif xml[k].split('"')[1][0:23]=='Goertek_HorizontalSpeed':
-                vel=int(xml[k+1][17:-8])
-                acc=int(xml[k+2][17:-8])
+                vel=float(xml[k+1][17:-8])
+                acc=float(xml[k+2][17:-8])
             elif xml[k].split('"')[1][0:13]=='Goertek_Point':
-                points[xml[k+1][19:-8]]=[int(xml[k+2][16:-8]),int(xml[k+3][16:-8]),int(xml[k+4][16:-8])]
+                points[xml[k+1][19:-8]]=[float(xml[k+2][16:-8]),float(xml[k+3][16:-8]),float(xml[k+4][16:-8])]
             elif xml[k].split('"')[1][0:19]=='Goertek_MoveToPoint':
                 if vel==0:
                     vel=60
@@ -114,9 +114,9 @@ def read_xml(data,fii=[],time=0,x=0,y=0,z=0,vel=0,acc=0,w=0,points={}):#格式�
                 if acc==0:
                     acc=100
                     warns.append("Acceleration is not defined.Default 100cm/s^2.加速度未定义。默认100cm/s^2。")
-                x=int(xml[k+1][16:-8])
-                y=int(xml[k+2][16:-8])
-                dots.append([time,x,y,int(xml[k+3][16:-8]),vel,acc,"move"])
+                x=float(xml[k+1][16:-8])
+                y=float(xml[k+2][16:-8])
+                dots.append([time,x,y,float(xml[k+3][16:-8]),vel,acc,"move"])
                 end=max(time,end)
                 #raise Warning("Goertek_Move is not recommended.方向移动不建议使用。")
             elif xml[k].split('"')[1][0:14]=='Goertek_TurnTo':
@@ -124,11 +124,11 @@ def read_xml(data,fii=[],time=0,x=0,y=0,z=0,vel=0,acc=0,w=0,points={}):#格式�
                     w=60
                     warns.append("Arate is not defined.Default 60°/s.角速度未定义。默认60°/s。")
                 if xml[k+1][28]=='l':
-                    angle=int(xml[k+2][20:-8])
+                    angle=float(xml[k+2][20:-8])
                     dots.append([time,angle,w,"turn2"])
                     end=max(time,end)
                 elif xml[k+1][28]=='r':
-                    angle=-int(xml[k+2][20:-8])
+                    angle=-float(xml[k+2][20:-8])
                     dots.append([time,angle,w,"turn2"])
                     end=max(time,end)
                 #print(angle)
@@ -137,14 +137,14 @@ def read_xml(data,fii=[],time=0,x=0,y=0,z=0,vel=0,acc=0,w=0,points={}):#格式�
                     w=60
                     warns.append("Arate is not defined.Default 60°/s.角速度未定义。默认60°/s。")
                 if xml[k+1][28]=='l':
-                    angle=int(xml[k+2][20:-8])
+                    angle=float(xml[k+2][20:-8])
                 elif xml[k+1][28]=='r':
-                    angle=-int(xml[k+2][20:-8])
+                    angle=-float(xml[k+2][20:-8])
                 dots.append([time,angle,w,"turn"])
                 end=max(time,end)
                 #print(angle)
             elif xml[k].split('"')[1][0:23]=='Goertek_AngularVelocity':
-                w=int(xml[k+1][16:-8])
+                w=float(xml[k+1][16:-8])
                 #print(w)
             elif "Goertek_LEDTurnOnAllSingleColor" in xml[k]:
                 color = str2bgr(xml[k+1].split('>')[1].split('<')[0])
@@ -476,7 +476,7 @@ def read_fii(path,getfeild=False,fps=200):
                 #print(xml[k].split('"')[1])
         with open(path+'/动作组/'+drone+'/webCodeAll.xml', "r",encoding='utf-8') as F:
             file = F.read()
-        try:
+        #try:
             line=dots2line(file,fii=[x,y],fps=fps,points=points)
             '''with open(name+'/动作组/'+drone+'line.csv','w',encoding='utf-8') as F:
                 F.write('time,x,y,z,angle\n')
@@ -485,8 +485,8 @@ def read_fii(path,getfeild=False,fps=200):
                         F.write(str(li))
                         F.write(',')
                     F.write('\n')'''
-        except:
-            raise Exception('No take off place.起飞位置未定义。')
+        '''except:
+            raise Exception('No take off place.起飞位置未定义。')'''
         dots.append(line[0])
         t0=max(t0,line[1])
         n+=1
