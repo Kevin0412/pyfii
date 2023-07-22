@@ -661,16 +661,19 @@ inittime('''+str(time)+''')
         height:80~250
         vilovity:60~180
         """
+        X=startpos[0]
+        Y=startpos[1]
+        Cx=centerpos[0]
+        Cy=centerpos[1]
         if vilocity<60 or vilocity>180 or height>250 or height<80 or X<0 or X>560 or Y<0 or Y>560 or Cx<0 or Cx>560 or Cy<0 or Cy>560:
             raise Exception("Out of range.超出范围。")
         def RoundInAir_callback(self,startpos,centerpos,height,vilocity):
-            X=int(startpos[0]+0.5)
-            Y=int(startpos[1]+0.5)
-            Cx=int(centerpos[0]+0.5)
-            Cy=int(centerpos[1]+0.5)
-            height=int(height+0.5)
+            X=startpos[0]
+            Y=startpos[1]
+            Cx=centerpos[0]
+            Cy=centerpos[1]
             direction=int((abs(vilocity)/vilocity+1)/2)
-            vilocity=int(abs(vilocity)+0.5)
+            vilocity=abs(vilocity)
             spaces='  '*(self.space+self.block)
             if self.inT:
                 self.outputString += spaces+'''<next>
@@ -1483,16 +1486,19 @@ inittime('''+str(time)+''')
         height:80~250
         vilovity:60~180
         """
+        X=startpos[0]
+        Y=startpos[1]
+        Cx=centerpos[0]
+        Cy=centerpos[1]
         if vilocity<60 or vilocity>180 or height>250 or height<80 or X<0 or X>560 or Y<0 or Y>560 or Cx<0 or Cx>560 or Cy<0 or Cy>560:
             raise Exception("Out of range.超出范围。")
         def RoundInAir_callback(self,startpos,centerpos,height,vilocity):
-            X=int(startpos[0]+0.5)
-            Y=int(startpos[1]+0.5)
-            Cx=int(centerpos[0]+0.5)
-            Cy=int(centerpos[1]+0.5)
-            height=int(height+0.5)
+            X=startpos[0]
+            Y=startpos[1]
+            Cx=centerpos[0]
+            Cy=centerpos[1]
             direction=int((abs(vilocity)/vilocity+1)/2)
-            vilocity=int(abs(vilocity)+0.5)
+            vilocity=abs(vilocity)
             spaces='  '*(self.space+self.block)
             if self.inT:
                 self.outputString += spaces+'''<next>
