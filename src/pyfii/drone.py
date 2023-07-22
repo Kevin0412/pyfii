@@ -132,10 +132,10 @@ class Drone:
         self.outputString = '''<xml xmlns="http://www.w3.org/1999/xhtml">
   <variables></variables>
 '''
-        self.X=int(x+0.5)
-        self.Y=int(y+0.5)
+        self.X=x
+        self.Y=y
         self.times=[]
-        self.x,self.y,self.z=int(x+0.5),int(y+0.5),0
+        self.x,self.y,self.z=x,y,0
         self.outpy=''
 
         self.action_list:list[DroneAction] = []
@@ -199,19 +199,15 @@ class Drone:
         单位:cm
         范围:80~250
         """
-        time=int(time+0.5)
         self.time=time*1000
-        z=int(z+0.5)
-        self.z =z
-        self.x,self.y=int(self.X+0.5),int(self.Y+0.5)
-        self.X,self.Y=int(self.X+0.5),int(self.Y+0.5)
+        self.x,self.y=self.X,self.Y
+        self.X,self.Y=self.X,self.Y
         if self.outRange(z,'zRange') or self.outRange(self.X,'xyRange') or self.outRange(self.Y,'xyRange') or time<1:
             raise Exception("Out of range.超出范围。")
         def take_off_callback(self,time,z):
-            z=int(z+0.5)
             self.z =z
-            self.x,self.y=int(self.X+0.5),int(self.Y+0.5)
-            self.X,self.Y=int(self.X+0.5),int(self.Y+0.5)
+            self.x,self.y=self.X,self.Y
+            self.X,self.Y=self.X,self.Y
             self.outputString+='''  <block type="Goertek_Start" x="'''+str(self.X)+'''" y="'''+str(self.Y)+'''">
     <next>
       <block type="block_inittime">
@@ -287,12 +283,10 @@ inittime('''+str(time)+''')
         单位:cm
         必须在intime(time)中
         """
-        x,y,z=int(x+0.5),int(y+0.5),int(z+0.5)
         self.x+=x
         self.y+=y
         self.z+=z
         def move_callback(self, x, y, z):
-            x,y,z=int(x+0.5),int(y+0.5),int(z+0.5)
             self.x+=x
             self.y+=y
             self.z+=z
@@ -320,12 +314,10 @@ inittime('''+str(time)+''')
         范围:x,y:0~560,z:80~250
         必须在intime(time)中
         """
-        x,y,z=int(x+0.5),int(y+0.5),int(z+0.5)
         if self.outRange(x,'xyRange') or self.outRange(y,'xyRange') or self.outRange(z,'zRange'):
             raise Exception("Out of range.超出范围。")
         self.x, self.y, self.z = x, y, z
         def move2_callback(self, x, y, z):
-            x,y,z=int(x+0.5),int(y+0.5),int(z+0.5)
             self.x, self.y, self.z = x, y, z
             spaces='  '*(self.space+self.block)
             if self.inT:
@@ -350,7 +342,6 @@ inittime('''+str(time)+''')
         单位:ms
         必须在intime(time)中
         """
-        time=int(time+0.5)
         self.time+=time
         def delay_callback(self, time):
             spaces='  '*(self.space+self.block)
@@ -379,7 +370,6 @@ inittime('''+str(time)+''')
         self.append_action(DroneAction(self.VelXY_callback, [v, a], timestamp))
 
     def VelXY_callback(self, v, a):
-        v,a=int(v+0.5),int(a+0.5)
         if self.outRange(v,'velRange') or self.outRange(a,'accRange'):
             raise Exception("Out of range.超出范围。")
         spaces='  '*(self.space+self.block)
@@ -406,7 +396,6 @@ inittime('''+str(time)+''')
         self.append_action(DroneAction(self.VelZ_callback, [v, a], timestamp))
     
     def VelZ_callback(self, v, a):
-        v,a=int(v+0.5),int(a+0.5)
         spaces='  '*(self.space+self.block)
         if self.inT:
             self.outputString += spaces+'''<next>
@@ -431,7 +420,6 @@ inittime('''+str(time)+''')
         必须在intime(time)中
         """
         def AccXY(self, a):
-            a=int(a+0.5)
             spaces='  '*(self.space+self.block)
             if self.inT:
                 self.outputString += spaces+'''<next>
@@ -453,7 +441,6 @@ inittime('''+str(time)+''')
         单位:cm/s^2
         必须在intime(time)中
         """
-        a=int(a+0.5)
         if self.outRange(a,'accRange'):
             raise Exception("Out of range.超出范围。")
         def AccZ_callback(self, a):
@@ -480,7 +467,6 @@ inittime('''+str(time)+''')
         范围:5~60
         必须在intime(time)中
         """
-        w=int(w+0.5)
         if self.outRange(w,'ArateRange'):
             raise Exception("Out of range.超出范围。")
         def ARate_callback(self, w):
@@ -514,7 +500,6 @@ inittime('''+str(time)+''')
                 self.block+=1
                 spaces+='  '
             if a>0:
-                a=int(a+0.5)
                 self.outputString += spaces+'''<block type="Goertek_Turn">
 '''+spaces+'''  <field name="turnDirection">l</field>
 '''+spaces+'''  <field name="angle">'''+str(a)+'''</field>
@@ -522,7 +507,7 @@ inittime('''+str(time)+''')
                 self.outpy+='''Yaw('''+str(a)+''')
 '''
             else:
-                a=int(abs(a)+0.5)
+                a=abs(a)
                 self.outputString += spaces+'''<block type="Goertek_Turn">
 '''+spaces+'''  <field name="turnDirection">r</field>
 '''+spaces+'''  <field name="angle">'''+str(a)+'''</field>
@@ -549,7 +534,6 @@ inittime('''+str(time)+''')
                 self.block+=1
                 spaces+='  '
             if a>0:
-                a=int(a+0.5)
                 self.outputString += spaces+'''<block type="Goertek_TurnTo">
 '''+spaces+'''  <field name="turnDirection">l</field>
 '''+spaces+'''  <field name="angle">'''+str(a)+'''</field>
@@ -557,7 +541,7 @@ inittime('''+str(time)+''')
                 self.outpy+='''Yaw2('''+str(a)+''')
 '''
             else:
-                a=int(abs(a)+0.5)
+                a=abs(a)
                 self.outputString += spaces+'''<block type="Goertek_TurnTo">
 '''+spaces+'''  <field name="turnDirection">r</field>
 '''+spaces+'''  <field name="angle">'''+str(a)+'''</field>
@@ -625,7 +609,6 @@ inittime('''+str(time)+''')
         direction:x,-x,y,-y
         d:10~20
         """
-        distance=int(distance+0.5)
         if distance<10 or distance>20:
             raise Exception("Out of range.超出范围。")
         def nod_callback(self, direction,distance):
@@ -652,7 +635,6 @@ inittime('''+str(time)+''')
         direction:x,-x,y,-y,z,-z
         amplitude:10~50
         """
-        amplitude=int(amplitude+0.5)
         if amplitude<10 or amplitude>50:
             raise Exception("Out of range.超出范围。")
         def SimpleHarmonic2_callback(self, direction,amplitude):
@@ -679,12 +661,6 @@ inittime('''+str(time)+''')
         height:80~250
         vilovity:60~180
         """
-        X=int(startpos[0]+0.5)
-        Y=int(startpos[1]+0.5)
-        Cx=int(centerpos[0]+0.5)
-        Cy=int(centerpos[1]+0.5)
-        height=int(height+0.5)
-        vilocity=int(abs(vilocity)+0.5)
         if vilocity<60 or vilocity>180 or height>250 or height<80 or X<0 or X>560 or Y<0 or Y>560 or Cx<0 or Cx>560 or Cy<0 or Cy>560:
             raise Exception("Out of range.超出范围。")
         def RoundInAir_callback(self,startpos,centerpos,height,vilocity):

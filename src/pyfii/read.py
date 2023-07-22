@@ -42,7 +42,7 @@ def read_xml(data,fii=[],time=0,x=0,y=0,z=0,vel=0,acc=0,w=0,points={}):#格式�
                 time=int(xml[k+1][19:21])*60000+int(xml[k+1][22:24])*1000
                 #print(time)
             elif xml[k].split('"')[1][0:11]=='block_delay':
-                time+=int(xml[k+2][19:-8])
+                time+=float(xml[k+2][19:-8])
                 #print(time)
             elif xml[k].split('"')[1][0:19]=='Goertek_MoveToCoord':
                 if vel==0:
