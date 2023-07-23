@@ -425,7 +425,7 @@ def dots2line(file,fii=[],fps=200,points={}):#将指令转换为飞行轨迹
         lines.append((time+t,x,y,z))'''
     return(lines,time*fps/1000,warns)
 
-def read_fii(path,getfeild=False,fps=200):
+def read_fii(path,getfeild=False,getdevice=False,fps=200):
     '''
     读入.fii文件
     path 所在文件夹的路径
@@ -455,6 +455,8 @@ def read_fii(path,getfeild=False,fps=200):
             drones.append(xml[k].split('"')[1])
         if xml[k][1:6]=='AreaL':
             feild=int(xml[k].split('"')[1][0])
+        if xml[k][1:11]=='DeviceType':
+            DeviceType=xml[k].split('"')[1]
     if len(music)==1:
         music=[]
     dots=[]
@@ -495,6 +497,8 @@ def read_fii(path,getfeild=False,fps=200):
                 warnings.warn('d'+str(n)+' 无人机'+str(n)+':'+warn,Warning,2)
         print('\r'+str(n)+'/'+str(len(drones)),end='')
     print('\n读取文件与轨迹计算耗时：'+str(int((time.time()-time_start)*1000+0.5)/1000)+'秒')
+    if getdevice:
+        return dots,t0,music,feild,DeviceType
     if getfeild:
         return dots,t0,music,feild
     else:
