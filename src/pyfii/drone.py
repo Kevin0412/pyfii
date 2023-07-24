@@ -342,7 +342,7 @@ inittime('''+str(time)+''')
         单位:ms
         必须在intime(time)中
         """
-        self.time+=time
+        self.time+=int(time+0.5)
         def delay_callback(self, time):
             spaces='  '*(self.space+self.block)
             if self.inT:
@@ -352,11 +352,11 @@ inittime('''+str(time)+''')
                 spaces+='  '
             self.outputString += spaces+'''<block type="block_delay">
 '''+spaces+'''  <field name="delay">0</field>
-'''+spaces+'''  <field name="time">'''+str(time)+'''</field>
+'''+spaces+'''  <field name="time">'''+str(int(time+0.5))+'''</field>
 '''
             self.block+=1
             self.inT=True
-            self.outpy+='''delay('''+str(time)+''')
+            self.outpy+='''delay('''+str(int(time+0.5))+''')
 '''
         self.append_action(DroneAction(delay_callback, [self, time], timestamp))
 
@@ -1167,7 +1167,7 @@ inittime('''+str(time)+''')
         单位:ms
         必须在intime(time)中
         """
-        self.time+=time
+        self.time+=int(time+0.5)
         def delay_callback(self, time):
             spaces='  '*(self.space+self.block)
             if self.inT:
@@ -1177,11 +1177,11 @@ inittime('''+str(time)+''')
                 spaces+='  '
             self.outputString += spaces+'''<block type="block_delay">
 '''+spaces+'''  <field name="delay">0</field>
-'''+spaces+'''  <field name="time">'''+str(time)+'''</field>
+'''+spaces+'''  <field name="time">'''+str(int(time+0.5))+'''</field>
 '''
             self.block+=1
             self.inT=True
-            self.outpy+='''delay('''+str(time)+''')
+            self.outpy+='''delay('''+str(int(time+0.5))+''')
 '''
         self.append_action(DroneAction(delay_callback, [self, time], timestamp))
 
