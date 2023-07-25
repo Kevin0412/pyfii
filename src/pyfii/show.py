@@ -362,16 +362,28 @@ def show(data,t0,music,feild=6,device="F400",show=True,save="",FPS=200,max_fps=2
             for m in range(len(aixs)):
                 for n in range(m+1,len(aixs)):#计算距离
                     distance=((aixs[m][0]-aixs[n][0])**2+(aixs[m][1]-aixs[n][1])**2)**0.5
-                    if distance<51:
-                        #print(t,distance,int(distance/20),m+1,n+1)#距离太近就输出错误
-                        warnings.warn('In '+str(int(t))+'s,distance between d'+str(m+1)+' and d'+str(n+1)+' is less than '+str((int(distance/17)+1)*17)+'cm.在'+str(int(t))+'秒，无人机'+str(m+1)+'和无人机'+str(n+1)+'之间的距离小于'+str((int(distance/17)+1)*17)+'厘米。',Warning,2)
-                        if show or len(save)>0:
-                            cv2.circle(img2,(int(20+aixs[m][0]),int(580-aixs[m][1])),20,(0,0,255),3)
-                            cv2.circle(img2,(int(620+aixs[m][0]),int(270-aixs[m][2])),20,(0,0,255),3)
-                            cv2.circle(img2,(int(620+aixs[m][1]),int(540-aixs[m][2])),20,(0,0,255),3)
-                            cv2.circle(img2,(int(20+aixs[n][0]),int(580-aixs[n][1])),20,(0,0,255),3)
-                            cv2.circle(img2,(int(620+aixs[n][0]),int(270-aixs[n][2])),20,(0,0,255),3)
-                            cv2.circle(img2,(int(620+aixs[n][1]),int(540-aixs[n][2])),20,(0,0,255),3)#错误红点标记
+                    if device=="F400":
+                        if distance<51:
+                            #print(t,distance,int(distance/20),m+1,n+1)#距离太近就输出错误
+                            warnings.warn('In '+str(int(t))+'s,distance between d'+str(m+1)+' and d'+str(n+1)+' is less than '+str((int(distance/17)+1)*17)+'cm.在'+str(int(t))+'秒，无人机'+str(m+1)+'和无人机'+str(n+1)+'之间的距离小于'+str((int(distance/17)+1)*17)+'厘米。',Warning,2)
+                            if show or len(save)>0:
+                                cv2.circle(img2,(int(20+aixs[m][0]),int(580-aixs[m][1])),20,(0,0,255),3)
+                                cv2.circle(img2,(int(620+aixs[m][0]),int(270-aixs[m][2])),20,(0,0,255),3)
+                                cv2.circle(img2,(int(620+aixs[m][1]),int(540-aixs[m][2])),20,(0,0,255),3)
+                                cv2.circle(img2,(int(20+aixs[n][0]),int(580-aixs[n][1])),20,(0,0,255),3)
+                                cv2.circle(img2,(int(620+aixs[n][0]),int(270-aixs[n][2])),20,(0,0,255),3)
+                                cv2.circle(img2,(int(620+aixs[n][1]),int(540-aixs[n][2])),20,(0,0,255),3)#错误红点标记
+                    elif device=="F600":
+                        if distance<33:
+                            #print(t,distance,int(distance/20),m+1,n+1)#距离太近就输出错误
+                            warnings.warn('In '+str(int(t))+'s,distance between d'+str(m+1)+' and d'+str(n+1)+' is less than '+str((int(distance/11)+1)*11)+'cm.在'+str(int(t))+'秒，无人机'+str(m+1)+'和无人机'+str(n+1)+'之间的距离小于'+str((int(distance/11)+1)*11)+'厘米。',Warning,2)
+                            if show or len(save)>0:
+                                cv2.circle(img2,(int(20+aixs[m][0]),int(580-aixs[m][1])),12,(0,0,255),2)
+                                cv2.circle(img2,(int(620+aixs[m][0]),int(270-aixs[m][2])),12,(0,0,255),2)
+                                cv2.circle(img2,(int(620+aixs[m][1]),int(540-aixs[m][2])),12,(0,0,255),2)
+                                cv2.circle(img2,(int(20+aixs[n][0]),int(580-aixs[n][1])),12,(0,0,255),2)
+                                cv2.circle(img2,(int(620+aixs[n][0]),int(270-aixs[n][2])),12,(0,0,255),2)
+                                cv2.circle(img2,(int(620+aixs[n][1]),int(540-aixs[n][2])),12,(0,0,255),2)#错误红点标记
         if (show or len(save)>0) and not ThreeD:
             cv2.putText(img2,str(int(t*1000)/1000),(1050,590),font,0.5,(255,255,255),1)#在img2上显示时间
         time_fps=time.time()
@@ -468,15 +480,26 @@ def show(data,t0,music,feild=6,device="F400",show=True,save="",FPS=200,max_fps=2
             for m in range(0,len(aixs),14):
                 for n in range(m+14,len(aixs),14):#计算距离
                     distance=((aixs[m][0][0]-aixs[n][0][0]+aixs[m+2][0][0]-aixs[n+2][0][0])**2+(aixs[m][0][1]-aixs[n][0][1]+aixs[m+2][0][1]-aixs[n+2][0][1])**2)**0.5/2
-                    if distance<51:
-                        warnings.warn('In '+str(int(t))+'s,distance between d'+str(int(m/12+1))+' and d'+str(int(n/12+1))+' is less than '+str((int(distance/17)+1)*17)+'cm.在'+str(int(t))+'秒，无人机'+str(int(m/12+1))+'和无人机'+str(int(n/12+1))+'之间的距离小于'+str((int(distance/17)+1)*17)+'厘米。',Warning,2)
-                        #print(t,distance,int(distance/20),m+1,n+1)#距离太近就输出错误
-                        if len(track)==0:
-                            errors.append([((aixs[m][0][0]+aixs[m+2][0][0])/2,(aixs[m][0][1]+aixs[m+2][0][1])/2,aixs[m][0][2]),(0,0,255),10,1,'sphere'])#错误红圈标记
-                            errors.append([((aixs[n][0][0]+aixs[n+2][0][0])/2,(aixs[n][0][1]+aixs[n+2][0][1])/2,aixs[n][0][2]),(0,0,255),10,1,'sphere'])
-                        else:
-                            errors.append([((aixs[m][0][0]+aixs[m+2][0][0])/2,(aixs[m][0][1]+aixs[m+2][0][1])/2,aixs[m][0][2]),(0,0,255),10,1,'ring'])#错误红圈标记
-                            errors.append([((aixs[n][0][0]+aixs[n+2][0][0])/2,(aixs[n][0][1]+aixs[n+2][0][1])/2,aixs[n][0][2]),(0,0,255),10,1,'ring'])
+                    if device=="F400":
+                        if distance<51:
+                            warnings.warn('In '+str(int(t))+'s,distance between d'+str(int(m/12+1))+' and d'+str(int(n/12+1))+' is less than '+str((int(distance/17)+1)*17)+'cm.在'+str(int(t))+'秒，无人机'+str(int(m/12+1))+'和无人机'+str(int(n/12+1))+'之间的距离小于'+str((int(distance/17)+1)*17)+'厘米。',Warning,2)
+                            #print(t,distance,int(distance/20),m+1,n+1)#距离太近就输出错误
+                            if len(track)==0:
+                                errors.append([((aixs[m][0][0]+aixs[m+2][0][0])/2,(aixs[m][0][1]+aixs[m+2][0][1])/2,aixs[m][0][2]),(0,0,255),10,1,'sphere'])#错误红圈标记
+                                errors.append([((aixs[n][0][0]+aixs[n+2][0][0])/2,(aixs[n][0][1]+aixs[n+2][0][1])/2,aixs[n][0][2]),(0,0,255),10,1,'sphere'])
+                            else:
+                                errors.append([((aixs[m][0][0]+aixs[m+2][0][0])/2,(aixs[m][0][1]+aixs[m+2][0][1])/2,aixs[m][0][2]),(0,0,255),10,1,'ring'])#错误红圈标记
+                                errors.append([((aixs[n][0][0]+aixs[n+2][0][0])/2,(aixs[n][0][1]+aixs[n+2][0][1])/2,aixs[n][0][2]),(0,0,255),10,1,'ring'])
+                    elif device=="F600":
+                        if distance<33:
+                            warnings.warn('In '+str(int(t))+'s,distance between d'+str(int(m/12+1))+' and d'+str(int(n/12+1))+' is less than '+str((int(distance/11)+1)*11)+'cm.在'+str(int(t))+'秒，无人机'+str(int(m/12+1))+'和无人机'+str(int(n/12+1))+'之间的距离小于'+str((int(distance/11)+1)*11)+'厘米。',Warning,2)
+                            #print(t,distance,int(distance/20),m+1,n+1)#距离太近就输出错误
+                            if len(track)==0:
+                                errors.append([((aixs[m][0][0]+aixs[m+2][0][0])/2,(aixs[m][0][1]+aixs[m+2][0][1])/2,aixs[m][0][2]),(0,0,255),6,1,'sphere'])#错误红圈标记
+                                errors.append([((aixs[n][0][0]+aixs[n+2][0][0])/2,(aixs[n][0][1]+aixs[n+2][0][1])/2,aixs[n][0][2]),(0,0,255),6,1,'sphere'])
+                            else:
+                                errors.append([((aixs[m][0][0]+aixs[m+2][0][0])/2,(aixs[m][0][1]+aixs[m+2][0][1])/2,aixs[m][0][2]),(0,0,255),6,1,'ring'])#错误红圈标记
+                                errors.append([((aixs[n][0][0]+aixs[n+2][0][0])/2,(aixs[n][0][1]+aixs[n+2][0][1])/2,aixs[n][0][2]),(0,0,255),6,1,'ring'])
             img=IIID.show(aixs+lines+errors+texts,center,1280,720,[imshow[0],imshow[1],1,0,0],d)
             f+=1
             if f==1:
