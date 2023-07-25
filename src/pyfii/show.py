@@ -136,25 +136,46 @@ def draw_drone(img,x,y,color,a=0,led=(-1,-1,-1),up=False,skin=1,device="F400"):
             cv2.ellipse(img,(int(x+12.6/(2**0.5)/2),int(y-3/4*4.0)),(5,2),0,0,360,color,1)
             cv2.line(img,(int(x+12.6/(2**0.5)/2),int(y-1/4*4.0)),(int(x-21/(2**0.5)/2),int(y-3/4*4.0)),color,1)
             cv2.line(img,(int(x-12.6/(2**0.5)/2),int(y-1/4*4.0)),(int(x+21/(2**0.5)/2),int(y-3/4*4.0)),color,1)
-
-def drone3d(aixs,x,y,z,c,a,led=(-1,-1,-1),acceleration=(0,0,0),g=np.array([0,0,-980])):
-    rotate_matrix=iiid_rotate(np.array([acceleration[0],acceleration[1],acceleration[2]]),g)
-    wing_force=a-g
-    unit_wing_force=wing_force/np.sqrt(wing_force[0]**2+wing_force[1]**2+wing_force[2]**2)
-    ring1=np.array(np.dot(rotate_matrix,np.array([21/2*np.cos(np.pi/4+a),21/2*np.sin(np.pi/4+a),0])))
-    ring2=np.array(np.dot(rotate_matrix,np.array([21/2*np.cos(3*np.pi/4+a),21/2*np.sin(3*np.pi/4+a),0])))
-    ring3=np.array(np.dot(rotate_matrix,np.array([21/2*np.cos(-3*np.pi/4+a),21/2*np.sin(-3*np.pi/4+a),0])))
-    ring4=np.array(np.dot(rotate_matrix,np.array([21/2*np.cos(-np.pi/4+a),21/2*np.sin(-np.pi/4+a),0])))
-    aixs.append([(x+ring1[0][0],y+ring1[0][1],z+ring1[0][2]),c,(14.9-21/4*2**0.5),1,(unit_wing_force[0],unit_wing_force[1],unit_wing_force[2]),'ring'])
-    aixs.append([(x+ring2[0][0],y+ring2[0][1],z+ring2[0][2]),c,(14.9-21/4*2**0.5),1,(unit_wing_force[0],unit_wing_force[1],unit_wing_force[2]),'ring'])
-    aixs.append([(x+ring3[0][0],y+ring3[0][1],z+ring3[0][2]),c,(14.9-21/4*2**0.5),1,(unit_wing_force[0],unit_wing_force[1],unit_wing_force[2]),'ring'])
-    aixs.append([(x+ring4[0][0],y+ring4[0][1],z+ring4[0][2]),c,(14.9-21/4*2**0.5),1,(unit_wing_force[0],unit_wing_force[1],unit_wing_force[2]),'ring'])
-    aixs.append([(x+ring1[0][0],y+ring1[0][1],z+ring1[0][2]),(x+ring3[0][0],y+ring3[0][1],z+ring3[0][2]),c,1,8,'line'])
-    aixs.append([(x+ring2[0][0],y+ring2[0][1],z+ring2[0][2]),(x+ring4[0][0],y+ring4[0][1],z+ring4[0][2]),c,1,8,'line'])
-    if led[0]>-1:
-        aixs.append([(x,y,z),led,5,-1,'sphere'])
     else:
+        raise(Exception("Error Drone Type!无人机型号不支持"))
+
+def drone3d(aixs,x,y,z,c,a,led=(-1,-1,-1),acceleration=(0,0,0),g=np.array([0,0,-980]),device="F400"):
+    if device=="F400":
+        rotate_matrix=iiid_rotate(np.array([acceleration[0],acceleration[1],acceleration[2]]),g)
+        wing_force=a-g
+        unit_wing_force=wing_force/np.sqrt(wing_force[0]**2+wing_force[1]**2+wing_force[2]**2)
+        ring1=np.array(np.dot(rotate_matrix,np.array([21/2*np.cos(np.pi/4+a),21/2*np.sin(np.pi/4+a),0])))
+        ring2=np.array(np.dot(rotate_matrix,np.array([21/2*np.cos(3*np.pi/4+a),21/2*np.sin(3*np.pi/4+a),0])))
+        ring3=np.array(np.dot(rotate_matrix,np.array([21/2*np.cos(-3*np.pi/4+a),21/2*np.sin(-3*np.pi/4+a),0])))
+        ring4=np.array(np.dot(rotate_matrix,np.array([21/2*np.cos(-np.pi/4+a),21/2*np.sin(-np.pi/4+a),0])))
+        aixs.append([(x+ring1[0][0],y+ring1[0][1],z+ring1[0][2]),c,(14.9-21/4*2**0.5),1,(unit_wing_force[0],unit_wing_force[1],unit_wing_force[2]),'ring'])
+        aixs.append([(x+ring2[0][0],y+ring2[0][1],z+ring2[0][2]),c,(14.9-21/4*2**0.5),1,(unit_wing_force[0],unit_wing_force[1],unit_wing_force[2]),'ring'])
+        aixs.append([(x+ring3[0][0],y+ring3[0][1],z+ring3[0][2]),c,(14.9-21/4*2**0.5),1,(unit_wing_force[0],unit_wing_force[1],unit_wing_force[2]),'ring'])
+        aixs.append([(x+ring4[0][0],y+ring4[0][1],z+ring4[0][2]),c,(14.9-21/4*2**0.5),1,(unit_wing_force[0],unit_wing_force[1],unit_wing_force[2]),'ring'])
+        aixs.append([(x+ring1[0][0],y+ring1[0][1],z+ring1[0][2]),(x+ring3[0][0],y+ring3[0][1],z+ring3[0][2]),c,1,8,'line'])
+        aixs.append([(x+ring2[0][0],y+ring2[0][1],z+ring2[0][2]),(x+ring4[0][0],y+ring4[0][1],z+ring4[0][2]),c,1,8,'line'])
+        if led[0]>-1:
+            aixs.append([(x,y,z),led,5,-1,'sphere'])
+        else:
+            aixs.append([(x,y,z),c,1,-1,'sphere'])
+    elif device=="F600":
+        rotate_matrix=iiid_rotate(np.array([acceleration[0],acceleration[1],acceleration[2]]),g)
+        wing_force=a-g
+        unit_wing_force=wing_force/np.sqrt(wing_force[0]**2+wing_force[1]**2+wing_force[2]**2)
+        ring1=np.array(np.dot(rotate_matrix,np.array([12.6/2*np.cos(np.pi/4+a),12.6/2*np.sin(np.pi/4+a),0])))
+        ring2=np.array(np.dot(rotate_matrix,np.array([12.6/2*np.cos(3*np.pi/4+a),12.6/2*np.sin(3*np.pi/4+a),0])))
+        ring3=np.array(np.dot(rotate_matrix,np.array([12.6/2*np.cos(-3*np.pi/4+a),12.6/2*np.sin(-3*np.pi/4+a),0])))
+        ring4=np.array(np.dot(rotate_matrix,np.array([12.6/2*np.cos(-np.pi/4+a),12.6/2*np.sin(-np.pi/4+a),0])))
+        aixs.append([(x+ring1[0][0],y+ring1[0][1],z+ring1[0][2]),c,(17.5/2-12.6/4*2**0.5),1,(unit_wing_force[0],unit_wing_force[1],unit_wing_force[2]),'ring'])
+        aixs.append([(x+ring2[0][0],y+ring2[0][1],z+ring2[0][2]),c,(17.5/2-12.6/4*2**0.5),1,(unit_wing_force[0],unit_wing_force[1],unit_wing_force[2]),'ring'])
+        aixs.append([(x+ring3[0][0],y+ring3[0][1],z+ring3[0][2]),c,(17.5/2-12.6/4*2**0.5),1,(unit_wing_force[0],unit_wing_force[1],unit_wing_force[2]),'ring'])
+        aixs.append([(x+ring4[0][0],y+ring4[0][1],z+ring4[0][2]),c,(17.5/2-12.6/4*2**0.5),1,(unit_wing_force[0],unit_wing_force[1],unit_wing_force[2]),'ring'])
+        aixs.append([(x+ring1[0][0],y+ring1[0][1],z+ring1[0][2]),(x+ring3[0][0],y+ring3[0][1],z+ring3[0][2]),c,1,8,'line'])
+        aixs.append([(x+ring2[0][0],y+ring2[0][1],z+ring2[0][2]),(x+ring4[0][0],y+ring4[0][1],z+ring4[0][2]),c,1,8,'line'])
         aixs.append([(x,y,z),c,1,-1,'sphere'])
+    else:
+        raise(Exception("Error Drone Type!无人机型号不支持"))
+
 
 '''def color(n):
     n=n*180/7
@@ -439,8 +460,8 @@ def show(data,t0,music,feild=6,device="F400",show=True,save="",FPS=200,max_fps=2
                 c=color(a)
                 #aixs.append([(x,y,z),c,5,1,'ring'])
                 #drone.append([x,y,z,c])
-                drone3d(aixs,x,y,z,color(a,127),angle/180*np.pi,led,acceleration)
-                drone3d(aixs,x,y,0,color(a,-127),angle/180*np.pi)
+                drone3d(aixs,x,y,z,color(a,127),angle/180*np.pi,led,acceleration,device=device)
+                drone3d(aixs,x,y,0,color(a,-127),angle/180*np.pi,device=device)
                 texts.append([str(a+1)+'('+str(int(x+0.5))+','+str(int(y+0.5))+','+str(int(z+0.5))+')',(0,140+30*a),0.5,c,1,'text'])
             texts.append(['T+'+str(int(t*1000)/1000),(0,80),0.5,(255,255,255),1,'text'])
             errors=[]#圈出错误的飞机
