@@ -213,7 +213,7 @@ def dots2led(dots,warns,end,fps=200):#将指令转化为灯光
     return(leds)
 
 
-def dots2line(file,fii=[],fps=200,points={}):#将指令转换为飞行轨迹
+def dots2line(file,fii=[],fps=200,points={},ignore_acc=False):#将指令转换为飞行轨迹
     dots,warns,time,end=read_xml(file,fii,points=points)
     '''for dot in dots:
         print(dot)
@@ -234,139 +234,45 @@ def dots2line(file,fii=[],fps=200,points={}):#将指令转换为飞行轨迹
     moving=False#是否有速度
     k=0
     k1=0
-    while(True):
-        for n in range(len(dots)):
-            if time-dots[n][0]>0 and dots[n][-1] in ['move2','move','land','moved']:
-                '''if n-k>1:
-                    #warnings.warn(str(int(time/100)/10)+"s:Action isn't completed.动作未完成。",Warning,3)
-                    #raise Warning(str(int(time/100)/10)+"s:Action isn't completed.动作未完成。")
-                    warns.append("In "+str(int(time/1000))+"s,action isn't completed.在"+str(int(time/1000))+"秒动作未完成。")'''
-                k1=n
-        k=k1
-        #print(k)
-        if dots[k][-1]=='move2':
-            X=float(dots[k][1])-x
-            Y=float(dots[k][2])-y
-            Z=float(dots[k][3])-z
-            vel=dots[k][4]
-            acc=dots[k][5]
-        elif dots[k][-1]=='move':
-            X=float(dots[k][1])
-            Y=float(dots[k][2])
-            Z=float(dots[k][3])
-            vel=dots[k][4]
-            acc=dots[k][5]
-        elif dots[k][-1]=='moved':
-            X=0
-            Y=0
-            Z=0
-            vel=dots[k][4]
-            acc=dots[k][5]
-        elif dots[k][-1]=='land':
-            X=0
-            Y=0
-            Z=-z
-            vel=200
-            acc=400
-        alenth=vel**2/(2*acc)#加速距离s=v^2/2a
-        R=(X**2+Y**2+Z**2)**0.5#(X,Y,Z)位移矢量
-        if R==0:
-            moving=False
-            if len(lines)>=len(angles):
-                angle=angles[-1][1]
-            else:
-                angle=angles[len(lines)][1]
-            if len(lines)>=len(leds):
-                led=leds[-1][1]
-            else:
-                led=leds[len(lines)][1]
-            lines.append((time,x,y,z,angle,led,acceleration))
-            #print('\r'+str((time,x,y,z)),end='')
-            a=0
-        if a==0 and R!=0:#静止初始状态
-            #Rs=[]
-            ast=time/1000#动作开始时间点
-            if R>=2*alenth:#距离是否大于全速加速减速的前进距离
-                slenth=alenth#实际加速距离
-                actiontime=ast+2*vel/acc+(R-2*alenth)/vel#动作结束时间点
-                acctime=vel/acc#加速时长
-            else:
-                slenth=R/2
-                actiontime=ast+2*(2*slenth/acc)**0.5
-                acctime=(2*slenth/acc)**0.5
-            moving=True
-            v=0
-            slow=False
-            while(moving):
-                if slow:#出现下一指令
-                    if v==0:
-                        x=x1
-                        y=y1
-                        z=z1
-                        acceleration=(0,0,0)
-                        #dots[k][-1]='moved'
-                        if len(lines)>=len(angles):
-                            angle=angles[-1][1]
-                        else:
-                            angle=angles[len(lines)][1]
-                        if len(lines)>=len(leds):
-                            led=leds[-1][1]
-                        else:
-                            led=leds[len(lines)][1]
-                        lines.append((time,x,y,z,angle,led,acceleration))
-                        #print(time)
-                        break
-                    if v-400/fps>0:
-                        r+=v/fps-200/(fps**2)
-                        v-=400/fps
-                        acceleration=(-400*X/R,-400*Y/R,-400*Z/R)
-                    else:
-                        r+=v**2/800
-                        v=0
-                        acceleration=(-400*X/R,-400*Y/R,-400*Z/R)
-                elif time/1000-ast<=acctime:#加速
-                    r=1/2*acc*(time/1000-ast)**2
-                    v=acc*(time/1000-ast)
-                    acceleration=(acc*X/R,acc*Y/R,acc*Z/R)
-                elif time/1000<actiontime-acctime:#匀速
-                    r=(slenth+vel*(time/1000-ast-acctime))
-                    v=vel
-                    acceleration=(0,0,0)
-                elif time/1000<actiontime:#减速
-                    r=R-1/2*acc*(actiontime-time/1000)**2
-                    v=acc*(actiontime-time/1000)
-                    acceleration=(-acc*X/R,-acc*Y/R,-acc*Z/R)
-                else:#停
-                    r=R
-                    if dots[k][-1]=='move2':
-                        x=float(dots[k][1])
-                        y=float(dots[k][2])
-                        z=float(dots[k][3])
-                        #dots[k][-1]='moved'
-                    elif dots[k][-1]=='move':
-                        x+=float(dots[k][1])
-                        y+=float(dots[k][2])
-                        z+=float(dots[k][3])
-                        dots[k][-1]='moved'
-                    elif dots[k][-1]=='land':
-                        z=0
-                    if len(lines)>=len(angles):
-                        angle=angles[-1][1]
-                    else:
-                        angle=angles[len(lines)][1]
-                    if len(lines)>=len(leds):
-                        led=leds[-1][1]
-                    else:
-                        led=leds[len(lines)][1]
-                    acceleration=(-acc*X/R,-acc*Y/R,-acc*Z/R)
-                    lines.append((time,x,y,z,angle,led,acceleration))
-                    acceleration=(0,0,0)
-                    #print('\r'+str((time,x,y,z)),end='')
-                    #print(time)
-                    break
-                x1=x+r*X/R
-                y1=y+r*Y/R
-                z1=z+r*Z/R
+    if not ignore_acc:
+        while(True):
+            for n in range(len(dots)):
+                if time-dots[n][0]>0 and dots[n][-1] in ['move2','move','land','moved']:
+                    '''if n-k>1:
+                        #warnings.warn(str(int(time/100)/10)+"s:Action isn't completed.动作未完成。",Warning,3)
+                        #raise Warning(str(int(time/100)/10)+"s:Action isn't completed.动作未完成。")
+                        warns.append("In "+str(int(time/1000))+"s,action isn't completed.在"+str(int(time/1000))+"秒动作未完成。")'''
+                    k1=n
+            k=k1
+            #print(k)
+            if dots[k][-1]=='move2':
+                X=float(dots[k][1])-x
+                Y=float(dots[k][2])-y
+                Z=float(dots[k][3])-z
+                vel=dots[k][4]
+                acc=dots[k][5]
+            elif dots[k][-1]=='move':
+                X=float(dots[k][1])
+                Y=float(dots[k][2])
+                Z=float(dots[k][3])
+                vel=dots[k][4]
+                acc=dots[k][5]
+            elif dots[k][-1]=='moved':
+                X=0
+                Y=0
+                Z=0
+                vel=dots[k][4]
+                acc=dots[k][5]
+            elif dots[k][-1]=='land':
+                X=0
+                Y=0
+                Z=-z
+                vel=200
+                acc=400
+            alenth=vel**2/(2*acc)#加速距离s=v^2/2a
+            R=(X**2+Y**2+Z**2)**0.5#(X,Y,Z)位移矢量
+            if R==0:
+                moving=False
                 if len(lines)>=len(angles):
                     angle=angles[-1][1]
                 else:
@@ -375,57 +281,332 @@ def dots2line(file,fii=[],fps=200,points={}):#将指令转换为飞行轨迹
                     led=leds[-1][1]
                 else:
                     led=leds[len(lines)][1]
-                lines.append((time,x1,y1,z1,angle,led,acceleration))
-                #print('\r'+str((time,x1,y1,z1)),end='')
-                time+=1000/fps
-                for n in range(len(dots)):
-                    if time-dots[n][0]>0 and dots[n][-1] in ['move2','move','land','moved']:
-                        if n-k>0:
-                            #warnings.warn(str(int(time/100)/10)+"s:Action isn't completed.动作未完成。",Warning,3)
-                            #raise Warning(str(int(time/100)/10)+"s:Action isn't completed.动作未完成。")
-                            warns.append("In "+str(int(time/1000))+"s,action isn't completed.在"+str(int(time/1000))+"秒动作未完成。")
-                            slow=True
-            #print(time/1000,x1,y1,z1)
-            #print(moving)
-        '''if moving:
-            if a==1:#加速状态
-                if R-(v+a/2)<slength:#加速是否结束
-                    if 
-        if v==vel:
-            a=0
-        else:
-        
+                lines.append((time,x,y,z,angle,led,acceleration))
+                #print('\r'+str((time,x,y,z)),end='')
+                a=0
+            if a==0 and R!=0:#静止初始状态
+                #Rs=[]
+                ast=time/1000#动作开始时间点
+                if R>=2*alenth:#距离是否大于全速加速减速的前进距离
+                    slenth=alenth#实际加速距离
+                    actiontime=ast+2*vel/acc+(R-2*alenth)/vel#动作结束时间点
+                    acctime=vel/acc#加速时长
+                else:
+                    slenth=R/2
+                    actiontime=ast+2*(2*slenth/acc)**0.5
+                    acctime=(2*slenth/acc)**0.5
+                moving=True
+                v=0
+                slow=False
+                while(moving):
+                    if slow:#出现下一指令
+                        if v==0:
+                            x=x1
+                            y=y1
+                            z=z1
+                            acceleration=(0,0,0)
+                            #dots[k][-1]='moved'
+                            if len(lines)>=len(angles):
+                                angle=angles[-1][1]
+                            else:
+                                angle=angles[len(lines)][1]
+                            if len(lines)>=len(leds):
+                                led=leds[-1][1]
+                            else:
+                                led=leds[len(lines)][1]
+                            lines.append((time,x,y,z,angle,led,acceleration))
+                            #print(time)
+                            break
+                        if v-400/fps>0:
+                            r+=v/fps-200/(fps**2)
+                            v-=400/fps
+                            acceleration=(-400*X/R,-400*Y/R,-400*Z/R)
+                        else:
+                            r+=v**2/800
+                            v=0
+                            acceleration=(-400*X/R,-400*Y/R,-400*Z/R)
+                    elif time/1000-ast<=acctime:#加速
+                        r=1/2*acc*(time/1000-ast)**2
+                        v=acc*(time/1000-ast)
+                        acceleration=(acc*X/R,acc*Y/R,acc*Z/R)
+                    elif time/1000<actiontime-acctime:#匀速
+                        r=(slenth+vel*(time/1000-ast-acctime))
+                        v=vel
+                        acceleration=(0,0,0)
+                    elif time/1000<actiontime:#减速
+                        r=R-1/2*acc*(actiontime-time/1000)**2
+                        v=acc*(actiontime-time/1000)
+                        acceleration=(-acc*X/R,-acc*Y/R,-acc*Z/R)
+                    else:#停
+                        r=R
+                        if dots[k][-1]=='move2':
+                            x=float(dots[k][1])
+                            y=float(dots[k][2])
+                            z=float(dots[k][3])
+                            #dots[k][-1]='moved'
+                        elif dots[k][-1]=='move':
+                            x+=float(dots[k][1])
+                            y+=float(dots[k][2])
+                            z+=float(dots[k][3])
+                            dots[k][-1]='moved'
+                        elif dots[k][-1]=='land':
+                            z=0
+                        if len(lines)>=len(angles):
+                            angle=angles[-1][1]
+                        else:
+                            angle=angles[len(lines)][1]
+                        if len(lines)>=len(leds):
+                            led=leds[-1][1]
+                        else:
+                            led=leds[len(lines)][1]
+                        acceleration=(-acc*X/R,-acc*Y/R,-acc*Z/R)
+                        lines.append((time,x,y,z,angle,led,acceleration))
+                        acceleration=(0,0,0)
+                        #print('\r'+str((time,x,y,z)),end='')
+                        #print(time)
+                        break
+                    x1=x+r*X/R
+                    y1=y+r*Y/R
+                    z1=z+r*Z/R
+                    if len(lines)>=len(angles):
+                        angle=angles[-1][1]
+                    else:
+                        angle=angles[len(lines)][1]
+                    if len(lines)>=len(leds):
+                        led=leds[-1][1]
+                    else:
+                        led=leds[len(lines)][1]
+                    lines.append((time,x1,y1,z1,angle,led,acceleration))
+                    #print('\r'+str((time,x1,y1,z1)),end='')
+                    time+=1000/fps
+                    for n in range(len(dots)):
+                        if time-dots[n][0]>0 and dots[n][-1] in ['move2','move','land','moved']:
+                            if n-k>0:
+                                #warnings.warn(str(int(time/100)/10)+"s:Action isn't completed.动作未完成。",Warning,3)
+                                #raise Warning(str(int(time/100)/10)+"s:Action isn't completed.动作未完成。")
+                                warns.append("In "+str(int(time/1000))+"s,action isn't completed.在"+str(int(time/1000))+"秒动作未完成。")
+                                slow=True
+                #print(time/1000,x1,y1,z1)
+                #print(moving)
+            '''if moving:
+                if a==1:#加速状态
+                    if R-(v+a/2)<slength:#加速是否结束
+                        if 
+            if v==vel:
+                a=0
+            else:
             
-        if R<=v:
-            x=dots[k][1]
-            y=dots[k][2]
-            z=dots[k][3]
-        else:
-            x+=X/R*v
-            y+=Y/R*v
-            z+=Z/R*v
-        #print(time/1000,x,y,z)'''
-        if k==len(dots)-1 or time>end:
-            m=-1
-            breakable=False
-            while True:
-                if dots[m][-1]=='land':
+                
+            if R<=v:
+                x=dots[k][1]
+                y=dots[k][2]
+                z=dots[k][3]
+            else:
+                x+=X/R*v
+                y+=Y/R*v
+                z+=Z/R*v
+            #print(time/1000,x,y,z)'''
+            if k==len(dots)-1 or time>end:
+                m=-1
+                breakable=False
+                while True:
+                    if dots[m][-1]=='land':
+                        break
+                    if len(dots[m])>3:
+                        if z==dots[m][3]:
+                            breakable=True
+                        break
+                    m-=1
+                if breakable:
                     break
-                if len(dots[m])>3:
-                    if z==dots[m][3]:
-                        breakable=True
+                if z==0:
                     break
-                m-=1
-            if breakable:
-                break
-            if z==0:
-                break
-        time+=1000/fps
+            time+=1000/fps
+    else:
+        while(True):
+            for n in range(len(dots)):
+                if time-dots[n][0]>0 and dots[n][-1] in ['move2','move','land','moved']:
+                    '''if n-k>1:
+                        #warnings.warn(str(int(time/100)/10)+"s:Action isn't completed.动作未完成。",Warning,3)
+                        #raise Warning(str(int(time/100)/10)+"s:Action isn't completed.动作未完成。")
+                        warns.append("In "+str(int(time/1000))+"s,action isn't completed.在"+str(int(time/1000))+"秒动作未完成。")'''
+                    k1=n
+            k=k1
+            #print(k)
+            if dots[k][-1]=='move2':
+                X=float(dots[k][1])-x
+                Y=float(dots[k][2])-y
+                Z=float(dots[k][3])-z
+                vel=dots[k][4]
+                acc=2.0**512
+            elif dots[k][-1]=='move':
+                X=float(dots[k][1])
+                Y=float(dots[k][2])
+                Z=float(dots[k][3])
+                vel=dots[k][4]
+                acc=2.0**512
+            elif dots[k][-1]=='moved':
+                X=0
+                Y=0
+                Z=0
+                vel=dots[k][4]
+                acc=2.0**512
+            elif dots[k][-1]=='land':
+                X=0
+                Y=0
+                Z=-z
+                vel=200
+                acc=2.0**512
+            alenth=vel**2/(2*acc)#加速距离s=v^2/2a
+            R=(X**2+Y**2+Z**2)**0.5#(X,Y,Z)位移矢量
+            if R==0:
+                moving=False
+                if len(lines)>=len(angles):
+                    angle=angles[-1][1]
+                else:
+                    angle=angles[len(lines)][1]
+                if len(lines)>=len(leds):
+                    led=leds[-1][1]
+                else:
+                    led=leds[len(lines)][1]
+                lines.append((time,x,y,z,angle,led,(0,0,0)))
+                #print('\r'+str((time,x,y,z)),end='')
+                a=0
+            if a==0 and R!=0:#静止初始状态
+                #Rs=[]
+                ast=time/1000#动作开始时间点
+                if R>=2*alenth:#距离是否大于全速加速减速的前进距离
+                    slenth=alenth#实际加速距离
+                    actiontime=ast+2*vel/acc+(R-2*alenth)/vel#动作结束时间点
+                    acctime=vel/acc#加速时长
+                else:
+                    slenth=R/2
+                    actiontime=ast+2*(2*slenth/acc)**0.5
+                    acctime=(2*slenth/acc)**0.5
+                moving=True
+                v=0
+                slow=False
+                while(moving):
+                    if slow:#出现下一指令
+                        if v==0:
+                            x=x1
+                            y=y1
+                            z=z1
+                            #dots[k][-1]='moved'
+                            if len(lines)>=len(angles):
+                                angle=angles[-1][1]
+                            else:
+                                angle=angles[len(lines)][1]
+                            if len(lines)>=len(leds):
+                                led=leds[-1][1]
+                            else:
+                                led=leds[len(lines)][1]
+                            lines.append((time,x,y,z,angle,led,(0,0,0)))
+                            #print(time)
+                            break
+                        if v-2.0**512/fps>0:
+                            r+=v/fps-2.0**512/2/(fps**2)
+                            v-=2.0**512/fps
+                        else:
+                            r+=v**2/2.0**512/2
+                            v=0
+                    elif time/1000-ast<=acctime:#加速
+                        r=1/2*acc*(time/1000-ast)**2
+                        v=acc*(time/1000-ast)
+                    elif time/1000<actiontime-acctime:#匀速
+                        r=(slenth+vel*(time/1000-ast-acctime))
+                        v=vel
+                    elif time/1000<actiontime:#减速
+                        r=R-1/2*acc*(actiontime-time/1000)**2
+                        v=acc*(actiontime-time/1000)
+                    else:#停
+                        r=R
+                        if dots[k][-1]=='move2':
+                            x=float(dots[k][1])
+                            y=float(dots[k][2])
+                            z=float(dots[k][3])
+                            #dots[k][-1]='moved'
+                        elif dots[k][-1]=='move':
+                            x+=float(dots[k][1])
+                            y+=float(dots[k][2])
+                            z+=float(dots[k][3])
+                            dots[k][-1]='moved'
+                        elif dots[k][-1]=='land':
+                            z=0
+                        if len(lines)>=len(angles):
+                            angle=angles[-1][1]
+                        else:
+                            angle=angles[len(lines)][1]
+                        if len(lines)>=len(leds):
+                            led=leds[-1][1]
+                        else:
+                            led=leds[len(lines)][1]
+                        lines.append((time,x,y,z,angle,led,(0,0,0)))
+                        #print('\r'+str((time,x,y,z)),end='')
+                        #print(time)
+                        break
+                    x1=x+r*X/R
+                    y1=y+r*Y/R
+                    z1=z+r*Z/R
+                    if len(lines)>=len(angles):
+                        angle=angles[-1][1]
+                    else:
+                        angle=angles[len(lines)][1]
+                    if len(lines)>=len(leds):
+                        led=leds[-1][1]
+                    else:
+                        led=leds[len(lines)][1]
+                    lines.append((time,x1,y1,z1,angle,led,(0,0,0)))
+                    #print('\r'+str((time,x1,y1,z1)),end='')
+                    time+=1000/fps
+                    for n in range(len(dots)):
+                        if time-dots[n][0]>0 and dots[n][-1] in ['move2','move','land','moved']:
+                            if n-k>0:
+                                #warnings.warn(str(int(time/100)/10)+"s:Action isn't completed.动作未完成。",Warning,3)
+                                #raise Warning(str(int(time/100)/10)+"s:Action isn't completed.动作未完成。")
+                                warns.append("In "+str(int(time/1000))+"s,action isn't completed.在"+str(int(time/1000))+"秒动作未完成。")
+                                slow=True
+                #print(time/1000,x1,y1,z1)
+                #print(moving)
+            '''if moving:
+                if a==1:#加速状态
+                    if R-(v+a/2)<slength:#加速是否结束
+                        if 
+            if v==vel:
+                a=0
+            else:
+            
+                
+            if R<=v:
+                x=dots[k][1]
+                y=dots[k][2]
+                z=dots[k][3]
+            else:
+                x+=X/R*v
+                y+=Y/R*v
+                z+=Z/R*v
+            #print(time/1000,x,y,z)'''
+            if k==len(dots)-1 or time>end:
+                m=-1
+                breakable=False
+                while True:
+                    if dots[m][-1]=='land':
+                        break
+                    if len(dots[m])>3:
+                        if z==dots[m][3]:
+                            breakable=True
+                        break
+                    m-=1
+                if breakable:
+                    break
+                if z==0:
+                    break
+            time+=1000/fps
     '''for t in range(10,120000,10):
         lines.append((time+t,x,y,z))'''
     return(lines,time*fps/1000,warns)
 
-def read_fii(path,getfeild=False,getdevice=False,fps=200):
+def read_fii(path,getfeild=False,getdevice=False,fps=200,ignore_acc=False):
     '''
     读入.fii文件
     path 所在文件夹的路径
@@ -479,7 +660,7 @@ def read_fii(path,getfeild=False,getdevice=False,fps=200):
         with open(path+'/动作组/'+drone+'/webCodeAll.xml', "r",encoding='utf-8') as F:
             file = F.read()
         #try:
-            line=dots2line(file,fii=[x,y],fps=fps,points=points)
+            line=dots2line(file,fii=[x,y],fps=fps,points=points,ignore_acc=ignore_acc)
             '''with open(name+'/动作组/'+drone+'line.csv','w',encoding='utf-8') as F:
                 F.write('time,x,y,z,angle\n')
                 for l in line[0]:
