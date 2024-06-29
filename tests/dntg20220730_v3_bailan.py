@@ -438,8 +438,8 @@ for d in ds:
 name = 'output/大闹天宫已摆烂'
 F=pf.Fii(name,ds,music='cjxq.mp3')
 F.save()
-data, t0, music = pf.read_fii(name,fps=60)
-pf.show(data, t0, music, save='dntg20220730_bailan', FPS=60,max_fps=60,skin=2)
+data, t0, music ,*_= pf.read_fii(name,fps=60)
+pf.show(data, t0, music, save='dntg20220730_bailan', FPS=60,max_fps=60,skin=2,size=3,ssaa=2)
 #pf.show(data,t0,music,save='dntg20220730_3D',ThreeD=True,imshow=[90,0],d=(600,450),FPS=25)
 
 

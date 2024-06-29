@@ -98,30 +98,30 @@ def draw_drone(img,x,y,color,a=0,led=(-1,-1,-1),up=False,skin=1,device="F400",si
                     cv2.circle(img,(int(x*size),int((y-1/2*7.6)*size)),5*size,led,-1)
         elif skin==2:
             if up:
-                red_square=np.array([[x+16*np.cos(a),y+16*np.sin(a)],[x+16*np.cos(a+np.pi/2),y+16*np.sin(a+np.pi/2)],[x+16*np.cos(a+np.pi),y+16*np.sin(a+np.pi)],[x+16*np.cos(a-np.pi/2),y+16*np.sin(a-np.pi/2)]],np.int32)
-                fu=[np.array([[x+((-7-6j)*cmath.e**(a*1j)).real,y+((-7-6j)*cmath.e**(a*1j)).imag],[x+((-6-5j)*cmath.e**(a*1j)).real,y+((-6-5j)*cmath.e**(a*1j)).imag]],np.int32),
-                np.array([[x+((-8-2j)*cmath.e**(a*1j)).real,y+((-8-2j)*cmath.e**(a*1j)).imag],[x+((-5-3j)*cmath.e**(a*1j)).real,y+((-5-3j)*cmath.e**(a*1j)).imag]],np.int32),
-                np.array([[x+((-5-3j)*cmath.e**(a*1j)).real,y+((-5-3j)*cmath.e**(a*1j)).imag],[x+((-8+3j)*cmath.e**(a*1j)).real,y+((-8+3j)*cmath.e**(a*1j)).imag]],np.int32),
-                np.array([[x+((-6-0j)*cmath.e**(a*1j)).real,y+((-6-0j)*cmath.e**(a*1j)).imag],[x+((-6+6j)*cmath.e**(a*1j)).real,y+((-6+6j)*cmath.e**(a*1j)).imag]],np.int32),
-                np.array([[x+((-6+1j)*cmath.e**(a*1j)).real,y+((-6+1j)*cmath.e**(a*1j)).imag],[x+((-5+2j)*cmath.e**(a*1j)).real,y+((-5+2j)*cmath.e**(a*1j)).imag]],np.int32),
-                np.array([[x+((-3-5j)*cmath.e**(a*1j)).real,y+((-3-5j)*cmath.e**(a*1j)).imag],[x+((5-5j)*cmath.e**(a*1j)).real,y+((5-5j)*cmath.e**(a*1j)).imag]],np.int32),
-                np.array([[x+((-2-3j)*cmath.e**(a*1j)).real,y+((-2-3j)*cmath.e**(a*1j)).imag],[x+((4-3j)*cmath.e**(a*1j)).real,y+((4-3j)*cmath.e**(a*1j)).imag],
-                [x+((4-1j)*cmath.e**(a*1j)).real,y+((4-1j)*cmath.e**(a*1j)).imag],[x+((-2-1j)*cmath.e**(a*1j)).real,y+((-2-1j)*cmath.e**(a*1j)).imag]],np.int32),
-                np.array([[x+((-3+1j)*cmath.e**(a*1j)).real,y+((-3+1j)*cmath.e**(a*1j)).imag],[x+((5+1j)*cmath.e**(a*1j)).real,y+((5+1j)*cmath.e**(a*1j)).imag],
-                [x+((5+5j)*cmath.e**(a*1j)).real,y+((5+5j)*cmath.e**(a*1j)).imag],[x+((-3+5j)*cmath.e**(a*1j)).real,y+((-3+5j)*cmath.e**(a*1j)).imag]],np.int32),
-                np.array([[x+((-3+3j)*cmath.e**(a*1j)).real,y+((-3+3j)*cmath.e**(a*1j)).imag],[x+((5+3j)*cmath.e**(a*1j)).real,y+((5+3j)*cmath.e**(a*1j)).imag]],np.int32),
-                np.array([[x+((1+1j)*cmath.e**(a*1j)).real,y+((1+1j)*cmath.e**(a*1j)).imag],[(x+(1+5j)*cmath.e**(a*1j)).real,y+((1+5j)*cmath.e**(a*1j)).imag]],np.int32)]
+                red_square=(np.array([[x+16*np.cos(a),y+16*np.sin(a)],[x+16*np.cos(a+np.pi/2),y+16*np.sin(a+np.pi/2)],[x+16*np.cos(a+np.pi),y+16*np.sin(a+np.pi)],[x+16*np.cos(a-np.pi/2),y+16*np.sin(a-np.pi/2)]],np.float32)*size).astype(np.int32)
+                fu=[(np.array([[x+((-7-6j)*cmath.e**(a*1j)).real,y+((-7-6j)*cmath.e**(a*1j)).imag],[x+((-6-5j)*cmath.e**(a*1j)).real,y+((-6-5j)*cmath.e**(a*1j)).imag]],np.float32)*size).astype(np.int32),
+                (np.array([[x+((-8-2j)*cmath.e**(a*1j)).real,y+((-8-2j)*cmath.e**(a*1j)).imag],[x+((-5-3j)*cmath.e**(a*1j)).real,y+((-5-3j)*cmath.e**(a*1j)).imag]],np.float32)*size).astype(np.int32),
+                (np.array([[x+((-5-3j)*cmath.e**(a*1j)).real,y+((-5-3j)*cmath.e**(a*1j)).imag],[x+((-8+3j)*cmath.e**(a*1j)).real,y+((-8+3j)*cmath.e**(a*1j)).imag]],np.float32)*size).astype(np.int32),
+                (np.array([[x+((-6-0j)*cmath.e**(a*1j)).real,y+((-6-0j)*cmath.e**(a*1j)).imag],[x+((-6+6j)*cmath.e**(a*1j)).real,y+((-6+6j)*cmath.e**(a*1j)).imag]],np.float32)*size).astype(np.int32),
+                (np.array([[x+((-6+1j)*cmath.e**(a*1j)).real,y+((-6+1j)*cmath.e**(a*1j)).imag],[x+((-5+2j)*cmath.e**(a*1j)).real,y+((-5+2j)*cmath.e**(a*1j)).imag]],np.float32)*size).astype(np.int32),
+                (np.array([[x+((-3-5j)*cmath.e**(a*1j)).real,y+((-3-5j)*cmath.e**(a*1j)).imag],[x+((5-5j)*cmath.e**(a*1j)).real,y+((5-5j)*cmath.e**(a*1j)).imag]],np.float32)*size).astype(np.int32),
+                (np.array([[x+((-2-3j)*cmath.e**(a*1j)).real,y+((-2-3j)*cmath.e**(a*1j)).imag],[x+((4-3j)*cmath.e**(a*1j)).real,y+((4-3j)*cmath.e**(a*1j)).imag],
+                [x+((4-1j)*cmath.e**(a*1j)).real,y+((4-1j)*cmath.e**(a*1j)).imag],[x+((-2-1j)*cmath.e**(a*1j)).real,y+((-2-1j)*cmath.e**(a*1j)).imag]],np.float32)*size).astype(np.int32),
+                (np.array([[x+((-3+1j)*cmath.e**(a*1j)).real,y+((-3+1j)*cmath.e**(a*1j)).imag],[x+((5+1j)*cmath.e**(a*1j)).real,y+((5+1j)*cmath.e**(a*1j)).imag],
+                [x+((5+5j)*cmath.e**(a*1j)).real,y+((5+5j)*cmath.e**(a*1j)).imag],[x+((-3+5j)*cmath.e**(a*1j)).real,y+((-3+5j)*cmath.e**(a*1j)).imag]],np.float32)*size).astype(np.int32),
+                (np.array([[x+((-3+3j)*cmath.e**(a*1j)).real,y+((-3+3j)*cmath.e**(a*1j)).imag],[x+((5+3j)*cmath.e**(a*1j)).real,y+((5+3j)*cmath.e**(a*1j)).imag]],np.float32)*size).astype(np.int32),
+                (np.array([[x+((1+1j)*cmath.e**(a*1j)).real,y+((1+1j)*cmath.e**(a*1j)).imag],[(x+(1+5j)*cmath.e**(a*1j)).real,y+((1+5j)*cmath.e**(a*1j)).imag]],np.float32)*size).astype(np.int32)]
                 img=cv2.fillPoly(img,[red_square],color=[0,0,255])
-                img=cv2.polylines(img,fu,isClosed=True,color=[0,0,0],thickness=1)
+                img=cv2.polylines(img,fu,isClosed=True,color=[0,0,0],thickness=size)
             else:
-                cv2.ellipse(img,(int(x+21/(2**0.5)/2),int(y-1/4*7.6)),(8,2),0,0,360,color,1)
-                cv2.ellipse(img,(int(x-21/(2**0.5)/2),int(y-1/4*7.6)),(8,2),0,0,360,color,1)
-                cv2.ellipse(img,(int(x-21/(2**0.5)/2),int(y-3/4*7.6)),(8,2),0,0,360,color,1)
-                cv2.ellipse(img,(int(x+21/(2**0.5)/2),int(y-3/4*7.6)),(8,2),0,0,360,color,1)
-                cv2.line(img,(int(x+21/(2**0.5)/2),int(y-1/4*7.6)),(int(x-21/(2**0.5)/2),int(y-3/4*7.6)),color,1)
-                cv2.line(img,(int(x-21/(2**0.5)/2),int(y-1/4*7.6)),(int(x+21/(2**0.5)/2),int(y-3/4*7.6)),color,1)
+                cv2.ellipse(img,(int((x+21/(2**0.5)/2)*size),int((y-1/4*7.6)*size)),(8*size,2*size),0,0,360,color,size)
+                cv2.ellipse(img,(int((x-21/(2**0.5)/2)*size),int((y-1/4*7.6)*size)),(8*size,2*size),0,0,360,color,size)
+                cv2.ellipse(img,(int((x-21/(2**0.5)/2)*size),int((y-3/4*7.6)*size)),(8*size,2*size),0,0,360,color,size)
+                cv2.ellipse(img,(int((x+21/(2**0.5)/2)*size),int((y-3/4*7.6)*size)),(8*size,2*size),0,0,360,color,size)
+                cv2.line(img,(int((x+21/(2**0.5)/2)*size),int((y-1/4*7.6)*size)),(int((x-21/(2**0.5)/2)*size),int((y-3/4*7.6)*size)),color,size)
+                cv2.line(img,(int((x-21/(2**0.5)/2)*size),int((y-1/4*7.6)*size)),(int((x+21/(2**0.5)/2)*size),int((y-3/4*7.6)*size)),color,size)
                 if led[0]>-1:
-                    cv2.circle(img,(int(x),int(y-1/2*7.6)),5,led,-1)
+                    cv2.circle(img,(int(x*size),int((y-1/2*7.6)*size)),5*size,led,-1)
     elif device=="F600":
         if up:
             cv2.circle(img,(int((x-12.6/2*np.cos(np.pi/4+a))*size),int((y+12.6/2*np.sin(np.pi/4+a))*size)),5*size,color,size)
