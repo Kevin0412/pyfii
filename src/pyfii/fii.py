@@ -362,7 +362,7 @@ class Fii6:
   <AreaH AreaH="300" />
 ''')
             if len(self.music)>0:
-                file.write('<MusicName path="'+self.music.split('.')[0].split('/')[-1]+'" />')
+                file.write('  <MusicName path="'+self.music.split('.')[0].split('/')[-1]+'" />')
                 file.write('\n')
             k=1
             for d in self.ds:

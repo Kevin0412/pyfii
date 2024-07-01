@@ -8,7 +8,7 @@ import pyfii as pf
 d1=pf.Drone6(40,40,pf.drone_config_4m)
 d1.ip="192.168.51.51"
 
-d1.takeoff(1,80)
+d1.takeoff(1,100)
 
 d1.inittime(4)
 d1.VelXY(200,400)

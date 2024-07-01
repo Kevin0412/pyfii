@@ -19,7 +19,7 @@ for d,y in zip(ds,range(60,360,120)):
     d.Y=y
     
     # 起飞
-    d.takeoff(1,80)
+    d.takeoff(1,100)
 
     # 4秒开始动作
     d.inittime(4)

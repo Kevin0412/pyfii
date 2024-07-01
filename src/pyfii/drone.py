@@ -110,7 +110,8 @@ class LightAction:
 
 drone_config_6m={
     'xyRange':(0,560), # xy坐标范围，单位cm
-    'zRange':(80,250), # z坐标范围，单位cm
+    'zRangeF400':(80,250), # F400的z坐标范围，单位cm
+    'zRangeF600':(100,250), # F400的z坐标范围，单位cm
     'velRange':(20,200), # 速度范围，单位cm/s
     'accRange':(50,400), # 加速度范围，单位cm/s^2
     'ArateRange':(5,60), # 角速度范围，单位°/s
@@ -118,7 +119,8 @@ drone_config_6m={
 
 drone_config_4m={
     'xyRange':(0,360),
-    'zRange':(80,250),
+    'zRangeF400':(80,250),
+    'zRangeF600':(100,250),
     'velRange':(20,200),
     'accRange':(50,400),
     'ArateRange':(5,60),
@@ -204,7 +206,7 @@ class Drone:
         self.time=time*1000
         self.x,self.y=self.X,self.Y
         self.X,self.Y=self.X,self.Y
-        if self.outRange(z,'zRange') or self.outRange(self.X,'xyRange') or self.outRange(self.Y,'xyRange') or time<1:
+        if self.outRange(z,'zRangeF400') or self.outRange(self.X,'xyRange') or self.outRange(self.Y,'xyRange') or time<1:
             raise Exception("Out of range.超出范围。")
         def take_off_callback(self,time,z):
             self.z =z
@@ -316,7 +318,7 @@ inittime('''+str(time)+''')
         范围:x,y:0~560,z:80~250
         必须在inittime(time)中
         """
-        if self.outRange(x,'xyRange') or self.outRange(y,'xyRange') or self.outRange(z,'zRange'):
+        if self.outRange(x,'xyRange') or self.outRange(y,'xyRange') or self.outRange(z,'zRangeF400'):
             raise Exception("Out of range.超出范围。")
         self.x, self.y, self.z = x, y, z
         def move2_callback(self, x, y, z):
@@ -1026,12 +1028,12 @@ class Drone6:
         """
         起飞(x坐标,y坐标,起飞高度)
         单位:cm
-        范围:80~250
+        范围:100~250
         """
         self.time=time*1000
         self.x,self.y=self.X,self.Y
         self.X,self.Y=self.X,self.Y
-        if self.outRange(z,'zRange') or self.outRange(self.X,'xyRange') or self.outRange(self.Y,'xyRange') or time<1:
+        if self.outRange(z,'zRangeF600') or self.outRange(self.X,'xyRange') or self.outRange(self.Y,'xyRange') or time<1:
             raise Exception("Out of range.超出范围。")
         def take_off_callback(self,time,z):
             self.z =z
@@ -1140,10 +1142,10 @@ inittime('''+str(time)+''')
         """
         直线移动至(x坐标,y坐标,z坐标)
         单位:cm
-        范围:x,y:0~560,z:80~250
+        范围:x,y:0~560,z:100~250
         必须在inittime(time)中
         """
-        if self.outRange(x,'xyRange') or self.outRange(y,'xyRange') or self.outRange(z,'zRange'):
+        if self.outRange(x,'xyRange') or self.outRange(y,'xyRange') or self.outRange(z,'zRangeF600'):
             raise Exception("Out of range.超出范围。")
         self.x, self.y, self.z = x, y, z
         def move2_callback(self, x, y, z):
