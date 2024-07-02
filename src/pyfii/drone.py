@@ -936,18 +936,18 @@ inittime('''+str(time)+''')
             spaces='  '*(self.space+self.block)
             if self.inT:
                 self.outputString += spaces+'''<next>
-    '''
+'''
                 self.block+=1
                 spaces+='  '
             self.outputString += spaces+'''<block type="Goertek_LEDHorseRacel">
-    '''
+'''
             for c in range(12):
                 self.outputString += spaces+'''  <field name="color'''+str(c+1)+'''">'''+colors[c%len(colors)]+'''</field>
-    '''
+'''
             self.block+=1
             self.inT=True
             self.outpy+='''HorseRace('''+str(colors)+''')
-    '''
+'''
         if timestamp is None:
             self.append_action(DroneAction(HorseRace_callback, [self, colors], timestamp))
         else:
@@ -1051,7 +1051,7 @@ class Drone6:
                 <field name="delay">0</field>
                 <field name="time">'''+str(time*1000)+'''</field>
                 <next>
-                  <block type="Goertek_TakeOff">
+                  <block type="Goertek_TakeOff2">
                     <field name="alt">'''+str(z)+'''</field>
 '''
             self.block+=6
@@ -1124,7 +1124,7 @@ inittime('''+str(time)+''')
             spaces='  '*(self.space+self.block)
             if self.inT:
                 self.outputString += spaces+'''<next>
-    '''
+'''
                 self.block+=1
                 spaces+='  '
             self.outputString += spaces+'''<block type="Goertek_Move">
@@ -1153,10 +1153,10 @@ inittime('''+str(time)+''')
             spaces='  '*(self.space+self.block)
             if self.inT:
                 self.outputString += spaces+'''<next>
-    '''
+'''
                 self.block+=1
                 spaces+='  '
-            self.outputString += spaces+'''<block type="Goertek_MoveToCoord">
+            self.outputString += spaces+'''<block type="Goertek_MoveToCoord2">
 '''+spaces+'''  <field name="X">'''+str(x)+'''</field>
 '''+spaces+'''  <field name="Y">'''+str(y)+'''</field>
 '''+spaces+'''  <field name="Z">'''+str(z)+'''</field>
@@ -1539,11 +1539,11 @@ inittime('''+str(time)+''')
                 spaces+='  '
             if state:
                 self.outputString += spaces+'''<block type="Goertek_Magnet">
-  <field name="magnetSwich">on</field>
+'''+spaces+'''  <field name="magnetSwich">on</field>
 '''
             else:
                 self.outputString += spaces+'''<block type="Goertek_Magnet">
-  <field name="magnetSwich">off</field>
+'''+spaces+'''  <field name="magnetSwich">off</field>
 '''
             self.block+=1
             self.inT=True
@@ -1566,7 +1566,7 @@ inittime('''+str(time)+''')
                 self.block+=1
                 spaces+='  '
             self.outputString += spaces+'''<block type="Goertek_LEDTurnOnAllSingleColor2">
-  <field name="color1">'''+color+'''</field>
+'''+spaces+'''  <field name="color1">'''+color+'''</field>
 '''
             self.block+=1
             self.inT=True
