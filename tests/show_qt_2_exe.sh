@@ -1,0 +1,1 @@
+pyinstaller --onefile --add-binary C:\\ffmpeg\\bin:ffmpeg --paths src tests\\show_qt.py
