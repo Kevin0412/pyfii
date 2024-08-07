@@ -606,11 +606,16 @@ def dots2line(file,fii=[],fps=200,points={},ignore_acc=False):#将指令转换�
         lines.append((time+t,x,y,z))'''
     return(lines,time*fps/1000,warns)
 
-def read_fii(path,getfield=False,getdevice=False,fps=200,ignore_acc=False):
+def read_fii(path,getfield=None,getdevice=None,fps=200,ignore_acc=False):
     '''
     读入.fii文件
     path 所在文件夹的路径
     '''
+    if getfield!=None:
+        warnings.warn('getfield argument can be ingored since pyfii1.6.0. pyfii1.6.0及以后版本可忽略getfield参数。',Warning)
+    if getdevice!=None:
+        warnings.warn('getdevice argument can be ingored since pyfii1.6.0. pyfii1.6.0及以后版本可忽略getdevice参数。',Warning)
+    
     DeviceType = None
     field = None
     time_start=time.time()

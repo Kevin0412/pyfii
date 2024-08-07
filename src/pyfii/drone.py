@@ -211,14 +211,15 @@ class DroneBase:
         time=timeSec
         self.time=time*1000
         self.x,self.y=self.X,self.Y
-        self.X,self.Y=self.X,self.Y
+        self.z =z
         if self.outRange(z,'zRange') or self.outRange(self.X,'xyRange') or self.outRange(self.Y,'xyRange') or time<1:
             raise Exception("Out of range.超出范围。")
-        def take_off_callback(self,time,z):
+        def take_off_callback(self,time,z,x,y):
+            if self.X!=x or self.Y!=y:
+                raise Exception("Take off place has been changed after takeoff. 起飞位置在起飞后更改了。")
             self.z =z
-            self.x,self.y=self.X,self.Y
-            self.X,self.Y=self.X,self.Y
-            self.outputString+='''  <block type="Goertek_Start" x="'''+str(self.X)+'''" y="'''+str(self.Y)+'''">
+            self.x,self.y=x,y
+            self.outputString+='''  <block type="Goertek_Start" x="'''+str(x)+'''" y="'''+str(y)+'''">
     <next>
       <block type="block_inittime">
         <field name="time">00:00</field>
@@ -238,7 +239,7 @@ class DroneBase:
             self.space=4
             self.outpy+='''takeoff('''+str(time)+''','''+str(z)+''')
 '''
-        self.append_action(DroneAction(take_off_callback, [self, time, z], timestamp))
+        self.append_action(DroneAction(take_off_callback, [self, time, z, self.X, self.Y], timestamp))
 
     def intime(self,timeSec:int, timestamp = None) -> None:
         """

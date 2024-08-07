@@ -83,16 +83,16 @@ for d,y in zip(ds,range(40,560,80)):
     d.end()
 
 # 保存
-path='output/group_flight_6m_2'
-F=pf.Fii(path,ds)
-F.save(field=6)
+name='output/group_flight_6m_2'
+F=pf.Fii(name,ds)
+F.save()
 
 # 读取
-data,t0,music,field,*_=pf.read_fii(path,getfield=True)
+data,t0,music,field,device,*_=pf.read_fii(name)
 # 储存二维模拟视频
-pf.show(data,t0,music,field=field,save=path,FPS=25)
+pf.show(data,t0,music,field=field,device=device,save=name,FPS=25)
 # 储存三维模拟视频
-pf.show(data,t0,music,field=field,save=path+'_3D',ThreeD=True,imshow=[90,0],d=(600,450),FPS=25)
+pf.show(data,t0,music,field=field,device=device,save=name+'_3D',ThreeD=True,imshow=[90,0],d=(600,550),FPS=25)
 
 '''
 如果在实际飞行中三架无人机保持在一条直线上，

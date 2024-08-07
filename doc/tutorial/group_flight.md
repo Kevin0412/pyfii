@@ -98,11 +98,11 @@
     5. 模拟
         ```python
         # 读取
-        data,t0,music,field=pf.read_fii(name,getfield=True)
+        data,t0,music,field,device,*_=pf.read_fii(name)
         # 储存二维模拟视频
-        pf.show(data,t0,music,field=field,save=name,FPS=25)
+        pf.show(data,t0,music,field=field,device=device,save=name,FPS=25)
         # 储存三维模拟视频
-        pf.show(data,t0,music,field=field,save=name+'_3D',ThreeD=True,imshow=[90,0],d=(600,450),FPS=25)
+        pf.show(data,t0,music,field=field,device=device,save=name+'_3D',ThreeD=True,imshow=[90,0],d=(600,550),FPS=25)
         ```
 
 2. 4m毯
@@ -114,10 +114,10 @@
 
     2. 新建
         ```python
-        # 三架F400,4m毯
-        d1=pf.Drone(0,0,pf.drone_config_4m)
-        d2=pf.Drone(0,0,pf.drone_config_4m)
-        d3=pf.Drone(0,0,pf.drone_config_4m)
+        # 三架F600,4m毯
+        d1=pf.Drone6(0,0,pf.drone_config_4m)
+        d2=pf.Drone6(0,0,pf.drone_config_4m)
+        d3=pf.Drone6(0,0,pf.drone_config_4m)
 
         # 无人机列表
         ds=[d1,d2,d3]
@@ -131,7 +131,7 @@
             d.Y=y
             
             # 起飞
-            d.takeoff(1,80)
+            d.takeoff(1,100)
 
             # 4秒开始动作
             d.inittime(4)
@@ -143,47 +143,31 @@
             # 移动至(340,y,250)
             d.move2(340,y,250)
             # 全部亮黄灯
-            d.TurnOnAll('#ffff00')
+            d.AllOn('#ffff00')
             # 等待500ms
             # t = v / a = 200cm/s / 400cm/s^2 = 0.5s = 500ms
             d.delay(500)
             # 全部亮绿灯
-            d.TurnOnAll((0,255,0))
-            # 等待1312ms
+            d.AllOn((0,255,0))
+            # 等待1267ms
             # t = s_匀速 / v = ( s_总 - s_加速 - s_减速 ) / v
             # = ( sqrt ( ( x_1 - x_0 ) ^ 2 + ( y_1 - y_0 ) ^ 2 + ( z_1 - z_0 ) ^ 2 ) - v ^ 2 / a ) / v
-            # = ( sqrt ( ( 340cm - 20cm ) ^ 2 + ( y - y ) ^2 + ( 250cm - 80cm ) ^ 2 ) - 200cm/s ^ 2 / 400cm/s^2 ) / 200cm/s
-            # = 1.312s = 1312ms
-            d.delay(1312)
+            # = ( sqrt ( ( 340cm - 20cm ) ^ 2 + ( y - y ) ^2 + ( 250cm - 100cm ) ^ 2 ) - 200cm/s ^ 2 / 400cm/s^2 ) / 200cm/s
+            # = 1.267s = 1267ms
+            d.delay(1267)
             # 全部亮黄灯
-            d.TurnOnAll([
-                '#ffff00','#ffff00','#ffff00','#ffff00',
-                '#ffff00','#ffff00','#ffff00','#ffff00',
-                '#ffff00','#ffff00','#ffff00','#ffff00'
-            ])
+            d.AllOn('#ffff00')
             # 等待500ms
             # t = v / a = 200cm/s / 400cm/s^2 = 0.5s = 500ms
             d.delay(500)
             # 全部亮红灯
-            d.TurnOnAll([
-                (255,0,0),(255,0,0),(255,0,0),(255,0,0),
-                (255,0,0),(255,0,0),(255,0,0),(255,0,0),
-                (255,0,0),(255,0,0),(255,0,0),(255,0,0)
-            ])
+            d.AllOn((255,0,0))
 
             # 8秒开始动作
             d.inittime(8)
-            # 快速闪烁所有灯(红黄绿交替)
-            d.BlinkFastAll(['#ff0000',(255,255,0),'#00ff00'])
-            '''
-            相当于
-            d.BlinkFastAll([
-                '#ff0000',(255,255,0),'#00ff00',
-                '#ff0000',(255,255,0),'#00ff00',
-                '#ff0000',(255,255,0),'#00ff00',
-                '#ff0000',(255,255,0),'#00ff00'
-            ])
-            '''
+            # 全部熄灭
+            d.AllOff()
+
             # 降落
             d.land()
 
@@ -201,9 +185,9 @@
     5. 模拟
         ```python
         # 读取
-        data,t0,music,field=pf.read_fii(name,getfield=True)
+        data,t0,music,field,device,*_=pf.read_fii(name)
         # 储存二维模拟视频
-        pf.show(data,t0,music,field=field,save=name,FPS=25)
+        pf.show(data,t0,music,field=field,device=device,save=name,FPS=25)
         # 储存三维模拟视频
-        pf.show(data,t0,music,field=field,save=name+'_3D',ThreeD=True,imshow=[90,0],d=(600,550),FPS=25)
+        pf.show(data,t0,music,field=field,device=device,save=name+'_3D',ThreeD=True,imshow=[90,0],d=(600,550),FPS=25)
         ```

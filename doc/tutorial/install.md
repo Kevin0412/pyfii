@@ -10,11 +10,11 @@
     
     在参照视频配置完成后，你需要了解基本的conda命令
 
-        conda create -n 环境名 python=3.9
+        conda create -n 环境名 python=3.10
 
     环境名比如 : pyfii_env
 
-    这个命令创建了一个名叫`环境名`的虚拟环境，且python版本为3.9
+    这个命令创建了一个名叫`环境名`的虚拟环境，且python版本为3.10及以上
 
         conda env list
 
@@ -28,7 +28,7 @@
 
     在你当前创建的环境下使用pip install命令安装pyfii
 
-        pip install -i https://pypi.org/simple pyfii==1.5
+        pip install -i https://pypi.org/simple pyfii==1.6
 
     这个命令会从pypi官网下载pyfii
 

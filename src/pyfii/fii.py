@@ -37,7 +37,9 @@ class Fii:
             except Exception as e:
                 logging.exception(e)
 
-    def save(self,infii=False,addlights=False,field=6):
+    def save(self,infii=False,addlights=False,field=None):
+        if field!=None:
+            warnings.warn('field argument can be ingored since pyfii1.6.0. pyfii1.6.0及以后版本可忽略feild参数。',Warning)
         if not addlights:
             if infii:
                 file=open(self.name+'.fii',"w",encoding='utf-8')
@@ -62,6 +64,13 @@ class Fii:
                         raise(Exception("F400 and F600 can't fly together. F400与F600不能一起飞。"))
             else:
                 raise(Exception("Error Drone Type! 无人机型号不支持"))
+            
+            if self.ds[0].config['xyRange'][1]==560:
+                field=6
+            elif self.ds[0].config['xyRange'][1]==360:
+                field=4
+            else:
+                raise(Exception("Error field size! 地毯大小有误"))
 
             file.write('''  <AreaL AreaL="'''+str(field)+'''00" />
   <AreaW AreaW="'''+str(field)+'''00" />
