@@ -352,7 +352,7 @@ inittime('''+str(time)+''')
 '''
         self.append_action(DroneAction(move2_callback, [self, x,y,z], timestamp))
 
-    def delay(self, timeMs:float, timestamp = None) -> None:
+    def delay(self, timeMs:int, timestamp = None) -> None:
         """
         等待(时间)
         单位:ms
@@ -1099,7 +1099,7 @@ class Drone6(DroneBase):
         else:
             self.append_light(DroneAction(BodyOff_callback, [self], timestamp, order))
 
-    def AllBlink(self, color:Color, dur:float, delay:float, bright:int, timestamp = None, order='before') -> None:
+    def AllBlink(self, color:Color, dur:int, delay:int, bright:int, timestamp = None, order='before') -> None:
         """
         飞机灯光先变为color亮度为bright,持续dur ms,再关闭delay ms
         bright: {1,2,3,4,5}
@@ -1134,7 +1134,7 @@ class Drone6(DroneBase):
         else:
             self.append_light(DroneAction(AllBlink_callback, [self, color, dur, delay, bright], timestamp, order))
 
-    def AllBreath(self, color:Color, dur:float, delay:float, bright:int, timestamp = None, order='before') -> None:
+    def AllBreath(self, color:Color, dur:int, delay:int, bright:int, timestamp = None, order='before') -> None:
         """
         飞机灯光先在dur ms逐渐变为color,亮度为bright,然后在delay ms逐渐变暗
         bright: {1,2,3,4,5}
@@ -1169,7 +1169,7 @@ class Drone6(DroneBase):
         else:
             self.append_light(DroneAction(AllBreath_callback, [self, color, dur, delay, bright], timestamp, order))
 
-    def BodyBlink(self, color:Color, dur:float, delay:float, bright:int, timestamp = None, order='before') -> None:
+    def BodyBlink(self, color:Color, dur:int, delay:int, bright:int, timestamp = None, order='before') -> None:
         """
         机身灯光先变为color亮度为bright,持续dur ms,再关闭delay ms
         bright: {1,2,3,4,5}
@@ -1204,7 +1204,7 @@ class Drone6(DroneBase):
         else:
             self.append_light(DroneAction(BodyBlink_callback, [self, color, dur, delay, bright], timestamp, order))
 
-    def BodyBreath(self, color:Color, dur:float, delay:float, bright:int, timestamp = None, order='before') -> None:
+    def BodyBreath(self, color:Color, dur:int, delay:int, bright:int, timestamp = None, order='before') -> None:
         """
         机身灯光先在dur ms逐渐变为color,亮度为bright,然后在delay ms逐渐变暗
         bright: {1,2,3,4,5}
@@ -1297,7 +1297,7 @@ class Drone6(DroneBase):
         else:
             self.append_light(DroneAction(MotorOff_callback, [self, motor], timestamp, order))
 
-    def MotorBlink(self, motor:int, color:Color, dur:float, delay:float, bright:int, timestamp = None, order='before') -> None:
+    def MotorBlink(self, motor:int, color:Color, dur:int, delay:int, bright:int, timestamp = None, order='before') -> None:
         """
         电机motor灯光先变为color亮度为bright,持续dur ms,再关闭delay ms
         motor:{0,1,2,3,4}其中0表示all
@@ -1334,7 +1334,7 @@ class Drone6(DroneBase):
         else:
             self.append_light(DroneAction(MotorBlink_callback, [self, motor, color, dur, delay, bright], timestamp, order))
 
-    def MotorBreath(self, motor:int, color:Color, dur:float, delay:float, bright:int, timestamp = None, order='before') -> None:
+    def MotorBreath(self, motor:int, color:Color, dur:int, delay:int, bright:int, timestamp = None, order='before') -> None:
         """
         电机motor灯光先在dur ms逐渐变为color,亮度为bright,然后在delay ms逐渐变暗
         motor:{0,1,2,3,4}其中0表示all
@@ -1370,3 +1370,34 @@ class Drone6(DroneBase):
             self.append_action(DroneAction(MotorBreath_callback, [self, motor, color, dur, delay, bright], timestamp))
         else:
             self.append_light(DroneAction(MotorBreath_callback, [self, motor, color, dur, delay, bright], timestamp, order))
+
+    def MotorHorse(self, colors:Colors, clock:bool, delay:int, timestamp = None, order='before') -> None:
+        """
+        clock==True:四个电机电机灯光变为colors,然后灯光顺时针转圈,转一圈时间为delay ms
+        clock==False:四个电机电机灯光变为colors,然后灯光逆时针转圈,转一圈时间为delay ms
+        """
+        delay=int(delay+0.5)
+        normalize_colors(colors)
+        def MotorHorse_callback(self, colors, clock, delay):
+            spaces='  '*(self.space+self.block)
+            if self.inT:
+                self.outputString += spaces+'''<next>
+'''
+                self.block+=1
+                spaces+='  '
+            self.outputString += spaces+'''<block type="Goertek_LEDHorseALL4">
+'''
+            for c in range(4):
+                self.outputString += spaces+'''  <field name="color'''+str(c+1)+'''">'''+colors[c%len(colors)]+'''</field>
+'''
+            self.outputString += spaces+'''  <field name="clock">'''+str(clock)+'''</field>
+'''+spaces+'''  <field name="delay">'''+str(delay)+'''</field>
+'''
+            self.block+=1
+            self.inT=True
+            self.outpy+='''MotorHorse('''+str(colors)+','+str(clock)+','+str(delay)+''')
+'''
+        if timestamp is None:
+            self.append_action(DroneAction(MotorHorse_callback, [self, colors, clock, delay], timestamp))
+        else:
+            self.append_light(LightAction(MotorHorse_callback, [self, colors, clock, delay], timestamp, order))
