@@ -1022,7 +1022,7 @@ class Drone6(DroneBase):
 '''
             self.block+=1
             self.inT=True
-            self.outpy+='''AllOn()
+            self.outpy+='''AllOn('''+str(color)+''')
 '''
         if timestamp is None:
             self.append_action(DroneAction(AllOn_callback, [self, color], timestamp))
@@ -1070,7 +1070,7 @@ class Drone6(DroneBase):
 '''
             self.block+=1
             self.inT=True
-            self.outpy+='''BodyOn()
+            self.outpy+='''BodyOn('''+str(color)+''')
 '''
         if timestamp is None:
             self.append_action(DroneAction(BodyOn_callback, [self, color], timestamp))
@@ -1098,3 +1098,201 @@ class Drone6(DroneBase):
             self.append_action(DroneAction(BodyOff_callback, [self], timestamp))
         else:
             self.append_light(DroneAction(BodyOff_callback, [self], timestamp, order))
+
+    def AllBlink(self, color:Color, dur:float, delay:float, bright:int, timestamp = None, order='before') -> None:
+        """
+        飞机灯光先变为color亮度为bright,持续dur ms,再关闭delay ms
+        bright: {1,2,3,4,5}
+        """
+        bright=int(bright+0.5)
+        dur=int(dur+0.5)
+        delay=int(delay+0.5)
+        if bright not in range(1,6):
+            raise Exception("Out of range.超出范围。")
+        checkcolor(color)
+        def AllBlink_callback(self, color, dur, delay, bright):
+            if type(color)==tuple:
+                color=rgb2str(color)
+            spaces='  '*(self.space+self.block)
+            if self.inT:
+                self.outputString += spaces+'''<next>
+'''
+                self.block+=1
+                spaces+='  '
+            self.outputString += spaces+'''<block type="Goertek_LEDBlinkALL2">
+'''+spaces+'''  <field name="color1">'''+color+'''</field>
+'''+spaces+'''  <field name="bright">'''+str(bright/5)+'''</field>
+'''+spaces+'''  <field name="dur">'''+str(dur)+'''</field>
+'''+spaces+'''  <field name="delay">'''+str(delay)+'''</field>
+'''
+            self.block+=1
+            self.inT=True
+            self.outpy+='''AllBlink('''+str(color)+','+str(dur)+','+str(delay)+','+str(bright)+''')
+'''
+        if timestamp is None:
+            self.append_action(DroneAction(AllBlink_callback, [self, color, dur, delay, bright], timestamp))
+        else:
+            self.append_light(DroneAction(AllBlink_callback, [self, color, dur, delay, bright], timestamp, order))
+
+    def AllBreath(self, color:Color, dur:float, delay:float, bright:int, timestamp = None, order='before') -> None:
+        """
+        飞机灯光先在dur ms逐渐变为color,亮度为bright,然后在delay ms逐渐变暗
+        bright: {1,2,3,4,5}
+        """
+        bright=int(bright+0.5)
+        dur=int(dur+0.5)
+        delay=int(delay+0.5)
+        if bright not in range(1,6):
+            raise Exception("Out of range.超出范围。")
+        checkcolor(color)
+        def AllBreath_callback(self, color, dur, delay, bright):
+            if type(color)==tuple:
+                color=rgb2str(color)
+            spaces='  '*(self.space+self.block)
+            if self.inT:
+                self.outputString += spaces+'''<next>
+'''
+                self.block+=1
+                spaces+='  '
+            self.outputString += spaces+'''<block type="Goertek_LEDBreathALL2">
+'''+spaces+'''  <field name="dur">'''+str(dur)+'''</field>
+'''+spaces+'''  <field name="color1">'''+color+'''</field>
+'''+spaces+'''  <field name="bright">'''+str(bright/5)+'''</field>
+'''+spaces+'''  <field name="delay">'''+str(delay)+'''</field>
+'''
+            self.block+=1
+            self.inT=True
+            self.outpy+='''AllBreath('''+str(color)+','+str(dur)+','+str(delay)+','+str(bright)+''')
+'''
+        if timestamp is None:
+            self.append_action(DroneAction(AllBreath_callback, [self, color, dur, delay, bright], timestamp))
+        else:
+            self.append_light(DroneAction(AllBreath_callback, [self, color, dur, delay, bright], timestamp, order))
+
+    def BodyBlink(self, color:Color, dur:float, delay:float, bright:int, timestamp = None, order='before') -> None:
+        """
+        机身灯光先变为color亮度为bright,持续dur ms,再关闭delay ms
+        bright: {1,2,3,4,5}
+        """
+        bright=int(bright+0.5)
+        dur=int(dur+0.5)
+        delay=int(delay+0.5)
+        if bright not in range(1,6):
+            raise Exception("Out of range.超出范围。")
+        checkcolor(color)
+        def BodyBlink_callback(self, color, dur, delay, bright):
+            if type(color)==tuple:
+                color=rgb2str(color)
+            spaces='  '*(self.space+self.block)
+            if self.inT:
+                self.outputString += spaces+'''<next>
+'''
+                self.block+=1
+                spaces+='  '
+            self.outputString += spaces+'''<block type="Goertek_LEDBlinkALL3">
+'''+spaces+'''  <field name="color1">'''+color+'''</field>
+'''+spaces+'''  <field name="bright">'''+str(bright/5)+'''</field>
+'''+spaces+'''  <field name="dur">'''+str(dur)+'''</field>
+'''+spaces+'''  <field name="delay">'''+str(delay)+'''</field>
+'''
+            self.block+=1
+            self.inT=True
+            self.outpy+='''BodyBlink('''+str(color)+','+str(dur)+','+str(delay)+','+str(bright)+''')
+'''
+        if timestamp is None:
+            self.append_action(DroneAction(BodyBlink_callback, [self, color, dur, delay, bright], timestamp))
+        else:
+            self.append_light(DroneAction(BodyBlink_callback, [self, color, dur, delay, bright], timestamp, order))
+
+    def BodyBreath(self, color:Color, dur:float, delay:float, bright:int, timestamp = None, order='before') -> None:
+        """
+        机身灯光先在dur ms逐渐变为color,亮度为bright,然后在delay ms逐渐变暗
+        bright: {1,2,3,4,5}
+        """
+        bright=int(bright+0.5)
+        dur=int(dur+0.5)
+        delay=int(delay+0.5)
+        if bright not in range(1,6):
+            raise Exception("Out of range.超出范围。")
+        checkcolor(color)
+        def BodyBreath_callback(self, color, dur, delay, bright):
+            if type(color)==tuple:
+                color=rgb2str(color)
+            spaces='  '*(self.space+self.block)
+            if self.inT:
+                self.outputString += spaces+'''<next>
+'''
+                self.block+=1
+                spaces+='  '
+            self.outputString += spaces+'''<block type="Goertek_LEDBreathALL3">
+'''+spaces+'''  <field name="dur">'''+str(dur)+'''</field>
+'''+spaces+'''  <field name="color1">'''+color+'''</field>
+'''+spaces+'''  <field name="bright">'''+str(bright/5)+'''</field>
+'''+spaces+'''  <field name="delay">'''+str(delay)+'''</field>
+'''
+            self.block+=1
+            self.inT=True
+            self.outpy+='''BodyBreath('''+str(color)+','+str(dur)+','+str(delay)+','+str(bright)+''')
+'''
+        if timestamp is None:
+            self.append_action(DroneAction(BodyBreath_callback, [self, color, dur, delay, bright], timestamp))
+        else:
+            self.append_light(DroneAction(BodyBreath_callback, [self, color, dur, delay, bright], timestamp, order))
+
+    def MotorOn(self, motor:int, color:Color, timestamp = None, order='before') -> None:
+        """
+        电机motor灯光变为color
+        motor:{0,1,2,3,4}其中0表示all
+        """
+        if motor not in range(5):
+            raise Exception("Out of range.超出范围。")
+        checkcolor(color)
+        def MotorOn_callback(self, motor, color):
+            if type(color)==tuple:
+                color=rgb2str(color)
+            spaces='  '*(self.space+self.block)
+            if self.inT:
+                self.outputString += spaces+'''<next>
+'''
+                self.block+=1
+                spaces+='  '
+            self.outputString += spaces+'''<block type="Goertek_LEDTurnOnAllSingleColor4">
+'''+spaces+'''  <field name="motor">'''+str(motor)+'''</field>
+'''+spaces+'''  <field name="color1">'''+color+'''</field>
+'''
+            self.block+=1
+            self.inT=True
+            self.outpy+='''MotorOn('''+str(motor)+','+str(color)+''')
+'''
+        if timestamp is None:
+            self.append_action(DroneAction(MotorOn_callback, [self, motor, color], timestamp))
+        else:
+            self.append_light(DroneAction(MotorOn_callback, [self, motor, color], timestamp, order))
+
+    def MotorOff(self, motor:int, timestamp = None, order='before') -> None:
+        """
+        关闭电机motor灯光
+        motor:{0,1,2,3,4}其中0表示all
+        """
+        if motor not in range(5):
+            raise Exception("Out of range.超出范围。")
+        def MotorOff_callback(self, motor):
+            if type(color)==tuple:
+                color=rgb2str(color)
+            spaces='  '*(self.space+self.block)
+            if self.inT:
+                self.outputString += spaces+'''<next>
+'''
+                self.block+=1
+                spaces+='  '
+            self.outputString += spaces+'''<block type="Goertek_LEDTurnOffAll4">
+'''+spaces+'''  <field name="motor">'''+str(motor)+'''</field>
+'''
+            self.block+=1
+            self.inT=True
+            self.outpy+='''MotorOff('''+str(motor)+''')
+'''
+        if timestamp is None:
+            self.append_action(DroneAction(MotorOff_callback, [self, motor], timestamp))
+        else:
+            self.append_light(DroneAction(MotorOff_callback, [self, motor], timestamp, order))
