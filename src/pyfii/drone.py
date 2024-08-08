@@ -1005,7 +1005,7 @@ class Drone6(DroneBase):
     
     def AllOn(self, color:Color, timestamp = None, order='before') -> None:
         """
-        全部点亮
+        飞机灯光变为color
         """
         checkcolor(color)
         def AllOn_callback(self,color):
@@ -1031,7 +1031,7 @@ class Drone6(DroneBase):
 
     def AllOff(self, timestamp = None, order='before') -> None:
         """
-        全部熄灭
+        关闭飞机灯光
         """
         def AllOff_callback(self):
             spaces='  '*(self.space+self.block)
@@ -1050,3 +1050,51 @@ class Drone6(DroneBase):
             self.append_action(DroneAction(AllOff_callback, [self], timestamp))
         else:
             self.append_light(DroneAction(AllOff_callback, [self], timestamp, order))
+
+    def BodyOn(self, color:Color, timestamp = None, order='before') -> None:
+        """
+        机身灯光变为color
+        """
+        checkcolor(color)
+        def BodyOn_callback(self,color):
+            if type(color)==tuple:
+                color=rgb2str(color)
+            spaces='  '*(self.space+self.block)
+            if self.inT:
+                self.outputString += spaces+'''<next>
+'''
+                self.block+=1
+                spaces+='  '
+            self.outputString += spaces+'''<block type="Goertek_LEDTurnOnAllSingleColor3">
+'''+spaces+'''  <field name="color1">'''+color+'''</field>
+'''
+            self.block+=1
+            self.inT=True
+            self.outpy+='''BodyOn()
+'''
+        if timestamp is None:
+            self.append_action(DroneAction(BodyOn_callback, [self, color], timestamp))
+        else:
+            self.append_light(LightAction(BodyOn_callback, [self, color], timestamp, order))
+
+    def BodyOff(self, timestamp = None, order='before') -> None:
+        """
+        关闭机身灯光
+        """
+        def BodyOff_callback(self):
+            spaces='  '*(self.space+self.block)
+            if self.inT:
+                self.outputString += spaces+'''<next>
+'''
+                self.block+=1
+                spaces+='  '
+            self.outputString += spaces+'''<block type="Goertek_LEDTurnOffAll3">
+'''
+            self.block+=1
+            self.inT=True
+            self.outpy+='''BodyOff()
+'''
+        if timestamp is None:
+            self.append_action(DroneAction(BodyOff_callback, [self], timestamp))
+        else:
+            self.append_light(DroneAction(BodyOff_callback, [self], timestamp, order))
