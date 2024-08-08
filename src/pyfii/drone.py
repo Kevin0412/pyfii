@@ -1003,7 +1003,7 @@ class Drone6(DroneBase):
 '''
         self.append_action(DroneAction(magnet_callback, [self, state], timestamp))
     
-    def AllOn(self,color:Color, timestamp = None) -> None:
+    def AllOn(self, color:Color, timestamp = None, order='before') -> None:
         """
         全部点亮
         """
@@ -1024,9 +1024,12 @@ class Drone6(DroneBase):
             self.inT=True
             self.outpy+='''AllOn()
 '''
-        self.append_action(DroneAction(AllOn_callback, [self, color], timestamp))
+        if timestamp is None:
+            self.append_action(DroneAction(AllOn_callback, [self, color], timestamp))
+        else:
+            self.append_light(LightAction(AllOn_callback, [self, color], timestamp, order))
 
-    def AllOff(self,timestamp = None) -> None:
+    def AllOff(self, timestamp = None, order='before') -> None:
         """
         全部熄灭
         """
@@ -1043,4 +1046,7 @@ class Drone6(DroneBase):
             self.inT=True
             self.outpy+='''AllOff()
 '''
-        self.append_action(DroneAction(AllOff_callback, [self], timestamp))
+        if timestamp is None:
+            self.append_action(DroneAction(AllOff_callback, [self], timestamp))
+        else:
+            self.append_light(DroneAction(AllOff_callback, [self], timestamp, order))
