@@ -236,7 +236,7 @@ def getGui(field,size):
     cv2.putText(img,'right',(600*size,530*size), font, size,(255,255,255),size)
     return img
 
-def show(data,t0,music,field=6,device="F400",show=True,save="",FPS=200,max_fps=200,ThreeD=False,imshow=[120,-15],d=(600,450),track=[],skin=1,size=0,ssaa=1):
+def show(data,t0,music,field=6,device="F400",show=True,save="",FPS=200,max_fps=200,ThreeD=False,imshow=[120,-15],d=(600,450),track=[],skin=1,size=1,ssaa=1):
     size=int(size)
     ssaa=int(ssaa)
     if size==0:
