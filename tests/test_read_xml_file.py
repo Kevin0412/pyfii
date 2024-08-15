@@ -1,27 +1,38 @@
 import xml.etree.ElementTree as ET
 
-# 假设你的XML数据存储在xml_data变量中
-with open("output/大闹天宫/动作组/动作组1/webCodeAll.xml", "r",encoding='utf-8') as F:
-    xml_data = F.read()
+# 解析一个XML文件
+def getXml(filename:str) -> list:
+    tree = ET.parse(filename)
+    root = tree.getroot()
 
-# 解析XML数据
-root = ET.fromstring(xml_data)
+    result=[]
 
-# 获取所有block的类型
-block_types = [block.get('type') for block in root.iter('block') if 'type' in block.attrib]
+    #file=open("read_xml.csv",'w')
+    #file.write("tag,text,attrib\n")
+    # 遍历所有元素
+    def recursive_traversal(element):
+        # 处理当前元素
+        #print(element.tag, element.text, element.attrib)
+        result.append({})
+        result[-1]["tag"]=element.tag
+        result[-1]["text"]=element.text
+        result[-1]["attrib"]=element.attrib
+        #file.write('"')
+        #file.write(element.tag)
+        #file.write('","')
+        #file.write(str(element.text))
+        #file.write('","')
+        #file.write(str(element.attrib))
+        #file.write('"\n')
 
-# 打印block类型
-print("Block types found in the XML:")
-for block_type in block_types:
-    print(block_type)
+        # 递归遍历所有子元素
+        for child in element:
+            recursive_traversal(child)
 
-# 如果你想获取特定字段的值，例如所有'Goertek_LEDTurnOnAllSingleColor2' block的'color1'字段
-color1_values = []
-for block in root.iter('block'):
-    if block.get('type') == 'Goertek_LEDTurnOnAllSingleColor2' and 'color1' in block.attrib:
-        color1_values.append(block.get('color1'))
+    # 从根元素开始递归遍历
+    recursive_traversal(root)
+    #file.close()
+    return result
 
-# 打印color1的值
-print("\nColor1 values for 'Goertek_LEDTurnOnAllSingleColor2' blocks:")
-for color in color1_values:
-    print(color)
+if __name__=="__main__":
+    print(getXml("output/大闹天宫/动作组/动作组1/webCodeAll.xml"))

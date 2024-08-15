@@ -13,3 +13,4 @@ gui.png
 .history
 *.spec
 build
+*.csv
