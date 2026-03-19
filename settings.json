@@ -1,7 +1,7 @@
 {
-    "video_generate": true,
+    "video_generate": false,
     "video_framerate": 20,
-    "operation_framerate": 20,
+    "operation_framerate": 200,
     "render_mode": 0,
     "observer_yaw": 90,
     "observer_pitch": 3,

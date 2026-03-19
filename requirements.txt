@@ -1,4 +1,4 @@
-opencv-python >= 4.9.*
+opencv-python >= 4.9
 pyqt5
 tqdm
 numpy == 1.*

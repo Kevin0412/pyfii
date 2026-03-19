@@ -410,9 +410,9 @@ name = 'output/大闹天宫'
 F=pf.Fii(name,ds,music='云宫迅音_缩混3.mp3')
 F.save()
 data, t0, music,*_ = pf.read_fii(name,fps=60)
-#pf.show(data, t0, music,max_fps=60,skin=1,device="F600",ssaa=2)
+pf.show(data, t0, music,max_fps=60,skin=1,device="F400")
 #pf.show(data, t0, music, save='dntg20220730', FPS=60,max_fps=60,skin=1,size=3,ssaa=2)
-pf.show(data,t0,music,save='dntg20220730_3D',ThreeD=True,imshow=[90,3],d=(600,500),FPS=60,max_fps=60)
+#pf.show(data,t0,music,save='dntg20220730_3D',ThreeD=True,imshow=[90,3],d=(600,500),FPS=60,max_fps=60)
 #pf.show(data, t0, music, save='dntg20220730_f600', FPS=60,max_fps=60,skin=1,device="F600")
 #pf.show(data,t0,music,save='dntg20220730_f600_3D',ThreeD=True,imshow=[90,3],d=(600,500),FPS=60,max_fps=60,device="F600")
 

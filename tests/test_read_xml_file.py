@@ -7,23 +7,10 @@ def getXml(filename:str) -> list:
 
     result=[]
 
-    #file=open("read_xml.csv",'w')
-    #file.write("tag,text,attrib\n")
     # 遍历所有元素
     def recursive_traversal(element):
         # 处理当前元素
-        #print(element.tag, element.text, element.attrib)
-        result.append({})
-        result[-1]["tag"]=element.tag
-        result[-1]["text"]=element.text
-        result[-1]["attrib"]=element.attrib
-        #file.write('"')
-        #file.write(element.tag)
-        #file.write('","')
-        #file.write(str(element.text))
-        #file.write('","')
-        #file.write(str(element.attrib))
-        #file.write('"\n')
+        result.append(element)
 
         # 递归遍历所有子元素
         for child in element:
@@ -31,7 +18,6 @@ def getXml(filename:str) -> list:
 
     # 从根元素开始递归遍历
     recursive_traversal(root)
-    #file.close()
     return result
 
 if __name__=="__main__":
