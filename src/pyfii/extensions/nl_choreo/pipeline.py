@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import json
 import re
+import shutil
 import subprocess
 import sys
 from dataclasses import dataclass, field
@@ -302,6 +303,8 @@ def _ensure_render_project(out_dir: Path, program_file: Path, force: bool = Fals
     project_dir = out_dir / "nl_choreo_output"
     if project_dir.exists() and not force:
         return
+    if project_dir.exists() and force:
+        shutil.rmtree(project_dir)
     proc = subprocess.run(
         [sys.executable, str(program_file)],
         cwd=str(Path.cwd()),
@@ -312,6 +315,31 @@ def _ensure_render_project(out_dir: Path, program_file: Path, force: bool = Fals
         raise RuntimeError(f"generated program execution failed: {proc.stderr.strip()}")
     if not project_dir.exists():
         raise RuntimeError("generated program finished but nl_choreo_output is missing")
+
+
+def _probe_video_duration_sec(video_path: str) -> float:
+    # 读取视频时长，供分段窗口与实际渲染长度对齐
+    proc = subprocess.run(
+        [
+            "ffprobe",
+            "-v",
+            "error",
+            "-show_entries",
+            "format=duration",
+            "-of",
+            "json",
+            video_path,
+        ],
+        capture_output=True,
+        text=True,
+    )
+    if proc.returncode != 0:
+        return 0.0
+    try:
+        payload = json.loads(proc.stdout or "{}")
+    except Exception:
+        return 0.0
+    return float((payload.get("format") or {}).get("duration") or 0.0)
 
 
 def _coerce_duration_if_needed(analysis: MusicAnalysis, force_duration_sec: float | None) -> MusicAnalysis:
@@ -418,6 +446,19 @@ def _normalize_generated_program_text(program_text: str, expected_fps: int) -> s
     # 兼容 intime 写法，并补齐 FPS
     normalized = program_text
     normalized = re.sub(r"\.intime\(", ".inittime(", normalized)
+
+    # 自动修正不合规的 inittime：首个 >=4，且全局不回退
+    prev_init = 4
+
+    def _fix_inittime(match: re.Match[str]) -> str:
+        nonlocal prev_init
+        raw = int(match.group(1))
+        fixed = max(4, raw, prev_init)
+        prev_init = fixed
+        return f".inittime({fixed})"
+
+    normalized = re.sub(r"\.inittime\((\d+)\)", _fix_inittime, normalized)
+
     if f"FPS={expected_fps}" not in normalized:
         normalized = re.sub(
             r"FPS\s*=\s*\d+",
@@ -452,7 +493,7 @@ def _validate_generated_program_text(program_text: str, expected_fps: int) -> li
     errors: list[str] = []
     lower = program_text.lower()
 
-    required_tokens = ["takeoff(", ".velxy(", ".velz(", ".move2(", ".land()", ".end()"]
+    required_tokens = ["takeoff(", ".inittime(", ".velxy(", ".velz(", ".move2(", ".land()", ".end()"]
     for token in required_tokens:
         if token not in lower:
             errors.append(f"missing required action token: {token}")
@@ -697,6 +738,7 @@ def _generate_program_stepwise_with_qwen(
     except Exception:
         step_plan_text = "Step1: 强化队形变化并增加动作频率"
 
+    successful_steps = 0
     for step_idx in range(1, max(1, int(config.qwen_action_steps)) + 1):
         _log_progress(f"direct step {step_idx}/{config.qwen_action_steps}")
         step_prompt = _build_action_step_prompt(
@@ -739,6 +781,7 @@ def _generate_program_stepwise_with_qwen(
                     },
                 )
                 current_code = candidate
+                successful_steps += 1
                 step_ok = True
                 break
             except Exception as exc:
@@ -755,7 +798,10 @@ def _generate_program_stepwise_with_qwen(
                     "errors": last_errors,
                 },
             )
-            break
+            continue
+
+    if successful_steps == 0:
+        raise RuntimeError("direct stepwise generation produced no valid step")
 
     program_file.write_text(current_code, encoding="utf-8")
     _ensure_render_project(out_dir, program_file, force=True)
@@ -802,6 +848,33 @@ def _render_full_videos(out_dir: Path, config: PipelineConfig, tag: str) -> tupl
         return full_video_2d, full_video_3d, True, field, device, frame_count_hint, render_warnings
 
 
+def _align_segments_to_video_duration(segments: list[SegmentSpec], video_duration_sec: float) -> list[SegmentSpec]:
+    # 分段窗口必须与实际渲染视频长度对齐，避免尾段切片越界
+    if video_duration_sec <= 0:
+        return segments
+    aligned: list[SegmentSpec] = []
+    prev_start = 0.0
+    max_end = max(0.05, video_duration_sec - 0.01)
+    for idx, seg in enumerate(segments):
+        start = max(0.0, min(float(seg.start), max_end))
+        start = max(start, prev_start)
+        if idx == len(segments) - 1:
+            end = max(start + 0.05, max_end)
+        else:
+            end = max(start + 0.05, min(float(seg.end), max_end))
+        prev_start = start
+        aligned.append(
+            SegmentSpec(
+                segment_id=seg.segment_id,
+                scene_id=seg.scene_id,
+                start=start,
+                end=end,
+                tracks=seg.tracks,
+            )
+        )
+    return aligned
+
+
 def _render_and_inspect_round(
     out_dir: Path,
     config: PipelineConfig,
@@ -825,6 +898,9 @@ def _render_and_inspect_round(
     merged_changed: set[str] = set()
     should_regen = False
     frozen = frozen_segment_ids or set()
+
+    effective_duration = _probe_video_duration_sec(full_video_2d)
+    segments = _align_segments_to_video_duration(segments, effective_duration)
 
     for seg in segments:
         if seg.segment_id in frozen:

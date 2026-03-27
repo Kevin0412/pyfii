@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import json
 import subprocess
 import warnings
 
@@ -55,12 +56,36 @@ def cut_video_segment(source_video: str, output_video: str, start_sec: float, en
     if end_sec <= start_sec:
         raise ValueError("end_sec must be greater than start_sec")
 
-    duration = max(0.05, end_sec - start_sec)
+    src_probe = subprocess.run(
+        [
+            "ffprobe",
+            "-v",
+            "error",
+            "-show_entries",
+            "format=duration",
+            "-of",
+            "json",
+            source_video,
+        ],
+        capture_output=True,
+        text=True,
+    )
+    if src_probe.returncode != 0:
+        raise RuntimeError(f"ffprobe failed for source: {src_probe.stderr.strip()}")
+    src_info = json.loads(src_probe.stdout or "{}")
+    src_duration = float((src_info.get("format") or {}).get("duration") or 0.0)
+    if src_duration <= 0.0:
+        raise RuntimeError(f"source video duration invalid: {source_video}")
+
+    safe_start = max(0.0, min(float(start_sec), max(0.0, src_duration - 0.05)))
+    safe_end = max(safe_start + 0.05, min(float(end_sec), src_duration))
+    duration = max(0.05, safe_end - safe_start)
+
     cmd = [
         "ffmpeg",
         "-y",
         "-ss",
-        f"{start_sec:.3f}",
+        f"{safe_start:.3f}",
         "-i",
         source_video,
         "-t",
@@ -70,6 +95,14 @@ def cut_video_segment(source_video: str, output_video: str, start_sec: float, en
         "libx264",
         "-pix_fmt",
         "yuv420p",
+        "-profile:v",
+        "baseline",
+        "-level",
+        "3.1",
+        "-g",
+        "30",
+        "-bf",
+        "0",
         "-movflags",
         "+faststart",
         output_video,
@@ -77,6 +110,29 @@ def cut_video_segment(source_video: str, output_video: str, start_sec: float, en
     proc = subprocess.run(cmd, capture_output=True, text=True)
     if proc.returncode != 0:
         raise RuntimeError(f"cut segment failed: {proc.stderr.strip()}")
+
+    probe = subprocess.run(
+        [
+            "ffprobe",
+            "-v",
+            "error",
+            "-select_streams",
+            "v:0",
+            "-show_entries",
+            "stream=codec_name,codec_type,width,height,r_frame_rate",
+            "-of",
+            "json",
+            output_video,
+        ],
+        capture_output=True,
+        text=True,
+    )
+    if probe.returncode != 0:
+        raise RuntimeError(f"ffprobe failed for segment: {probe.stderr.strip()}")
+    info = json.loads(probe.stdout or "{}")
+    streams = info.get("streams", [])
+    if not streams:
+        raise RuntimeError(f"segment has no video stream: {output_video}")
     return output_video
 
 
