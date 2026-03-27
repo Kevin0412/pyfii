@@ -7,9 +7,13 @@ import warnings
 
 import cv2
 import numpy as np
-import pyautogui
 import pygame
 import tqdm
+
+try:
+    import pyautogui
+except Exception:
+    pyautogui = None
 from ffmpy import FFmpeg
 
 from .cv3d import IIID, IIID2
@@ -243,12 +247,15 @@ def show(data,t0,music,field=6,device="F400",show=True,save="",FPS=200,max_fps=2
         if len(save)>0:
             size=1
         else:
-            screenWidth, screenHeight = pyautogui.size()
-            while screenHeight>600*size/ssaa and screenWidth>1200*size/ssaa:
-                size+=1
-            size-=1
-            while (600*size)%ssaa!=0:
+            if pyautogui is None:
+                size = 1
+            else:
+                screenWidth, screenHeight = pyautogui.size()
+                while screenHeight>600*size/ssaa and screenWidth>1200*size/ssaa:
+                    size+=1
                 size-=1
+                while (600*size)%ssaa!=0:
+                    size-=1
     font=cv2.FONT_HERSHEY_SIMPLEX
     t0=int(t0+0.5)+3*max_fps
     if len(save)>0 and not ThreeD:  # save 2D video
