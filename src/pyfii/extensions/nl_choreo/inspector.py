@@ -29,7 +29,7 @@ def build_visual_prompt(vibe_target: str) -> str:
         "5. 表演气质是否符合目标描述\n"
         "6. 节奏视觉上是否和时间规划基本一致\n\n"
         "用户目标：" + vibe_target + "\n\n"
-        "请输出 JSON："
+        "请仅输出 JSON，不要输出 markdown 代码块："
         "{\"issues\":[{\"segment_id\":\"SG01\",\"severity\":\"low|medium|high\",\"detail\":\"...\",\"recommendation_zh\":\"...\"}],\"suggest_regenerate\":true|false}"
     )
 
@@ -52,10 +52,21 @@ def _extract_text_from_response(resp: dict[str, Any]) -> str:
     return ""
 
 
+def _strip_code_block(text: str) -> str:
+    # 兼容模型返回 markdown 代码块的情况
+    t = text.strip()
+    if t.startswith("```"):
+        lines = t.splitlines()
+        if len(lines) >= 3 and lines[-1].strip().startswith("```"):
+            return "\n".join(lines[1:-1]).strip()
+    return t
+
+
 def parse_inspection_response(text: str) -> InspectionReport:
     # 解析 JSON 结果，失败时降级为单条问题
+    normalized = _strip_code_block(text)
     try:
-        data = json.loads(text)
+        data = json.loads(normalized)
         issues = [
             SegmentIssue(
                 segment_id=str(item.get("segment_id", "SG00")),
@@ -70,7 +81,7 @@ def parse_inspection_response(text: str) -> InspectionReport:
         fallback = SegmentIssue(
             segment_id="SG00",
             severity="medium",
-            detail=text[:500],
+            detail=normalized[:500],
             recommendation_zh="请人工确认后再进行局部重生成。",
         )
         return InspectionReport(issues=[fallback], suggest_regenerate=True)

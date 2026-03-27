@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+from copy import deepcopy
 from dataclasses import dataclass
 
 from .contracts import InspectionReport, SegmentSpec
@@ -15,12 +16,20 @@ class RefineResult:
     changed_segment_ids: list[str]
 
 
-def refine_segments(segments: list[SegmentSpec], report: InspectionReport) -> RefineResult:
-    # 简化版局部修正：按问题段降低速度并增加缓冲
+def refine_segments(
+    segments: list[SegmentSpec],
+    report: InspectionReport,
+    allowed_segment_ids: set[str] | None = None,
+) -> RefineResult:
+    # 局部修正：仅修改指定问题段，且默认深拷贝避免原地污染
     issue_segments = {issue.segment_id for issue in report.issues}
+    if allowed_segment_ids is not None:
+        issue_segments = issue_segments.intersection(allowed_segment_ids)
+
+    cloned = deepcopy(segments)
     changed: list[str] = []
 
-    for seg in segments:
+    for seg in cloned:
         if seg.segment_id not in issue_segments:
             continue
         for track in seg.tracks:
@@ -32,4 +41,4 @@ def refine_segments(segments: list[SegmentSpec], report: InspectionReport) -> Re
                     op.args[0] = int(op.args[0]) + 120
         changed.append(seg.segment_id)
 
-    return RefineResult(updated_segments=segments, changed_segment_ids=sorted(set(changed)))
+    return RefineResult(updated_segments=cloned, changed_segment_ids=sorted(set(changed)))
