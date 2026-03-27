@@ -25,6 +25,7 @@ class TestNlChoreoPipelineFullLoop(unittest.TestCase):
                 self.field = 6
                 self.device = "F400"
                 self.frame_count_hint = 100
+                self.warnings = []
 
         class _I:
             def __init__(self, regenerate, issues=None):
@@ -44,7 +45,7 @@ class TestNlChoreoPipelineFullLoop(unittest.TestCase):
             energy_curve=[0.1, 0.2, 0.8],
             climax_ranges=[(44.0, 58.0)],
         )
-        mock_render_project.side_effect = lambda project_path, save_path, fps=25: _R(save_path + ".mp4")
+        mock_render_project.side_effect = lambda project_path, save_path, fps=25, three_d=False: _R(save_path + ".mp4")
         mock_cut_segment.side_effect = lambda source_video, output_video, start_sec, end_sec: output_video
 
         # 第一轮建议重生（含无效段号 SG00，需归一到当前段），第二轮通过

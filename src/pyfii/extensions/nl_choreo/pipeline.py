@@ -19,7 +19,7 @@ from .inspector import InspectInput, inspect_with_qwen
 from .qwen_client import QwenConfig, QwenVideoClient
 from .refiner import refine_segments
 from .renderer import cut_video_segment, render_project
-from .safety import validate_duration, validate_fleet_rule, validate_segment_specs
+from .safety import summarize_render_distance_warnings, validate_duration, validate_fleet_rule, validate_segment_specs
 
 
 @dataclass
@@ -231,23 +231,35 @@ def _render_and_inspect_round(
     project_path = str(out_dir / "nl_choreo_output")
     full_save = str(out_dir / f"render_round_{round_idx:02d}")
 
-    full_video: str
+    full_video_2d: str
+    full_video_3d: str
     fallback_used = False
     field = 6
     device = config.fleet_type
     frame_count_hint = 0
-    try:
-        full_result = render_project(project_path=project_path, save_path=full_save, fps=25)
-        full_video = full_result.output_video
-        field = full_result.field
-        device = full_result.device
-        frame_count_hint = full_result.frame_count_hint
-    except Exception as exc:
-        fallback = Path(config.fallback_video_path)
-        if not fallback.exists():
-            raise RuntimeError(f"render failed and fallback video missing: {exc}") from exc
-        full_video = str(fallback)
-        fallback_used = True
+    render_warnings: list[str] = []
+
+    prebuilt_video = out_dir / "nl_choreo_output.mp4"
+    if prebuilt_video.exists():
+        full_video_2d = str(prebuilt_video)
+        full_video_3d = str(prebuilt_video)
+    else:
+        try:
+            full_result_2d = render_project(project_path=project_path, save_path=full_save, fps=25, three_d=False)
+            full_result_3d = render_project(project_path=project_path, save_path=f"{full_save}_3d", fps=25, three_d=True)
+            full_video_2d = full_result_2d.output_video
+            full_video_3d = full_result_3d.output_video
+            field = full_result_2d.field
+            device = full_result_2d.device
+            frame_count_hint = full_result_2d.frame_count_hint
+            render_warnings = full_result_2d.warnings + full_result_3d.warnings
+        except Exception as exc:
+            fallback = Path(config.fallback_video_path)
+            if not fallback.exists():
+                raise RuntimeError(f"render failed and fallback video missing: {exc}") from exc
+            full_video_2d = str(fallback)
+            full_video_3d = str(fallback)
+            fallback_used = True
 
     segment_reports: list[dict[str, Any]] = []
     merged_changed: set[str] = set()
@@ -260,7 +272,8 @@ def _render_and_inspect_round(
                 {
                     "round": round_idx,
                     "segment_id": seg.segment_id,
-                    "video": "",
+                    "video_2d": "",
+                    "video_3d": "",
                     "suggest_regenerate": False,
                     "issues": [],
                     "frozen": True,
@@ -268,17 +281,24 @@ def _render_and_inspect_round(
             )
             continue
         seg_save = str(out_dir / f"segment_{seg.segment_id}_r{round_idx:02d}")
-        seg_video = cut_video_segment(
-            source_video=full_video,
-            output_video=f"{seg_save}.mp4",
+        seg_video_2d = cut_video_segment(
+            source_video=full_video_2d,
+            output_video=f"{seg_save}_2d.mp4",
+            start_sec=seg.start,
+            end_sec=seg.end,
+        )
+        seg_video_3d = cut_video_segment(
+            source_video=full_video_3d,
+            output_video=f"{seg_save}_3d.mp4",
             start_sec=seg.start,
             end_sec=seg.end,
         )
         report = inspect_with_qwen(
             client=qwen_client,
             data=InspectInput(
-                video_path=seg_video,
+                video_path=seg_video_2d,
                 vibe_target=config.user_intent,
+                video_paths=[seg_video_2d, seg_video_3d],
             ),
         )
         report = _normalize_report_segment_ids(report, seg.segment_id)
@@ -297,7 +317,8 @@ def _render_and_inspect_round(
             {
                 "round": round_idx,
                 "segment_id": seg.segment_id,
-                "video": seg_video,
+                "video_2d": seg_video_2d,
+                "video_3d": seg_video_3d,
                 "suggest_regenerate": report.suggest_regenerate,
                 "issues": [to_dict(i) for i in report.issues],
                 "actionable_change": changed_local,
@@ -312,10 +333,15 @@ def _render_and_inspect_round(
         _inspection_rounds_path(out_dir),
         {
             "round": round_idx,
-            "full_video": full_video,
+            "full_video_2d": full_video_2d,
+            "full_video_3d": full_video_3d,
             "fallback_used": fallback_used,
             "type": "round_summary",
             "changed_segments": sorted(merged_changed),
+            "render_distance_warning_summary": summarize_render_distance_warnings(render_warnings),
+            "field": field,
+            "device": device,
+            "frame_count_hint": frame_count_hint,
         },
     )
 

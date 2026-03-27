@@ -16,6 +16,7 @@ class InspectInput:
     # 检查输入：视频路径与表演目标
     video_path: str
     vibe_target: str
+    video_paths: list[str] | None = None
 
 
 def build_visual_prompt(vibe_target: str) -> str:
@@ -89,8 +90,9 @@ def parse_inspection_response(text: str) -> InspectionReport:
 
 def inspect_with_qwen(client: QwenVideoClient, data: InspectInput) -> InspectionReport:
     # 上传视频并执行视觉评估
-    video_url = client.upload_video(data.video_path)
+    paths = data.video_paths or [data.video_path]
+    video_urls = [client.upload_video(p) for p in paths]
     prompt = build_visual_prompt(data.vibe_target)
-    response = client.inspect_video(video_url=video_url, prompt_zh=prompt)
+    response = client.inspect_video(video_urls=video_urls, prompt_zh=prompt)
     text = _extract_text_from_response(response)
     return parse_inspection_response(text)

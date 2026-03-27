@@ -13,11 +13,12 @@ from extensions.nl_choreo.pipeline import PipelineConfig, run_nl_choreo_pipeline
 
 
 class TestNlChoreoPipelineConvergence(unittest.TestCase):
+    @patch("extensions.nl_choreo.pipeline._ensure_render_project")
     @patch("extensions.nl_choreo.pipeline.analyze_music")
     @patch("extensions.nl_choreo.pipeline.render_project")
     @patch("extensions.nl_choreo.pipeline.cut_video_segment")
     @patch("extensions.nl_choreo.pipeline.inspect_with_qwen")
-    def test_fallback_in_strict_mode_sets_retryable(self, mock_inspect, mock_cut_segment, mock_render_project, mock_analyze):
+    def test_fallback_in_strict_mode_sets_retryable(self, mock_inspect, mock_cut_segment, mock_render_project, mock_analyze, mock_ensure):
         mock_analyze.return_value = MusicAnalysis(
             duration=64.0,
             tempo_estimate=128.0,
@@ -36,6 +37,7 @@ class TestNlChoreoPipelineConvergence(unittest.TestCase):
             issues = []
 
         mock_render_project.side_effect = _render_fail
+        mock_ensure.return_value = None
         mock_cut_segment.side_effect = lambda source_video, output_video, start_sec, end_sec: output_video
         mock_inspect.return_value = _I()
 
@@ -43,6 +45,9 @@ class TestNlChoreoPipelineConvergence(unittest.TestCase):
             fallback_path = os.path.join(d, "fb.mp4")
             with open(fallback_path, "wb") as f:
                 f.write(b"0")
+            out_video = os.path.join(d, "nl_choreo_output.mp4")
+            if os.path.exists(out_video):
+                os.remove(out_video)
             cfg = PipelineConfig(
                 audio_path="cjxq.mp3",
                 output_dir=d,
@@ -68,6 +73,7 @@ class TestNlChoreoPipelineConvergence(unittest.TestCase):
                 self.field = 6
                 self.device = "F400"
                 self.frame_count_hint = 100
+                self.warnings = []
 
         class _I:
             def __init__(self, issues):
@@ -87,7 +93,7 @@ class TestNlChoreoPipelineConvergence(unittest.TestCase):
             energy_curve=[0.1, 0.2, 0.8],
             climax_ranges=[(44.0, 58.0)],
         )
-        mock_render_project.side_effect = lambda project_path, save_path, fps=25: _R(save_path + ".mp4")
+        mock_render_project.side_effect = lambda project_path, save_path, fps=25, three_d=False: _R(save_path + ".mp4")
         mock_cut_segment.side_effect = lambda source_video, output_video, start_sec, end_sec: output_video
 
         # 全部问题都指向未知段，不可行动；应在第一轮视为 completed

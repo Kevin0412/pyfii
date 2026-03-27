@@ -170,15 +170,14 @@ class QwenVideoClient:
 
         return self._retry_loop("upload_video", _do_upload)
 
-    def inspect_video(self, video_url: str, prompt_zh: str, max_tokens: int = 8192) -> dict[str, Any]:
-        # 使用中文提示词进行视觉评估
+    def inspect_video(self, video_urls: list[str], prompt_zh: str, max_tokens: int = 8192) -> dict[str, Any]:
+        # 使用中文提示词进行视觉评估（可携带多路视频）
+        content = [{"type": "video_url", "video_url": {"url": u}} for u in video_urls]
+        content.append({"type": "text", "text": prompt_zh})
         messages = [
             {
                 "role": "user",
-                "content": [
-                    {"type": "video_url", "video_url": {"url": video_url}},
-                    {"type": "text", "text": prompt_zh},
-                ],
+                "content": content,
             }
         ]
 

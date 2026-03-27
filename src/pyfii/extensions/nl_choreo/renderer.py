@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import warnings
 
 import cv2
 
@@ -15,32 +16,38 @@ class RenderResult:
     field: int
     device: str
     frame_count_hint: int
+    warnings: list[str]
 
 
-def render_project(project_path: str, save_path: str, fps: int = 25) -> RenderResult:
-    # 读取 Fii 项目并输出 2D 渲染视频
+def render_project(project_path: str, save_path: str, fps: int = 25, three_d: bool = False) -> RenderResult:
+    # 读取 Fii 项目并输出渲染视频（可选 3D）
     # 延迟导入，避免在无图形环境中仅导入模块就触发 pyautogui 初始化
     from pyfii.read import read_fii
     from pyfii.show import show
 
-    data, t0, music, field, device = read_fii(project_path)
-    show(
-        data,
-        t0,
-        music,
-        field=field,
-        device=device,
-        save=save_path,
-        FPS=fps,
-        max_fps=200,
-        ThreeD=False,
-        show=True,
-    )
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        data, t0, music, field, device = read_fii(project_path)
+        show(
+            data,
+            t0,
+            music,
+            field=field,
+            device=device,
+            save=save_path,
+            FPS=fps,
+            max_fps=200,
+            ThreeD=three_d,
+            show=True,
+        )
+
+    warning_msgs = [str(w.message) for w in caught]
     return RenderResult(
         output_video=f"{save_path}.mp4",
         field=int(field),
         device=str(device),
         frame_count_hint=int(t0),
+        warnings=warning_msgs,
     )
 
 
@@ -102,4 +109,5 @@ def render_segment_like(
         field=full_result.field,
         device=full_result.device,
         frame_count_hint=full_result.frame_count_hint,
+        warnings=full_result.warnings,
     )
