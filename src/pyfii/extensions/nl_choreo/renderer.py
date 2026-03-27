@@ -1,13 +1,11 @@
 # -*- coding: utf-8 -*-
-# 该文件封装 pyfii 的读取与渲染调用
+# 该文件封装 pyfii 的读取与渲染调用，并提供段级素材裁剪
 
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any
 
-from pyfii.read import read_fii
-from pyfii.show import show
+import cv2
 
 
 @dataclass
@@ -21,6 +19,10 @@ class RenderResult:
 
 def render_project(project_path: str, save_path: str, fps: int = 25) -> RenderResult:
     # 读取 Fii 项目并输出 2D 渲染视频
+    # 延迟导入，避免在无图形环境中仅导入模块就触发 pyautogui 初始化
+    from pyfii.read import read_fii
+    from pyfii.show import show
+
     data, t0, music, field, device = read_fii(project_path)
     show(
         data,
@@ -42,6 +44,43 @@ def render_project(project_path: str, save_path: str, fps: int = 25) -> RenderRe
     )
 
 
+def cut_video_segment(source_video: str, output_video: str, start_sec: float, end_sec: float) -> str:
+    # 按时间窗口裁剪段级视频，供 Qwen 局部检查
+    if end_sec <= start_sec:
+        raise ValueError("end_sec must be greater than start_sec")
+
+    cap = cv2.VideoCapture(source_video)
+    if not cap.isOpened():
+        raise RuntimeError(f"cannot open source video: {source_video}")
+
+    fps = cap.get(cv2.CAP_PROP_FPS)
+    if fps <= 0:
+        fps = 25.0
+    width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+    height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+
+    start_frame = max(0, int(start_sec * fps))
+    end_frame = max(start_frame + 1, int(end_sec * fps))
+
+    fourcc = cv2.VideoWriter_fourcc(*"mp4v")
+    writer = cv2.VideoWriter(output_video, fourcc, fps, (width, height))
+
+    idx = 0
+    while True:
+        ok, frame = cap.read()
+        if not ok:
+            break
+        if idx >= start_frame and idx < end_frame:
+            writer.write(frame)
+        if idx >= end_frame:
+            break
+        idx += 1
+
+    writer.release()
+    cap.release()
+    return output_video
+
+
 def render_segment_like(
     project_path: str,
     save_path: str,
@@ -49,7 +88,18 @@ def render_segment_like(
     end_sec: float,
     fps: int = 25,
 ) -> RenderResult:
-    # 当前 pyfii 原生 show 不直接按时间切片，这里先复用全量渲染接口并记录窗口信息
-    # 后续可扩展为按 data 切片后再渲染
-    _ = (start_sec, end_sec)
-    return render_project(project_path=project_path, save_path=save_path, fps=fps)
+    # 先渲染完整视频，再裁剪目标片段，实现段级可检查素材
+    full_save = f"{save_path}_full"
+    full_result = render_project(project_path=project_path, save_path=full_save, fps=fps)
+    clipped = cut_video_segment(
+        source_video=full_result.output_video,
+        output_video=f"{save_path}.mp4",
+        start_sec=start_sec,
+        end_sec=end_sec,
+    )
+    return RenderResult(
+        output_video=clipped,
+        field=full_result.field,
+        device=full_result.device,
+        frame_count_hint=full_result.frame_count_hint,
+    )

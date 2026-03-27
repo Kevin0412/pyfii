@@ -5,15 +5,30 @@ path = os.getcwd() + r'/src'
 sys.path.append(path)
 
 from pyfii.extensions.nl_choreo.pipeline import PipelineConfig, run_nl_choreo_pipeline
+from pyfii.extensions.nl_choreo.qwen_client import QwenConfig, RetryPolicy, TimeoutPolicy
 
 
 if __name__ == "__main__":
-    # 演示入口：默认按 7 架 F400 生成 60~70 秒编排流程
+    # 演示入口：完整工作流（默认 7 架 F400）
     cfg = PipelineConfig(
         audio_path="cjxq.mp3",
         output_dir="output/nl_choreo_cjxq",
         user_intent="整体风格要有层次感，前半段克制，高潮段更有张力，转场要清晰。",
         fleet_type="F400",
+        use_qwen=True,
+        resume=True,
+        max_rounds=4,
+        max_regen_per_segment=2,
+        max_consecutive_qwen_failures=3,
+        qwen=QwenConfig(
+            base_url="https://ai.kevin0412.top/v1",
+            api_key="EMPTY",
+            upload_endpoint="https://ai.kevin0412.top/video-upload/v1/videos",
+            model="Qwen3.5-35B-A3B-FP8",
+            fps=2,
+            retry=RetryPolicy(max_attempts=5),
+            timeout=TimeoutPolicy(upload_sec=240.0, inspect_sec=420.0),
+        ),
     )
 
     # 多轮自然语言编辑示例：用户可持续追加修改要求

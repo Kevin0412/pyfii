@@ -38,6 +38,7 @@ class TestNlChoreoPipelineSmoke(unittest.TestCase):
                 output_dir=d,
                 user_intent="smoke test",
                 fleet_type="F400",
+                use_qwen=False,
             )
             result = run_nl_choreo_pipeline(cfg, edit_rounds=["更慢一点"])
             self.assertTrue(os.path.exists(result["analysis_path"]))
