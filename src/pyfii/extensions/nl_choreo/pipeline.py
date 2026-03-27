@@ -186,6 +186,7 @@ def _render_and_inspect_round(
     segments: list[SegmentSpec],
     qwen_client: QwenVideoClient,
     round_idx: int,
+    frozen_segment_ids: set[str] | None = None,
 ) -> tuple[list[SegmentSpec], bool, list[str]]:
     # 单轮：优先全量渲染；若渲染不可用则回退到预置视频继续检查链路
     project_path = str(out_dir / "nl_choreo_output")
@@ -210,8 +211,21 @@ def _render_and_inspect_round(
     segment_reports: list[dict[str, Any]] = []
     merged_changed: set[str] = set()
     should_regen = False
+    frozen = frozen_segment_ids or set()
 
     for seg in segments:
+        if seg.segment_id in frozen:
+            segment_reports.append(
+                {
+                    "round": round_idx,
+                    "segment_id": seg.segment_id,
+                    "video": "",
+                    "suggest_regenerate": False,
+                    "issues": [],
+                    "frozen": True,
+                }
+            )
+            continue
         seg_save = str(out_dir / f"segment_{seg.segment_id}_r{round_idx:02d}")
         seg_video = cut_video_segment(
             source_video=full_video,
@@ -384,12 +398,16 @@ def run_nl_choreo_pipeline(config: PipelineConfig, edit_rounds: list[str] | None
                 break
 
             try:
+                frozen_segment_ids = {
+                    sid for sid, cnt in state.regen_counters.items() if cnt >= config.max_regen_per_segment
+                }
                 segments, should_regen, changed = _render_and_inspect_round(
                     out_dir=out_dir,
                     config=config,
                     segments=segments,
                     qwen_client=qwen_client,
                     round_idx=state.round_idx,
+                    frozen_segment_ids=frozen_segment_ids,
                 )
                 # 统计段级重整次数
                 for sid in changed:
@@ -406,16 +424,16 @@ def run_nl_choreo_pipeline(config: PipelineConfig, edit_rounds: list[str] | None
                 if not safety.ok:
                     raise ValueError("safety check failed after qwen refine")
 
-                hit_limit = any(v >= config.max_regen_per_segment for v in state.regen_counters.values())
-                if hit_limit:
-                    state.status = "stopped_limits"
+                if not should_regen or not changed:
+                    state.status = "completed"
                     state.stage = "done"
                     state.last_error = ""
                     _write_state(out_dir, state)
                     break
 
-                if not should_regen or not changed:
-                    state.status = "completed"
+                hit_limit = any(v >= config.max_regen_per_segment for v in state.regen_counters.values())
+                if hit_limit:
+                    state.status = "stopped_limits"
                     state.stage = "done"
                     state.last_error = ""
                     _write_state(out_dir, state)
