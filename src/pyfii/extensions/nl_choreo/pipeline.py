@@ -4,6 +4,8 @@
 from __future__ import annotations
 
 import json
+import subprocess
+import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -123,6 +125,23 @@ def _append_jsonl(path: Path, payload: dict[str, Any]) -> None:
     with path.open("a", encoding="utf-8") as f:
         f.write(json.dumps(payload, ensure_ascii=False))
         f.write("\n")
+
+
+def _ensure_render_project(out_dir: Path, program_file: Path) -> None:
+    # 执行生成脚本，确保输出目录中的 .fii 与渲染输入工件存在
+    project_dir = out_dir / "nl_choreo_output"
+    if project_dir.exists():
+        return
+    proc = subprocess.run(
+        [sys.executable, str(program_file)],
+        cwd=str(Path.cwd()),
+        capture_output=True,
+        text=True,
+    )
+    if proc.returncode != 0:
+        raise RuntimeError(f"generated program execution failed: {proc.stderr.strip()}")
+    if not project_dir.exists():
+        raise RuntimeError("generated program finished but nl_choreo_output is missing")
 
 
 def _coerce_duration_if_needed(analysis: MusicAnalysis, force_duration_sec: float | None) -> MusicAnalysis:
@@ -379,6 +398,7 @@ def run_nl_choreo_pipeline(config: PipelineConfig, edit_rounds: list[str] | None
         )
         program_file = out_dir / "nl_choreo_generated.py"
         program_file.write_text(program_text, encoding="utf-8")
+        _ensure_render_project(out_dir, program_file)
 
         state.stage = "qwen_loop"
         _write_state(out_dir, state)
@@ -433,11 +453,13 @@ def run_nl_choreo_pipeline(config: PipelineConfig, edit_rounds: list[str] | None
 
                 hit_limit = any(v >= config.max_regen_per_segment for v in state.regen_counters.values())
                 if hit_limit:
-                    state.status = "stopped_limits"
-                    state.stage = "done"
-                    state.last_error = ""
-                    _write_state(out_dir, state)
-                    break
+                    saturated_ids = {sid for sid, cnt in state.regen_counters.items() if cnt >= config.max_regen_per_segment}
+                    if all(seg.segment_id in saturated_ids for seg in segments):
+                        state.status = "stopped_limits"
+                        state.stage = "done"
+                        state.last_error = ""
+                        _write_state(out_dir, state)
+                        break
 
             except Exception as exc:
                 state.consecutive_qwen_failures += 1

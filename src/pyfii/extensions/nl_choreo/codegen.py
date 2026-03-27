@@ -171,10 +171,11 @@ def emit_pyfii_program(
         lines.append(f"    # 段 {seg.segment_id} / 场景 {seg.scene_id}")
         ref_track = seg.tracks[0]
         for op in ref_track.ops:
+            if op.op == "inittime":
+                continue
             args = ",".join([repr(a) for a in op.args])
             lines.append(f"    d.{op.op}({args})")
 
-    lines.append("    d.inittime(69)")
     lines.append("    d.land()")
     lines.append("    d.end()")
     lines.append("")
