@@ -65,6 +65,8 @@ class TestNlChoreoPipelineFullLoop(unittest.TestCase):
                 output_dir=d,
                 user_intent="full loop test",
                 use_qwen=True,
+                direct_python_codegen=False,
+                render_fps=40,
                 max_rounds=2,
             )
             result = run_nl_choreo_pipeline(cfg, edit_rounds=[])
@@ -79,8 +81,16 @@ class TestNlChoreoPipelineFullLoop(unittest.TestCase):
             with open(result["inspection_rounds_path"], "r", encoding="utf-8") as f:
                 rows = [json.loads(line) for line in f if line.strip()]
             summaries = [r for r in rows if r.get("type") == "round_summary"]
+            finals = [r for r in rows if r.get("type") == "final_summary"]
             self.assertTrue(summaries)
+            self.assertTrue(finals)
             self.assertIn("fallback_used", summaries[-1])
+            self.assertIn("final_full_video_2d", finals[-1])
+            self.assertIn("final_full_video_3d", finals[-1])
+            self.assertEqual(finals[-1].get("render_fps"), 40)
+            self.assertIn("final_full_video_2d", result)
+            self.assertIn("final_full_video_3d", result)
+            self.assertEqual(result.get("render_fps"), 40)
 
             # 当首轮就无可行动变更时，不应强制重建项目
             forced_calls = [c for c in mock_ensure.call_args_list if c.kwargs.get("force") is True]

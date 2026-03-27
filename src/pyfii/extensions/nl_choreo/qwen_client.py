@@ -9,6 +9,7 @@ import time
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
+from urllib.parse import quote
 
 import httpx
 from openai import OpenAI
@@ -39,6 +40,9 @@ class QwenConfig:
     upload_endpoint: str = "https://ai.kevin0412.top/video-upload/v1/videos"
     model: str = "Qwen3.5-35B-A3B-FP8"
     fps: int = 2
+    use_local_video_path: bool = False
+    local_video_mode: str = "file_url"  # file_url | path_text
+    inspect_auto_fallback_to_upload: bool = False
     retry: RetryPolicy = field(default_factory=RetryPolicy)
     timeout: TimeoutPolicy = field(default_factory=TimeoutPolicy)
 
@@ -59,6 +63,25 @@ class QwenVideoClient:
         self.config = config or QwenConfig()
         self.client = OpenAI(base_url=self.config.base_url, api_key=self.config.api_key)
         self.telemetry_path = Path(telemetry_path) if telemetry_path else None
+        self._token_usage = {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0}
+
+    @property
+    def token_usage(self) -> dict[str, int]:
+        return dict(self._token_usage)
+
+    def _accumulate_usage(self, dumped: dict[str, Any]) -> dict[str, int]:
+        usage = dumped.get("usage", {}) or {}
+        prompt_tokens = int(usage.get("prompt_tokens", 0) or 0)
+        completion_tokens = int(usage.get("completion_tokens", 0) or 0)
+        total_tokens = int(usage.get("total_tokens", prompt_tokens + completion_tokens) or 0)
+        self._token_usage["prompt_tokens"] += prompt_tokens
+        self._token_usage["completion_tokens"] += completion_tokens
+        self._token_usage["total_tokens"] += total_tokens
+        return {
+            "prompt_tokens": prompt_tokens,
+            "completion_tokens": completion_tokens,
+            "total_tokens": total_tokens,
+        }
 
     def _log_attempt(self, event: dict[str, Any]) -> None:
         # 记录每次调用尝试，便于长流程回溯
@@ -170,16 +193,28 @@ class QwenVideoClient:
 
         return self._retry_loop("upload_video", _do_upload)
 
+    def _to_file_url(self, p: str) -> str:
+        path = Path(p).expanduser().resolve()
+        return f"file://{quote(path.as_posix(), safe='/:._-')}"
+
+    def _build_inspect_content(self, video_urls: list[str], prompt_zh: str, local_mode: str) -> list[dict[str, Any]]:
+        content: list[dict[str, Any]] = []
+        for u in video_urls:
+            is_remote = u.startswith("http://") or u.startswith("https://") or u.startswith("file://")
+            if is_remote:
+                content.append({"type": "video_url", "video_url": {"url": u}})
+            elif local_mode == "file_url":
+                content.append({"type": "video_url", "video_url": {"url": self._to_file_url(u)}})
+            else:
+                content.append({"type": "text", "text": f"[local_video_path] {u}"})
+        content.append({"type": "text", "text": prompt_zh})
+        return content
+
     def inspect_video(self, video_urls: list[str], prompt_zh: str, max_tokens: int = 8192) -> dict[str, Any]:
         # 使用中文提示词进行视觉评估（可携带多路视频）
-        content = [{"type": "video_url", "video_url": {"url": u}} for u in video_urls]
-        content.append({"type": "text", "text": prompt_zh})
-        messages = [
-            {
-                "role": "user",
-                "content": content,
-            }
-        ]
+        local_mode = self.config.local_video_mode if self.config.use_local_video_path else "file_url"
+        content = self._build_inspect_content(video_urls=video_urls, prompt_zh=prompt_zh, local_mode=local_mode)
+        messages = [{"role": "user", "content": content}]
 
         def _do_inspect() -> dict[str, Any]:
             try:
@@ -195,11 +230,59 @@ class QwenVideoClient:
                         "mm_processor_kwargs": {"fps": self.config.fps, "do_sample_frames": True},
                     },
                 )
-                return response.model_dump()
+                dumped = response.model_dump()
+                usage = self._accumulate_usage(dumped)
+                self._log_attempt(
+                    {
+                        "action": "inspect_video_usage",
+                        "ok": True,
+                        "usage": usage,
+                        "usage_cumulative": dict(self._token_usage),
+                        "model": self.config.model,
+                    }
+                )
+                return dumped
             except Exception as exc:
                 msg = str(exc)
-                # OpenAI SDK 异常在不同版本类型不稳定，采用文本+关键字分类
                 lower = msg.lower()
+                if (
+                    self.config.use_local_video_path
+                    and self.config.inspect_auto_fallback_to_upload
+                    and local_mode == "file_url"
+                    and any(k in lower for k in ["400", "invalid", "validation", "video_url", "schema"])
+                ):
+                    uploaded_urls = [self.upload_video(p) for p in video_urls]
+                    retry_content = self._build_inspect_content(
+                        video_urls=uploaded_urls,
+                        prompt_zh=prompt_zh,
+                        local_mode="file_url",
+                    )
+                    retry_messages = [{"role": "user", "content": retry_content}]
+                    response = self.client.chat.completions.create(
+                        model=self.config.model,
+                        messages=retry_messages,
+                        max_tokens=max_tokens,
+                        temperature=0.2,
+                        top_p=0.9,
+                        timeout=self.config.timeout.inspect_sec,
+                        extra_body={
+                            "top_k": 20,
+                            "mm_processor_kwargs": {"fps": self.config.fps, "do_sample_frames": True},
+                        },
+                    )
+                    dumped = response.model_dump()
+                    usage = self._accumulate_usage(dumped)
+                    self._log_attempt(
+                        {
+                            "action": "inspect_video_local_fallback_upload",
+                            "ok": True,
+                            "usage": usage,
+                            "usage_cumulative": dict(self._token_usage),
+                            "model": self.config.model,
+                        }
+                    )
+                    return dumped
+                # OpenAI SDK 异常在不同版本类型不稳定，采用文本+关键字分类
                 if any(x in lower for x in ["timeout", "timed out", "429", "503", "502", "500", "connection"]):
                     raise QwenRetryableError(f"inspect retryable error: {msg}") from exc
                 if any(x in lower for x in ["401", "403", "404", "invalid", "model", "permission"]):
@@ -207,3 +290,53 @@ class QwenVideoClient:
                 raise QwenRetryableError(f"inspect unknown error: {msg}") from exc
 
         return self._retry_loop("inspect_video", _do_inspect)
+
+    def generate_python_code(self, prompt_zh: str, max_tokens: int = 8192) -> str:
+        # 生成 pyfii Python 脚本（纯文本）
+        messages = [{"role": "user", "content": [{"type": "text", "text": prompt_zh}]}]
+
+        def _do_generate() -> str:
+            try:
+                response = self.client.chat.completions.create(
+                    model=self.config.model,
+                    messages=messages,
+                    max_tokens=max_tokens,
+                    temperature=0.3,
+                    top_p=0.9,
+                    timeout=self.config.timeout.inspect_sec,
+                )
+                dumped = response.model_dump()
+                usage = self._accumulate_usage(dumped)
+                self._log_attempt(
+                    {
+                        "action": "generate_python_code_usage",
+                        "ok": True,
+                        "usage": usage,
+                        "usage_cumulative": dict(self._token_usage),
+                        "model": self.config.model,
+                    }
+                )
+                choices = dumped.get("choices", [])
+                if not choices:
+                    raise QwenRetryableError("code generation empty choices")
+                msg = choices[0].get("message", {})
+                content = msg.get("content", "")
+                if isinstance(content, str):
+                    return content
+                if isinstance(content, list):
+                    parts: list[str] = []
+                    for item in content:
+                        if isinstance(item, dict) and item.get("type") == "text":
+                            parts.append(str(item.get("text", "")))
+                    return "\n".join(parts)
+                return str(content)
+            except Exception as exc:
+                msg = str(exc)
+                lower = msg.lower()
+                if any(x in lower for x in ["timeout", "timed out", "429", "503", "502", "500", "connection"]):
+                    raise QwenRetryableError(f"generate retryable error: {msg}") from exc
+                if any(x in lower for x in ["401", "403", "404", "invalid", "model", "permission"]):
+                    raise QwenNonRetryableError(f"generate non-retryable error: {msg}") from exc
+                raise QwenRetryableError(f"generate unknown error: {msg}") from exc
+
+        return self._retry_loop("generate_python_code", _do_generate)

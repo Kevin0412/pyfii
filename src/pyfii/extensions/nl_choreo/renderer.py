@@ -4,9 +4,8 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import subprocess
 import warnings
-
-import cv2
 
 
 @dataclass
@@ -56,35 +55,28 @@ def cut_video_segment(source_video: str, output_video: str, start_sec: float, en
     if end_sec <= start_sec:
         raise ValueError("end_sec must be greater than start_sec")
 
-    cap = cv2.VideoCapture(source_video)
-    if not cap.isOpened():
-        raise RuntimeError(f"cannot open source video: {source_video}")
-
-    fps = cap.get(cv2.CAP_PROP_FPS)
-    if fps <= 0:
-        fps = 25.0
-    width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-    height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-
-    start_frame = max(0, int(start_sec * fps))
-    end_frame = max(start_frame + 1, int(end_sec * fps))
-
-    fourcc = cv2.VideoWriter_fourcc(*"mp4v")
-    writer = cv2.VideoWriter(output_video, fourcc, fps, (width, height))
-
-    idx = 0
-    while True:
-        ok, frame = cap.read()
-        if not ok:
-            break
-        if idx >= start_frame and idx < end_frame:
-            writer.write(frame)
-        if idx >= end_frame:
-            break
-        idx += 1
-
-    writer.release()
-    cap.release()
+    duration = max(0.05, end_sec - start_sec)
+    cmd = [
+        "ffmpeg",
+        "-y",
+        "-ss",
+        f"{start_sec:.3f}",
+        "-i",
+        source_video,
+        "-t",
+        f"{duration:.3f}",
+        "-an",
+        "-c:v",
+        "libx264",
+        "-pix_fmt",
+        "yuv420p",
+        "-movflags",
+        "+faststart",
+        output_video,
+    ]
+    proc = subprocess.run(cmd, capture_output=True, text=True)
+    if proc.returncode != 0:
+        raise RuntimeError(f"cut segment failed: {proc.stderr.strip()}")
     return output_video
 
 

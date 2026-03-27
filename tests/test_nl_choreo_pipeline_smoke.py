@@ -16,8 +16,9 @@ from extensions.nl_choreo.pipeline import PipelineConfig, run_nl_choreo_pipeline
 
 
 class TestNlChoreoPipelineSmoke(unittest.TestCase):
+    @patch("extensions.nl_choreo.pipeline.render_project")
     @patch("extensions.nl_choreo.pipeline.analyze_music")
-    def test_pipeline_generates_files(self, mock_analyze):
+    def test_pipeline_generates_files(self, mock_analyze, mock_render_project):
         mock_analyze.return_value = MusicAnalysis(
             duration=64.0,
             tempo_estimate=128.0,
@@ -32,6 +33,16 @@ class TestNlChoreoPipelineSmoke(unittest.TestCase):
             climax_ranges=[(45.0, 58.0)],
         )
 
+        class _R:
+            def __init__(self, video):
+                self.output_video = video
+                self.field = 6
+                self.device = "F400"
+                self.frame_count_hint = 100
+                self.warnings = []
+
+        mock_render_project.side_effect = lambda project_path, save_path, fps=25, three_d=False: _R(save_path + ".mp4")
+
         with tempfile.TemporaryDirectory() as d:
             cfg = PipelineConfig(
                 audio_path="cjxq.mp3",
@@ -39,6 +50,8 @@ class TestNlChoreoPipelineSmoke(unittest.TestCase):
                 user_intent="smoke test",
                 fleet_type="F400",
                 use_qwen=False,
+                direct_python_codegen=False,
+                render_fps=40,
             )
             result = run_nl_choreo_pipeline(cfg, edit_rounds=["更慢一点"])
             self.assertTrue(os.path.exists(result["analysis_path"]))
@@ -46,6 +59,9 @@ class TestNlChoreoPipelineSmoke(unittest.TestCase):
             self.assertTrue(os.path.exists(result["segment_specs_path"]))
             self.assertTrue(os.path.exists(result["dialogue_history_path"]))
             self.assertTrue(os.path.exists(result["program_path"]))
+            self.assertIn("final_full_video_2d", result)
+            self.assertIn("final_full_video_3d", result)
+            self.assertEqual(result.get("render_fps"), 40)
 
 
 if __name__ == "__main__":

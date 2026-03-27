@@ -91,8 +91,11 @@ def parse_inspection_response(text: str) -> InspectionReport:
 def inspect_with_qwen(client: QwenVideoClient, data: InspectInput) -> InspectionReport:
     # 上传视频并执行视觉评估
     paths = data.video_paths or [data.video_path]
-    video_urls = [client.upload_video(p) for p in paths]
+    if client.config.use_local_video_path:
+        video_inputs = [str(p) for p in paths]
+    else:
+        video_inputs = [client.upload_video(p) for p in paths]
     prompt = build_visual_prompt(data.vibe_target)
-    response = client.inspect_video(video_urls=video_urls, prompt_zh=prompt)
+    response = client.inspect_video(video_urls=video_inputs, prompt_zh=prompt)
     text = _extract_text_from_response(response)
     return parse_inspection_response(text)

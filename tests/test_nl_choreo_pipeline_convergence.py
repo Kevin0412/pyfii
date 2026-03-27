@@ -53,6 +53,7 @@ class TestNlChoreoPipelineConvergence(unittest.TestCase):
                 output_dir=d,
                 user_intent="strict fallback test",
                 use_qwen=True,
+                direct_python_codegen=False,
                 max_rounds=1,
                 fallback_video_path=fallback_path,
                 strict_render_source=True,
@@ -106,6 +107,7 @@ class TestNlChoreoPipelineConvergence(unittest.TestCase):
                 output_dir=d,
                 user_intent="non actionable",
                 use_qwen=True,
+                direct_python_codegen=False,
                 max_rounds=2,
             )
             result = run_nl_choreo_pipeline(cfg, edit_rounds=[])
