@@ -167,17 +167,34 @@ def emit_pyfii_program(
     lines.append("    d.Y=y")
     lines.append("    d.takeoff(1,80)")
 
-    for seg in segments:
-        lines.append(f"    # 段 {seg.segment_id} / 场景 {seg.scene_id}")
-        ref_track = seg.tracks[0]
-        for op in ref_track.ops:
-            if op.op == "inittime":
-                continue
-            args = ",".join([repr(a) for a in op.args])
-            lines.append(f"    d.{op.op}({args})")
+    velxy_ready: dict[int, bool] = {i + 1: False for i in range(fleet.drone_count)}
+    velz_ready: dict[int, bool] = {i + 1: False for i in range(fleet.drone_count)}
 
-    lines.append("    d.land()")
-    lines.append("    d.end()")
+    for seg in segments:
+        lines.append(f"# 段 {seg.segment_id} / 场景 {seg.scene_id}")
+        for track in sorted(seg.tracks, key=lambda t: t.drone_id):
+            dname = f"d{track.drone_id}"
+            lines.append(f"# 无人机 {track.drone_id}")
+            for op in track.ops:
+                if op.op == "inittime":
+                    continue
+                if op.op == "VelXY":
+                    velxy_ready[track.drone_id] = True
+                if op.op == "VelZ":
+                    velz_ready[track.drone_id] = True
+                if op.op == "move2":
+                    if not velxy_ready[track.drone_id]:
+                        lines.append(f"{dname}.VelXY(160,320)")
+                        velxy_ready[track.drone_id] = True
+                    if not velz_ready[track.drone_id]:
+                        lines.append(f"{dname}.VelZ(160,320)")
+                        velz_ready[track.drone_id] = True
+                args = ",".join([repr(a) for a in op.args])
+                lines.append(f"{dname}.{op.op}({args})")
+
+    for i in range(fleet.drone_count):
+        lines.append(f"d{i+1}.land()")
+        lines.append(f"d{i+1}.end()")
     lines.append("")
     lines.append(f"name='{output_path}'")
     lines.append("F=pf.Fii(name,ds,music='" + music_path + "')")
