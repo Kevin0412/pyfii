@@ -13,7 +13,7 @@ from typing import Any
 from .audio_analyzer import analyze_music
 from .choreo_planner import build_scene_plan
 from .codegen import apply_nl_patch, build_segment_specs, emit_pyfii_program
-from .contracts import FleetSpec, MusicAnalysis, MusicSection, SegmentSpec, to_dict, validate_scene_plan
+from .contracts import FleetSpec, MusicAnalysis, MusicSection, SegmentIssue, SegmentSpec, to_dict, validate_scene_plan
 from .dialogue_manager import DialogueManager, DialogueTurn
 from .inspector import InspectInput, inspect_with_qwen
 from .qwen_client import QwenConfig, QwenVideoClient
@@ -38,6 +38,7 @@ class PipelineConfig:
     qwen: QwenConfig = field(default_factory=QwenConfig)
     fallback_video_path: str = "/home/test/dntg20220730_3D.mp4"
     force_duration_sec: float | None = None
+    strict_render_source: bool = True
 
 
 @dataclass
@@ -127,10 +128,10 @@ def _append_jsonl(path: Path, payload: dict[str, Any]) -> None:
         f.write("\n")
 
 
-def _ensure_render_project(out_dir: Path, program_file: Path) -> None:
+def _ensure_render_project(out_dir: Path, program_file: Path, force: bool = False) -> None:
     # 执行生成脚本，确保输出目录中的 .fii 与渲染输入工件存在
     project_dir = out_dir / "nl_choreo_output"
-    if project_dir.exists():
+    if project_dir.exists() and not force:
         return
     proc = subprocess.run(
         [sys.executable, str(program_file)],
@@ -199,6 +200,25 @@ def _segments_from_dict(data: list[dict[str, Any]]) -> list[SegmentSpec]:
     return segments
 
 
+def _normalize_report_segment_ids(report: Any, current_segment_id: str) -> Any:
+    # 将无效段号归一到当前段，避免 SG00 等导致重整失效
+    normalized_issues: list[SegmentIssue] = []
+    for issue in report.issues:
+        sid = issue.segment_id
+        if sid == "SG00":
+            sid = current_segment_id
+        normalized_issues.append(
+            SegmentIssue(
+                segment_id=sid,
+                severity=issue.severity,
+                detail=issue.detail,
+                recommendation_zh=issue.recommendation_zh,
+            )
+        )
+    report.issues = normalized_issues
+    return report
+
+
 def _render_and_inspect_round(
     out_dir: Path,
     config: PipelineConfig,
@@ -206,12 +226,13 @@ def _render_and_inspect_round(
     qwen_client: QwenVideoClient,
     round_idx: int,
     frozen_segment_ids: set[str] | None = None,
-) -> tuple[list[SegmentSpec], bool, list[str]]:
+) -> tuple[list[SegmentSpec], bool, list[str], bool]:
     # 单轮：优先全量渲染；若渲染不可用则回退到预置视频继续检查链路
     project_path = str(out_dir / "nl_choreo_output")
     full_save = str(out_dir / f"render_round_{round_idx:02d}")
 
     full_video: str
+    fallback_used = False
     field = 6
     device = config.fleet_type
     frame_count_hint = 0
@@ -226,6 +247,7 @@ def _render_and_inspect_round(
         if not fallback.exists():
             raise RuntimeError(f"render failed and fallback video missing: {exc}") from exc
         full_video = str(fallback)
+        fallback_used = True
 
     segment_reports: list[dict[str, Any]] = []
     merged_changed: set[str] = set()
@@ -259,6 +281,18 @@ def _render_and_inspect_round(
                 vibe_target=config.user_intent,
             ),
         )
+        report = _normalize_report_segment_ids(report, seg.segment_id)
+        refined = refine_segments(
+            segments=segments,
+            report=report,
+            allowed_segment_ids={seg.segment_id},
+        )
+        changed_local = bool(refined.changed_segment_ids)
+        segments = refined.updated_segments
+        if changed_local:
+            should_regen = True
+            merged_changed.update(refined.changed_segment_ids)
+
         segment_reports.append(
             {
                 "round": round_idx,
@@ -266,17 +300,9 @@ def _render_and_inspect_round(
                 "video": seg_video,
                 "suggest_regenerate": report.suggest_regenerate,
                 "issues": [to_dict(i) for i in report.issues],
+                "actionable_change": changed_local,
             }
         )
-        if report.suggest_regenerate or report.issues:
-            should_regen = True
-            refined = refine_segments(
-                segments=segments,
-                report=report,
-                allowed_segment_ids={seg.segment_id},
-            )
-            segments = refined.updated_segments
-            merged_changed.update(refined.changed_segment_ids)
 
     for item in segment_reports:
         _append_jsonl(_inspection_rounds_path(out_dir), item)
@@ -287,12 +313,13 @@ def _render_and_inspect_round(
         {
             "round": round_idx,
             "full_video": full_video,
+            "fallback_used": fallback_used,
             "type": "round_summary",
             "changed_segments": sorted(merged_changed),
         },
     )
 
-    return segments, should_regen, sorted(merged_changed)
+    return segments, should_regen, sorted(merged_changed), fallback_used
 
 
 def run_nl_choreo_pipeline(config: PipelineConfig, edit_rounds: list[str] | None = None) -> dict[str, Any]:
@@ -421,7 +448,7 @@ def run_nl_choreo_pipeline(config: PipelineConfig, edit_rounds: list[str] | None
                 frozen_segment_ids = {
                     sid for sid, cnt in state.regen_counters.items() if cnt >= config.max_regen_per_segment
                 }
-                segments, should_regen, changed = _render_and_inspect_round(
+                segments, should_regen, changed, fallback_used = _render_and_inspect_round(
                     out_dir=out_dir,
                     config=config,
                     segments=segments,
@@ -430,6 +457,9 @@ def run_nl_choreo_pipeline(config: PipelineConfig, edit_rounds: list[str] | None
                     frozen_segment_ids=frozen_segment_ids,
                 )
                 # 统计段级重整次数
+                if fallback_used and config.strict_render_source:
+                    raise RuntimeError("render fallback used in strict mode")
+
                 for sid in changed:
                     state.regen_counters[sid] = state.regen_counters.get(sid, 0) + 1
                 state.consecutive_qwen_failures = 0
@@ -439,6 +469,17 @@ def run_nl_choreo_pipeline(config: PipelineConfig, edit_rounds: list[str] | None
                     json.dumps([to_dict(s) for s in segments], ensure_ascii=False, indent=2),
                     encoding="utf-8",
                 )
+
+                if changed:
+                    program_text = emit_pyfii_program(
+                        output_path=str(out_dir / "nl_choreo_output"),
+                        fleet=fleet,
+                        segments=segments,
+                        program_name="nl_choreo_output",
+                        music_path=config.audio_path,
+                    )
+                    program_file.write_text(program_text, encoding="utf-8")
+                    _ensure_render_project(out_dir, program_file, force=True)
 
                 safety = validate_segment_specs(segments, fleet)
                 if not safety.ok:
@@ -464,6 +505,11 @@ def run_nl_choreo_pipeline(config: PipelineConfig, edit_rounds: list[str] | None
             except Exception as exc:
                 state.consecutive_qwen_failures += 1
                 state.last_error = str(exc)
+                if "render fallback used in strict mode" in state.last_error:
+                    state.status = "failed_retryable"
+                    state.stage = "done"
+                    _write_state(out_dir, state)
+                    break
                 _write_state(out_dir, state)
                 if state.consecutive_qwen_failures >= config.max_consecutive_qwen_failures:
                     state.status = "failed_retryable"
@@ -472,7 +518,7 @@ def run_nl_choreo_pipeline(config: PipelineConfig, edit_rounds: list[str] | None
                     break
 
         if state.stage != "done":
-            state.status = "stopped_limits"
+            state.status = "stopped_max_rounds"
             state.stage = "done"
             state.last_error = ""
             _write_state(out_dir, state)
