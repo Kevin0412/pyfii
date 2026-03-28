@@ -618,11 +618,17 @@ def read_fii(path,getfield=None,getdevice=None,fps=200,ignore_acc=False):
     
     DeviceType = None
     field = None
+    fii_path = None
     time_start=time.time()
     for root, dirs, files in os.walk(path):
         for file in files:
             if os.path.splitext(file)[1] == '.fii':
                 fii_path=(os.path.join(root , file))
+                break
+        if fii_path is not None:
+            break
+    if fii_path is None:
+        raise FileNotFoundError(f"No .fii file found under path: {path}")
     with open(fii_path, "r",encoding='utf-8') as F:
         data = F.read()
     data=data.split('\n')

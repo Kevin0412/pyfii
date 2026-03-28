@@ -3,15 +3,16 @@
 
 from __future__ import annotations
 
+import ast
 import json
 import re
 import shutil
 import subprocess
 import sys
 from dataclasses import dataclass, field
-from math import cos, pi, sin
+from math import ceil, cos, pi, sin
 from pathlib import Path
-from typing import Any, Literal
+from typing import Any, Callable, Literal
 
 from .audio_analyzer import analyze_music
 from .choreo_planner import build_scene_plan
@@ -55,9 +56,11 @@ class PipelineConfig:
     strict_render_source: bool = True
     render_fps: int = 30
     direct_python_codegen: bool = True
-    max_python_regen_attempts: int = 3
+    max_python_regen_attempts: int = 5
     qwen_action_steps: int = 3
-    qwen_step_patch_attempts: int = 2
+    qwen_step_patch_attempts: int = 4
+    direct_wait_until_step_accepted: bool = True
+    direct_use_structured_agent_fallback: bool = True
     direct_fallback_mode: Literal["freeform_seed", "none", "pattern_seed"] = "none"
 
 
@@ -205,8 +208,8 @@ def _build_freeform_seed_program(
     lines.append("ds=[" + ",".join([f"d{i+1}" for i in range(fleet.drone_count)]) + "]")
     lines.append(f"start_positions={repr(start_positions)}")
     lines.append("for d,p in zip(ds,start_positions):")
-    lines.append("    d.X=p[0]")
-    lines.append("    d.Y=p[1]")
+    lines.append("    d.X=d.x=p[0]")
+    lines.append("    d.Y=d.y=p[1]")
     lines.append("    d.takeoff(1,80)")
     lines.append("")
     lines.append("for d in ds:")
@@ -232,9 +235,13 @@ def _build_minimal_segments_from_plan(plan: ScenePlan, fleet: FleetSpec) -> list
     segments: list[SegmentSpec] = []
     anchors = _freeform_start_positions(fleet.drone_count)
     z_base = 90 if fleet.fleet_type == "F400" else 110
+    prev_start_int = 4
     for s_idx, scene in enumerate(plan.scenes):
         tracks: list[DroneTrackSpec] = []
-        delay_ms = max(100, int((scene.end - scene.start) * 1000) - 800)
+        scene_start_int = max(4, ceil(float(scene.start)), prev_start_int)
+        scene_end_int = max(scene_start_int + 1, ceil(float(scene.end)))
+        delay_ms = max(100, (scene_end_int - scene_start_int) * 1000 - 800)
+        prev_start_int = scene_start_int
         for d_idx in range(fleet.drone_count):
             x0, y0 = anchors[d_idx]
             x = max(0, min(560, x0 + (10 * ((s_idx + d_idx) % 3 - 1))))
@@ -244,7 +251,7 @@ def _build_minimal_segments_from_plan(plan: ScenePlan, fleet: FleetSpec) -> list
                 DroneTrackSpec(
                     drone_id=d_idx + 1,
                     ops=[
-                        DroneOp(op="inittime", args=[int(scene.start)]),
+                        DroneOp(op="inittime", args=[scene_start_int]),
                         DroneOp(op="VelXY", args=[120, 240]),
                         DroneOp(op="VelZ", args=[120, 240]),
                         DroneOp(op="move2", args=[int(x), int(y), int(z)]),
@@ -256,22 +263,53 @@ def _build_minimal_segments_from_plan(plan: ScenePlan, fleet: FleetSpec) -> list
             SegmentSpec(
                 segment_id=f"SG{s_idx + 1:02d}",
                 scene_id=scene.scene_id,
-                start=scene.start,
-                end=scene.end,
+                start=float(scene_start_int),
+                end=float(scene_end_int),
                 tracks=tracks,
             )
         )
     return segments
 
 
+def _build_pyfii_usage_guide_context() -> str:
+    # 将文档+源码关键用法作为固定上下文注入，降低小众项目 hallucination
+    return (
+        "Pyfii 用法指南（必须遵守）：\n"
+        "- 这是开发环境，不是 pip 安装环境：脚本开头必须先 import os,sys，再 append '/src' 和 '/src/pyfii'，然后再导入 pyfii。\n"
+        "- 导入模板必须放在文件最前面：import os; import sys; sys.path.append(...); try import pyfii as pf except ...。\n"
+        "- 运行方式：在 pyfii 仓库根目录执行 python output/.../nl_choreo_generated.py。\n"
+        "- 无人机动作要按 Python class 对象语义写：先创建全部 Drone 对象，再逐个对象赋起飞点。\n"
+        "- 每架机都要设置起飞坐标：d.X=d.x=x 与 d.Y=d.y=y（x,y 为起飞坐标）。\n"
+        "- takeoff 必须带两个参数：d.takeoff(time,height)，其中 time>=1，80<=height<=250（F400）。禁止 d.takeoff()。\n"
+        "- 首个动作层时间规则：first_inittime >= max_takeoff_time + 3（例如 takeoff(1,...) -> inittime>=4；takeoff(2,...) -> inittime>=5）。\n"
+        "- 后续 inittime 必须单调不回退。\n"
+        "- move2 前必须先设置 VelXY(v,a) 与 VelZ(v,a)。\n"
+        "- delay(ms) 用于动作间停顿/节奏控制，建议放在 move/move2 后；ms 必须为非负整数。\n"
+        "- move2(x,y,z) = 绝对坐标移动到目标点；move(dx,dy,dz) = 相对位移。\n"
+        "- d.x,d.y,d.z 表示当前目标点，可用于相对写法，例如 d.move(d.x+dx,d.y+dy,d.z+dz)。\n"
+        "- 强烈建议采用‘按 inittime 分层 + for 循环’结构：每个时间层用 for d in groupA/groupB... 批量下发动作，清晰表达编队关系。\n"
+        "- 每层至少分 2 组以上（例如内圈/外圈、左翼/右翼），禁止全体同路径同目标。\n"
+        "- 全片应有足够动作层和转场，不要只做 2~3 次 move2。\n"
+        "- 艺术参考：dntg20220730_3D.mp4（强调队形层次、呼应、对称与转场，而非随机位移）。\n"
+        "- 6m 毯坐标范围：x,y ∈ [0,560]；F400 z ∈ [80,250]。\n"
+        "- 脚本必须有 land() 与 end()，最后用 F=pf.Fii(name,ds,music='...'); F.save()。\n"
+        "- 注意：pf.Fii(...) 不接受 fps 参数；帧率应在 pf.show(...,FPS=40) 中设置。\n"
+        "- 参考源码语义：src/pyfii/drone.py 中 takeoff/inittime/move/move2/VelXY/VelZ/land/end。\n"
+        "- 参考文档：doc/doc_zh_CN.md 与 doc/tutorial/principle.md。\n"
+    )
+
+
 def _build_direct_edit_patch_prompt(current_code: str, edit_text: str, expected_fps: int) -> str:
     return (
         "请根据用户编辑要求修改下面 pyfii 脚本，并返回完整代码（只输出代码）。\n"
-        "硬约束：\n"
-        "1) 首个 inittime >= 4 且不回退。\n"
+        + _build_pyfii_usage_guide_context()
+        + "硬约束：\n"
+        "1) 首个 inittime >= max_takeoff_time+3（例如 takeoff(1)->>=4, takeoff(2)->>=5），且不回退。\n"
         "2) 每次 move2 前必须先 VelXY 和 VelZ。\n"
-        "3) 保留结尾 land + end。\n"
-        f"4) 使用 FPS={expected_fps}。\n"
+        "3) 允许并鼓励使用 delay(ms) 控节奏（非负整数）。\n"
+        "4) 按 inittime 分层，并优先使用 for d in groupA/groupB 的分组写法表达编队关系。\n"
+        "5) 保留结尾 land + end。\n"
+        f"5) 使用 FPS={expected_fps}。\n"
         f"用户编辑: {edit_text}\n"
         "当前脚本:\n"
         "```python\n"
@@ -303,8 +341,15 @@ def _ensure_render_project(out_dir: Path, program_file: Path, force: bool = Fals
     project_dir = out_dir / "nl_choreo_output"
     if project_dir.exists() and not force:
         return
+
+    backup_dir: Path | None = None
     if project_dir.exists() and force:
+        backup_dir = out_dir / "nl_choreo_output__backup"
+        if backup_dir.exists():
+            shutil.rmtree(backup_dir)
+        shutil.copytree(project_dir, backup_dir)
         shutil.rmtree(project_dir)
+
     proc = subprocess.run(
         [sys.executable, str(program_file)],
         cwd=str(Path.cwd()),
@@ -312,9 +357,19 @@ def _ensure_render_project(out_dir: Path, program_file: Path, force: bool = Fals
         text=True,
     )
     if proc.returncode != 0:
+        if backup_dir is not None:
+            if project_dir.exists():
+                shutil.rmtree(project_dir)
+            shutil.move(str(backup_dir), str(project_dir))
         raise RuntimeError(f"generated program execution failed: {proc.stderr.strip()}")
+
     if not project_dir.exists():
+        if backup_dir is not None:
+            shutil.move(str(backup_dir), str(project_dir))
         raise RuntimeError("generated program finished but nl_choreo_output is missing")
+
+    if backup_dir is not None and backup_dir.exists():
+        shutil.rmtree(backup_dir)
 
 
 def _probe_video_duration_sec(video_path: str) -> float:
@@ -422,24 +477,72 @@ def _is_qwen_video_decode_error(exc: Exception) -> bool:
         or "cannot find video stream" in msg
         or "error while loading video data" in msg
         or "st_nb >= 0" in msg
+        or "nframes should in interval" in msg
+        or ("nframes" in msg and "got 0" in msg)
     )
 
 
 def _strip_markdown_code_fence(text: str) -> str:
-    # 清理 LLM 返回的 markdown 包裹，只保留 python 正文
-    t = text.strip()
-    m = re.match(r"^```(?:python)?\s*([\s\S]*?)\s*```$", t, flags=re.IGNORECASE)
-    if m:
-        t = m.group(1).strip()
-    else:
-        t = t
+    # 清理/提取 LLM 返回内容中的 Python 正文，优先可解析代码块
+    t = (text or "").strip()
+    if not t:
+        return "\n"
 
-    # 某些模型会输出前导解释文本，截取首个 import/from/赋值风格代码起点
-    marker = re.search(r"(?:^|\n)(?:import\s+|from\s+\w+\s+import\s+|path\s*=|d1\s*=)", t)
-    if marker:
-        t = t[marker.start() :]
+    candidates: list[str] = []
 
-    return t + ("\n" if not t.endswith("\n") else "")
+    # 1) 提取 markdown fenced code blocks
+    fence_blocks = re.findall(r"```(?:python|py)?\s*([\s\S]*?)\s*```", t, flags=re.IGNORECASE)
+    for block in fence_blocks:
+        b = block.strip()
+        if b:
+            candidates.append(b)
+
+    # 2) 提取 JSON 样式 code 字段
+    code_field_match = re.search(r'"code"\s*:\s*"((?:\\.|[^"\\])*)"', t)
+    if code_field_match:
+        raw = code_field_match.group(1)
+        try:
+            decoded = ast.literal_eval('"' + raw + '"')
+            if isinstance(decoded, str) and decoded.strip():
+                candidates.append(decoded.strip())
+        except Exception:
+            pass
+
+    # 3) 回退：整段文本
+    candidates.append(t)
+
+    def _trim_to_probable_python_start(s: str) -> str:
+        marker = re.search(
+            r"(?:^|\n)(?:import\s+|from\s+\w+\s+import\s+|try\s*:|d\d+\s*=|ds\s*=|for\s+\w+\s+in\s+ds\s*:|name\s*=)",
+            s,
+        )
+        return s[marker.start() :].strip() if marker else s.strip()
+
+    def _score_pyfii_script(s: str) -> int:
+        low = s.lower()
+        score = 0
+        for token in ("takeoff(", ".inittime(", ".move2(", "pf.", "f=pf.fii("):
+            if token in low:
+                score += 1
+        return score
+
+    prepared: list[str] = []
+    for c in candidates:
+        c2 = _trim_to_probable_python_start(c)
+        if c2:
+            prepared.append(c2)
+
+    prepared.sort(key=_score_pyfii_script, reverse=True)
+
+    for c in prepared:
+        try:
+            ast.parse(c)
+            return c + ("\n" if not c.endswith("\n") else "")
+        except Exception:
+            continue
+
+    fallback = prepared[0] if prepared else t
+    return fallback + ("\n" if not fallback.endswith("\n") else "")
 
 
 def _normalize_generated_program_text(program_text: str, expected_fps: int) -> str:
@@ -447,17 +550,21 @@ def _normalize_generated_program_text(program_text: str, expected_fps: int) -> s
     normalized = program_text
     normalized = re.sub(r"\.intime\(", ".inittime(", normalized)
 
-    # 自动修正不合规的 inittime：首个 >=4，且全局不回退
-    prev_init = 4
+    takeoff_times = [int(x) for x in re.findall(r"\.takeoff\(\s*(\d+)\s*,", normalized)]
+    first_inittime_floor = (max(takeoff_times) + 3) if takeoff_times else 4
+
+    # 自动修正不合规的 inittime：统一为 int、首个 >= max_takeoff+3，且全局不回退
+    prev_init = first_inittime_floor
 
     def _fix_inittime(match: re.Match[str]) -> str:
         nonlocal prev_init
-        raw = int(match.group(1))
-        fixed = max(4, raw, prev_init)
+        raw_text = match.group(1).strip()
+        raw = int(float(raw_text))
+        fixed = max(first_inittime_floor, raw, prev_init)
         prev_init = fixed
         return f".inittime({fixed})"
 
-    normalized = re.sub(r"\.inittime\((\d+)\)", _fix_inittime, normalized)
+    normalized = re.sub(r"\.inittime\(([^\)]+)\)", _fix_inittime, normalized)
 
     if f"FPS={expected_fps}" not in normalized:
         normalized = re.sub(
@@ -466,24 +573,55 @@ def _normalize_generated_program_text(program_text: str, expected_fps: int) -> s
             normalized,
         )
 
-    if "import pyfii as pf" in normalized and "sys.path.append(os.getcwd() + r'/src/pyfii')" not in normalized:
+    has_pyfii_import = bool(
+        re.search(r"(?m)^\s*(import\s+pyfii\s+as\s+pf|from\s+pyfii\s+import\s+pyfii\s+as\s+pf)\s*$", normalized)
+    )
+    has_src_path = "sys.path.append(os.getcwd() + r'/src')" in normalized
+    has_pkg_path = "sys.path.append(os.getcwd() + r'/src/pyfii')" in normalized
+    if has_pyfii_import and (not has_src_path or not has_pkg_path):
         lines = normalized.splitlines()
         insert_at = 0
-        for i, ln in enumerate(lines[:16]):
-            if ln.startswith("import ") or ln.startswith("from ") or ln.strip() == "":
+        for i, ln in enumerate(lines[:40]):
+            s = ln.strip()
+            if (
+                s.startswith("#!")
+                or s.startswith("# -*-")
+                or s.startswith("#")
+                or s == ""
+                or s.startswith("import ")
+                or s.startswith("from ")
+            ):
                 insert_at = i + 1
-        bootstrap = [
-            "sys.path.append(os.getcwd() + r'/src')",
-            "sys.path.append(os.getcwd() + r'/src/pyfii')",
-        ]
-        lines[insert_at:insert_at] = bootstrap
-        normalized = "\n".join(lines) + "\n"
+                continue
+            break
+
+        bootstrap: list[str] = []
+        if not re.search(r"(?m)^\s*import\s+os\s*$", normalized):
+            bootstrap.append("import os")
+        if not re.search(r"(?m)^\s*import\s+sys\s*$", normalized):
+            bootstrap.append("import sys")
+        if not has_src_path:
+            bootstrap.append("sys.path.append(os.getcwd() + r'/src')")
+        if not has_pkg_path:
+            bootstrap.append("sys.path.append(os.getcwd() + r'/src/pyfii')")
+
+        if bootstrap:
+            lines[insert_at:insert_at] = bootstrap
+            normalized = "\n".join(lines) + "\n"
 
     # 仅在顶层导入语句出现时替换，避免误替换 try 块中的已缩进语句
     normalized = re.sub(
-        r"(?m)^import\s+pyfii\s+as\s+pf\s*$",
+        r"(?m)^(import\s+pyfii\s+as\s+pf|from\s+pyfii\s+import\s+pyfii\s+as\s+pf)\s*$",
         "try:\n    import pyfii as pf\nexcept Exception:\n    from pyfii import pyfii as pf",
         normalized,
+    )
+
+    # 修复常见坏模式：try 导入 pyfii 后 except: pass，导致后续 pf 未定义
+    normalized = re.sub(
+        r"try:\s*\n\s*(?:import\s+pyfii\s+as\s+pf|from\s+pyfii\s+import\s+pyfii\s+as\s+pf)\s*\n\s*except(?:\s+Exception)?\s*:\s*\n\s*pass",
+        "try:\n    import pyfii as pf\nexcept Exception:\n    from pyfii import pyfii as pf",
+        normalized,
+        flags=re.IGNORECASE,
     )
     return normalized
 
@@ -498,10 +636,26 @@ def _validate_generated_program_text(program_text: str, expected_fps: int) -> li
         if token not in lower:
             errors.append(f"missing required action token: {token}")
 
+    if re.search(r"\.takeoff\(\s*\)", lower):
+        errors.append("invalid takeoff signature: takeoff() is forbidden, must be takeoff(time,height)")
+
+    for m in re.finditer(r"\.takeoff\(([^\)]*)\)", program_text):
+        args_text = m.group(1).strip()
+        if not args_text:
+            continue
+        if len([p for p in args_text.split(",") if p.strip()]) < 2:
+            errors.append("invalid takeoff signature: takeoff requires two args (time,height)")
+            break
+
+    takeoff_times = [int(x) for x in re.findall(r"\.takeoff\(\s*(\d+)\s*,", program_text)]
+    first_inittime_floor = (max(takeoff_times) + 3) if takeoff_times else 4
+
     times = [int(x) for x in re.findall(r"\.inittime\((\d+)\)", program_text)]
     if times:
-        if min(times) < 4:
-            errors.append(f"first inittime must be >= 4, got min={min(times)}")
+        if min(times) < first_inittime_floor:
+            errors.append(
+                f"first inittime must be >= max_takeoff_time+3 (={first_inittime_floor}), got min={min(times)}"
+            )
         for i in range(1, len(times)):
             if times[i] < times[i - 1]:
                 errors.append(
@@ -509,8 +663,7 @@ def _validate_generated_program_text(program_text: str, expected_fps: int) -> li
                 )
                 break
 
-    if f"FPS={expected_fps}" not in program_text:
-        errors.append(f"missing target FPS setting: FPS={expected_fps}")
+    # FPS 由归一化阶段补齐，不作为拒收条件
 
     # 至少应有多段 move2，避免“起飞后仅一次动作”的空洞脚本
     move2_calls = len(re.findall(r"\.move2\(", lower))
@@ -529,6 +682,55 @@ def _validate_generated_program_text(program_text: str, expected_fps: int) -> li
     return errors
 
 
+def _validate_stepwise_candidate_text(
+    candidate: str,
+    expected_fps: int,
+    step_idx: int,
+    total_steps: int,
+) -> list[str]:
+    # stepwise 阶段允许渐进增强，避免首步因“完整终稿约束”被过度拦截
+    errors: list[str] = []
+    lower = candidate.lower()
+
+    required_tokens = [".inittime(", ".velxy(", ".velz(", ".move2("]
+    for token in required_tokens:
+        if token not in lower:
+            errors.append(f"missing required action token: {token}")
+
+    if "takeoff(" not in lower:
+        errors.append("missing required action token: takeoff(")
+    if step_idx >= total_steps:
+        if ".land()" not in lower:
+            errors.append("missing required action token: .land()")
+        if ".end()" not in lower:
+            errors.append("missing required action token: .end()")
+
+    takeoff_times = [int(x) for x in re.findall(r"\.takeoff\(\s*(\d+)\s*,", candidate)]
+    first_inittime_floor = (max(takeoff_times) + 3) if takeoff_times else 4
+    times = [int(x) for x in re.findall(r"\.inittime\((\d+)\)", candidate)]
+    if times:
+        if min(times) < first_inittime_floor:
+            errors.append(
+                f"first inittime must be >= max_takeoff_time+3 (={first_inittime_floor}), got min={min(times)}"
+            )
+        for i in range(1, len(times)):
+            if times[i] < times[i - 1]:
+                errors.append(
+                    f"inittime must be monotonic non-decreasing: {times[i - 1]} -> {times[i]} at index {i}"
+                )
+                break
+
+    # FPS 由归一化阶段补齐，不作为拒收条件
+
+    move2_calls = len(re.findall(r"\.move2\(", lower))
+    if move2_calls < 1:
+        errors.append(f"insufficient choreography complexity: move2 calls={move2_calls}, require >=1")
+
+    if re.search(r"for\s+\w+\s+in\s+ds\s*:[\s\S]{0,220}?\.move2\(\s*\w+\.x\s*,\s*\w+\.y\s*,", lower):
+        errors.append("unsafe same-path pattern: blind loop move2(d.X,d.Y,...) detected")
+
+    return errors
+
 def _build_direct_codegen_prompt(
     config: PipelineConfig,
     fleet: FleetSpec,
@@ -542,17 +744,35 @@ def _build_direct_codegen_prompt(
     analysis_payload = json.dumps(to_dict(analysis), ensure_ascii=False)
     prompt = (
         "你是 pyfii 编舞工程师。请基于输入上下文生成完整可执行 Python 脚本（只输出代码）。\n"
+        + _build_pyfii_usage_guide_context()
+        + "设计规范（来自项目文档摘要）：\n"
+        "- 先确定起飞位与起飞，再按时间轴推进动作层。\n"
+        "- inittime 用整数秒，首个动作层 >=4 秒，后续不回退。\n"
+        "- 每个动作层先设 VelXY/VelZ，再 move2；尽量按场景分层推进。\n"
+        "- 编码结构优先采用‘每个 inittime 一层 + for 循环分组’（参考 tests/dntg20220730_v3.py 的层次表达）。\n"
+        "- 每层至少 2 组以上无人机（如内外圈/左右翼），体现队形关系与呼应。\n"
+        "- 艺术参考：dntg20220730_3D.mp4，目标是有层次的编队艺术，不是随机两三次位移。\n"
+        "- 6m 场地坐标范围：0<=x<=560, 0<=y<=560。\n"
+        "- move2(x,y,z) 是绝对坐标移动到目标点，不是相对位移。\n"
+        "- 相对位移请用 d.move(d.x+dx,d.y+dy,d.z+dz) 思路（d.x,d.y,d.z 为当前目标点）。\n"
+        "- 6m 场地优先安全余量与可执行性，避免碰撞与越界。\n"
+        "编码原则：\n"
+        "- 直接返回完整可运行 pyfii 脚本，不要解释文本。\n"
+        "- 保留标准收尾 land + end，并确保 FPS 正确。\n"
         "硬约束：\n"
-        "1) 首个 inittime 必须 >= 4。\n"
+        "1) 首个 inittime 必须 >= max_takeoff_time+3（例：takeoff(1)->>=4, takeoff(2)->>=5）。\n"
         "2) 全部 inittime 必须单调不回退。\n"
         "3) 每次 move2 前必须先 VelXY 和 VelZ。\n"
+        "3.1) 可使用 delay(ms) 设计节奏停顿（非负整数）。\n"
         "4) 结尾必须 land + end。\n"
         "5) 输出 fps 必须使用 FPS="
         f"{render_fps}。\n"
         "6) 保持 6m 场地安全余量，避免明显碰撞风险。\n"
         "7) 优先原创编队与高频动作变化，不要套固定图案库。\n"
         "8) 严禁全机同路径、同目标点同步飞行（现实高风险）。\n"
-        "9) 至少 3 个不同 inittime 的动作层，且每层要有可见队形变化。\n"
+        "9) 至少 4 个不同 inittime 的动作层，且每层要有可见队形变化。\n"
+        "10) 必须按‘每个 inittime 一层 + for 循环分组’组织代码，禁止仅按单机顺序零散写动作。\n"
+        "11) 每层至少 2 组以上不同目标点，且全片不少于 6 个不同 move2 目标坐标。\n"
         "\n"
         f"用户意图: {config.user_intent}\n"
         f"机队: {to_dict(fleet)}\n"
@@ -572,18 +792,214 @@ def _build_direct_codegen_prompt(
     return prompt
 
 
+def _build_structured_plan_prompt(config: PipelineConfig, fleet: FleetSpec, analysis: MusicAnalysis, steps: int) -> str:
+    analysis_payload = json.dumps(to_dict(analysis), ensure_ascii=False)
+    return (
+        "你是 pyfii 编舞 DSL 规划器。请输出严格 JSON，不要输出解释。\n"
+        + _build_pyfii_usage_guide_context()
+        + "输出格式：\n"
+        "{\n"
+        "  \"global\": {\"takeoff_time\": 1, \"takeoff_z\": 100, \"fps\": 40},\n"
+        "  \"layers\": [\n"
+        "    {\"inittime\": 4, \"targets\": [{\"drone_id\":1,\"x\":280,\"y\":200,\"z\":120}], \"velxy\": [120,240], \"velz\": [120,240]}\n"
+        "  ]\n"
+        "}\n"
+        "约束：\n"
+        f"- drone_id 范围 1..{fleet.drone_count}\n"
+        "- x/y/z 必须在合法范围\n"
+        f"- layers 至少 {max(3, int(steps))} 层，inittime 单调\n"
+        "- 每层 targets 必须覆盖全部无人机\n"
+        f"用户意图: {config.user_intent}\n"
+        f"机队: {to_dict(fleet)}\n"
+        f"音乐分析: {analysis_payload}\n"
+    )
+
+
+def _compile_structured_plan_to_pyfii(
+    plan_text: str,
+    fleet: FleetSpec,
+    output_path: str,
+    music_path: str,
+    expected_fps: int,
+) -> str | None:
+    try:
+        payload = json.loads(plan_text)
+    except Exception:
+        m = re.search(r"\{[\s\S]*\}", plan_text)
+        if not m:
+            return None
+        try:
+            payload = json.loads(m.group(0))
+        except Exception:
+            return None
+
+    layers = payload.get("layers") if isinstance(payload, dict) else None
+    if not isinstance(layers, list) or not layers:
+        return None
+
+    ctor = "pf.Drone" if fleet.fleet_type == "F400" else "pf.Drone6"
+    config_name = "pf.drone_config_6m"
+    start_positions = _freeform_start_positions(fleet.drone_count)
+
+    lines: list[str] = _pyfii_bootstrap_lines() + ["# structured pyfii coding-agent fallback"]
+    for idx in range(fleet.drone_count):
+        lines.append(f"d{idx + 1}={ctor}(0,0,{config_name},\"192.168.51.{51 + idx}\")")
+    lines.append("")
+    lines.append("ds=[" + ",".join([f"d{i+1}" for i in range(fleet.drone_count)]) + "]")
+    lines.append(f"start_positions={repr(start_positions)}")
+    lines.append("for d,p in zip(ds,start_positions):")
+    lines.append("    d.X=d.x=p[0]")
+    lines.append("    d.Y=d.y=p[1]")
+    lines.append("    d.takeoff(1,100)")
+    lines.append("")
+
+    prev_time = 4
+    for layer in layers:
+        if not isinstance(layer, dict):
+            continue
+        t = int(layer.get("inittime", prev_time))
+        t = max(4, t, prev_time)
+        prev_time = t
+        velxy = layer.get("velxy", [120, 240])
+        velz = layer.get("velz", [120, 240])
+        vx = int(velxy[0]) if isinstance(velxy, list) and len(velxy) >= 2 else 120
+        ax = int(velxy[1]) if isinstance(velxy, list) and len(velxy) >= 2 else 240
+        vz = int(velz[0]) if isinstance(velz, list) and len(velz) >= 2 else 120
+        az = int(velz[1]) if isinstance(velz, list) and len(velz) >= 2 else 240
+
+        targets = layer.get("targets", [])
+        targets_by_id: dict[int, dict[str, Any]] = {}
+        if isinstance(targets, list):
+            for item in targets:
+                if isinstance(item, dict) and "drone_id" in item:
+                    targets_by_id[int(item["drone_id"])] = item
+
+        for d_idx in range(1, fleet.drone_count + 1):
+            item = targets_by_id.get(d_idx, {})
+            x = int(item.get("x", start_positions[d_idx - 1][0]))
+            y = int(item.get("y", start_positions[d_idx - 1][1]))
+            z = int(item.get("z", 120 if fleet.fleet_type == "F400" else 140))
+            x = max(0, min(560, x))
+            y = max(0, min(560, y))
+            z = max(80 if fleet.fleet_type == "F400" else 100, min(250, z))
+            lines.append(f"d{d_idx}.inittime({t})")
+            lines.append(f"d{d_idx}.VelXY({vx},{ax})")
+            lines.append(f"d{d_idx}.VelZ({vz},{az})")
+            lines.append(f"d{d_idx}.move2({x},{y},{z})")
+        lines.append("")
+
+    for d_idx in range(1, fleet.drone_count + 1):
+        lines.append(f"d{d_idx}.land()")
+        lines.append(f"d{d_idx}.end()")
+    lines.append("")
+    lines.append(f"name='{output_path}'")
+    lines.append("F=pf.Fii(name,ds,music='" + music_path + "')")
+    lines.append("F.save()")
+    lines.append("data,t0,music,field,device=pf.read_fii(name)")
+    lines.append(f"pf.show(data,t0,music,field=field,device=device,save=name,FPS={max(10, int(expected_fps))})")
+    return "\n".join(lines) + "\n"
+
+
+def _generate_program_with_structured_coding_agent(
+    out_dir: Path,
+    qwen_client: QwenVideoClient,
+    config: PipelineConfig,
+    fleet: FleetSpec,
+    analysis: MusicAnalysis,
+    expected_fps: int,
+    program_file: Path,
+) -> str:
+    plan_prompt = _build_structured_plan_prompt(config=config, fleet=fleet, analysis=analysis, steps=max(3, int(config.qwen_action_steps)))
+    plan_text = qwen_client.generate_design_text(plan_prompt)
+    compiled = _compile_structured_plan_to_pyfii(
+        plan_text=plan_text,
+        fleet=fleet,
+        output_path=str(out_dir / "nl_choreo_output"),
+        music_path=config.audio_path,
+        expected_fps=expected_fps,
+    )
+    if not compiled:
+        local_plan = {
+            "global": {"takeoff_time": 1, "takeoff_z": 100, "fps": int(expected_fps)},
+            "layers": [],
+        }
+        positions = _freeform_start_positions(fleet.drone_count)
+        for li in range(max(3, int(config.qwen_action_steps))):
+            t = 4 + li * 4
+            targets: list[dict[str, int]] = []
+            for i in range(fleet.drone_count):
+                x0, y0 = positions[i]
+                x = max(0, min(560, x0 + ((li % 3) - 1) * 35 + (i % 3 - 1) * 18))
+                y = max(0, min(560, y0 + (((li + i) % 3) - 1) * 28))
+                z = max(80 if fleet.fleet_type == "F400" else 100, min(250, 110 + (li % 3) * 12 + (i % 2) * 8))
+                targets.append({"drone_id": i + 1, "x": int(x), "y": int(y), "z": int(z)})
+            local_plan["layers"].append({"inittime": t, "targets": targets, "velxy": [120, 240], "velz": [120, 240]})
+        compiled = _compile_structured_plan_to_pyfii(
+            plan_text=json.dumps(local_plan, ensure_ascii=False),
+            fleet=fleet,
+            output_path=str(out_dir / "nl_choreo_output"),
+            music_path=config.audio_path,
+            expected_fps=expected_fps,
+        )
+        if not compiled:
+            raise RuntimeError("structured coding-agent plan parse/compile failed")
+    compiled = _normalize_generated_program_text(compiled, expected_fps=expected_fps)
+    static_errors = _validate_generated_program_text(compiled, expected_fps=expected_fps)
+    if static_errors:
+        raise RuntimeError("structured coding-agent generated invalid script: " + "; ".join(static_errors))
+    program_file.write_text(compiled, encoding="utf-8")
+    _ensure_render_project(out_dir, program_file, force=True)
+    _append_jsonl(
+        _qwen_calls_path(out_dir),
+        {
+            "action": "structured_coding_agent_acceptance",
+            "accepted": True,
+            "reason": "passed",
+        },
+    )
+    return compiled
+
+
+def _build_reviewer_repair_prompt(candidate_code: str, errors: list[str], expected_fps: int) -> str:
+    errs = "\n".join([f"- {e}" for e in errors])
+    return (
+        "你是 pyfii 代码审稿修复器。请修复候选脚本并输出完整 Python 代码（只输出代码）。\n"
+        + _build_pyfii_usage_guide_context()
+        + "必须先修复以下失败项：\n"
+        + errs
+        + "\n\n硬约束：\n"
+        "1) 必须保留 takeoff。\n"
+        "2) 至少包含 inittime/VelXY/VelZ/move2。\n"
+        "3) 末尾必须 land + end。\n"
+        "4) move2 必须有至少 6 次调用（stepwise 可>=1）。\n"
+        "5) 按 inittime 分层，并使用 for 循环分组表达编队关系。\n"
+        "6) 每层至少 2 组目标，避免全机同目标同路径。\n"
+        f"5) 输出 FPS={expected_fps}。\n"
+        "候选脚本：\n"
+        "```python\n"
+        + candidate_code
+        + "\n```"
+    )
+
+
 def _build_codegen_fix_prompt(previous_code: str, errors: list[str]) -> str:
     # 根据失败原因回传修复指令，要求返回完整代码
     errs = "\n".join([f"- {e}" for e in errors])
     return (
         "请修复下面 pyfii Python 脚本，并返回完整修复后代码（只输出代码）。\n"
-        "必须修复以下问题：\n"
+        + _build_pyfii_usage_guide_context()
+        + "必须修复以下问题：\n"
         f"{errs}\n\n"
         "强约束（必须同时满足）：\n"
         "1) 严禁所有无人机共享同一路径或同一目标点。\n"
         "2) 至少包含 3 个时间层（3 个不同 inittime）和明显编队变化。\n"
         "3) 每个动作层至少 2 组不同目标坐标。\n"
-        "4) move2 前必须 VelXY + VelZ；保留 land+end；保留正确 FPS。\n\n"
+        "3.1) 编码结构采用按 inittime 分层的 for 循环分组写法，清晰表达队形关系。\n"
+        "3.2) 参考 tests/dntg20220730_v3.py 的分层风格与 dntg20220730_3D.mp4 的艺术转场节奏。\n"
+        "4) 6m 场地坐标范围：0<=x<=560, 0<=y<=560。\n"
+        "5) move2(x,y,z) 是绝对坐标移动，不是相对位移。\n"
+        "6) 相对位移请用 d.move(d.x+dx,d.y+dy,d.z+dz) 思路（d.x,d.y,d.z 为当前目标点）。\n"
+        "7) move2 前必须 VelXY + VelZ；保留 land+end；FPS 缺失会自动补齐。\n\n"
         "脚本如下：\n"
         "```python\n"
         f"{previous_code}\n"
@@ -597,7 +1013,8 @@ def _build_action_plan_prompt(config: PipelineConfig, analysis: MusicAnalysis, t
     return (
         "你是 pyfii 编舞总导演。先做动作分步规划，不写完整代码。\n"
         f"将本次编舞拆成 {total_steps} 步，每一步写 1 行：StepN: 该步的编队变化与动作目标。\n"
-        "要求动作频繁、队形变化明显、转场有层次。\n"
+        "要求动作频繁、队形变化明显、转场有层次；参考 dntg20220730_3D.mp4 的艺术编排。\n"
+        "每一步都要指明该层 inittime 下至少两组（groupA/groupB）队形关系，而不是随机单点移动。\n"
         "返回纯文本步骤列表。\n"
         f"用户意图: {config.user_intent}\n"
         f"音乐分析: {analysis_payload}\n"
@@ -614,18 +1031,30 @@ def _build_action_step_prompt(
     current_code: str,
     expected_fps: int,
 ) -> str:
-    # 要求 Qwen 仅返回完整脚本（在当前脚本基础上加一步动作）
+    # 要求 Qwen 按“分场景递进”改写完整脚本，且优先沿用当前脚本结构
     analysis_payload = json.dumps(to_dict(analysis), ensure_ascii=False)
     return (
-        "你是 pyfii 编舞工程师。请基于当前脚本追加/修改一步动作，返回完整 Python 代码。\n"
+        "你是 pyfii 编舞工程师。请在当前脚本基础上，按当前步对应的场景递进修改，返回完整 Python 代码。\n"
+        + _build_pyfii_usage_guide_context()
+        + "分步规则：\n"
+        "1) 当前步先保证该场景可执行与安全，可暂不追求终稿复杂度。\n"
+        "2) 逐步增强动作密度与队形变化，最后一步再收敛到完整终稿。\n"
+        "3) 必须按 inittime 分层组织，并使用 for 循环分组（groupA/groupB...）表达编队关系。\n"
+        "4) 每一步都应增加可见编队艺术性，参考 dntg20220730_3D.mp4 的层次与转场。\n"
         "硬约束：\n"
-        "1) takeoff 后首个 inittime>=4；inittime 不回退。\n"
-        "2) move2 前必须 VelXY 和 VelZ。\n"
-        "3) 保留结尾 land+end。\n"
-        "4) 动作要比上一版更丰富，且本步至少新增一次队形变化。\n"
-        "4.1) 严禁全机同路径/同目标点；至少分成 2 组以上目标。\n"
-        f"5) 必须使用 FPS={expected_fps}。\n"
-        "6) 不要输出解释，只输出完整代码。\n"
+        "1) takeoff 后首个 inittime>=max_takeoff_time+3（例：takeoff(1)->>=4, takeoff(2)->>=5）；inittime 不回退。\n"
+        "2) 每次 move2 前必须 VelXY 和 VelZ。\n"
+        "3) 可使用 delay(ms) 设计停顿节奏（非负整数）。\n"
+        "3) 6m 场地坐标范围：0<=x<=560, 0<=y<=560。\n"
+        "4) move2(x,y,z) 是绝对坐标移动，不是相对位移。\n"
+        "5) 相对位移请用 d.move(d.x+dx,d.y+dy,d.z+dz) 思路（d.x,d.y,d.z 为当前目标点）。\n"
+        "6) 必须保留 takeoff。\n"
+        "7) 最后一步必须包含 land+end；非最后一步也尽量保留。\n"
+        "8) 严禁全机同路径/同目标点；至少分成 2 组以上目标。\n"
+        "9) 每个 inittime 层必须有分组 for 块，不得只写零散单机动作。\n"
+        "10) 本步新增动作应尽量形成呼应/对称/扩散/收拢等艺术转场，而非随机位移。\n"
+        f"11) 必须使用 FPS={expected_fps}（若遗漏会由系统自动补齐）。\n"
+        "12) 只输出完整代码，不要解释。\n"
         f"用户意图: {config.user_intent}\n"
         f"机队: {to_dict(fleet)}\n"
         f"音乐分析: {analysis_payload}\n"
@@ -637,6 +1066,46 @@ def _build_action_step_prompt(
         f"{current_code}\n"
         "```"
     )
+
+
+def _run_reviewer_repair_once(
+    qwen_client: QwenVideoClient,
+    candidate: str,
+    errors: list[str],
+    expected_fps: int,
+) -> str | None:
+    try:
+        repaired_raw = qwen_client.generate_python_code(
+            _build_reviewer_repair_prompt(candidate_code=candidate, errors=errors, expected_fps=expected_fps)
+        )
+        repaired = _strip_markdown_code_fence(repaired_raw)
+        repaired = _normalize_generated_program_text(repaired, expected_fps=expected_fps)
+        return repaired
+    except Exception:
+        return None
+
+
+def _validate_then_maybe_repair(
+    qwen_client: QwenVideoClient,
+    validator: Callable[[str], list[str]],
+    candidate: str,
+    expected_fps: int,
+) -> tuple[str, list[str], bool]:
+    errors = validator(candidate)
+    if not errors:
+        return candidate, errors, False
+    repaired = _run_reviewer_repair_once(
+        qwen_client=qwen_client,
+        candidate=candidate,
+        errors=errors,
+        expected_fps=expected_fps,
+    )
+    if repaired is None:
+        return candidate, errors, False
+    repaired_errors = validator(repaired)
+    if repaired_errors:
+        return candidate, errors, False
+    return repaired, [], True
 
 
 def _generate_safe_program_with_qwen(
@@ -651,23 +1120,97 @@ def _generate_safe_program_with_qwen(
     prompt = prompt_zh
     last_errors: list[str] = ["unknown generation failure"]
 
-    for _ in range(max(1, int(max_attempts))):
+    for attempt in range(1, max(1, int(max_attempts)) + 1):
         candidate_raw = qwen_client.generate_python_code(prompt)
         candidate = _strip_markdown_code_fence(candidate_raw)
         candidate = _normalize_generated_program_text(candidate, expected_fps=expected_fps)
 
-        static_errors = _validate_generated_program_text(candidate, expected_fps=expected_fps)
+        candidate, static_errors, repaired_by_reviewer = _validate_then_maybe_repair(
+            qwen_client=qwen_client,
+            validator=lambda c: _validate_generated_program_text(c, expected_fps=expected_fps),
+            candidate=candidate,
+            expected_fps=expected_fps,
+        )
         if static_errors:
             last_errors = static_errors
+            _append_jsonl(
+                _inspection_rounds_path(out_dir),
+                {
+                    "type": "direct_codegen_attempt",
+                    "mode": "one_shot",
+                    "attempt": attempt,
+                    "accepted": False,
+                    "reason": "static_validation_failed",
+                    "errors": static_errors,
+                    "reviewer_repair_attempted": True,
+                },
+            )
+            _append_jsonl(
+                _qwen_calls_path(out_dir),
+                {
+                    "action": "generate_python_code_acceptance",
+                    "mode": "one_shot",
+                    "attempt": attempt,
+                    "accepted": False,
+                    "reason": "static_validation_failed",
+                    "errors": static_errors,
+                    "reviewer_repair_attempted": True,
+                },
+            )
             prompt = _build_codegen_fix_prompt(candidate, static_errors)
             continue
 
         program_file.write_text(candidate, encoding="utf-8")
         try:
             _ensure_render_project(out_dir, program_file, force=True)
+            _append_jsonl(
+                _inspection_rounds_path(out_dir),
+                {
+                    "type": "direct_codegen_attempt",
+                    "mode": "one_shot",
+                    "attempt": attempt,
+                    "accepted": True,
+                    "reason": "passed",
+                    "program_file": str(program_file),
+                    "reviewer_repaired": repaired_by_reviewer,
+                },
+            )
+            _append_jsonl(
+                _qwen_calls_path(out_dir),
+                {
+                    "action": "generate_python_code_acceptance",
+                    "mode": "one_shot",
+                    "attempt": attempt,
+                    "accepted": True,
+                    "reason": "passed",
+                    "reviewer_repaired": repaired_by_reviewer,
+                },
+            )
             return candidate
         except Exception as exc:
             last_errors = [f"program execution/render failed: {exc}"]
+            _append_jsonl(
+                _inspection_rounds_path(out_dir),
+                {
+                    "type": "direct_codegen_attempt",
+                    "mode": "one_shot",
+                    "attempt": attempt,
+                    "accepted": False,
+                    "reason": "execution_or_render_failed",
+                    "errors": last_errors,
+                },
+            )
+            _append_jsonl(
+                _qwen_calls_path(out_dir),
+                {
+                    "action": "generate_python_code_acceptance",
+                    "mode": "one_shot",
+                    "attempt": attempt,
+                    "accepted": False,
+                    "reason": "execution_or_render_failed",
+                    "errors": last_errors,
+                },
+            )
             prompt = _build_codegen_fix_prompt(candidate, last_errors)
 
     raise RuntimeError("qwen direct codegen failed after retries: " + "; ".join(last_errors))
@@ -716,6 +1259,25 @@ def _apply_direct_edit_rounds(
     return patched
 
 
+def _build_adaptive_step_prompt(base_prompt: str, failure_errors: list[str], attempt: int, max_attempts: int) -> str:
+    # 同一步连续失败时，逐轮强化约束并注入失败统计
+    if not failure_errors:
+        return base_prompt
+    freq: dict[str, int] = {}
+    for err in failure_errors:
+        freq[err] = freq.get(err, 0) + 1
+    top_items = sorted(freq.items(), key=lambda kv: (-kv[1], kv[0]))[:8]
+    top_lines = "\n".join([f"- {k} (x{v})" for k, v in top_items])
+    return (
+        base_prompt
+        + "\n\n"
+        + f"[系统追加约束 attempt {attempt}/{max_attempts}]\n"
+        + "你上一次输出未通过静态检查。请逐条修复以下高频失败项：\n"
+        + top_lines
+        + "\n必须直接输出完整 Python 代码，不得输出解释。"
+    )
+
+
 def _generate_program_stepwise_with_qwen(
     out_dir: Path,
     qwen_client: QwenVideoClient,
@@ -732,7 +1294,7 @@ def _generate_program_stepwise_with_qwen(
     _ensure_render_project(out_dir, program_file, force=True)
 
     try:
-        step_plan_text = qwen_client.generate_python_code(
+        step_plan_text = qwen_client.generate_design_text(
             _build_action_plan_prompt(config=config, analysis=analysis, total_steps=max(1, int(config.qwen_action_steps)))
         )
     except Exception:
@@ -754,15 +1316,58 @@ def _generate_program_stepwise_with_qwen(
         prompt = step_prompt
         step_ok = False
         last_errors: list[str] = []
+        failure_history: list[str] = []
 
         for attempt in range(1, max(1, int(config.qwen_step_patch_attempts)) + 1):
             try:
-                candidate_raw = qwen_client.generate_python_code(prompt)
+                effective_prompt = _build_adaptive_step_prompt(
+                    base_prompt=prompt,
+                    failure_errors=failure_history,
+                    attempt=attempt,
+                    max_attempts=max(1, int(config.qwen_step_patch_attempts)),
+                )
+                candidate_raw = qwen_client.generate_python_code(effective_prompt)
                 candidate = _strip_markdown_code_fence(candidate_raw)
                 candidate = _normalize_generated_program_text(candidate, expected_fps=expected_fps)
-                static_errors = _validate_generated_program_text(candidate, expected_fps=expected_fps)
+                candidate, static_errors, repaired_by_reviewer = _validate_then_maybe_repair(
+                    qwen_client=qwen_client,
+                    validator=lambda c: _validate_stepwise_candidate_text(
+                        c,
+                        expected_fps=expected_fps,
+                        step_idx=step_idx,
+                        total_steps=max(1, int(config.qwen_action_steps)),
+                    ),
+                    candidate=candidate,
+                    expected_fps=expected_fps,
+                )
                 if static_errors:
                     last_errors = static_errors
+                    failure_history.extend(static_errors)
+                    _append_jsonl(
+                        _inspection_rounds_path(out_dir),
+                        {
+                            "type": "direct_codegen_step_attempt",
+                            "step": step_idx,
+                            "attempt": attempt,
+                            "accepted": False,
+                            "reason": "static_validation_failed",
+                            "errors": static_errors,
+                            "reviewer_repair_attempted": True,
+                        },
+                    )
+                    _append_jsonl(
+                        _qwen_calls_path(out_dir),
+                        {
+                            "action": "generate_python_code_acceptance",
+                            "mode": "stepwise",
+                            "step": step_idx,
+                            "attempt": attempt,
+                            "accepted": False,
+                            "reason": "static_validation_failed",
+                            "errors": static_errors,
+                            "reviewer_repair_attempted": True,
+                        },
+                    )
                     prompt = _build_codegen_fix_prompt(candidate, static_errors)
                     continue
 
@@ -780,12 +1385,48 @@ def _generate_program_stepwise_with_qwen(
                         "step_file": str(step_file),
                     },
                 )
+                _append_jsonl(
+                    _qwen_calls_path(out_dir),
+                    {
+                        "action": "generate_python_code_acceptance",
+                        "mode": "stepwise",
+                        "step": step_idx,
+                        "attempt": attempt,
+                        "accepted": True,
+                        "reason": "passed",
+                        "step_file": str(step_file),
+                    },
+                )
                 current_code = candidate
                 successful_steps += 1
                 step_ok = True
                 break
             except Exception as exc:
                 last_errors = [f"step execution failed: {exc}"]
+                failure_history.extend(last_errors)
+                _append_jsonl(
+                    _inspection_rounds_path(out_dir),
+                    {
+                        "type": "direct_codegen_step_attempt",
+                        "step": step_idx,
+                        "attempt": attempt,
+                        "accepted": False,
+                        "reason": "execution_or_render_failed",
+                        "errors": last_errors,
+                    },
+                )
+                _append_jsonl(
+                    _qwen_calls_path(out_dir),
+                    {
+                        "action": "generate_python_code_acceptance",
+                        "mode": "stepwise",
+                        "step": step_idx,
+                        "attempt": attempt,
+                        "accepted": False,
+                        "reason": "execution_or_render_failed",
+                        "errors": last_errors,
+                    },
+                )
                 prompt = _build_codegen_fix_prompt(candidate if 'candidate' in locals() else current_code, last_errors)
 
         if not step_ok:
@@ -798,6 +1439,11 @@ def _generate_program_stepwise_with_qwen(
                     "errors": last_errors,
                 },
             )
+            if config.direct_wait_until_step_accepted:
+                raise RuntimeError(
+                    f"direct step {step_idx} failed after {max(1, int(config.qwen_step_patch_attempts))} attempts: "
+                    + "; ".join(last_errors)
+                )
             continue
 
     if successful_steps == 0:
@@ -1179,17 +1825,48 @@ def run_nl_choreo_pipeline(config: PipelineConfig, edit_rounds: list[str] | None
                         program_file=program_file,
                     )
                 except Exception:
-                    fallback_seed = _choose_direct_seed_program(
-                        config=config,
-                        deterministic_seed_program_text=deterministic_seed_program_text,
-                        fleet=fleet,
-                    )
-                    if fallback_seed is None:
-                        raise
-                    _log_progress("direct mode fallback: use configured direct seed")
-                    program_text = fallback_seed
-                    program_file.write_text(program_text, encoding="utf-8")
-                    _ensure_render_project(out_dir, program_file, force=True)
+                    if config.direct_use_structured_agent_fallback:
+                        _log_progress("direct mode fallback: structured pyfii coding agent")
+                        try:
+                            program_text = _generate_program_with_structured_coding_agent(
+                                out_dir=out_dir,
+                                qwen_client=qwen_client,
+                                config=config,
+                                fleet=fleet,
+                                analysis=analysis,
+                                expected_fps=max(40, int(config.render_fps)),
+                                program_file=program_file,
+                            )
+                        except Exception:
+                            fallback_seed = _choose_direct_seed_program(
+                                config=config,
+                                deterministic_seed_program_text=deterministic_seed_program_text,
+                                fleet=fleet,
+                            )
+                            if fallback_seed is None:
+                                _log_progress("direct mode fallback: force local freeform seed")
+                                fallback_seed = _build_freeform_seed_program(
+                                    output_path=str(out_dir / "nl_choreo_output"),
+                                    fleet=fleet,
+                                    music_path=config.audio_path,
+                                    render_fps=max(40, int(config.render_fps)),
+                                )
+                            _log_progress("direct mode fallback: use configured direct seed")
+                            program_text = fallback_seed
+                            program_file.write_text(program_text, encoding="utf-8")
+                            _ensure_render_project(out_dir, program_file, force=True)
+                    else:
+                        fallback_seed = _choose_direct_seed_program(
+                            config=config,
+                            deterministic_seed_program_text=deterministic_seed_program_text,
+                            fleet=fleet,
+                        )
+                        if fallback_seed is None:
+                            raise
+                        _log_progress("direct mode fallback: use configured direct seed")
+                        program_text = fallback_seed
+                        program_file.write_text(program_text, encoding="utf-8")
+                        _ensure_render_project(out_dir, program_file, force=True)
 
             rounds = edit_rounds or []
             if rounds:
@@ -1304,16 +1981,44 @@ def run_nl_choreo_pipeline(config: PipelineConfig, edit_rounds: list[str] | None
                                     program_file=program_file,
                                 )
                             except Exception:
-                                fallback_seed = _choose_direct_seed_program(
-                                    config=config,
-                                    deterministic_seed_program_text=deterministic_seed_program_text,
-                                    fleet=fleet,
-                                )
-                                if fallback_seed is None:
-                                    raise
-                                program_text = fallback_seed
-                                program_file.write_text(program_text, encoding="utf-8")
-                                _ensure_render_project(out_dir, program_file, force=True)
+                                if config.direct_use_structured_agent_fallback:
+                                    try:
+                                        program_text = _generate_program_with_structured_coding_agent(
+                                            out_dir=out_dir,
+                                            qwen_client=qwen_client,
+                                            config=config,
+                                            fleet=fleet,
+                                            analysis=analysis,
+                                            expected_fps=max(40, int(config.render_fps)),
+                                            program_file=program_file,
+                                        )
+                                    except Exception:
+                                        fallback_seed = _choose_direct_seed_program(
+                                            config=config,
+                                            deterministic_seed_program_text=deterministic_seed_program_text,
+                                            fleet=fleet,
+                                        )
+                                        if fallback_seed is None:
+                                            fallback_seed = _build_freeform_seed_program(
+                                                output_path=str(out_dir / "nl_choreo_output"),
+                                                fleet=fleet,
+                                                music_path=config.audio_path,
+                                                render_fps=max(40, int(config.render_fps)),
+                                            )
+                                        program_text = fallback_seed
+                                        program_file.write_text(program_text, encoding="utf-8")
+                                        _ensure_render_project(out_dir, program_file, force=True)
+                                else:
+                                    fallback_seed = _choose_direct_seed_program(
+                                        config=config,
+                                        deterministic_seed_program_text=deterministic_seed_program_text,
+                                        fleet=fleet,
+                                    )
+                                    if fallback_seed is None:
+                                        raise
+                                    program_text = fallback_seed
+                                    program_file.write_text(program_text, encoding="utf-8")
+                                    _ensure_render_project(out_dir, program_file, force=True)
                     else:
                         program_text = seed_program_text
                         program_file.write_text(program_text, encoding="utf-8")

@@ -43,6 +43,10 @@ class QwenConfig:
     use_local_video_path: bool = False
     local_video_mode: str = "file_url"  # file_url | path_text
     inspect_auto_fallback_to_upload: bool = False
+    design_temperature: float = 0.85
+    design_top_p: float = 0.95
+    codegen_temperature: float = 0.1
+    codegen_top_p: float = 0.9
     retry: RetryPolicy = field(default_factory=RetryPolicy)
     timeout: TimeoutPolicy = field(default_factory=TimeoutPolicy)
 
@@ -291,8 +295,16 @@ class QwenVideoClient:
 
         return self._retry_loop("inspect_video", _do_inspect)
 
-    def generate_python_code(self, prompt_zh: str, max_tokens: int = 8192) -> str:
-        # 生成 pyfii Python 脚本（纯文本）
+    def generate_text(
+        self,
+        prompt_zh: str,
+        *,
+        max_tokens: int = 8192,
+        temperature: float | None = None,
+        top_p: float | None = None,
+        action_name: str = "generate_python_code",
+    ) -> str:
+        # 通用文本生成：允许按阶段设置不同温度参数
         messages = [{"role": "user", "content": [{"type": "text", "text": prompt_zh}]}]
 
         def _do_generate() -> str:
@@ -301,15 +313,15 @@ class QwenVideoClient:
                     model=self.config.model,
                     messages=messages,
                     max_tokens=max_tokens,
-                    temperature=0.3,
-                    top_p=0.9,
+                    temperature=float(self.config.codegen_temperature if temperature is None else temperature),
+                    top_p=float(self.config.codegen_top_p if top_p is None else top_p),
                     timeout=self.config.timeout.inspect_sec,
                 )
                 dumped = response.model_dump()
                 usage = self._accumulate_usage(dumped)
                 self._log_attempt(
                     {
-                        "action": "generate_python_code_usage",
+                        "action": f"{action_name}_usage",
                         "ok": True,
                         "usage": usage,
                         "usage_cumulative": dict(self._token_usage),
@@ -339,4 +351,16 @@ class QwenVideoClient:
                     raise QwenNonRetryableError(f"generate non-retryable error: {msg}") from exc
                 raise QwenRetryableError(f"generate unknown error: {msg}") from exc
 
-        return self._retry_loop("generate_python_code", _do_generate)
+        return self._retry_loop(action_name, _do_generate)
+
+    def generate_python_code(self, prompt_zh: str, max_tokens: int = 8192) -> str:
+        return self.generate_text(prompt_zh=prompt_zh, max_tokens=max_tokens, action_name="generate_python_code")
+
+    def generate_design_text(self, prompt_zh: str, max_tokens: int = 4096) -> str:
+        return self.generate_text(
+            prompt_zh=prompt_zh,
+            max_tokens=max_tokens,
+            temperature=float(self.config.design_temperature),
+            top_p=float(self.config.design_top_p),
+            action_name="generate_design_text",
+        )
