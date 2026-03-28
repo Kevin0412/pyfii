@@ -216,7 +216,7 @@ class QwenVideoClient:
 
     def inspect_video(self, video_urls: list[str], prompt_zh: str, max_tokens: int = 8192) -> dict[str, Any]:
         # 使用中文提示词进行视觉评估（可携带多路视频）
-        local_mode = self.config.local_video_mode if self.config.use_local_video_path else "file_url"
+        local_mode = self.config.local_video_mode if self.config.use_local_video_path else "video_url"
         content = self._build_inspect_content(video_urls=video_urls, prompt_zh=prompt_zh, local_mode=local_mode)
         messages = [{"role": "user", "content": content}]
 

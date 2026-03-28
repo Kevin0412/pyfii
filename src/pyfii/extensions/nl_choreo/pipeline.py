@@ -193,30 +193,51 @@ def _build_freeform_seed_program(
     fleet: FleetSpec,
     music_path: str,
     render_fps: int,
+    target_output_duration_sec: float | None = None,
 ) -> str:
-    # 极简可运行脚手架：只含起降与渲染，动作由 Qwen 自主改写
+    # 可运行自由编舞脚手架：默认使用分层分组循环，避免退化为单层短动作
     ctor = "pf.Drone" if fleet.fleet_type == "F400" else "pf.Drone6"
     config_name = "pf.drone_config_6m"
     start_positions = _freeform_start_positions(fleet.drone_count)
+    target_output = max(10.0, float(target_output_duration_sec or 24.0))
+    target_script = max(8.0, target_output - 3.0)
+    layer_count = max(4, int(ceil(target_script / 8.0)))
 
     lines: list[str] = _pyfii_bootstrap_lines() + [
-        "# Qwen 自由编舞初始脚手架（无固定图案库）",
+        "# Qwen 自由编舞初始脚手架（分层+分组循环）",
     ]
     for idx in range(fleet.drone_count):
         lines.append(f"d{idx + 1}={ctor}(0,0,{config_name},\"192.168.51.{51 + idx}\")")
     lines.append("")
     lines.append("ds=[" + ",".join([f"d{i+1}" for i in range(fleet.drone_count)]) + "]")
+    lines.append("group_a=ds[::2]")
+    lines.append("group_b=ds[1::2]")
     lines.append(f"start_positions={repr(start_positions)}")
     lines.append("for d,p in zip(ds,start_positions):")
     lines.append("    d.X=d.x=p[0]")
     lines.append("    d.Y=d.y=p[1]")
-    lines.append("    d.takeoff(1,80)")
+    lines.append("    d.takeoff(1,100)")
     lines.append("")
-    lines.append("for d in ds:")
-    lines.append("    d.inittime(4)")
-    lines.append("    d.VelXY(120,240)")
-    lines.append("    d.VelZ(120,240)")
-    lines.append("    d.move2(d.X,d.Y,100)")
+    lines.append(f"for li in range({layer_count}):")
+    lines.append("    t=4+li*8")
+    lines.append("    for gi,d in enumerate(group_a):")
+    lines.append("        d.inittime(t)")
+    lines.append("        d.VelXY(120,240)")
+    lines.append("        d.VelZ(120,240)")
+    lines.append("        x=max(0,min(560,d.X-60+li*18+gi*22))")
+    lines.append("        y=max(0,min(560,d.Y+((li%3)-1)*40+gi*8))")
+    lines.append("        z=max(90,min(220,110+(li%4)*12))")
+    lines.append("        d.move2(int(x),int(y),int(z))")
+    lines.append("        d.delay(900)")
+    lines.append("    for gi,d in enumerate(group_b):")
+    lines.append("        d.inittime(t)")
+    lines.append("        d.VelXY(120,240)")
+    lines.append("        d.VelZ(120,240)")
+    lines.append("        x=max(0,min(560,d.X+60-li*16-gi*20))")
+    lines.append("        y=max(0,min(560,d.Y-((li%3)-1)*36-gi*10))")
+    lines.append("        z=max(90,min(220,118+((li+1)%4)*10))")
+    lines.append("        d.move2(int(x),int(y),int(z))")
+    lines.append("        d.delay(900)")
     lines.append("")
     lines.append("for d in ds:")
     lines.append("    d.land()")
@@ -322,6 +343,8 @@ def _choose_direct_seed_program(
     config: PipelineConfig,
     deterministic_seed_program_text: str | None,
     fleet: FleetSpec,
+    *,
+    target_output_duration_sec: float | None = None,
 ) -> str | None:
     # direct_fallback_mode 仅决定 direct 模式最终兜底是否注入 pattern seed
     if config.direct_fallback_mode == "pattern_seed":
@@ -332,6 +355,7 @@ def _choose_direct_seed_program(
             fleet=fleet,
             music_path=config.audio_path,
             render_fps=max(40, int(config.render_fps)),
+            target_output_duration_sec=target_output_duration_sec,
         )
     return None
 
@@ -395,6 +419,29 @@ def _probe_video_duration_sec(video_path: str) -> float:
     except Exception:
         return 0.0
     return float((payload.get("format") or {}).get("duration") or 0.0)
+
+
+def _duration_targets_sec(analysis: MusicAnalysis, force_duration_sec: float | None) -> tuple[float, float, float, float]:
+    # 输出视频时长目标 + 脚本动作时长目标（show 会额外增加约 3 秒尾帧）
+    target_output = float(force_duration_sec) if force_duration_sec is not None else float(analysis.duration)
+    target_output = max(10.0, target_output)
+    target_script = max(7.0, target_output - 3.0)
+    if force_duration_sec is not None:
+        out_min = max(10.0, target_output - 5.0)
+        out_max = target_output + 6.0
+    else:
+        out_min = max(10.0, target_output * 0.85)
+        out_max = target_output * 1.15
+    return target_output, target_script, out_min, out_max
+
+
+def _validate_output_duration(video_path: str, out_min_sec: float, out_max_sec: float) -> str | None:
+    dur = _probe_video_duration_sec(video_path)
+    if dur <= 0:
+        return f"duration probe failed for output video: {video_path}"
+    if dur < out_min_sec or dur > out_max_sec:
+        return f"output duration out of range: got={dur:.2f}s, require=[{out_min_sec:.2f},{out_max_sec:.2f}]s"
+    return None
 
 
 def _coerce_duration_if_needed(analysis: MusicAnalysis, force_duration_sec: float | None) -> MusicAnalysis:
@@ -559,7 +606,11 @@ def _normalize_generated_program_text(program_text: str, expected_fps: int) -> s
     def _fix_inittime(match: re.Match[str]) -> str:
         nonlocal prev_init
         raw_text = match.group(1).strip()
-        raw = int(float(raw_text))
+        try:
+            raw = int(float(raw_text))
+        except Exception:
+            # 非常量表达式（如 inittime(t)）保留原样
+            return match.group(0)
         fixed = max(first_inittime_floor, raw, prev_init)
         prev_init = fixed
         return f".inittime({fixed})"
@@ -626,8 +677,13 @@ def _normalize_generated_program_text(program_text: str, expected_fps: int) -> s
     return normalized
 
 
-def _validate_generated_program_text(program_text: str, expected_fps: int) -> list[str]:
-    # 代码级快速安全门：时间单调、首动作时刻、关键动作完整性 + 基础编舞质量约束
+def _validate_generated_program_text(
+    program_text: str,
+    expected_fps: int,
+    *,
+    target_script_duration_sec: float | None = None,
+) -> list[str]:
+    # 代码级快速安全门：时间单调、首动作时刻、关键动作完整性 + 编舞质量约束
     errors: list[str] = []
     lower = program_text.lower()
 
@@ -665,19 +721,32 @@ def _validate_generated_program_text(program_text: str, expected_fps: int) -> li
 
     # FPS 由归一化阶段补齐，不作为拒收条件
 
-    # 至少应有多段 move2，避免“起飞后仅一次动作”的空洞脚本
     move2_calls = len(re.findall(r"\.move2\(", lower))
-    if move2_calls < 3:
-        errors.append(f"insufficient choreography complexity: move2 calls={move2_calls}, require >=3")
+    if move2_calls < 6:
+        errors.append(f"insufficient choreography complexity: move2 calls={move2_calls}, require >=6")
 
-    # 禁止盲目同路径：for d in ds 内直接 move2(d.X,d.Y,...) 风险极高
     if re.search(r"for\s+\w+\s+in\s+ds\s*:[\s\S]{0,220}?\.move2\(\s*\w+\.x\s*,\s*\w+\.y\s*,", lower):
         errors.append("unsafe same-path pattern: blind loop move2(d.X,d.Y,...) detected")
 
-    # 若使用常量 move2 目标，至少应有 2 组不同目标，避免全体同目标
     literal_targets = re.findall(r"\.move2\(\s*(-?\d+)\s*,\s*(-?\d+)\s*,\s*(-?\d+)\s*\)", lower)
-    if literal_targets and len(set(literal_targets)) < 2:
-        errors.append("insufficient target diversity: all literal move2 targets are identical")
+    if literal_targets and len(set(literal_targets)) < 6:
+        errors.append("insufficient target diversity: require >=6 distinct literal move2 targets")
+
+    group_loop_count = len(re.findall(r"for\s+\w+\s+in\s+(?:ds|group_\w+)", lower))
+    if group_loop_count < 3:
+        errors.append("style requirement failed: require grouped for-loop structure (ds/group_*)")
+
+    per_drone_literal_blocks = len(re.findall(r"\bd\d+\.inittime\(", lower))
+    if per_drone_literal_blocks >= 7 and group_loop_count == 0:
+        errors.append("style requirement failed: avoid repeated d1/d2/... literal per-drone blocks, use ds/group loops")
+
+    if target_script_duration_sec is not None and times:
+        max_t = max(times)
+        min_required_t = max(8, int(target_script_duration_sec - 8.0))
+        if max_t < min_required_t:
+            errors.append(
+                f"insufficient timeline horizon: max inittime={max_t}, require >= {min_required_t} for target duration"
+            )
 
     return errors
 
@@ -687,6 +756,8 @@ def _validate_stepwise_candidate_text(
     expected_fps: int,
     step_idx: int,
     total_steps: int,
+    *,
+    target_script_duration_sec: float | None = None,
 ) -> list[str]:
     # stepwise 阶段允许渐进增强，避免首步因“完整终稿约束”被过度拦截
     errors: list[str] = []
@@ -723,11 +794,24 @@ def _validate_stepwise_candidate_text(
     # FPS 由归一化阶段补齐，不作为拒收条件
 
     move2_calls = len(re.findall(r"\.move2\(", lower))
-    if move2_calls < 1:
-        errors.append(f"insufficient choreography complexity: move2 calls={move2_calls}, require >=1")
+    min_move2 = 6 if step_idx >= total_steps else 1
+    if move2_calls < min_move2:
+        errors.append(f"insufficient choreography complexity: move2 calls={move2_calls}, require >={min_move2}")
 
     if re.search(r"for\s+\w+\s+in\s+ds\s*:[\s\S]{0,220}?\.move2\(\s*\w+\.x\s*,\s*\w+\.y\s*,", lower):
         errors.append("unsafe same-path pattern: blind loop move2(d.X,d.Y,...) detected")
+
+    if step_idx >= total_steps:
+        group_loop_count = len(re.findall(r"for\s+\w+\s+in\s+(?:ds|group_\w+)", lower))
+        if group_loop_count < 3:
+            errors.append("style requirement failed: final step requires grouped for-loop structure (ds/group_*)")
+        if target_script_duration_sec is not None and times:
+            max_t = max(times)
+            min_required_t = max(8, int(target_script_duration_sec - 8.0))
+            if max_t < min_required_t:
+                errors.append(
+                    f"insufficient timeline horizon: max inittime={max_t}, require >= {min_required_t} for target duration"
+                )
 
     return errors
 
@@ -908,8 +992,13 @@ def _generate_program_with_structured_coding_agent(
     analysis: MusicAnalysis,
     expected_fps: int,
     program_file: Path,
+    *,
+    target_script_duration_sec: float | None = None,
+    output_duration_range_sec: tuple[float, float] | None = None,
+    effective_action_steps: int | None = None,
 ) -> str:
-    plan_prompt = _build_structured_plan_prompt(config=config, fleet=fleet, analysis=analysis, steps=max(3, int(config.qwen_action_steps)))
+    struct_steps = max(3, int(effective_action_steps if effective_action_steps is not None else config.qwen_action_steps))
+    plan_prompt = _build_structured_plan_prompt(config=config, fleet=fleet, analysis=analysis, steps=struct_steps)
     plan_text = qwen_client.generate_design_text(plan_prompt)
     compiled = _compile_structured_plan_to_pyfii(
         plan_text=plan_text,
@@ -924,7 +1013,7 @@ def _generate_program_with_structured_coding_agent(
             "layers": [],
         }
         positions = _freeform_start_positions(fleet.drone_count)
-        for li in range(max(3, int(config.qwen_action_steps))):
+        for li in range(struct_steps):
             t = 4 + li * 4
             targets: list[dict[str, int]] = []
             for i in range(fleet.drone_count):
@@ -944,11 +1033,24 @@ def _generate_program_with_structured_coding_agent(
         if not compiled:
             raise RuntimeError("structured coding-agent plan parse/compile failed")
     compiled = _normalize_generated_program_text(compiled, expected_fps=expected_fps)
-    static_errors = _validate_generated_program_text(compiled, expected_fps=expected_fps)
+    static_errors = _validate_generated_program_text(
+        compiled,
+        expected_fps=expected_fps,
+        target_script_duration_sec=target_script_duration_sec,
+    )
     if static_errors:
         raise RuntimeError("structured coding-agent generated invalid script: " + "; ".join(static_errors))
     program_file.write_text(compiled, encoding="utf-8")
     _ensure_render_project(out_dir, program_file, force=True)
+    if output_duration_range_sec is not None:
+        out_min_sec, out_max_sec = output_duration_range_sec
+        duration_err = _validate_output_duration(
+            video_path=str(out_dir / "nl_choreo_output.mp4"),
+            out_min_sec=float(out_min_sec),
+            out_max_sec=float(out_max_sec),
+        )
+        if duration_err:
+            raise RuntimeError(duration_err)
     _append_jsonl(
         _qwen_calls_path(out_dir),
         {
@@ -1115,6 +1217,9 @@ def _generate_safe_program_with_qwen(
     max_attempts: int,
     expected_fps: int,
     program_file: Path,
+    *,
+    target_script_duration_sec: float | None = None,
+    output_duration_range_sec: tuple[float, float] | None = None,
 ) -> str:
     # 代码生成-执行闭环：若不安全/不可执行则把问题回传给 Qwen 修复
     prompt = prompt_zh
@@ -1127,7 +1232,11 @@ def _generate_safe_program_with_qwen(
 
         candidate, static_errors, repaired_by_reviewer = _validate_then_maybe_repair(
             qwen_client=qwen_client,
-            validator=lambda c: _validate_generated_program_text(c, expected_fps=expected_fps),
+            validator=lambda c: _validate_generated_program_text(
+                c,
+                expected_fps=expected_fps,
+                target_script_duration_sec=target_script_duration_sec,
+            ),
             candidate=candidate,
             expected_fps=expected_fps,
         )
@@ -1163,6 +1272,15 @@ def _generate_safe_program_with_qwen(
         program_file.write_text(candidate, encoding="utf-8")
         try:
             _ensure_render_project(out_dir, program_file, force=True)
+            if output_duration_range_sec is not None:
+                out_min_sec, out_max_sec = output_duration_range_sec
+                duration_err = _validate_output_duration(
+                    video_path=str(out_dir / "nl_choreo_output.mp4"),
+                    out_min_sec=float(out_min_sec),
+                    out_max_sec=float(out_max_sec),
+                )
+                if duration_err:
+                    raise RuntimeError(duration_err)
             _append_jsonl(
                 _inspection_rounds_path(out_dir),
                 {
@@ -1224,6 +1342,9 @@ def _apply_direct_edit_rounds(
     dialogue_manager: DialogueManager,
     out_dir: Path,
     program_file: Path,
+    *,
+    target_script_duration_sec: float | None = None,
+    output_duration_range_sec: tuple[float, float] | None = None,
 ) -> str:
     patched = current_code
     for idx, patch_text in enumerate(rounds, start=1):
@@ -1242,6 +1363,8 @@ def _apply_direct_edit_rounds(
                 max_attempts=2,
                 expected_fps=expected_fps,
                 program_file=program_file,
+                target_script_duration_sec=target_script_duration_sec,
+                output_duration_range_sec=output_duration_range_sec,
             )
         except Exception as exc:
             summary = f"direct patch failed: {exc}"
@@ -1287,29 +1410,35 @@ def _generate_program_stepwise_with_qwen(
     seed_program_text: str,
     expected_fps: int,
     program_file: Path,
+    *,
+    target_script_duration_sec: float | None = None,
+    output_duration_range_sec: tuple[float, float] | None = None,
+    effective_action_steps: int | None = None,
 ) -> str:
     # 动作级迭代生成：先规划步骤，再逐步改写完整脚本并执行反馈
     current_code = seed_program_text
     program_file.write_text(current_code, encoding="utf-8")
     _ensure_render_project(out_dir, program_file, force=True)
 
+    total_steps = max(1, int(effective_action_steps if effective_action_steps is not None else config.qwen_action_steps))
+
     try:
         step_plan_text = qwen_client.generate_design_text(
-            _build_action_plan_prompt(config=config, analysis=analysis, total_steps=max(1, int(config.qwen_action_steps)))
+            _build_action_plan_prompt(config=config, analysis=analysis, total_steps=total_steps)
         )
     except Exception:
         step_plan_text = "Step1: 强化队形变化并增加动作频率"
 
     successful_steps = 0
-    for step_idx in range(1, max(1, int(config.qwen_action_steps)) + 1):
-        _log_progress(f"direct step {step_idx}/{config.qwen_action_steps}")
+    for step_idx in range(1, total_steps + 1):
+        _log_progress(f"direct step {step_idx}/{total_steps}")
         step_prompt = _build_action_step_prompt(
             config=config,
             fleet=fleet,
             analysis=analysis,
             step_plan_text=step_plan_text,
             step_idx=step_idx,
-            total_steps=max(1, int(config.qwen_action_steps)),
+            total_steps=total_steps,
             current_code=current_code,
             expected_fps=expected_fps,
         )
@@ -1335,7 +1464,8 @@ def _generate_program_stepwise_with_qwen(
                         c,
                         expected_fps=expected_fps,
                         step_idx=step_idx,
-                        total_steps=max(1, int(config.qwen_action_steps)),
+                        total_steps=total_steps,
+                        target_script_duration_sec=target_script_duration_sec,
                     ),
                     candidate=candidate,
                     expected_fps=expected_fps,
@@ -1373,6 +1503,15 @@ def _generate_program_stepwise_with_qwen(
 
                 program_file.write_text(candidate, encoding="utf-8")
                 _ensure_render_project(out_dir, program_file, force=True)
+                if output_duration_range_sec is not None and step_idx >= total_steps:
+                    out_min_sec, out_max_sec = output_duration_range_sec
+                    duration_err = _validate_output_duration(
+                        video_path=str(out_dir / "nl_choreo_output.mp4"),
+                        out_min_sec=float(out_min_sec),
+                        out_max_sec=float(out_max_sec),
+                    )
+                    if duration_err:
+                        raise RuntimeError(duration_err)
                 step_file = out_dir / f"nl_choreo_step_{step_idx:02d}.py"
                 step_file.write_text(candidate, encoding="utf-8")
                 _append_jsonl(
@@ -1451,6 +1590,15 @@ def _generate_program_stepwise_with_qwen(
 
     program_file.write_text(current_code, encoding="utf-8")
     _ensure_render_project(out_dir, program_file, force=True)
+    if output_duration_range_sec is not None:
+        out_min_sec, out_max_sec = output_duration_range_sec
+        duration_err = _validate_output_duration(
+            video_path=str(out_dir / "nl_choreo_output.mp4"),
+            out_min_sec=float(out_min_sec),
+            out_max_sec=float(out_max_sec),
+        )
+        if duration_err:
+            raise RuntimeError(duration_err)
     return current_code
 
 
@@ -1707,6 +1855,19 @@ def run_nl_choreo_pipeline(config: PipelineConfig, edit_rounds: list[str] | None
             analysis = _coerce_duration_if_needed(analysis, config.force_duration_sec)
             validate_duration(analysis.duration)
 
+        target_output_duration_sec, target_script_duration_sec, output_dur_min_sec, output_dur_max_sec = _duration_targets_sec(
+            analysis=analysis,
+            force_duration_sec=config.force_duration_sec,
+        )
+        target_script_duration_sec = target_script_duration_sec if config.force_duration_sec is not None else None
+        strict_output_duration_range_sec = (
+            (output_dur_min_sec, output_dur_max_sec) if config.force_duration_sec is not None else None
+        )
+
+        effective_action_steps = max(1, int(config.qwen_action_steps))
+        if config.direct_python_codegen and target_script_duration_sec is not None and target_script_duration_sec > 0:
+            effective_action_steps = max(effective_action_steps, int(ceil(target_script_duration_sec / 8.0)))
+
         _log_progress("building scene plan")
         plan = build_scene_plan(config.user_intent, analysis, fleet)
         validate_scene_plan(plan)
@@ -1785,6 +1946,7 @@ def run_nl_choreo_pipeline(config: PipelineConfig, edit_rounds: list[str] | None
                 fleet=fleet,
                 music_path=config.audio_path,
                 render_fps=max(40, int(config.render_fps)),
+                target_output_duration_sec=target_output_duration_sec,
             )
         else:
             if deterministic_seed_program_text is None:
@@ -1803,6 +1965,9 @@ def run_nl_choreo_pipeline(config: PipelineConfig, edit_rounds: list[str] | None
                     seed_program_text=seed_program_text,
                     expected_fps=max(40, int(config.render_fps)),
                     program_file=program_file,
+                    target_script_duration_sec=target_script_duration_sec,
+                    output_duration_range_sec=strict_output_duration_range_sec,
+                    effective_action_steps=effective_action_steps,
                 )
             except Exception:
                 _log_progress("direct mode stepwise failed, fallback to one-shot full script")
@@ -1823,6 +1988,8 @@ def run_nl_choreo_pipeline(config: PipelineConfig, edit_rounds: list[str] | None
                         max_attempts=config.max_python_regen_attempts,
                         expected_fps=max(40, int(config.render_fps)),
                         program_file=program_file,
+                        target_script_duration_sec=target_script_duration_sec,
+                        output_duration_range_sec=strict_output_duration_range_sec,
                     )
                 except Exception:
                     if config.direct_use_structured_agent_fallback:
@@ -1836,37 +2003,62 @@ def run_nl_choreo_pipeline(config: PipelineConfig, edit_rounds: list[str] | None
                                 analysis=analysis,
                                 expected_fps=max(40, int(config.render_fps)),
                                 program_file=program_file,
+                                target_script_duration_sec=target_script_duration_sec,
+                                output_duration_range_sec=strict_output_duration_range_sec,
+                                effective_action_steps=effective_action_steps,
                             )
                         except Exception:
                             fallback_seed = _choose_direct_seed_program(
                                 config=config,
                                 deterministic_seed_program_text=deterministic_seed_program_text,
                                 fleet=fleet,
+                                target_output_duration_sec=target_output_duration_sec,
                             )
+                            if fallback_seed is None and deterministic_seed_program_text is not None:
+                                _log_progress("direct mode fallback: use deterministic scene seed")
+                                fallback_seed = deterministic_seed_program_text
                             if fallback_seed is None:
-                                _log_progress("direct mode fallback: force local freeform seed")
+                                _log_progress("direct mode fallback: use duration-safe freeform seed")
                                 fallback_seed = _build_freeform_seed_program(
                                     output_path=str(out_dir / "nl_choreo_output"),
                                     fleet=fleet,
                                     music_path=config.audio_path,
                                     render_fps=max(40, int(config.render_fps)),
+                                    target_output_duration_sec=target_output_duration_sec,
                                 )
                             _log_progress("direct mode fallback: use configured direct seed")
                             program_text = fallback_seed
                             program_file.write_text(program_text, encoding="utf-8")
                             _ensure_render_project(out_dir, program_file, force=True)
+                            duration_err = _validate_output_duration(
+                                video_path=str(out_dir / "nl_choreo_output.mp4"),
+                                out_min_sec=output_dur_min_sec,
+                                out_max_sec=output_dur_max_sec,
+                            ) if strict_output_duration_range_sec is not None else None
+                            if duration_err:
+                                raise RuntimeError(duration_err)
                     else:
                         fallback_seed = _choose_direct_seed_program(
                             config=config,
                             deterministic_seed_program_text=deterministic_seed_program_text,
                             fleet=fleet,
+                            target_output_duration_sec=target_output_duration_sec,
                         )
+                        if fallback_seed is None and deterministic_seed_program_text is not None:
+                            fallback_seed = deterministic_seed_program_text
                         if fallback_seed is None:
                             raise
                         _log_progress("direct mode fallback: use configured direct seed")
                         program_text = fallback_seed
                         program_file.write_text(program_text, encoding="utf-8")
                         _ensure_render_project(out_dir, program_file, force=True)
+                        duration_err = _validate_output_duration(
+                            video_path=str(out_dir / "nl_choreo_output.mp4"),
+                            out_min_sec=output_dur_min_sec,
+                            out_max_sec=output_dur_max_sec,
+                        )
+                        if duration_err:
+                            raise RuntimeError(duration_err)
 
             rounds = edit_rounds or []
             if rounds:
@@ -1878,6 +2070,8 @@ def run_nl_choreo_pipeline(config: PipelineConfig, edit_rounds: list[str] | None
                     dialogue_manager=dialogue_manager,
                     out_dir=out_dir,
                     program_file=program_file,
+                    target_script_duration_sec=target_script_duration_sec,
+                    output_duration_range_sec=strict_output_duration_range_sec,
                 )
         else:
             program_text = seed_program_text
@@ -1960,6 +2154,9 @@ def run_nl_choreo_pipeline(config: PipelineConfig, edit_rounds: list[str] | None
                                 seed_program_text=seed_program_text,
                                 expected_fps=max(40, int(config.render_fps)),
                                 program_file=program_file,
+                                target_script_duration_sec=target_script_duration_sec,
+                                output_duration_range_sec=strict_output_duration_range_sec,
+                                effective_action_steps=effective_action_steps,
                             )
                         except Exception:
                             prompt_zh = _build_direct_codegen_prompt(
@@ -1979,6 +2176,8 @@ def run_nl_choreo_pipeline(config: PipelineConfig, edit_rounds: list[str] | None
                                     max_attempts=config.max_python_regen_attempts,
                                     expected_fps=max(40, int(config.render_fps)),
                                     program_file=program_file,
+                                    target_script_duration_sec=target_script_duration_sec,
+                                    output_duration_range_sec=strict_output_duration_range_sec,
                                 )
                             except Exception:
                                 if config.direct_use_structured_agent_fallback:
@@ -1991,34 +2190,64 @@ def run_nl_choreo_pipeline(config: PipelineConfig, edit_rounds: list[str] | None
                                             analysis=analysis,
                                             expected_fps=max(40, int(config.render_fps)),
                                             program_file=program_file,
+                                            target_script_duration_sec=target_script_duration_sec,
+                                            output_duration_range_sec=strict_output_duration_range_sec,
+                                            effective_action_steps=effective_action_steps,
                                         )
                                     except Exception:
                                         fallback_seed = _choose_direct_seed_program(
                                             config=config,
                                             deterministic_seed_program_text=deterministic_seed_program_text,
                                             fleet=fleet,
+                                            target_output_duration_sec=target_output_duration_sec,
                                         )
+                                        if fallback_seed is None and deterministic_seed_program_text is not None:
+                                            fallback_seed = deterministic_seed_program_text
                                         if fallback_seed is None:
                                             fallback_seed = _build_freeform_seed_program(
                                                 output_path=str(out_dir / "nl_choreo_output"),
                                                 fleet=fleet,
                                                 music_path=config.audio_path,
                                                 render_fps=max(40, int(config.render_fps)),
+                                                target_output_duration_sec=target_output_duration_sec,
                                             )
                                         program_text = fallback_seed
                                         program_file.write_text(program_text, encoding="utf-8")
                                         _ensure_render_project(out_dir, program_file, force=True)
+                                        duration_err = _validate_output_duration(
+                                            video_path=str(out_dir / "nl_choreo_output.mp4"),
+                                            out_min_sec=output_dur_min_sec,
+                                            out_max_sec=output_dur_max_sec,
+                                        )
+                                        if duration_err:
+                                            raise RuntimeError(duration_err)
                                 else:
                                     fallback_seed = _choose_direct_seed_program(
                                         config=config,
                                         deterministic_seed_program_text=deterministic_seed_program_text,
                                         fleet=fleet,
+                                        target_output_duration_sec=target_output_duration_sec,
                                     )
+                                    if fallback_seed is None and deterministic_seed_program_text is not None:
+                                        fallback_seed = deterministic_seed_program_text
                                     if fallback_seed is None:
-                                        raise
+                                        fallback_seed = _build_freeform_seed_program(
+                                            output_path=str(out_dir / "nl_choreo_output"),
+                                            fleet=fleet,
+                                            music_path=config.audio_path,
+                                            render_fps=max(40, int(config.render_fps)),
+                                            target_output_duration_sec=target_output_duration_sec,
+                                        )
                                     program_text = fallback_seed
                                     program_file.write_text(program_text, encoding="utf-8")
                                     _ensure_render_project(out_dir, program_file, force=True)
+                                    duration_err = _validate_output_duration(
+                                        video_path=str(out_dir / "nl_choreo_output.mp4"),
+                                        out_min_sec=output_dur_min_sec,
+                                        out_max_sec=output_dur_max_sec,
+                                    )
+                                    if duration_err:
+                                        raise RuntimeError(duration_err)
                     else:
                         program_text = seed_program_text
                         program_file.write_text(program_text, encoding="utf-8")

@@ -30,7 +30,7 @@ if __name__ == "__main__":
             upload_endpoint="https://ai.kevin0412.top/video-upload/v1/videos",
             model="Qwen3.5-35B-A3B-FP8",
             fps=2,
-            use_local_video_path=True,
+            use_local_video_path=False,
             local_video_mode="file_url",
             inspect_auto_fallback_to_upload=False,
             retry=RetryPolicy(max_attempts=5),
