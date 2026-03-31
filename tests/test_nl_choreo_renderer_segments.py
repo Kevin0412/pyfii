@@ -3,7 +3,10 @@ import sys
 import tempfile
 import unittest
 
-import cv2
+try:
+    import cv2
+except Exception:  # pragma: no cover
+    cv2 = None
 import numpy as np
 
 path = os.getcwd() + r'/src/pyfii'
@@ -13,6 +16,7 @@ from extensions.nl_choreo.renderer import cut_video_segment
 
 
 class TestNlChoreoRendererSegments(unittest.TestCase):
+    @unittest.skipIf(cv2 is None, "cv2 not installed")
     def test_cut_video_segment(self):
         with tempfile.TemporaryDirectory() as d:
             src = os.path.join(d, "src.mp4")

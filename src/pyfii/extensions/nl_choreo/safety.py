@@ -5,6 +5,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from math import sqrt
+import re
 from typing import Any
 
 from .contracts import FleetSpec, SegmentSpec
@@ -152,6 +153,52 @@ def validate_segment_specs(segments: list[SegmentSpec], fleet: FleetSpec) -> Saf
     return SafetyCheckResult(errors=errors, warnings=warnings)
 
 
+def _parse_distance_warning_item(message: str) -> dict[str, Any] | None:
+    # 解析 pyfii 渲染输出中的距离告警文本
+    m = re.search(
+        r"In\s+(\d+(?:\.\d+)?)s\s*,\s*distance\s+between\s+d(\d+)\s+and\s+d(\d+)\s+is\s+less\s+than\s+(\d+(?:\.\d+)?)cm",
+        message,
+        flags=re.IGNORECASE,
+    )
+    if not m:
+        return None
+    return {
+        "time_sec": float(m.group(1)),
+        "drone_a": int(m.group(2)),
+        "drone_b": int(m.group(3)),
+        "threshold_cm": float(m.group(4)),
+        "message": message,
+    }
+
+
 def summarize_render_distance_warnings(render_warnings: list[str]) -> dict[str, Any]:
     # 渲染阶段警告汇总：便于对话轮次显示
-    return {"count": len(render_warnings), "warnings": render_warnings[:50]}
+    parsed_items: list[dict[str, Any]] = []
+    for msg in render_warnings:
+        parsed = _parse_distance_warning_item(str(msg))
+        if parsed is not None:
+            parsed_items.append(parsed)
+    parsed_items.sort(key=lambda x: float(x.get("time_sec", 0.0)))
+    return {
+        "count": len(render_warnings),
+        "warnings": render_warnings[:50],
+        "distance_event_count": len(parsed_items),
+        "distance_events": parsed_items[:50],
+        "unsafe": len(parsed_items) > 0,
+    }
+
+
+def classify_render_distance_warnings(render_warnings: list[str]) -> tuple[bool, list[str]]:
+    # 任何距离告警都视为不可接受的安全风险
+    summary = summarize_render_distance_warnings(render_warnings)
+    events = summary.get("distance_events", [])
+    if not events:
+        return False, []
+    details: list[str] = []
+    for item in events[:8]:
+        details.append(
+            f"unsafe distance at t={float(item.get('time_sec', 0.0)):.2f}s between d{int(item.get('drone_a', 0))}/d{int(item.get('drone_b', 0))}"
+        )
+    if len(events) > 8:
+        details.append(f"... and {len(events) - 8} more unsafe distance events")
+    return True, details

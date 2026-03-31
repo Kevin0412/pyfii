@@ -7,6 +7,7 @@ from dataclasses import dataclass
 import json
 import subprocess
 import warnings
+from typing import Any
 
 
 @dataclass
@@ -19,36 +20,110 @@ class RenderResult:
     warnings: list[str]
 
 
-def render_project(project_path: str, save_path: str, fps: int = 25, three_d: bool = False) -> RenderResult:
-    # 读取 Fii 项目并输出渲染视频（可选 3D）
-    # 延迟导入，避免在无图形环境中仅导入模块就触发 pyautogui 初始化
+def _timing_fps_for_render(three_d: bool) -> int:
+    # read_fii 与 show.max_fps 必须同源，避免节拍采样漂移
+    return 60 if three_d else 200
+
+
+def _build_show_kwargs(
+    *,
+    field: int,
+    device: str,
+    save_path: str,
+    fps: int,
+    three_d: bool,
+    timing_fps: int,
+) -> dict[str, Any]:
+    kwargs: dict[str, Any] = {
+        "field": field,
+        "device": device,
+        "save": save_path,
+        "FPS": int(fps),
+        "max_fps": int(timing_fps),
+        "ThreeD": bool(three_d),
+        "show": True,
+    }
+    if three_d:
+        kwargs.update(
+            {
+                "FPS": max(60, int(fps)),
+                "imshow": [90, 3],
+                "d": (600, 500),
+            }
+        )
+    return kwargs
+
+
+def _render_with_shared_track(
+    *,
+    project_path: str,
+    variants: list[tuple[str, bool, int]],
+) -> tuple[RenderResult, dict[str, RenderResult]]:
+    # 一次 read_fii，按给定变体多次 show（例如 2D/3D）
     from pyfii.read import read_fii
     from pyfii.show import show
 
+    if not variants:
+        raise ValueError("variants cannot be empty")
+
+    timing_fps = _timing_fps_for_render(three_d=any(v[1] for v in variants))
+
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("always")
-        data, t0, music, field, device = read_fii(project_path)
-        show(
-            data,
-            t0,
-            music,
-            field=field,
-            device=device,
-            save=save_path,
-            FPS=fps,
-            max_fps=200,
-            ThreeD=three_d,
-            show=True,
-        )
+        data, t0, music, field, device = read_fii(project_path, fps=timing_fps)
+
+        results: dict[str, RenderResult] = {}
+        for save_path, three_d, fps in variants:
+            show_kwargs = _build_show_kwargs(
+                field=int(field),
+                device=str(device),
+                save_path=save_path,
+                fps=int(fps),
+                three_d=bool(three_d),
+                timing_fps=timing_fps,
+            )
+            show(data, t0, music, **show_kwargs)
+            results[save_path] = RenderResult(
+                output_video=f"{save_path}.mp4",
+                field=int(field),
+                device=str(device),
+                frame_count_hint=int(t0),
+                warnings=[],
+            )
 
     warning_msgs = [str(w.message) for w in caught]
-    return RenderResult(
-        output_video=f"{save_path}.mp4",
-        field=int(field),
-        device=str(device),
-        frame_count_hint=int(t0),
-        warnings=warning_msgs,
+    for key, item in list(results.items()):
+        results[key] = RenderResult(
+            output_video=item.output_video,
+            field=item.field,
+            device=item.device,
+            frame_count_hint=item.frame_count_hint,
+            warnings=warning_msgs,
+        )
+
+    first_save = variants[0][0]
+    return results[first_save], results
+
+
+def render_project(project_path: str, save_path: str, fps: int = 25, three_d: bool = False) -> RenderResult:
+    # 读取 Fii 项目并输出渲染视频（可选 3D）
+    result, _ = _render_with_shared_track(
+        project_path=project_path,
+        variants=[(save_path, three_d, int(fps))],
     )
+    return result
+
+
+def render_project_pair(project_path: str, save_path_2d: str, save_path_3d: str, fps: int = 25) -> tuple[RenderResult, RenderResult]:
+    # 一次 read_fii 同时输出 2D/3D，确保两者与同一 timing_fps 对齐
+    _, results = _render_with_shared_track(
+        project_path=project_path,
+        variants=[
+            (save_path_2d, False, int(fps)),
+            (save_path_3d, True, int(fps)),
+        ],
+    )
+    return results[save_path_2d], results[save_path_3d]
 
 
 def cut_video_segment(source_video: str, output_video: str, start_sec: float, end_sec: float) -> str:

@@ -15,10 +15,11 @@ from extensions.nl_choreo.pipeline import PipelineConfig, run_nl_choreo_pipeline
 class TestNlChoreoPipelineConvergence(unittest.TestCase):
     @patch("extensions.nl_choreo.pipeline._ensure_render_project")
     @patch("extensions.nl_choreo.pipeline.analyze_music")
-    @patch("extensions.nl_choreo.pipeline.render_project")
+    @patch("extensions.nl_choreo.pipeline.render_project_pair")
     @patch("extensions.nl_choreo.pipeline.cut_video_segment")
     @patch("extensions.nl_choreo.pipeline.inspect_with_qwen")
-    def test_fallback_in_strict_mode_sets_retryable(self, mock_inspect, mock_cut_segment, mock_render_project, mock_analyze, mock_ensure):
+    @patch("extensions.nl_choreo.pipeline.generate_final_design_narration")
+    def test_fallback_in_strict_mode_sets_retryable(self, mock_narration, mock_inspect, mock_cut_segment, mock_render_project_pair, mock_analyze, mock_ensure):
         mock_analyze.return_value = MusicAnalysis(
             duration=64.0,
             tempo_estimate=128.0,
@@ -36,8 +37,9 @@ class TestNlChoreoPipelineConvergence(unittest.TestCase):
             suggest_regenerate = False
             issues = []
 
-        mock_render_project.side_effect = _render_fail
+        mock_render_project_pair.side_effect = _render_fail
         mock_ensure.return_value = None
+        mock_narration.return_value = "final narration"
         mock_cut_segment.side_effect = lambda source_video, output_video, start_sec, end_sec: output_video
         mock_inspect.return_value = _I()
 
@@ -64,10 +66,11 @@ class TestNlChoreoPipelineConvergence(unittest.TestCase):
             self.assertEqual(state["status"], "failed_retryable")
 
     @patch("extensions.nl_choreo.pipeline.analyze_music")
-    @patch("extensions.nl_choreo.pipeline.render_project")
+    @patch("extensions.nl_choreo.pipeline.render_project_pair")
     @patch("extensions.nl_choreo.pipeline.cut_video_segment")
     @patch("extensions.nl_choreo.pipeline.inspect_with_qwen")
-    def test_non_actionable_issues_complete(self, mock_inspect, mock_cut_segment, mock_render_project, mock_analyze):
+    @patch("extensions.nl_choreo.pipeline.generate_final_design_narration")
+    def test_non_actionable_issues_complete(self, mock_narration, mock_inspect, mock_cut_segment, mock_render_project_pair, mock_analyze):
         class _R:
             def __init__(self, video):
                 self.output_video = video
@@ -94,7 +97,13 @@ class TestNlChoreoPipelineConvergence(unittest.TestCase):
             energy_curve=[0.1, 0.2, 0.8],
             climax_ranges=[(44.0, 58.0)],
         )
-        mock_render_project.side_effect = lambda project_path, save_path, fps=25, three_d=False: _R(save_path + ".mp4")
+        mock_render_project_pair.side_effect = (
+            lambda project_path, save_path_2d, save_path_3d, fps=25: (
+                _R(save_path_2d + ".mp4"),
+                _R(save_path_3d + ".mp4"),
+            )
+        )
+        mock_narration.return_value = "final narration"
         mock_cut_segment.side_effect = lambda source_video, output_video, start_sec, end_sec: output_video
 
         # 全部问题都指向未知段，不可行动；应在第一轮视为 completed

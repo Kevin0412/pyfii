@@ -15,10 +15,11 @@ from extensions.nl_choreo.pipeline import PipelineConfig, run_nl_choreo_pipeline
 class TestNlChoreoPipelineFullLoop(unittest.TestCase):
     @patch("extensions.nl_choreo.pipeline._ensure_render_project")
     @patch("extensions.nl_choreo.pipeline.analyze_music")
-    @patch("extensions.nl_choreo.pipeline.render_project")
+    @patch("extensions.nl_choreo.pipeline.render_project_pair")
     @patch("extensions.nl_choreo.pipeline.cut_video_segment")
     @patch("extensions.nl_choreo.pipeline.inspect_with_qwen")
-    def test_full_loop_with_resume_artifacts(self, mock_inspect, mock_cut_segment, mock_render_project, mock_analyze, mock_ensure):
+    @patch("extensions.nl_choreo.pipeline.generate_final_design_narration")
+    def test_full_loop_with_resume_artifacts(self, mock_narration, mock_inspect, mock_cut_segment, mock_render_project_pair, mock_analyze, mock_ensure):
         class _R:
             def __init__(self, video):
                 self.output_video = video
@@ -45,8 +46,14 @@ class TestNlChoreoPipelineFullLoop(unittest.TestCase):
             energy_curve=[0.1, 0.2, 0.8],
             climax_ranges=[(44.0, 58.0)],
         )
-        mock_render_project.side_effect = lambda project_path, save_path, fps=25, three_d=False: _R(save_path + ".mp4")
+        mock_render_project_pair.side_effect = (
+            lambda project_path, save_path_2d, save_path_3d, fps=25: (
+                _R(save_path_2d + ".mp4"),
+                _R(save_path_3d + ".mp4"),
+            )
+        )
         mock_cut_segment.side_effect = lambda source_video, output_video, start_sec, end_sec: output_video
+        mock_narration.return_value = "final narration"
 
         # 第一轮建议重生（含无效段号 SG00，需归一到当前段），第二轮通过
         bad_id_issue = SegmentIssue(segment_id="SG00", severity="medium", detail="x", recommendation_zh="y")
@@ -91,6 +98,7 @@ class TestNlChoreoPipelineFullLoop(unittest.TestCase):
             self.assertIn("final_full_video_2d", result)
             self.assertIn("final_full_video_3d", result)
             self.assertEqual(result.get("render_fps"), 40)
+            self.assertTrue(os.path.exists(result.get("final_design_narration_path", "")))
 
             # 当首轮就无可行动变更时，不应强制重建项目
             forced_calls = [c for c in mock_ensure.call_args_list if c.kwargs.get("force") is True]

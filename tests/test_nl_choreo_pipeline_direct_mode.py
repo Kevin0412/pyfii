@@ -16,14 +16,16 @@ class TestNlChoreoPipelineDirectMode(unittest.TestCase):
     @patch("extensions.nl_choreo.pipeline.emit_pyfii_program")
     @patch("extensions.nl_choreo.pipeline.inspect_with_qwen")
     @patch("extensions.nl_choreo.pipeline.cut_video_segment")
-    @patch("extensions.nl_choreo.pipeline.render_project")
+    @patch("extensions.nl_choreo.pipeline.render_project_pair")
     @patch("extensions.nl_choreo.pipeline._ensure_render_project")
     @patch("extensions.nl_choreo.pipeline.analyze_music")
+    @patch("extensions.nl_choreo.pipeline.generate_final_design_narration")
     def test_direct_default_has_no_pattern_seed_dependency(
         self,
+        mock_narration,
         mock_analyze,
         mock_ensure,
-        mock_render_project,
+        mock_render_project_pair,
         mock_cut_segment,
         mock_inspect,
         mock_emit,
@@ -49,10 +51,16 @@ class TestNlChoreoPipelineDirectMode(unittest.TestCase):
             energy_curve=[0.5],
             climax_ranges=[(20.0, 40.0)],
         )
-        mock_render_project.side_effect = lambda project_path, save_path, fps=25, three_d=False: _R(save_path + ".mp4")
+        mock_render_project_pair.side_effect = (
+            lambda project_path, save_path_2d, save_path_3d, fps=25: (
+                _R(save_path_2d + ".mp4"),
+                _R(save_path_3d + ".mp4"),
+            )
+        )
         mock_cut_segment.side_effect = lambda source_video, output_video, start_sec, end_sec: output_video
         mock_inspect.return_value = _I()
         mock_ensure.return_value = None
+        mock_narration.return_value = "final narration"
         mock_emit.side_effect = AssertionError("emit_pyfii_program should not be called in direct default mode")
 
         with tempfile.TemporaryDirectory() as d:
@@ -75,18 +83,20 @@ class TestNlChoreoPipelineDirectMode(unittest.TestCase):
     @patch("extensions.nl_choreo.pipeline.emit_pyfii_program")
     @patch("extensions.nl_choreo.pipeline.inspect_with_qwen")
     @patch("extensions.nl_choreo.pipeline.cut_video_segment")
-    @patch("extensions.nl_choreo.pipeline.render_project")
+    @patch("extensions.nl_choreo.pipeline.render_project_pair")
     @patch("extensions.nl_choreo.pipeline._ensure_render_project")
     @patch("extensions.nl_choreo.pipeline.analyze_music")
+    @patch("extensions.nl_choreo.pipeline.generate_final_design_narration")
     @patch("extensions.nl_choreo.pipeline._generate_safe_program_with_qwen")
     @patch("extensions.nl_choreo.pipeline._generate_program_stepwise_with_qwen")
     def test_direct_pattern_seed_mode_uses_emit_only_for_fallback(
         self,
         mock_stepwise,
         mock_generate_safe,
+        mock_narration,
         mock_analyze,
         mock_ensure,
-        mock_render_project,
+        mock_render_project_pair,
         mock_cut_segment,
         mock_inspect,
         mock_emit,
@@ -112,10 +122,16 @@ class TestNlChoreoPipelineDirectMode(unittest.TestCase):
             energy_curve=[0.5],
             climax_ranges=[(20.0, 40.0)],
         )
-        mock_render_project.side_effect = lambda project_path, save_path, fps=25, three_d=False: _R(save_path + ".mp4")
+        mock_render_project_pair.side_effect = (
+            lambda project_path, save_path_2d, save_path_3d, fps=25: (
+                _R(save_path_2d + ".mp4"),
+                _R(save_path_3d + ".mp4"),
+            )
+        )
         mock_cut_segment.side_effect = lambda source_video, output_video, start_sec, end_sec: output_video
         mock_inspect.return_value = _I()
         mock_ensure.return_value = None
+        mock_narration.return_value = "final narration"
         mock_emit.return_value = "# pattern seed\n"
 
         # force stepwise + oneshot to fail so fallback branch is exercised

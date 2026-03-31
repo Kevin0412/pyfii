@@ -30,11 +30,30 @@ from .contracts import (
     validate_scene_plan,
 )
 from .dialogue_manager import DialogueManager, DialogueTurn
-from .inspector import InspectInput, inspect_with_qwen
+from .inspector import InspectInput, generate_final_design_narration, inspect_with_qwen
 from .qwen_client import QwenConfig, QwenVideoClient
 from .refiner import refine_segments
-from .renderer import cut_video_segment, render_project
-from .safety import summarize_render_distance_warnings, validate_duration, validate_fleet_rule, validate_segment_specs
+from .renderer import cut_video_segment, render_project, render_project_pair
+from .safety import (
+    classify_render_distance_warnings,
+    summarize_render_distance_warnings,
+    validate_duration,
+    validate_fleet_rule,
+    validate_segment_specs,
+)
+
+
+QUALITY_MIN_MOVE2_FINAL = 14
+QUALITY_MIN_MOVE2_STEP = 3
+QUALITY_MIN_LITERAL_TARGETS = 12
+QUALITY_MIN_GROUP_LOOP_COUNT = 6
+QUALITY_MIN_TIMELAYERS = 6
+QUALITY_MAX_INTTIME_GAP_SEC = 4
+QUALITY_MIN_MAIN_SPAN_CM = 320
+QUALITY_MIN_SECONDARY_SPAN_CM = 120
+QUALITY_LONGFORM_LAYER_BASE = 6
+QUALITY_LONGFORM_LAYER_DIVISOR = 8
+QUALITY_TIMELINE_END_MARGIN_SEC = 6.0
 
 
 @dataclass
@@ -108,6 +127,10 @@ def _qwen_calls_path(out_dir: Path) -> Path:
     return out_dir / "qwen_calls.jsonl"
 
 
+def _final_narration_path(out_dir: Path) -> Path:
+    return out_dir / "final_design_narration.txt"
+
+
 def _write_state(out_dir: Path, state: WorkflowState) -> None:
     # 写入状态快照
     _state_path(out_dir).write_text(json.dumps(to_dict(state), ensure_ascii=False, indent=2), encoding="utf-8")
@@ -161,7 +184,7 @@ def _freeform_start_positions(count: int) -> list[tuple[int, int]]:
     if count <= 1:
         return [(280, 280)]
     cx, cy = 280.0, 280.0
-    radius = 140.0
+    radius = 220.0
     pts: list[tuple[int, int]] = []
     for i in range(count):
         ang = (2 * pi * i / count) - (pi / 2)
@@ -201,9 +224,10 @@ def _build_freeform_seed_program(
     start_positions = _freeform_start_positions(fleet.drone_count)
     target_output = max(10.0, float(target_output_duration_sec or 24.0))
     target_script = max(8.0, target_output - 3.0)
-    layer_count = max(4, int(ceil(target_script / 8.0)))
+    layer_count = max(4, int(ceil(max(0.0, target_script - 6.0) / 4.0)) + 1)
 
     lines: list[str] = _pyfii_bootstrap_lines() + [
+        "from math import cos, pi, sin",
         "# Qwen 自由编舞初始脚手架（分层+分组循环）",
     ]
     for idx in range(fleet.drone_count):
@@ -219,25 +243,34 @@ def _build_freeform_seed_program(
     lines.append("    d.takeoff(1,100)")
     lines.append("")
     lines.append(f"for li in range({layer_count}):")
-    lines.append("    t=4+li*8")
+    lines.append("    t=6+li*4")
+    lines.append("    phase=li*0.24")
     lines.append("    for gi,d in enumerate(group_a):")
+    lines.append("        idx=ds.index(d)")
     lines.append("        d.inittime(t)")
-    lines.append("        d.VelXY(120,240)")
-    lines.append("        d.VelZ(120,240)")
-    lines.append("        x=max(0,min(560,d.X-60+li*18+gi*22))")
-    lines.append("        y=max(0,min(560,d.Y+((li%3)-1)*40+gi*8))")
-    lines.append("        z=max(90,min(220,110+(li%4)*12))")
-    lines.append("        d.move2(int(x),int(y),int(z))")
-    lines.append("        d.delay(900)")
+    lines.append("        d.VelXY(150,260)")
+    lines.append("        d.VelZ(130,250)")
+    lines.append("        base=2*pi*idx/len(ds)-pi/2")
+    lines.append("        ang=base+phase")
+    lines.append("        r=226+8*sin(li*0.5+idx*0.3)")
+    lines.append("        x=280+r*cos(ang)")
+    lines.append("        y=280+r*sin(ang)")
+    lines.append("        z=max(104,min(210,120+(li%5)*8+gi*2))")
+    lines.append("        d.move2(int(max(28,min(532,x))),int(max(28,min(532,y))),int(z))")
+    lines.append("        d.delay(420)")
     lines.append("    for gi,d in enumerate(group_b):")
+    lines.append("        idx=ds.index(d)")
     lines.append("        d.inittime(t)")
-    lines.append("        d.VelXY(120,240)")
-    lines.append("        d.VelZ(120,240)")
-    lines.append("        x=max(0,min(560,d.X+60-li*16-gi*20))")
-    lines.append("        y=max(0,min(560,d.Y-((li%3)-1)*36-gi*10))")
-    lines.append("        z=max(90,min(220,118+((li+1)%4)*10))")
-    lines.append("        d.move2(int(x),int(y),int(z))")
-    lines.append("        d.delay(900)")
+    lines.append("        d.VelXY(150,260)")
+    lines.append("        d.VelZ(130,250)")
+    lines.append("        base=2*pi*idx/len(ds)-pi/2")
+    lines.append("        ang=base+phase")
+    lines.append("        r=162+10*cos(li*0.45+idx*0.35)")
+    lines.append("        x=280+r*cos(ang)")
+    lines.append("        y=280+r*sin(ang)")
+    lines.append("        z=max(110,min(218,138+((li+1)%5)*7-gi*2))")
+    lines.append("        d.move2(int(max(28,min(532,x))),int(max(28,min(532,y))),int(z))")
+    lines.append("        d.delay(420)")
     lines.append("")
     lines.append("for d in ds:")
     lines.append("    d.land()")
@@ -442,6 +475,28 @@ def _validate_output_duration(video_path: str, out_min_sec: float, out_max_sec: 
     if dur < out_min_sec or dur > out_max_sec:
         return f"output duration out of range: got={dur:.2f}s, require=[{out_min_sec:.2f},{out_max_sec:.2f}]s"
     return None
+
+
+def _validate_render_warnings_safe(render_warnings: list[str]) -> str | None:
+    unsafe, details = classify_render_distance_warnings(render_warnings)
+    if not unsafe:
+        return None
+    if not details:
+        return "unsafe render distance warnings detected"
+    return "unsafe render distance warnings detected: " + "; ".join(details)
+
+
+def _probe_render_safety_for_project(out_dir: Path, config: PipelineConfig, tag: str) -> str | None:
+    # 通过 2D/3D 渲染告警对候选脚本执行安全门
+    project_path = str(out_dir / "nl_choreo_output")
+    save_prefix = str(out_dir / tag)
+    r2d, r3d = render_project_pair(
+        project_path=project_path,
+        save_path_2d=f"{save_prefix}_2d",
+        save_path_3d=f"{save_prefix}_3d",
+        fps=max(10, int(config.render_fps)),
+    )
+    return _validate_render_warnings_safe(list(r2d.warnings) + list(r3d.warnings))
 
 
 def _coerce_duration_if_needed(analysis: MusicAnalysis, force_duration_sec: float | None) -> MusicAnalysis:
@@ -722,30 +777,66 @@ def _validate_generated_program_text(
     # FPS 由归一化阶段补齐，不作为拒收条件
 
     move2_calls = len(re.findall(r"\.move2\(", lower))
-    if move2_calls < 6:
-        errors.append(f"insufficient choreography complexity: move2 calls={move2_calls}, require >=6")
+    if move2_calls < QUALITY_MIN_MOVE2_FINAL:
+        errors.append(
+            f"insufficient choreography complexity: move2 calls={move2_calls}, require >={QUALITY_MIN_MOVE2_FINAL}"
+        )
 
     if re.search(r"for\s+\w+\s+in\s+ds\s*:[\s\S]{0,220}?\.move2\(\s*\w+\.x\s*,\s*\w+\.y\s*,", lower):
         errors.append("unsafe same-path pattern: blind loop move2(d.X,d.Y,...) detected")
 
     literal_targets = re.findall(r"\.move2\(\s*(-?\d+)\s*,\s*(-?\d+)\s*,\s*(-?\d+)\s*\)", lower)
-    if literal_targets and len(set(literal_targets)) < 6:
-        errors.append("insufficient target diversity: require >=6 distinct literal move2 targets")
+    if literal_targets and len(set(literal_targets)) < QUALITY_MIN_LITERAL_TARGETS:
+        errors.append(
+            f"insufficient target diversity: require >={QUALITY_MIN_LITERAL_TARGETS} distinct literal move2 targets"
+        )
 
-    group_loop_count = len(re.findall(r"for\s+\w+\s+in\s+(?:ds|group_\w+)", lower))
-    if group_loop_count < 3:
-        errors.append("style requirement failed: require grouped for-loop structure (ds/group_*)")
+    group_loop_count = len(re.findall(r"for\s+\w+\s+in\s+(?:ds|group_?\w+)", lower))
+    if group_loop_count < QUALITY_MIN_GROUP_LOOP_COUNT:
+        errors.append(
+            f"style requirement failed: require grouped for-loop structure (ds/group_*) count>={QUALITY_MIN_GROUP_LOOP_COUNT}"
+        )
 
     per_drone_literal_blocks = len(re.findall(r"\bd\d+\.inittime\(", lower))
     if per_drone_literal_blocks >= 7 and group_loop_count == 0:
         errors.append("style requirement failed: avoid repeated d1/d2/... literal per-drone blocks, use ds/group loops")
 
+    if times and len(set(times)) < QUALITY_MIN_TIMELAYERS:
+        errors.append(f"insufficient timeline diversity: require >={QUALITY_MIN_TIMELAYERS} distinct inittime layers")
+    if times:
+        sorted_times = sorted(set(times))
+        if len(sorted_times) >= 2:
+            max_gap = max(sorted_times[i] - sorted_times[i - 1] for i in range(1, len(sorted_times)))
+            if max_gap > QUALITY_MAX_INTTIME_GAP_SEC:
+                errors.append(
+                    f"movement too sparse: max inittime gap={max_gap}s, require <={QUALITY_MAX_INTTIME_GAP_SEC}s"
+                )
+
+    if literal_targets:
+        xs = [int(x) for x, _, _ in literal_targets]
+        ys = [int(y) for _, y, _ in literal_targets]
+        span_x = max(xs) - min(xs)
+        span_y = max(ys) - min(ys)
+        if max(span_x, span_y) < QUALITY_MIN_MAIN_SPAN_CM:
+            errors.append(
+                f"insufficient large-range movement: max span={max(span_x, span_y)}cm, require >={QUALITY_MIN_MAIN_SPAN_CM}cm"
+            )
+        if min(span_x, span_y) < QUALITY_MIN_SECONDARY_SPAN_CM:
+            errors.append(
+                f"insufficient 2-axis range: min span={min(span_x, span_y)}cm, require >={QUALITY_MIN_SECONDARY_SPAN_CM}cm"
+            )
+
     if target_script_duration_sec is not None and times:
         max_t = max(times)
-        min_required_t = max(8, int(target_script_duration_sec - 8.0))
+        min_required_t = max(8, int(target_script_duration_sec - QUALITY_TIMELINE_END_MARGIN_SEC))
         if max_t < min_required_t:
             errors.append(
                 f"insufficient timeline horizon: max inittime={max_t}, require >= {min_required_t} for target duration"
+            )
+        min_layer_count = max(QUALITY_LONGFORM_LAYER_BASE, int(target_script_duration_sec // QUALITY_LONGFORM_LAYER_DIVISOR))
+        if len(set(times)) < min_layer_count:
+            errors.append(
+                f"insufficient long-form layering: distinct inittime={len(set(times))}, require >= {min_layer_count}"
             )
 
     return errors
@@ -794,7 +885,7 @@ def _validate_stepwise_candidate_text(
     # FPS 由归一化阶段补齐，不作为拒收条件
 
     move2_calls = len(re.findall(r"\.move2\(", lower))
-    min_move2 = 6 if step_idx >= total_steps else 1
+    min_move2 = QUALITY_MIN_MOVE2_FINAL if step_idx >= total_steps else QUALITY_MIN_MOVE2_STEP
     if move2_calls < min_move2:
         errors.append(f"insufficient choreography complexity: move2 calls={move2_calls}, require >={min_move2}")
 
@@ -802,15 +893,53 @@ def _validate_stepwise_candidate_text(
         errors.append("unsafe same-path pattern: blind loop move2(d.X,d.Y,...) detected")
 
     if step_idx >= total_steps:
-        group_loop_count = len(re.findall(r"for\s+\w+\s+in\s+(?:ds|group_\w+)", lower))
-        if group_loop_count < 3:
-            errors.append("style requirement failed: final step requires grouped for-loop structure (ds/group_*)")
+        group_loop_count = len(re.findall(r"for\s+\w+\s+in\s+(?:ds|group_?\w+)", lower))
+        if group_loop_count < QUALITY_MIN_GROUP_LOOP_COUNT:
+            errors.append(
+                f"style requirement failed: final step requires grouped for-loop structure (ds/group_*) count>={QUALITY_MIN_GROUP_LOOP_COUNT}"
+            )
+        if times and len(set(times)) < QUALITY_MIN_TIMELAYERS:
+            errors.append(f"insufficient timeline diversity: require >={QUALITY_MIN_TIMELAYERS} distinct inittime layers")
+        if times:
+            sorted_times = sorted(set(times))
+            if len(sorted_times) >= 2:
+                max_gap = max(sorted_times[i] - sorted_times[i - 1] for i in range(1, len(sorted_times)))
+                if max_gap > QUALITY_MAX_INTTIME_GAP_SEC:
+                    errors.append(
+                        f"movement too sparse: max inittime gap={max_gap}s, require <={QUALITY_MAX_INTTIME_GAP_SEC}s"
+                    )
+        literal_targets = re.findall(r"\.move2\(\s*(-?\d+)\s*,\s*(-?\d+)\s*,\s*(-?\d+)\s*\)", lower)
+        if literal_targets and len(set(literal_targets)) < QUALITY_MIN_LITERAL_TARGETS:
+            errors.append(
+                f"insufficient target diversity: require >={QUALITY_MIN_LITERAL_TARGETS} distinct literal move2 targets"
+            )
+        if literal_targets:
+            xs = [int(x) for x, _, _ in literal_targets]
+            ys = [int(y) for _, y, _ in literal_targets]
+            span_x = max(xs) - min(xs)
+            span_y = max(ys) - min(ys)
+            if max(span_x, span_y) < QUALITY_MIN_MAIN_SPAN_CM:
+                errors.append(
+                    f"insufficient large-range movement: max span={max(span_x, span_y)}cm, require >={QUALITY_MIN_MAIN_SPAN_CM}cm"
+                )
+            if min(span_x, span_y) < QUALITY_MIN_SECONDARY_SPAN_CM:
+                errors.append(
+                    f"insufficient 2-axis range: min span={min(span_x, span_y)}cm, require >={QUALITY_MIN_SECONDARY_SPAN_CM}cm"
+                )
         if target_script_duration_sec is not None and times:
             max_t = max(times)
-            min_required_t = max(8, int(target_script_duration_sec - 8.0))
+            min_required_t = max(8, int(target_script_duration_sec - QUALITY_TIMELINE_END_MARGIN_SEC))
             if max_t < min_required_t:
                 errors.append(
                     f"insufficient timeline horizon: max inittime={max_t}, require >= {min_required_t} for target duration"
+                )
+            min_layer_count = max(
+                QUALITY_LONGFORM_LAYER_BASE,
+                int(target_script_duration_sec // QUALITY_LONGFORM_LAYER_DIVISOR),
+            )
+            if len(set(times)) < min_layer_count:
+                errors.append(
+                    f"insufficient long-form layering: distinct inittime={len(set(times))}, require >= {min_layer_count}"
                 )
 
     return errors
@@ -839,7 +968,10 @@ def _build_direct_codegen_prompt(
         "- 6m 场地坐标范围：0<=x<=560, 0<=y<=560。\n"
         "- move2(x,y,z) 是绝对坐标移动到目标点，不是相对位移。\n"
         "- 相对位移请用 d.move(d.x+dx,d.y+dy,d.z+dz) 思路（d.x,d.y,d.z 为当前目标点）。\n"
+        "- 可加入灯光编排：只使用 TurnOnAll/TurnOffAll（不要 TurnOnSingle/TurnOffSingle）；先完成全部动作设计，再补灯光；灯光可自由添加，允许突变换色。\n"
         "- 6m 场地优先安全余量与可执行性，避免碰撞与越界。\n"
+        "- 需要大尺度位移：主段应出现约 320~500cm 级别的跨区移动，且兼顾双轴变化。\n"
+        "- 禁止全机长时间静止：任意无人机连续保持同一目标点不应超过 4 秒。\n"
         "编码原则：\n"
         "- 直接返回完整可运行 pyfii 脚本，不要解释文本。\n"
         "- 保留标准收尾 land + end，并确保 FPS 正确。\n"
@@ -854,9 +986,12 @@ def _build_direct_codegen_prompt(
         "6) 保持 6m 场地安全余量，避免明显碰撞风险。\n"
         "7) 优先原创编队与高频动作变化，不要套固定图案库。\n"
         "8) 严禁全机同路径、同目标点同步飞行（现实高风险）。\n"
-        "9) 至少 4 个不同 inittime 的动作层，且每层要有可见队形变化。\n"
+        f"9) 至少 {QUALITY_MIN_TIMELAYERS} 个不同 inittime 的动作层，且每层要有可见队形变化。\n"
         "10) 必须按‘每个 inittime 一层 + for 循环分组’组织代码，禁止仅按单机顺序零散写动作。\n"
-        "11) 每层至少 2 组以上不同目标点，且全片不少于 6 个不同 move2 目标坐标。\n"
+        f"11) 每层至少 2 组以上不同目标点，且全片不少于 {QUALITY_MIN_LITERAL_TARGETS} 个不同 move2 目标坐标。\n"
+        f"12) 必须包含大尺度位移：全片主轴跨度 >={QUALITY_MIN_MAIN_SPAN_CM}cm，且次轴跨度 >={QUALITY_MIN_SECONDARY_SPAN_CM}cm（鼓励 320~500cm）。\n"
+        f"13) 动作不能稀疏：任意相邻动作层间隔不应超过 {QUALITY_MAX_INTTIME_GAP_SEC} 秒。\n"
+        "14) 3D 观演视角需面向前场：pf.show(...,ThreeD=True,imshow=[90,3],d=(600,500),FPS>=60,max_fps=60)。\n"
         "\n"
         f"用户意图: {config.user_intent}\n"
         f"机队: {to_dict(fleet)}\n"
@@ -998,6 +1133,10 @@ def _generate_program_with_structured_coding_agent(
     effective_action_steps: int | None = None,
 ) -> str:
     struct_steps = max(3, int(effective_action_steps if effective_action_steps is not None else config.qwen_action_steps))
+    if target_script_duration_sec is not None:
+        required_end = max(8, int(float(target_script_duration_sec) - 8.0))
+        min_steps_by_horizon = max(3, int(ceil(max(0, required_end - 4) / 4.0)) + 1)
+        struct_steps = max(struct_steps, min_steps_by_horizon)
     plan_prompt = _build_structured_plan_prompt(config=config, fleet=fleet, analysis=analysis, steps=struct_steps)
     plan_text = qwen_client.generate_design_text(plan_prompt)
     compiled = _compile_structured_plan_to_pyfii(
@@ -1042,6 +1181,9 @@ def _generate_program_with_structured_coding_agent(
         raise RuntimeError("structured coding-agent generated invalid script: " + "; ".join(static_errors))
     program_file.write_text(compiled, encoding="utf-8")
     _ensure_render_project(out_dir, program_file, force=True)
+    safety_err = _probe_render_safety_for_project(out_dir=out_dir, config=config, tag="safety_structured_accept")
+    if safety_err:
+        raise RuntimeError(safety_err)
     if output_duration_range_sec is not None:
         out_min_sec, out_max_sec = output_duration_range_sec
         duration_err = _validate_output_duration(
@@ -1073,10 +1215,11 @@ def _build_reviewer_repair_prompt(candidate_code: str, errors: list[str], expect
         "1) 必须保留 takeoff。\n"
         "2) 至少包含 inittime/VelXY/VelZ/move2。\n"
         "3) 末尾必须 land + end。\n"
-        "4) move2 必须有至少 6 次调用（stepwise 可>=1）。\n"
+        f"4) move2 必须有至少 {QUALITY_MIN_MOVE2_FINAL} 次调用（stepwise 至少 {QUALITY_MIN_MOVE2_STEP} 次）。\n"
         "5) 按 inittime 分层，并使用 for 循环分组表达编队关系。\n"
         "6) 每层至少 2 组目标，避免全机同目标同路径。\n"
-        f"5) 输出 FPS={expected_fps}。\n"
+        f"7) 鼓励 320~500cm 跨区位移，任意相邻动作层间隔不超过 {QUALITY_MAX_INTTIME_GAP_SEC} 秒。\n"
+        f"8) 输出 FPS={expected_fps}。\n"
         "候选脚本：\n"
         "```python\n"
         + candidate_code
@@ -1094,10 +1237,11 @@ def _build_codegen_fix_prompt(previous_code: str, errors: list[str]) -> str:
         f"{errs}\n\n"
         "强约束（必须同时满足）：\n"
         "1) 严禁所有无人机共享同一路径或同一目标点。\n"
-        "2) 至少包含 3 个时间层（3 个不同 inittime）和明显编队变化。\n"
+        f"2) 至少包含 {QUALITY_MIN_TIMELAYERS} 个时间层（不同 inittime）和明显编队变化。\n"
         "3) 每个动作层至少 2 组不同目标坐标。\n"
         "3.1) 编码结构采用按 inittime 分层的 for 循环分组写法，清晰表达队形关系。\n"
-        "3.2) 参考 tests/dntg20220730_v3.py 的分层风格与 dntg20220730_3D.mp4 的艺术转场节奏。\n"
+        "3.2) 使用分层编舞风格与有节奏的艺术转场；灯光在动作完成后再补充，颜色与变换方式可自由（允许突变）。\n"
+        f"3.3) 鼓励 320~500cm 级别跨区位移，且禁止任意无人机在同一目标点停留超过 {QUALITY_MAX_INTTIME_GAP_SEC} 秒。\n"
         "4) 6m 场地坐标范围：0<=x<=560, 0<=y<=560。\n"
         "5) move2(x,y,z) 是绝对坐标移动，不是相对位移。\n"
         "6) 相对位移请用 d.move(d.x+dx,d.y+dy,d.z+dz) 思路（d.x,d.y,d.z 为当前目标点）。\n"
@@ -1116,6 +1260,8 @@ def _build_action_plan_prompt(config: PipelineConfig, analysis: MusicAnalysis, t
         "你是 pyfii 编舞总导演。先做动作分步规划，不写完整代码。\n"
         f"将本次编舞拆成 {total_steps} 步，每一步写 1 行：StepN: 该步的编队变化与动作目标。\n"
         "要求动作频繁、队形变化明显、转场有层次；参考 dntg20220730_3D.mp4 的艺术编排。\n"
+        "鼓励主段出现 320~500cm 级别跨区位移，同时保持安全间距。\n"
+        f"任意无人机连续保持同一目标点不应超过 {QUALITY_MAX_INTTIME_GAP_SEC} 秒。\n"
         "每一步都要指明该层 inittime 下至少两组（groupA/groupB）队形关系，而不是随机单点移动。\n"
         "返回纯文本步骤列表。\n"
         f"用户意图: {config.user_intent}\n"
@@ -1155,8 +1301,11 @@ def _build_action_step_prompt(
         "8) 严禁全机同路径/同目标点；至少分成 2 组以上目标。\n"
         "9) 每个 inittime 层必须有分组 for 块，不得只写零散单机动作。\n"
         "10) 本步新增动作应尽量形成呼应/对称/扩散/收拢等艺术转场，而非随机位移。\n"
-        f"11) 必须使用 FPS={expected_fps}（若遗漏会由系统自动补齐）。\n"
-        "12) 只输出完整代码，不要解释。\n"
+        "11) 鼓励 320~500cm 级别的大尺度跨区转场（保持安全间距，不越界）。\n"
+        "11.1) 可加入灯光编排，但只用 TurnOnAll/TurnOffAll；灯光放在动作设计完成后统一添加，允许突变换色。\n"
+        f"12) 禁止任意无人机在同一目标点停留超过 {QUALITY_MAX_INTTIME_GAP_SEC} 秒。\n"
+        f"13) 必须使用 FPS={expected_fps}（若遗漏会由系统自动补齐）。\n"
+        "14) 只输出完整代码，不要解释。\n"
         f"用户意图: {config.user_intent}\n"
         f"机队: {to_dict(fleet)}\n"
         f"音乐分析: {analysis_payload}\n"
@@ -1213,6 +1362,7 @@ def _validate_then_maybe_repair(
 def _generate_safe_program_with_qwen(
     out_dir: Path,
     qwen_client: QwenVideoClient,
+    config: PipelineConfig,
     prompt_zh: str,
     max_attempts: int,
     expected_fps: int,
@@ -1272,6 +1422,13 @@ def _generate_safe_program_with_qwen(
         program_file.write_text(candidate, encoding="utf-8")
         try:
             _ensure_render_project(out_dir, program_file, force=True)
+            safety_err = _probe_render_safety_for_project(
+                out_dir=out_dir,
+                config=config,
+                tag=f"safety_one_shot_attempt_{attempt:02d}",
+            )
+            if safety_err:
+                raise RuntimeError(safety_err)
             if output_duration_range_sec is not None:
                 out_min_sec, out_max_sec = output_duration_range_sec
                 duration_err = _validate_output_duration(
@@ -1338,6 +1495,7 @@ def _apply_direct_edit_rounds(
     current_code: str,
     rounds: list[str],
     qwen_client: QwenVideoClient,
+    config: PipelineConfig,
     expected_fps: int,
     dialogue_manager: DialogueManager,
     out_dir: Path,
@@ -1359,6 +1517,7 @@ def _apply_direct_edit_rounds(
             patched = _generate_safe_program_with_qwen(
                 out_dir=out_dir,
                 qwen_client=qwen_client,
+                config=config,
                 prompt_zh=prompt,
                 max_attempts=2,
                 expected_fps=expected_fps,
@@ -1503,6 +1662,13 @@ def _generate_program_stepwise_with_qwen(
 
                 program_file.write_text(candidate, encoding="utf-8")
                 _ensure_render_project(out_dir, program_file, force=True)
+                safety_err = _probe_render_safety_for_project(
+                    out_dir=out_dir,
+                    config=config,
+                    tag=f"safety_step_{step_idx:02d}_attempt_{attempt:02d}",
+                )
+                if safety_err:
+                    raise RuntimeError(safety_err)
                 if output_duration_range_sec is not None and step_idx >= total_steps:
                     out_min_sec, out_max_sec = output_duration_range_sec
                     duration_err = _validate_output_duration(
@@ -1612,17 +1778,11 @@ def _render_full_videos(out_dir: Path, config: PipelineConfig, tag: str) -> tupl
     render_warnings: list[str] = []
 
     try:
-        full_result_2d = render_project(
+        full_result_2d, full_result_3d = render_project_pair(
             project_path=project_path,
-            save_path=full_save,
+            save_path_2d=full_save,
+            save_path_3d=f"{full_save}_3d",
             fps=max(10, int(config.render_fps)),
-            three_d=False,
-        )
-        full_result_3d = render_project(
-            project_path=project_path,
-            save_path=f"{full_save}_3d",
-            fps=max(10, int(config.render_fps)),
-            three_d=True,
         )
         full_video_2d = full_result_2d.output_video
         full_video_3d = full_result_3d.output_video
@@ -1984,6 +2144,7 @@ def run_nl_choreo_pipeline(config: PipelineConfig, edit_rounds: list[str] | None
                     program_text = _generate_safe_program_with_qwen(
                         out_dir=out_dir,
                         qwen_client=qwen_client,
+                        config=config,
                         prompt_zh=prompt_zh,
                         max_attempts=config.max_python_regen_attempts,
                         expected_fps=max(40, int(config.render_fps)),
@@ -2030,6 +2191,13 @@ def run_nl_choreo_pipeline(config: PipelineConfig, edit_rounds: list[str] | None
                             program_text = fallback_seed
                             program_file.write_text(program_text, encoding="utf-8")
                             _ensure_render_project(out_dir, program_file, force=True)
+                            safety_err = _probe_render_safety_for_project(
+                                out_dir=out_dir,
+                                config=config,
+                                tag="safety_fallback_seed_initial",
+                            )
+                            if safety_err:
+                                raise RuntimeError(safety_err)
                             duration_err = _validate_output_duration(
                                 video_path=str(out_dir / "nl_choreo_output.mp4"),
                                 out_min_sec=output_dur_min_sec,
@@ -2052,6 +2220,13 @@ def run_nl_choreo_pipeline(config: PipelineConfig, edit_rounds: list[str] | None
                         program_text = fallback_seed
                         program_file.write_text(program_text, encoding="utf-8")
                         _ensure_render_project(out_dir, program_file, force=True)
+                        safety_err = _probe_render_safety_for_project(
+                            out_dir=out_dir,
+                            config=config,
+                            tag="safety_fallback_seed_initial_nostruct",
+                        )
+                        if safety_err:
+                            raise RuntimeError(safety_err)
                         duration_err = _validate_output_duration(
                             video_path=str(out_dir / "nl_choreo_output.mp4"),
                             out_min_sec=output_dur_min_sec,
@@ -2066,6 +2241,7 @@ def run_nl_choreo_pipeline(config: PipelineConfig, edit_rounds: list[str] | None
                     current_code=program_text,
                     rounds=rounds,
                     qwen_client=qwen_client,
+                    config=config,
                     expected_fps=max(40, int(config.render_fps)),
                     dialogue_manager=dialogue_manager,
                     out_dir=out_dir,
@@ -2172,6 +2348,7 @@ def run_nl_choreo_pipeline(config: PipelineConfig, edit_rounds: list[str] | None
                                 program_text = _generate_safe_program_with_qwen(
                                     out_dir=out_dir,
                                     qwen_client=qwen_client,
+                                    config=config,
                                     prompt_zh=prompt_zh,
                                     max_attempts=config.max_python_regen_attempts,
                                     expected_fps=max(40, int(config.render_fps)),
@@ -2214,6 +2391,13 @@ def run_nl_choreo_pipeline(config: PipelineConfig, edit_rounds: list[str] | None
                                         program_text = fallback_seed
                                         program_file.write_text(program_text, encoding="utf-8")
                                         _ensure_render_project(out_dir, program_file, force=True)
+                                        safety_err = _probe_render_safety_for_project(
+                                            out_dir=out_dir,
+                                            config=config,
+                                            tag=f"safety_fallback_seed_round_{state.round_idx:02d}",
+                                        )
+                                        if safety_err:
+                                            raise RuntimeError(safety_err)
                                         duration_err = _validate_output_duration(
                                             video_path=str(out_dir / "nl_choreo_output.mp4"),
                                             out_min_sec=output_dur_min_sec,
@@ -2241,6 +2425,13 @@ def run_nl_choreo_pipeline(config: PipelineConfig, edit_rounds: list[str] | None
                                     program_text = fallback_seed
                                     program_file.write_text(program_text, encoding="utf-8")
                                     _ensure_render_project(out_dir, program_file, force=True)
+                                    safety_err = _probe_render_safety_for_project(
+                                        out_dir=out_dir,
+                                        config=config,
+                                        tag=f"safety_fallback_seed_round_{state.round_idx:02d}_nostruct",
+                                    )
+                                    if safety_err:
+                                        raise RuntimeError(safety_err)
                                     duration_err = _validate_output_duration(
                                         video_path=str(out_dir / "nl_choreo_output.mp4"),
                                         out_min_sec=output_dur_min_sec,
@@ -2252,6 +2443,13 @@ def run_nl_choreo_pipeline(config: PipelineConfig, edit_rounds: list[str] | None
                         program_text = seed_program_text
                         program_file.write_text(program_text, encoding="utf-8")
                         _ensure_render_project(out_dir, program_file, force=True)
+                        safety_err = _probe_render_safety_for_project(
+                            out_dir=out_dir,
+                            config=config,
+                            tag=f"safety_seed_round_{state.round_idx:02d}",
+                        )
+                        if safety_err:
+                            raise RuntimeError(safety_err)
 
                 safety = validate_segment_specs(segments, fleet)
                 if not safety.ok:
@@ -2310,6 +2508,43 @@ def run_nl_choreo_pipeline(config: PipelineConfig, edit_rounds: list[str] | None
             state.stage = "done"
             state.last_error = "final render fallback used in strict mode"
             _write_state(out_dir, state)
+        final_safety_err = _validate_render_warnings_safe(final_render_warnings)
+        if final_safety_err:
+            state.status = "failed_retryable"
+            state.stage = "done"
+            state.last_error = final_safety_err
+            _write_state(out_dir, state)
+
+        final_narration_text = ""
+        final_narration_error = ""
+        if config.use_qwen:
+            try:
+                final_narration_text = generate_final_design_narration(
+                    client=qwen_client,
+                    vibe_target=config.user_intent,
+                    script_text=program_file.read_text(encoding="utf-8") if program_file.exists() else "",
+                    video_paths=[final_full_video_3d, final_full_video_2d],
+                )
+                _final_narration_path(out_dir).write_text(final_narration_text, encoding="utf-8")
+                _append_jsonl(
+                    _qwen_calls_path(out_dir),
+                    {
+                        "action": "generate_final_design_narration",
+                        "ok": True,
+                        "artifact": str(_final_narration_path(out_dir)),
+                    },
+                )
+            except Exception as exc:
+                final_narration_error = str(exc)
+                _append_jsonl(
+                    _qwen_calls_path(out_dir),
+                    {
+                        "action": "generate_final_design_narration",
+                        "ok": False,
+                        "error": final_narration_error,
+                    },
+                )
+
         _append_jsonl(
             _inspection_rounds_path(out_dir),
             {
@@ -2318,6 +2553,9 @@ def run_nl_choreo_pipeline(config: PipelineConfig, edit_rounds: list[str] | None
                 "final_full_video_3d": final_full_video_3d,
                 "fallback_used": final_fallback_used,
                 "render_distance_warning_summary": summarize_render_distance_warnings(final_render_warnings),
+                "final_safety_error": final_safety_err or "",
+                "final_design_narration_path": str(_final_narration_path(out_dir)) if final_narration_text else "",
+                "final_design_narration_error": final_narration_error,
                 "field": final_field,
                 "device": final_device,
                 "frame_count_hint": final_frame_count_hint,
@@ -2340,6 +2578,7 @@ def run_nl_choreo_pipeline(config: PipelineConfig, edit_rounds: list[str] | None
             "workflow_state_path": str(_state_path(out_dir)),
             "inspection_rounds_path": str(_inspection_rounds_path(out_dir)),
             "qwen_calls_path": str(_qwen_calls_path(out_dir)),
+            "final_design_narration_path": str(_final_narration_path(out_dir)) if _final_narration_path(out_dir).exists() else "",
             "qwen_token_usage": qwen_token_usage,
             "fleet_type": fleet.fleet_type,
             "drone_class": fleet.drone_class,

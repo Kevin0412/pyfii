@@ -6,7 +6,7 @@ path = os.getcwd() + r'/src/pyfii'
 sys.path.append(path)
 
 from extensions.nl_choreo.contracts import DroneOp, DroneTrackSpec, FleetSpec, SegmentSpec
-from extensions.nl_choreo.safety import validate_segment_specs
+from extensions.nl_choreo.safety import classify_render_distance_warnings, validate_segment_specs
 
 
 class TestNlChoreoSafety(unittest.TestCase):
@@ -129,6 +129,20 @@ class TestNlChoreoSafety(unittest.TestCase):
         res = validate_segment_specs([seg1, seg2], fleet)
         self.assertFalse(res.ok)
         self.assertTrue(any("path conflict" in e for e in res.errors))
+
+    def test_classify_render_distance_warnings_detects_unsafe(self):
+        warnings = [
+            "In 43s, distance between d1 and d2 is less than 34cm. please check trajectory planning carefully",
+            "other warning",
+        ]
+        unsafe, details = classify_render_distance_warnings(warnings)
+        self.assertTrue(unsafe)
+        self.assertTrue(any("unsafe distance" in d for d in details))
+
+    def test_classify_render_distance_warnings_allows_clean(self):
+        unsafe, details = classify_render_distance_warnings(["frame dropped", "misc"])
+        self.assertFalse(unsafe)
+        self.assertEqual(details, [])
 
 
 if __name__ == "__main__":

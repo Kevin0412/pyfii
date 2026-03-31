@@ -16,9 +16,10 @@ from extensions.nl_choreo.pipeline import PipelineConfig, run_nl_choreo_pipeline
 
 
 class TestNlChoreoPipelineSmoke(unittest.TestCase):
-    @patch("extensions.nl_choreo.pipeline.render_project")
+    @patch("extensions.nl_choreo.pipeline._ensure_render_project")
+    @patch("extensions.nl_choreo.pipeline.render_project_pair")
     @patch("extensions.nl_choreo.pipeline.analyze_music")
-    def test_pipeline_generates_files(self, mock_analyze, mock_render_project):
+    def test_pipeline_generates_files(self, mock_analyze, mock_render_project_pair, mock_ensure):
         mock_analyze.return_value = MusicAnalysis(
             duration=64.0,
             tempo_estimate=128.0,
@@ -41,7 +42,13 @@ class TestNlChoreoPipelineSmoke(unittest.TestCase):
                 self.frame_count_hint = 100
                 self.warnings = []
 
-        mock_render_project.side_effect = lambda project_path, save_path, fps=25, three_d=False: _R(save_path + ".mp4")
+        mock_render_project_pair.side_effect = (
+            lambda project_path, save_path_2d, save_path_3d, fps=25: (
+                _R(save_path_2d + ".mp4"),
+                _R(save_path_3d + ".mp4"),
+            )
+        )
+        mock_ensure.return_value = None
 
         with tempfile.TemporaryDirectory() as d:
             cfg = PipelineConfig(
