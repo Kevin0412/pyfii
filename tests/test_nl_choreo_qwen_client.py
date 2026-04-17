@@ -7,12 +7,14 @@ from unittest.mock import patch
 path = os.getcwd() + r'/src/pyfii'
 sys.path.append(path)
 
+from extensions.nl_choreo.inspector import _extract_text_from_response
 from extensions.nl_choreo.qwen_client import (
     QwenConfig,
     QwenRetryableError,
     QwenVideoClient,
     RetryPolicy,
     TimeoutPolicy,
+    extract_response_text,
 )
 
 
@@ -54,6 +56,45 @@ class TestNlChoreoQwenClient(unittest.TestCase):
         with tempfile.NamedTemporaryFile(suffix=".mp4") as f:
             with self.assertRaises(Exception):
                 client.upload_video(f.name)
+
+    def test_extract_response_text_prefers_content(self):
+        resp = {
+            "choices": [
+                {
+                    "message": {
+                        "content": "final answer",
+                        "reasoning_content": "hidden chain",
+                    }
+                }
+            ]
+        }
+        self.assertEqual(extract_response_text(resp), "final answer")
+
+    def test_extract_response_text_falls_back_to_reasoning_content(self):
+        resp = {
+            "choices": [
+                {
+                    "message": {
+                        "content": None,
+                        "reasoning_content": "fallback answer",
+                    }
+                }
+            ]
+        }
+        self.assertEqual(extract_response_text(resp), "fallback answer")
+
+    def test_inspector_extract_text_uses_reasoning_content_fallback(self):
+        resp = {
+            "choices": [
+                {
+                    "message": {
+                        "content": None,
+                        "reasoning_content": '{"issues":[],"suggest_regenerate":false}',
+                    }
+                }
+            ]
+        }
+        self.assertEqual(_extract_text_from_response(resp), '{"issues":[],"suggest_regenerate":false}')
 
 
 if __name__ == "__main__":

@@ -47,6 +47,7 @@ class QwenConfig:
     design_top_p: float = 0.95
     codegen_temperature: float = 0.1
     codegen_top_p: float = 0.9
+    enable_thinking: bool | None = None
     retry: RetryPolicy = field(default_factory=RetryPolicy)
     timeout: TimeoutPolicy = field(default_factory=TimeoutPolicy)
 
@@ -59,6 +60,42 @@ class QwenRetryableError(RuntimeError):
 class QwenNonRetryableError(RuntimeError):
     # 不可重试异常：请求格式、权限、模型配置等问题
     pass
+
+
+def extract_response_text(resp: dict[str, Any]) -> str:
+    choices = resp.get("choices", [])
+    if not choices:
+        return ""
+    message = choices[0].get("message", {}) or {}
+    content = message.get("content")
+    if isinstance(content, str) and content.strip():
+        return content
+    if isinstance(content, list):
+        parts: list[str] = []
+        for item in content:
+            if isinstance(item, dict) and item.get("type") == "text":
+                text = str(item.get("text", ""))
+                if text:
+                    parts.append(text)
+        if parts:
+            return "\n".join(parts)
+    reasoning_content = message.get("reasoning_content")
+    if isinstance(reasoning_content, str):
+        return reasoning_content
+    if isinstance(reasoning_content, list):
+        parts = []
+        for item in reasoning_content:
+            if isinstance(item, dict) and item.get("type") == "text":
+                text = str(item.get("text", ""))
+                if text:
+                    parts.append(text)
+            elif isinstance(item, str) and item:
+                parts.append(item)
+        if parts:
+            return "\n".join(parts)
+    if content is None:
+        return ""
+    return str(content)
 
 
 class QwenVideoClient:
@@ -214,6 +251,14 @@ class QwenVideoClient:
         content.append({"type": "text", "text": prompt_zh})
         return content
 
+    def _completion_kwargs(self, **kwargs: Any) -> dict[str, Any]:
+        payload = dict(kwargs)
+        if self.config.enable_thinking is not None:
+            extra_body = dict(payload.get("extra_body") or {})
+            extra_body["chat_template_kwargs"] = {"enable_thinking": bool(self.config.enable_thinking)}
+            payload["extra_body"] = extra_body
+        return payload
+
     def inspect_video(self, video_urls: list[str], prompt_zh: str, max_tokens: int = 8192) -> dict[str, Any]:
         # 使用中文提示词进行视觉评估（可携带多路视频）
         local_mode = self.config.local_video_mode if self.config.use_local_video_path else "video_url"
@@ -223,16 +268,18 @@ class QwenVideoClient:
         def _do_inspect() -> dict[str, Any]:
             try:
                 response = self.client.chat.completions.create(
-                    model=self.config.model,
-                    messages=messages,
-                    max_tokens=max_tokens,
-                    temperature=0.2,
-                    top_p=0.9,
-                    timeout=self.config.timeout.inspect_sec,
-                    extra_body={
-                        "top_k": 20,
-                        "mm_processor_kwargs": {"fps": self.config.fps, "do_sample_frames": True},
-                    },
+                    **self._completion_kwargs(
+                        model=self.config.model,
+                        messages=messages,
+                        max_tokens=max_tokens,
+                        temperature=0.2,
+                        top_p=0.9,
+                        timeout=self.config.timeout.inspect_sec,
+                        extra_body={
+                            "top_k": 20,
+                            "mm_processor_kwargs": {"fps": self.config.fps, "do_sample_frames": True},
+                        },
+                    )
                 )
                 dumped = response.model_dump()
                 usage = self._accumulate_usage(dumped)
@@ -310,12 +357,14 @@ class QwenVideoClient:
         def _do_generate() -> str:
             try:
                 response = self.client.chat.completions.create(
-                    model=self.config.model,
-                    messages=messages,
-                    max_tokens=max_tokens,
-                    temperature=float(self.config.codegen_temperature if temperature is None else temperature),
-                    top_p=float(self.config.codegen_top_p if top_p is None else top_p),
-                    timeout=self.config.timeout.inspect_sec,
+                    **self._completion_kwargs(
+                        model=self.config.model,
+                        messages=messages,
+                        max_tokens=max_tokens,
+                        temperature=float(self.config.codegen_temperature if temperature is None else temperature),
+                        top_p=float(self.config.codegen_top_p if top_p is None else top_p),
+                        timeout=self.config.timeout.inspect_sec,
+                    )
                 )
                 dumped = response.model_dump()
                 usage = self._accumulate_usage(dumped)
@@ -331,17 +380,7 @@ class QwenVideoClient:
                 choices = dumped.get("choices", [])
                 if not choices:
                     raise QwenRetryableError("code generation empty choices")
-                msg = choices[0].get("message", {})
-                content = msg.get("content", "")
-                if isinstance(content, str):
-                    return content
-                if isinstance(content, list):
-                    parts: list[str] = []
-                    for item in content:
-                        if isinstance(item, dict) and item.get("type") == "text":
-                            parts.append(str(item.get("text", "")))
-                    return "\n".join(parts)
-                return str(content)
+                return extract_response_text(dumped)
             except Exception as exc:
                 msg = str(exc)
                 lower = msg.lower()

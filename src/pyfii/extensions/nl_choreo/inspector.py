@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from .contracts import InspectionReport, SegmentIssue
-from .qwen_client import QwenVideoClient
+from .qwen_client import QwenVideoClient, extract_response_text
 
 
 @dataclass
@@ -41,21 +41,8 @@ def build_visual_prompt(vibe_target: str) -> str:
 
 
 def _extract_text_from_response(resp: dict[str, Any]) -> str:
-    # 尽量从标准 chat completion 结构提取文本
-    choices = resp.get("choices", [])
-    if not choices:
-        return ""
-    message = choices[0].get("message", {})
-    content = message.get("content", "")
-    if isinstance(content, str):
-        return content
-    if isinstance(content, list):
-        parts: list[str] = []
-        for item in content:
-            if isinstance(item, dict) and item.get("type") == "text":
-                parts.append(str(item.get("text", "")))
-        return "\n".join(parts)
-    return ""
+    # 尽量从标准 chat completion 结构提取文本，并兼容 reasoning_content 回退
+    return extract_response_text(resp)
 
 
 def _extract_finish_reason(resp: dict[str, Any]) -> str:
