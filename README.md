@@ -20,9 +20,16 @@
 
     pyfii 就会被下载到当前目录下，使用时将 pyfii 文件夹复制到项目目录下
 
-## 使用教程
+## 文档索引
 
-请见./doc/doc_zh_CN.md
+- [安装说明](doc/tutorial/install.md)
+- [教程目录](doc/tutorial/contents.md)
+- [编队飞行](doc/tutorial/group_flight.md)
+- [编程挑战](doc/tutorial/programme_challenge.md)
+- [脚本模式](doc/tutorial/script_mode.md)
+- [内部原理](doc/tutorial/principle.md)
+- [进阶用法](doc/tutorial/more.md)
+- [灯光编写](doc/tutorial/light.md)
 
 ## 目录结构说明
 
