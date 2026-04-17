@@ -22,6 +22,8 @@
 
 ## 文档索引
 
+如果你的目标不是简单使用 pyfii，而是想复刻整个项目，请优先阅读 [内部原理](doc/tutorial/principle.md)。
+
 - [安装说明](doc/tutorial/install.md)
 - [教程目录](doc/tutorial/contents.md)
 - [编队飞行](doc/tutorial/group_flight.md)
