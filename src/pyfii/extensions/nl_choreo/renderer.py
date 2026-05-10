@@ -5,7 +5,9 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import json
+from pathlib import Path
 import subprocess
+import sys
 import warnings
 from typing import Any
 
@@ -60,8 +62,15 @@ def _render_with_shared_track(
     variants: list[tuple[str, bool, int]],
 ) -> tuple[RenderResult, dict[str, RenderResult]]:
     # 一次 read_fii，按给定变体多次 show（例如 2D/3D）
-    from pyfii.read import read_fii
-    from pyfii.show import show
+    try:
+        from pyfii.read import read_fii
+        from pyfii.show import show
+    except ModuleNotFoundError:
+        src_path = str(Path.cwd() / "src")
+        if src_path not in sys.path:
+            sys.path.append(src_path)
+        from pyfii.read import read_fii
+        from pyfii.show import show
 
     if not variants:
         raise ValueError("variants cannot be empty")

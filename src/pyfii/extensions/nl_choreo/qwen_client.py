@@ -11,8 +11,15 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import quote
 
-import httpx
-from openai import OpenAI
+try:
+    import httpx
+except ModuleNotFoundError:  # pragma: no cover - optional dependency for use_qwen=False workflows
+    httpx = None  # type: ignore[assignment]
+
+try:
+    from openai import OpenAI
+except ModuleNotFoundError:  # pragma: no cover - optional dependency for use_qwen=False workflows
+    OpenAI = None  # type: ignore[assignment]
 
 
 @dataclass
@@ -102,7 +109,7 @@ class QwenVideoClient:
     # 视频理解客户端：上传视频后走 OpenAI 兼容接口
     def __init__(self, config: QwenConfig | None = None, telemetry_path: str | Path | None = None):
         self.config = config or QwenConfig()
-        self.client = OpenAI(base_url=self.config.base_url, api_key=self.config.api_key)
+        self.client = OpenAI(base_url=self.config.base_url, api_key=self.config.api_key) if OpenAI is not None else None
         self.telemetry_path = Path(telemetry_path) if telemetry_path else None
         self._token_usage = {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0}
 
@@ -132,6 +139,11 @@ class QwenVideoClient:
         with self.telemetry_path.open("a", encoding="utf-8") as f:
             f.write(json.dumps(event, ensure_ascii=False))
             f.write("\n")
+
+    def _require_client(self) -> Any:
+        if self.client is None:
+            raise QwenNonRetryableError("openai package is required when use_qwen=True")
+        return self.client
 
     def _is_retryable_status(self, status_code: int) -> bool:
         # 状态码分类：429/5xx/408 可重试
@@ -207,6 +219,8 @@ class QwenVideoClient:
             raise FileNotFoundError(f"video file not found: {path}")
 
         def _do_upload() -> str:
+            if httpx is None:
+                raise QwenNonRetryableError("httpx package is required for video upload")
             with path.open("rb") as f:
                 files = {"file": (path.name, f, "video/mp4")}
                 try:
@@ -267,7 +281,8 @@ class QwenVideoClient:
 
         def _do_inspect() -> dict[str, Any]:
             try:
-                response = self.client.chat.completions.create(
+                client = self._require_client()
+                response = client.chat.completions.create(
                     **self._completion_kwargs(
                         model=self.config.model,
                         messages=messages,
@@ -309,7 +324,8 @@ class QwenVideoClient:
                         local_mode="file_url",
                     )
                     retry_messages = [{"role": "user", "content": retry_content}]
-                    response = self.client.chat.completions.create(
+                    client = self._require_client()
+                    response = client.chat.completions.create(
                         model=self.config.model,
                         messages=retry_messages,
                         max_tokens=max_tokens,
@@ -356,7 +372,8 @@ class QwenVideoClient:
 
         def _do_generate() -> str:
             try:
-                response = self.client.chat.completions.create(
+                client = self._require_client()
+                response = client.chat.completions.create(
                     **self._completion_kwargs(
                         model=self.config.model,
                         messages=messages,

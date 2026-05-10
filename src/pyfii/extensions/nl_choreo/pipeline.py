@@ -31,6 +31,7 @@ from .contracts import (
 )
 from .dialogue_manager import DialogueManager, DialogueTurn
 from .inspector import InspectInput, generate_final_design_narration, inspect_with_qwen
+from .keyframe_workflow import emit_gpt55_burst_recompose_program, write_gpt55_burst_seed_report
 from .qwen_client import QwenConfig, QwenVideoClient
 from .refiner import refine_segments
 from .renderer import cut_video_segment, render_project, render_project_pair
@@ -80,7 +81,7 @@ class PipelineConfig:
     qwen_step_patch_attempts: int = 4
     direct_wait_until_step_accepted: bool = True
     direct_use_structured_agent_fallback: bool = True
-    direct_fallback_mode: Literal["freeform_seed", "none", "pattern_seed"] = "none"
+    direct_fallback_mode: Literal["freeform_seed", "gpt55_burst_seed", "none", "pattern_seed"] = "none"
 
 
 @dataclass
@@ -392,6 +393,12 @@ def _choose_direct_seed_program(
     target_output_duration_sec: float | None = None,
 ) -> str | None:
     # direct_fallback_mode 仅决定 direct 模式最终兜底是否注入 pattern seed
+    if config.direct_fallback_mode == "gpt55_burst_seed":
+        return emit_gpt55_burst_recompose_program(
+            output_path=str(Path(config.output_dir) / "nl_choreo_output"),
+            music_path=config.audio_path,
+            render_fps=max(40, int(config.render_fps)),
+        )
     if config.direct_fallback_mode == "pattern_seed":
         return deterministic_seed_program_text
     if config.direct_fallback_mode == "freeform_seed":
@@ -478,6 +485,29 @@ def _duration_targets_sec(analysis: MusicAnalysis, force_duration_sec: float | N
         out_min = max(10.0, target_output * 0.85)
         out_max = target_output * 1.15
     return target_output, target_script, out_min, out_max
+
+
+def _synthetic_music_analysis(duration_sec: float) -> MusicAnalysis:
+    # 无 librosa/无真实音频时的兜底结构：仅供固定种子或纯动作预览模式使用
+    duration = max(60.0, float(duration_sec))
+    section_edges = [0.0, duration * 0.25, duration * 0.5, duration * 0.75, duration]
+    sections = [
+        MusicSection(section_id="S01", start=section_edges[0], end=section_edges[1], energy="mid"),
+        MusicSection(section_id="S02", start=section_edges[1], end=section_edges[2], energy="high"),
+        MusicSection(section_id="S03", start=section_edges[2], end=section_edges[3], energy="high"),
+        MusicSection(section_id="S04", start=section_edges[3], end=section_edges[4], energy="mid"),
+    ]
+    beats = [float(t) for t in range(0, int(duration) + 1, 2)]
+    onsets = [float(t) for t in range(0, int(duration) + 1, 4)]
+    return MusicAnalysis(
+        duration=duration,
+        tempo_estimate=120.0,
+        beats=beats,
+        onsets=onsets,
+        sections=sections,
+        energy_curve=[0.45, 0.8, 0.85, 0.55],
+        climax_ranges=[(duration * 0.45, duration * 0.75)],
+    )
 
 
 def _validate_output_duration(video_path: str, out_min_sec: float, out_max_sec: float) -> str | None:
@@ -2012,7 +2042,13 @@ def run_nl_choreo_pipeline(config: PipelineConfig, edit_rounds: list[str] | None
         analysis_file = out_dir / "music_analysis.json"
         if state.stage in {"init", "analysis"} or (not analysis_file.exists()):
             _log_progress("analyzing music")
-            analysis = analyze_music(config.audio_path)
+            try:
+                analysis = analyze_music(config.audio_path)
+            except Exception:
+                if config.force_duration_sec is None:
+                    raise
+                _log_progress("audio analysis unavailable; using synthetic duration analysis")
+                analysis = _synthetic_music_analysis(config.force_duration_sec)
             analysis = _coerce_duration_if_needed(analysis, config.force_duration_sec)
             validate_duration(analysis.duration)
             analysis_file.write_text(
@@ -2130,13 +2166,20 @@ def run_nl_choreo_pipeline(config: PipelineConfig, edit_rounds: list[str] | None
             )
 
         if config.direct_python_codegen:
-            seed_program_text = _build_freeform_seed_program(
-                output_path=str(out_dir / "nl_choreo_output"),
+            seed_program_text = _choose_direct_seed_program(
+                config=config,
+                deterministic_seed_program_text=deterministic_seed_program_text,
                 fleet=fleet,
-                music_path=config.audio_path,
-                render_fps=max(40, int(config.render_fps)),
                 target_output_duration_sec=target_output_duration_sec,
             )
+            if seed_program_text is None:
+                seed_program_text = _build_freeform_seed_program(
+                    output_path=str(out_dir / "nl_choreo_output"),
+                    fleet=fleet,
+                    music_path=config.audio_path,
+                    render_fps=max(40, int(config.render_fps)),
+                    target_output_duration_sec=target_output_duration_sec,
+                )
         else:
             if deterministic_seed_program_text is None:
                 raise RuntimeError("deterministic seed unavailable")
@@ -2281,7 +2324,7 @@ def run_nl_choreo_pipeline(config: PipelineConfig, edit_rounds: list[str] | None
         else:
             program_text = seed_program_text
             program_file.write_text(program_text, encoding="utf-8")
-            _ensure_render_project(out_dir, program_file)
+            _ensure_render_project(out_dir, program_file, force=True)
 
         state.stage = "qwen_loop"
         _write_state(out_dir, state)
@@ -2296,6 +2339,10 @@ def run_nl_choreo_pipeline(config: PipelineConfig, edit_rounds: list[str] | None
             _log_progress(f"inspection round {state.round_idx}/{config.max_rounds}")
 
             if not config.use_qwen:
+                state.status = "completed"
+                state.stage = "done"
+                state.last_error = ""
+                _write_state(out_dir, state)
                 break
 
             try:
@@ -2338,12 +2385,19 @@ def run_nl_choreo_pipeline(config: PipelineConfig, edit_rounds: list[str] | None
                             render_fps=max(40, int(config.render_fps)),
                         )
                     if config.direct_python_codegen:
-                        seed_program_text = _build_freeform_seed_program(
-                            output_path=str(out_dir / "nl_choreo_output"),
+                        seed_program_text = _choose_direct_seed_program(
+                            config=config,
+                            deterministic_seed_program_text=deterministic_seed_program_text_round,
                             fleet=fleet,
-                            music_path=config.audio_path,
-                            render_fps=max(40, int(config.render_fps)),
+                            target_output_duration_sec=target_output_duration_sec,
                         )
+                        if seed_program_text is None:
+                            seed_program_text = _build_freeform_seed_program(
+                                output_path=str(out_dir / "nl_choreo_output"),
+                                fleet=fleet,
+                                music_path=config.audio_path,
+                                render_fps=max(40, int(config.render_fps)),
+                            )
                     else:
                         if deterministic_seed_program_text_round is None:
                             raise RuntimeError("deterministic round seed unavailable")
@@ -2596,6 +2650,14 @@ def run_nl_choreo_pipeline(config: PipelineConfig, edit_rounds: list[str] | None
         if not last_full_video_3d:
             last_full_video_3d = final_full_video_3d
 
+        keyframe_seed_report_path = ""
+        if config.direct_fallback_mode == "gpt55_burst_seed":
+            keyframe_seed_report_path = write_gpt55_burst_seed_report(
+                output_dir=out_dir,
+                output_path=str(out_dir / "nl_choreo_output"),
+                preview_path=final_full_video_2d,
+            )
+
         _log_progress(f"pipeline done: status={state.status}, rounds={state.round_idx}")
         qwen_token_usage = qwen_client.token_usage
         return {
@@ -2608,6 +2670,7 @@ def run_nl_choreo_pipeline(config: PipelineConfig, edit_rounds: list[str] | None
             "inspection_rounds_path": str(_inspection_rounds_path(out_dir)),
             "qwen_calls_path": str(_qwen_calls_path(out_dir)),
             "final_design_narration_path": str(_final_narration_path(out_dir)) if _final_narration_path(out_dir).exists() else "",
+            "keyframe_seed_report_path": keyframe_seed_report_path,
             "qwen_token_usage": qwen_token_usage,
             "fleet_type": fleet.fleet_type,
             "drone_class": fleet.drone_class,

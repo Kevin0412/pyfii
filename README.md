@@ -175,6 +175,40 @@ pyfii 2.0 不一定要直接等同于 Web 化。更合理的目标是先把 **�
    - 只在需要评价连续运动、节奏跟随、镜头观感时使用。
    - 不再把视频理解作为唯一或第一道反馈机制。
 
+### GPT-5.5 成品种子已落入工作流
+
+这次 60 秒 `burst_recompose` 成品动作已经不再只是一次性示例，而是沉淀为 `nl_choreo` 的关键帧种子：
+
+- 固定时间轴与关键帧位于 `src/pyfii/extensions/nl_choreo/keyframe_workflow.py`。
+- 可通过 `PipelineConfig(direct_fallback_mode="gpt55_burst_seed")` 接入现有工作流。
+- 该模式会生成完整 pyfii 程序，继续经过 `.fii` 读回、距离检查和最终 2D/3D 预览渲染。
+- 它不是新的安全限制模板，而是一条“成品动作种子”：当模型生成不稳定，或需要先有一版可运行视频时，用它打底；后续再让模型做局部优化。
+- 种子现在带有四段动作设计元信息：扩张椭圆、波形/斜向剪切、8 字心跳/三维旋转、有序收束。报告会把这些段落写出来，便于后续人工或模型按段修改。
+- 灯光只使用当前模拟器确定支持的控制方式：`TurnOnAll("#rrggbb")`、`TurnOffAll()` 和 `delay(100)`，不再依赖 per-LED 列表、呼吸、跑马等模拟器未稳定呈现的高级灯效。
+- 动作不再是少量固定位置跳转，而是由 `SCENES` 生成连续数学轨迹采样：旋转椭圆、Lissajous-like 波形、斜向剪切、8 字中心漂移、三维高度旋转和有序 bow 收束。速度按每个小步时长求解，灯光节拍穿插在移动段里。
+- 动作逻辑保持“相邻关系 + 环形桥接 + 角色循环移位”的轻约束表达，用连续轨迹和读回安全检查兜底；它不会把飞机锁进固定安全区域，也不强制固定中心机。
+
+示例入口：
+
+```python
+from pyfii.extensions.nl_choreo.pipeline import PipelineConfig, run_nl_choreo_pipeline
+
+cfg = PipelineConfig(
+    audio_path="",
+    output_dir="output/nl_choreo_gpt55_seed",
+    user_intent="以 GPT-5.5 burst_recompose 成品动作为基础，先确保完整预览视频可用。",
+    use_qwen=False,
+    direct_python_codegen=True,
+    direct_fallback_mode="gpt55_burst_seed",
+    force_duration_sec=64.0,
+    render_fps=20,
+)
+result = run_nl_choreo_pipeline(cfg)
+print(result["final_full_video_2d"])
+```
+
+也可以直接运行 `examples/nl_choreo_gpt55_seed_demo.py`，它会走同一条 pipeline 并输出最终 2D/3D 预览路径。
+
 ### 阶段结论
 
 - 2.0 的重点应从“换一个显示方式”转向“建立可插拔的编队模拟与审查架构”。

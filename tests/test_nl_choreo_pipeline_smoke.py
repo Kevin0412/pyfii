@@ -69,6 +69,7 @@ class TestNlChoreoPipelineSmoke(unittest.TestCase):
             self.assertIn("final_full_video_2d", result)
             self.assertIn("final_full_video_3d", result)
             self.assertEqual(result.get("render_fps"), 40)
+            self.assertEqual(result.get("status"), "completed")
 
 
 if __name__ == "__main__":
