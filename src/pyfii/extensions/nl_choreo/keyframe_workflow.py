@@ -28,6 +28,41 @@ class KeyframeSeedInfo:
     notes: list[str]
 
 
+@dataclass
+class DroneSpan:
+    drone_id: int
+    span_x_cm: int
+    span_y_cm: int
+
+
+@dataclass
+class TimelineDynamicsReport:
+    layer_count: int
+    transition_count: int
+    changed_rank_layers: int
+    average_rank_change: float
+    rank_changes: list[int]
+    drone_spans: list[DroneSpan]
+
+    @property
+    def changed_rank_ratio(self) -> float:
+        if self.transition_count <= 0:
+            return 0.0
+        return self.changed_rank_layers / self.transition_count
+
+    @property
+    def min_span_x_cm(self) -> int:
+        if not self.drone_spans:
+            return 0
+        return min(item.span_x_cm for item in self.drone_spans)
+
+    @property
+    def min_span_y_cm(self) -> int:
+        if not self.drone_spans:
+            return 0
+        return min(item.span_y_cm for item in self.drone_spans)
+
+
 GPT55_BURST_RECOMPOSE_TIMELINE: list[TimelineLayer] = [
     (1, "takeoff on wide diagonal", [(70, 327, 89), (148, 345, 98), (210, 296, 107), (272, 246, 116), (350, 264, 125), (428, 283, 134), (490, 233, 143)], "#4dd7ff"),
     (4, "wide diagonal reveal", [(70, 327, 89), (148, 345, 98), (210, 296, 107), (272, 246, 116), (350, 264, 125), (428, 283, 134), (490, 233, 143)], "#4dd7ff"),
@@ -100,6 +135,93 @@ GPT55_BURST_RECOMPOSE_DESIGN_SECTIONS: list[DesignSection] = [
         "The closing section compresses, falls through a chevron, sweeps late, recoils once more, flashes into a final diamond, and bows.",
     ),
 ]
+
+
+def _rank_order(points: list[Point3]) -> tuple[int, ...]:
+    return tuple(sorted(range(len(points)), key=lambda idx: (points[idx][0], points[idx][1])))
+
+
+def _rank_change(prev_rank: tuple[int, ...], next_rank: tuple[int, ...]) -> int:
+    prev_pos = {drone_idx: pos for pos, drone_idx in enumerate(prev_rank)}
+    next_pos = {drone_idx: pos for pos, drone_idx in enumerate(next_rank)}
+    return sum(abs(prev_pos[drone_idx] - next_pos[drone_idx]) for drone_idx in prev_pos)
+
+
+def evaluate_timeline_dynamics(timeline: list[TimelineLayer]) -> TimelineDynamicsReport:
+    if not timeline:
+        return TimelineDynamicsReport(
+            layer_count=0,
+            transition_count=0,
+            changed_rank_layers=0,
+            average_rank_change=0.0,
+            rank_changes=[],
+            drone_spans=[],
+        )
+
+    ranks = [_rank_order(points) for _time_sec, _name, points, _color in timeline]
+    rank_changes = [_rank_change(prev, nxt) for prev, nxt in zip(ranks, ranks[1:])]
+    changed_rank_layers = sum(1 for change in rank_changes if change > 0)
+    average_rank_change = sum(rank_changes) / len(rank_changes) if rank_changes else 0.0
+
+    drone_count = len(timeline[0][2])
+    drone_spans: list[DroneSpan] = []
+    for drone_idx in range(drone_count):
+        xs = [points[drone_idx][0] for _time_sec, _name, points, _color in timeline]
+        ys = [points[drone_idx][1] for _time_sec, _name, points, _color in timeline]
+        drone_spans.append(
+            DroneSpan(
+                drone_id=drone_idx + 1,
+                span_x_cm=max(xs) - min(xs),
+                span_y_cm=max(ys) - min(ys),
+            )
+        )
+
+    return TimelineDynamicsReport(
+        layer_count=len(timeline),
+        transition_count=max(0, len(timeline) - 1),
+        changed_rank_layers=changed_rank_layers,
+        average_rank_change=average_rank_change,
+        rank_changes=rank_changes,
+        drone_spans=drone_spans,
+    )
+
+
+def validate_timeline_dynamics(
+    timeline: list[TimelineLayer],
+    *,
+    min_changed_rank_ratio: float = 0.55,
+    min_average_rank_change: float = 5.0,
+    min_span_x_cm: int = 240,
+    min_span_y_cm: int = 240,
+) -> list[str]:
+    report = evaluate_timeline_dynamics(timeline)
+    errors: list[str] = []
+    if report.transition_count <= 0:
+        errors.append("timeline has no transitions")
+        return errors
+    if report.changed_rank_ratio < min_changed_rank_ratio:
+        errors.append(
+            "fixed-lane degeneration: changed rank layers "
+            f"{report.changed_rank_layers}/{report.transition_count}, "
+            f"require ratio >= {min_changed_rank_ratio:.2f}"
+        )
+    if report.average_rank_change < min_average_rank_change:
+        errors.append(
+            "weak role exchange: average rank change "
+            f"{report.average_rank_change:.2f}, require >= {min_average_rank_change:.2f}"
+        )
+    for span in report.drone_spans:
+        if span.span_x_cm < min_span_x_cm:
+            errors.append(
+                f"d{span.drone_id} insufficient x span: "
+                f"{span.span_x_cm}cm < {min_span_x_cm}cm"
+            )
+        if span.span_y_cm < min_span_y_cm:
+            errors.append(
+                f"d{span.drone_id} insufficient y span: "
+                f"{span.span_y_cm}cm < {min_span_y_cm}cm"
+            )
+    return errors
 
 
 def get_gpt55_burst_recompose_seed_info() -> KeyframeSeedInfo:
@@ -421,12 +543,17 @@ pf.show(data, t0, music, field=field, device=device, save=name, FPS={render_fps}
 
 def write_gpt55_burst_seed_report(output_dir: str | Path, output_path: str, preview_path: str) -> str:
     seed = get_gpt55_burst_recompose_seed_info()
+    dynamics = evaluate_timeline_dynamics(seed.timeline)
     out_dir = Path(output_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
     layers = "\n".join(f"- {time_sec:02d}s: {name}" for time_sec, name, _, _ in seed.timeline[1:])
     sections = "\n".join(
         f"- {start_sec:02d}-{end_sec:02d}s `{section_id}`: {summary}"
         for section_id, start_sec, end_sec, summary in seed.design_sections
+    )
+    spans = "\n".join(
+        f"- d{item.drone_id}: x span {item.span_x_cm}cm, y span {item.span_y_cm}cm"
+        for item in dynamics.drone_spans
     )
     report = f"""# {seed.title}
 
@@ -443,6 +570,14 @@ This seed is now part of the nl_choreo keyframe workflow.
 ## Notes
 
 """ + "\n".join(f"- {note}" for note in seed.notes) + f"""
+
+## Dynamics Guard
+
+- Rank-changing transitions: {dynamics.changed_rank_layers}/{dynamics.transition_count}
+- Average rank change: {dynamics.average_rank_change:.2f}
+- Minimum X/Y span: {dynamics.min_span_x_cm}cm / {dynamics.min_span_y_cm}cm
+
+{spans}
 
 ## Artifacts
 

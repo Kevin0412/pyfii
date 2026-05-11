@@ -11,7 +11,9 @@ from extensions.nl_choreo.keyframe_workflow import (
     GPT55_BURST_RECOMPOSE_LAND_TIME_SEC,
     GPT55_BURST_RECOMPOSE_TIMELINE,
     emit_gpt55_burst_recompose_program,
+    evaluate_timeline_dynamics,
     get_gpt55_burst_recompose_seed_info,
+    validate_timeline_dynamics,
 )
 
 try:
@@ -61,6 +63,37 @@ class TestNlChoreoKeyframeWorkflow(unittest.TestCase):
         self.assertIn("pf.Fii", program)
         self.assertIn("pf.show", program)
         self.assertIn("readback min distance failed", program)
+
+    def test_seed_dynamics_guard_accepts_role_exchange_baseline(self):
+        report = evaluate_timeline_dynamics(GPT55_BURST_RECOMPOSE_TIMELINE)
+        self.assertEqual(report.layer_count, len(GPT55_BURST_RECOMPOSE_TIMELINE))
+        self.assertGreaterEqual(report.changed_rank_layers, 16)
+        self.assertGreaterEqual(report.average_rank_change, 9.0)
+        self.assertGreaterEqual(report.min_span_x_cm, 320)
+        self.assertGreaterEqual(report.min_span_y_cm, 320)
+        self.assertEqual(validate_timeline_dynamics(GPT55_BURST_RECOMPOSE_TIMELINE), [])
+
+    def test_dynamics_guard_rejects_fixed_lane_regression(self):
+        fixed_lane_timeline = [
+            (
+                time_sec,
+                f"fixed lane {time_sec}",
+                [
+                    (80, 120 + time_sec * 8, 120),
+                    (150, 180 + time_sec * 6, 130),
+                    (220, 240 + time_sec * 4, 140),
+                    (290, 300 + time_sec * 2, 150),
+                    (360, 240 + time_sec * 4, 140),
+                    (430, 180 + time_sec * 6, 130),
+                    (500, 120 + time_sec * 8, 120),
+                ],
+                "#ffffff",
+            )
+            for time_sec in range(1, 6)
+        ]
+        errors = validate_timeline_dynamics(fixed_lane_timeline)
+        self.assertTrue(any("fixed-lane degeneration" in err for err in errors))
+        self.assertTrue(any("insufficient x span" in err for err in errors))
 
     def test_pipeline_direct_seed_selection_uses_gpt55_seed(self):
         if PipelineConfig is None or _choose_direct_seed_program is None:
