@@ -29,50 +29,75 @@ class KeyframeSeedInfo:
 
 
 GPT55_BURST_RECOMPOSE_TIMELINE: list[TimelineLayer] = [
-    (1, "takeoff ellipse", [(458, 293, 158), (391, 402, 206), (240, 428, 218), (119, 353, 185), (119, 233, 131), (240, 158, 98), (391, 185, 110)], "#4dd7ff"),
-    (10, "opening expansion end", [(262, 427, 200), (176, 287, 148), (203, 167, 104), (322, 157, 101), (444, 266, 140), (477, 411, 193), (396, 483, 220)], "#4dd7ff"),
-    (18, "lissajous weave end", [(163, 291, 105), (142, 196, 140), (245, 161, 189), (395, 213, 214), (478, 311, 197), (433, 383, 150), (293, 374, 109)], "#fff06e"),
-    (28, "diagonal shear end", [(239, 113, 183), (363, 149, 138), (412, 263, 107), (351, 368, 115), (225, 386, 155), (128, 303, 197), (135, 182, 210)], "#ff6f91"),
-    (38, "figure eight pulse end", [(307, 180, 156), (367, 244, 191), (348, 358, 200), (264, 436, 178), (178, 419, 141), (155, 320, 116), (212, 214, 123)], "#74ff9b"),
-    (50, "vertical rotation end", [(225, 398, 132), (113, 315, 128), (127, 196, 147), (256, 130, 174), (403, 167, 189), (458, 279, 181), (378, 382, 156)], "#b38bff"),
-    (58, "staggered bow", [(207, 280, 110), (60, 280, 110), (133, 280, 110), (280, 280, 110), (427, 280, 110), (500, 280, 110), (353, 280, 110)], "#ffffff"),
+    (1, "takeoff on wide diagonal", [(70, 327, 89), (148, 345, 98), (210, 296, 107), (272, 246, 116), (350, 264, 125), (428, 283, 134), (490, 233, 143)], "#4dd7ff"),
+    (4, "wide diagonal reveal", [(70, 327, 89), (148, 345, 98), (210, 296, 107), (272, 246, 116), (350, 264, 125), (428, 283, 134), (490, 233, 143)], "#4dd7ff"),
+    (7, "diamond expansion", [(70, 270, 160), (139, 403, 210), (269, 495, 175), (291, 65, 125), (421, 157, 155), (408, 417, 145), (490, 290, 190)], "#fff06e"),
+    (10, "offset crown bridge", [(206, 124, 123), (388, 138, 147), (79, 223, 123), (486, 254, 175), (428, 386, 188), (101, 361, 146), (257, 433, 175)], "#ff9f43"),
+    (13, "low double triangle", [(280, 280, 145), (206, 392, 210), (171, 210, 158), (496, 295, 170), (354, 168, 218), (67, 270, 118), (392, 354, 128)], "#ff6f91"),
+    (16, "vertical break line", [(158, 392, 126), (207, 487, 118), (255, 116, 158), (353, 73, 166), (354, 306, 142), (304, 211, 150), (256, 349, 134)], "#74ff9b"),
+    (19, "ribbon recoil", [(101, 304, 147), (415, 462, 171), (324, 208, 137), (399, 220, 161), (414, 329, 177), (57, 242, 171), (205, 268, 131)], "#b38bff"),
+    (22, "chevron lock", [(151, 169, 170), (280, 280, 145), (361, 262, 183), (530, 192, 158), (444, 235, 221), (91, 94, 132), (214, 229, 208)], "#69dbff"),
+    (25, "outer orbit bridge", [(73, 335, 148), (206, 441, 178), (396, 427, 198), (500, 304, 192), (440, 164, 165), (98, 189, 130), (261, 113, 137)], "#ffe066"),
+    (28, "reverse half arc", [(124, 124, 126), (263, 499, 172), (60, 274, 128), (117, 427, 150), (418, 451, 174), (458, 151, 131), (498, 309, 154)], "#ff8a3d"),
+    (31, "tilted diamond", [(80, 358, 175), (480, 202, 125), (208, 453, 145), (450, 359, 155), (356, 476, 190), (204, 84, 160), (110, 201, 210)], "#ff5da2"),
+    (34, "counter ribbon", [(315, 219, 184), (490, 179, 150), (201, 396, 136), (229, 508, 150), (165, 278, 146), (200, 217, 170), (439, 227, 174)], "#8ce99a"),
+    (37, "broad slash", [(337, 323, 156), (451, 410, 172), (109, 268, 132), (223, 237, 140), (109, 150, 124), (337, 205, 148), (337, 442, 164)], "#66d9ff"),
+    (40, "rotated triangle burst", [(280, 280, 145), (348, 395, 218), (165, 348, 128), (212, 165, 210), (382, 92, 118), (390, 212, 158), (173, 468, 170)], "#d191ff"),
+    (43, "compressed orbit", [(304, 78, 138), (156, 129, 123), (175, 448, 164), (98, 294, 135), (431, 179, 168), (441, 356, 190), (327, 476, 189)], "#c4f052"),
+    (46, "falling chevron", [(257, 16, 158), (277, 110, 221), (53, 417, 132), (141, 377, 170), (283, 197, 183), (280, 280, 145), (215, 331, 208)], "#ffbe4a"),
+    (49, "late arc sweep", [(214, 76, 136), (389, 95, 163), (85, 372, 141), (220, 486, 167), (83, 195, 124), (491, 240, 176), (395, 462, 175)], "#ff728a"),
+    (52, "final recoil ribbon", [(272, 228, 172), (503, 299, 128), (126, 233, 130), (362, 338, 170), (190, 171, 152), (73, 364, 128), (442, 379, 148)], "#69dbff"),
+    (55, "last diamond flare", [(451, 356, 145), (354, 482, 175), (362, 112, 155), (83, 352, 160), (477, 208, 190), (206, 78, 125), (198, 448, 210)], "#ffffff"),
+    (58, "straight bow", [(427, 280, 110), (353, 280, 110), (280, 280, 110), (60, 280, 110), (500, 280, 110), (133, 280, 110), (207, 280, 110)], "#ffffff"),
 ]
 
 
 GPT55_BURST_RECOMPOSE_SCENES: list[SceneSpec] = [
-    (4, 10, "opening", 3, "#4dd7ff"),
-    (10, 18, "lissajous", 4, "#fff06e"),
-    (18, 28, "diagonal", 5, "#ff6f91"),
-    (28, 38, "figure8", 5, "#74ff9b"),
-    (38, 50, "vertical", 6, "#b38bff"),
-    (50, 58, "final", 4, "#ffffff"),
+    (4, 7, "wide_diagonal_reveal", 1, "#4dd7ff"),
+    (7, 10, "diamond_expansion", 1, "#fff06e"),
+    (10, 13, "offset_crown_bridge", 1, "#ff9f43"),
+    (13, 16, "low_double_triangle", 1, "#ff6f91"),
+    (16, 19, "vertical_break_line", 1, "#74ff9b"),
+    (19, 22, "ribbon_recoil", 1, "#b38bff"),
+    (22, 25, "chevron_lock", 1, "#69dbff"),
+    (25, 28, "outer_orbit_bridge", 1, "#ffe066"),
+    (28, 31, "reverse_half_arc", 1, "#ff8a3d"),
+    (31, 34, "tilted_diamond", 1, "#ff5da2"),
+    (34, 37, "counter_ribbon", 1, "#8ce99a"),
+    (37, 40, "broad_slash", 1, "#66d9ff"),
+    (40, 43, "rotated_triangle_burst", 1, "#d191ff"),
+    (43, 46, "compressed_orbit", 1, "#c4f052"),
+    (46, 49, "falling_chevron", 1, "#ffbe4a"),
+    (49, 52, "late_arc_sweep", 1, "#ff728a"),
+    (52, 55, "final_recoil_ribbon", 1, "#69dbff"),
+    (55, 58, "last_diamond_flare", 1, "#ffffff"),
 ]
 
 
 GPT55_BURST_RECOMPOSE_DESIGN_SECTIONS: list[DesignSection] = [
     (
-        "expanding_rotated_ellipse",
+        "diagonal_diamond_crown",
         1,
-        10,
-        "The fleet takes off already separated on an ellipse, then expands and rotates with small center drift instead of jumping between fixed poses.",
+        13,
+        "The fleet opens as a wide diagonal, snaps into a tall diamond, then offsets into a crown bridge with visible role exchange.",
     ),
     (
-        "lissajous_and_diagonal_shear",
-        10,
+        "triangle_ribbon_chevron",
+        13,
         28,
-        "The phase order stays safe while the visual frame becomes a wave, then shears into a diagonal slash with changing height.",
+        "Double-triangle geometry breaks into a vertical line, recoils as a ribbon, locks into a chevron, then bridges through an outer orbit.",
     ),
     (
-        "figure8_and_vertical_rotation",
+        "arc_diamond_counterstroke",
         28,
-        50,
-        "The center of the whole formation traces a figure-eight pulse, then the ellipse turns into a 3D vertical rotation with strong height contrast.",
+        43,
+        "A reverse arc sweep becomes a tilted diamond, then a counter-ribbon and broad slash push the formation across the whole field.",
     ),
     (
-        "ordered_bow_recompose",
-        50,
+        "compression_fall_recompose",
+        43,
         60,
-        "The final section preserves the sorted visual order from the 3D rotation and recomposes into a low bow without crossing paths.",
+        "The closing section compresses, falls through a chevron, sweeps late, recoils once more, flashes into a final diamond, and bows.",
     ),
 ]
 
@@ -107,15 +132,26 @@ def emit_gpt55_burst_recompose_program(
     timeline_repr = repr(GPT55_BURST_RECOMPOSE_TIMELINE)
     design_sections_repr = repr(GPT55_BURST_RECOMPOSE_DESIGN_SECTIONS)
     scene_specs_repr = repr(GPT55_BURST_RECOMPOSE_SCENES)
-    bow_map_repr = repr({1: 60, 2: 133, 0: 207, 3: 280, 6: 353, 4: 427, 5: 500})
     palette_repr = repr(
         {
-            "opening": ["#4dd7ff", "#ffffff", "#69dbff"],
-            "lissajous": ["#fff06e", "#ffbe4a", "#ffffff"],
-            "diagonal": ["#ff6f91", "#d191ff", "#ffffff"],
-            "figure8": ["#74ff9b", "#69dbff", "#ffffff"],
-            "vertical": ["#b38bff", "#ff728a", "#ffffff"],
-            "final": ["#ffffff", "#dbeafe", "#fff06e"],
+            "wide_diagonal_reveal": ["#4dd7ff", "#ffffff", "#69dbff"],
+            "diamond_expansion": ["#fff06e", "#ffbe4a", "#ffffff"],
+            "offset_crown_bridge": ["#ff9f43", "#fff06e", "#ffffff"],
+            "low_double_triangle": ["#ff6f91", "#d191ff", "#ffffff"],
+            "vertical_break_line": ["#74ff9b", "#69dbff", "#ffffff"],
+            "ribbon_recoil": ["#b38bff", "#ff728a", "#ffffff"],
+            "chevron_lock": ["#69dbff", "#74ff9b", "#ffffff"],
+            "outer_orbit_bridge": ["#ffe066", "#ffbe4a", "#ffffff"],
+            "reverse_half_arc": ["#ff8a3d", "#ff728a", "#ffffff"],
+            "tilted_diamond": ["#ff5da2", "#d191ff", "#ffffff"],
+            "counter_ribbon": ["#8ce99a", "#63e6be", "#ffffff"],
+            "broad_slash": ["#66d9ff", "#4dd7ff", "#ffffff"],
+            "rotated_triangle_burst": ["#d191ff", "#ff6f91", "#ffffff"],
+            "compressed_orbit": ["#c4f052", "#fff06e", "#ffffff"],
+            "falling_chevron": ["#ffbe4a", "#ff728a", "#ffffff"],
+            "late_arc_sweep": ["#ff728a", "#ff5da2", "#ffffff"],
+            "final_recoil_ribbon": ["#69dbff", "#b38bff", "#ffffff"],
+            "last_diamond_flare": ["#ffffff", "#dbeafe", "#fff06e"],
         }
     )
 
@@ -133,11 +169,12 @@ import pyfii as pf
 TIMELINE = {timeline_repr}
 DESIGN_SECTIONS = {design_sections_repr}
 SCENES = {scene_specs_repr}
-BOW_X_BY_DRONE = {bow_map_repr}
 LIGHT_PALETTES = {palette_repr}
 LAND_TIME_SEC = {GPT55_BURST_RECOMPOSE_LAND_TIME_SEC}
 DRONE_COUNT = 7
 F400_SAFE_DISTANCE_CM = {F400_SAFE_DISTANCE_CM}
+ANCHOR_POINTS_BY_TIME = {{time_sec: points for time_sec, _name, points, _color in TIMELINE}}
+SCENE_INDEX_BY_NAME = {{name: idx for idx, (_start, _end, name, _step_count, _color) in enumerate(SCENES)}}
 
 
 def distance_3d(a, b):
@@ -188,8 +225,8 @@ def clamp_channel(value):
 
 def point3(values):
     return (
-        int(round(clamp(values[0], 50, 510))),
-        int(round(clamp(values[1], 50, 510))),
+        int(round(clamp(values[0], 0, 560))),
+        int(round(clamp(values[1], 0, 560))),
         int(round(clamp(values[2], 88, 230))),
     )
 
@@ -202,64 +239,62 @@ def mix_point(a, b, t):
     return tuple(a[i] * (1 - t) + b[i] * t for i in range(3))
 
 
-def ellipse_point(drone_idx, rotation, cx, cy, rx, ry, angle, z_base, z_amp, z_phase):
-    theta = 2 * math.pi * drone_idx / DRONE_COUNT + rotation
-    cos_t = math.cos(theta)
-    sin_t = math.sin(theta)
-    cos_a = math.cos(angle)
-    sin_a = math.sin(angle)
-    x = cx + rx * cos_t * cos_a - ry * sin_t * sin_a
-    y = cy + rx * cos_t * sin_a + ry * sin_t * cos_a
-    z = z_base + z_amp * math.sin(theta + z_phase)
-    return (x, y, z)
-
-
-def scene_time(scene_name, t):
-    for start_sec, end_sec, name, _step_count, _color in SCENES:
+def scene_spec(scene_name):
+    for start_sec, end_sec, name, step_count, color in SCENES:
         if name == scene_name:
-            return start_sec + (end_sec - start_sec) * t
+            return start_sec, end_sec, name, step_count, color
     raise ValueError("unknown scene: " + scene_name)
 
 
-def orbit_point_float(drone_idx, time_sec):
-    u = (time_sec - 4) / 46
-    base = 2 * math.pi * drone_idx / DRONE_COUNT
-    rotation = 2.6 * math.pi * u + 0.25 * math.sin(4 * math.pi * u)
-    cx = 280 + 42 * math.sin(2 * math.pi * u) + 24 * math.sin(6 * math.pi * u)
-    cy = 280 + 34 * math.sin(3 * math.pi * u + 0.4)
-    rx = 165 + 28 * math.sin(2 * math.pi * u + 0.5)
-    ry = 118 + 22 * math.sin(4 * math.pi * u + 1.2)
-    angle = 0.8 * math.sin(2 * math.pi * u) + 0.35 * math.sin(5 * math.pi * u)
-    x, y, z = ellipse_point(
-        drone_idx,
-        rotation,
-        cx,
-        cy,
-        rx,
-        ry,
-        angle,
-        158,
-        44,
-        2.6 * math.pi * u,
-    )
-    z += 18 * math.sin(6 * math.pi * u + base)
-    return (x, y, z)
+def curve_strength(scene_name):
+    if "ribbon" in scene_name or "arc" in scene_name:
+        return 30
+    if "chevron" in scene_name or "triangle" in scene_name:
+        return 22
+    if "diamond" in scene_name or "crown" in scene_name:
+        return 26
+    if "slash" in scene_name or "diagonal" in scene_name:
+        return 18
+    if "orbit" in scene_name:
+        return 32
+    return 24
 
 
 def scene_point_float(scene_name, drone_idx, t):
-    if scene_name == "final":
-        start = orbit_point_float(drone_idx, 50)
-        bow = (BOW_X_BY_DRONE[drone_idx], 280, 110)
-        ease = smoothstep(t)
-        phase = 2 * math.pi * drone_idx / DRONE_COUNT
-        wobble = (
-            (1 - ease) * 20 * math.sin(2 * math.pi * t + phase),
-            (1 - ease) * 16 * math.cos(2 * math.pi * t + phase),
-            (1 - ease) * 12 * math.sin(4 * math.pi * t + phase),
-        )
-        blended = mix_point(start, bow, ease)
-        return tuple(blended[i] + wobble[i] for i in range(3))
-    return orbit_point_float(drone_idx, scene_time(scene_name, t))
+    start_sec, end_sec, _name, _step_count, _color = scene_spec(scene_name)
+    start = ANCHOR_POINTS_BY_TIME[start_sec][drone_idx]
+    end = ANCHOR_POINTS_BY_TIME[end_sec][drone_idx]
+    ease = smoothstep(t)
+    base = mix_point(start, end, ease)
+    dx = end[0] - start[0]
+    dy = end[1] - start[1]
+    length = max(1.0, math.hypot(dx, dy))
+    nx = -dy / length
+    ny = dx / length
+    scene_idx = SCENE_INDEX_BY_NAME[scene_name]
+    phase = 2 * math.pi * drone_idx / DRONE_COUNT + scene_idx * 0.73
+    bump = math.sin(math.pi * t)
+    strength = curve_strength(scene_name)
+    arc = strength * bump * (0.65 + 0.35 * math.sin(phase))
+    ripple = strength * 0.35 * bump * math.sin(2 * math.pi * t + phase)
+    vertical = strength * 0.42 * bump * math.cos(2 * math.pi * t + phase)
+    if "ribbon" in scene_name:
+        arc += 16 * bump * math.sin(3 * math.pi * t + phase)
+        ripple += 10 * bump * math.cos(math.pi * t + phase)
+    elif "chevron" in scene_name:
+        vertical += 12 * bump * (1 if drone_idx % 2 == 0 else -1)
+    elif "diamond" in scene_name:
+        arc *= 1.15
+        vertical += 8 * bump * math.sin(phase)
+    elif "orbit" in scene_name or "arc" in scene_name:
+        arc += 18 * bump * math.cos(math.pi * t + phase)
+    elif "slash" in scene_name or "diagonal" in scene_name:
+        ripple += 8 * bump * (drone_idx - 3) / 3
+    return (
+        base[0] + nx * arc + (dx / length) * ripple,
+        base[1] + ny * arc + (dy / length) * ripple,
+        base[2] + vertical,
+    )
 
 
 def scene_point(scene_name, drone_idx, t):
@@ -273,8 +308,8 @@ def generate_motion_layers():
         step_duration = duration / step_count
         for step_idx in range(step_count):
             t = (step_idx + 1) / step_count
-            time_sec = int(round(start_sec + step_idx * step_duration))
-            duration_sec = int(round(step_duration))
+            time_sec = start_sec + step_idx * step_duration
+            duration_sec = step_duration
             points = [scene_point(scene_name, drone_idx, t) for drone_idx in range(DRONE_COUNT)]
             label = scene_name + " step " + str(step_idx + 1)
             layers.append((time_sec, duration_sec, label, scene_name, points, color))
@@ -331,16 +366,23 @@ for d, point in zip(ds, start_points):
     d.takeoff(1, point[2])
 
 previous_points = start_points
-for time_sec, duration, label, scene_name, points, color in generate_motion_layers():
-    duration_ms = int(duration * 1000)
-    for drone_idx, (d, previous, target) in enumerate(zip(ds, previous_points, points)):
-        speed, acc = speed_for_segment(distance_3d(previous, target), duration)
-        d.inittime(time_sec)
-        d.VelXY(speed, acc)
-        d.VelZ(speed, acc)
-        d.move2(*target)
-        apply_scene_lights(d, drone_idx, scene_name, color, duration_ms)
-    previous_points = points
+for start_sec, end_sec, scene_name, step_count, color in SCENES:
+    step_duration = (end_sec - start_sec) / step_count
+    duration_ms = int(round(step_duration * 1000))
+    next_points = [scene_point(scene_name, drone_idx, 1.0) for drone_idx in range(DRONE_COUNT)]
+    for drone_idx, d in enumerate(ds):
+        d.inittime(start_sec)
+        previous = previous_points[drone_idx]
+        for step_idx in range(step_count):
+            t = (step_idx + 1) / step_count
+            target = scene_point(scene_name, drone_idx, t)
+            speed, acc = speed_for_segment(distance_3d(previous, target), step_duration)
+            d.VelXY(speed, acc)
+            d.VelZ(speed, acc)
+            d.move2(*target)
+            apply_scene_lights(d, drone_idx, scene_name, color, duration_ms)
+            previous = target
+    previous_points = next_points
 
 for d in ds:
     d.inittime(LAND_TIME_SEC)
