@@ -15,6 +15,16 @@ from .keyframe_workflow import (
     emit_gpt55_burst_recompose_program,
     get_gpt55_burst_recompose_seed_info,
 )
+from .motion_phrase import (
+    DroneGroup,
+    MotionDesignSpec,
+    MotionPhrase,
+    MotionPhraseMetrics,
+    MotionPrimitive,
+    evaluate_motion_phrase_flexibility,
+    validate_motion_design_spec,
+    validate_phrase_design_direction,
+)
 
 try:
     from .pipeline import PipelineConfig, run_nl_choreo_pipeline
@@ -29,12 +39,20 @@ __all__ = [
     "emit_gpt55_burst_recompose_program",
     "FleetSpec",
     "get_gpt55_burst_recompose_seed_info",
+    "DroneGroup",
     "MusicAnalysis",
+    "MotionDesignSpec",
+    "MotionPhrase",
+    "MotionPhraseMetrics",
+    "MotionPrimitive",
     "PipelineConfig",
     "Scene",
     "ScenePlan",
     "SegmentIssue",
     "SegmentSpec",
+    "evaluate_motion_phrase_flexibility",
     "run_nl_choreo_pipeline",
+    "validate_motion_design_spec",
+    "validate_phrase_design_direction",
     "validate_scene_plan",
 ]

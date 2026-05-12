@@ -258,11 +258,118 @@ print(result["final_full_video_2d"])
 
 因此，模板库的长期定位应是 **动作词汇表**，不是成片编排表。真正的目标是每次都能生成一套新的动作设计，并在多轮反馈中局部重写、收紧、放大或改节奏，同时保留安全读回和可复现输出。
 
+### 本轮 v4-v9 收尾结论
+
+本轮从 v4 到 v9 的试验暴露了几个明确边界：
+
+- `random`/候选搜索不能替代动作设计。它可以用于离线探索可能的点位，但最终进入工作流的脚本必须是可解释、可复现的命名动作短句。
+- 单个 `rotation` 或 ribbon 场很容易把视觉退化成整体逆/顺时针旋转。局部旋转可以保留，但全片必须混入反向切割、错层穿插、压缩爆开、分组换位和非环形结构。
+- 安全硬门只认 PyFii 本身的危险信号：`distance between` 和 `action isn't completed`。最小距离可以作为报告指标，但不应私自加“保守阈值”替代 PyFii 判断。
+- 速度慢不是安全本身。正确做法是给每段动作按距离和时长求解 `VelXY/VelZ/Acc`，飞不完就修衔接、分段或目标分配，而不是把整段降速。
+- 视频是最终验收物。代码、指标和关键帧只能辅助判断；每次声称动作优化，都必须产出可观看的 2D/3D 视频。
+
+当前手写验证版是 `examples/original_crosscut_v9_60s.py`，输出：
+
+- `output/original_crosscut_v9_60s/original_crosscut_v9_60s.mp4`
+- `output/original_crosscut_v9_60s/render_crosscut_v9_3d.mp4`
+
+这版 v9 的定位不是最终模板，而是新的基线：**手写 phrase + 确定性换位 + PyFii 读回硬门 + 3D 视频验收**。它证明了“不靠 random、不靠固定模板、不靠全局旋转”这条路可行。
+
+工作流因此更新为：
+
+1. **先写 motion brief**
+   - 用自然语言列出段落意图，例如“交叉切入、错层换位、压缩爆开、反向斜切”。
+   - 明确哪些段落是快切、哪些是长句、哪些是停顿/释放，不再默认均匀 3 秒格。
+
+2. **再写 phrase/action-score**
+   - 每段包含 `time range`、`intent`、`groups`、`role mapping`、`motion primitives`、`risk`、`repair strategy`。
+   - `random`、`random_search`、`global_rotation`、`single_center_orbit`、`fixed_lane`、`uniform_template_grid` 这类原语禁止作为最终设计。
+
+3. **再生成 pyfii 程序**
+   - 目标点和轨迹来自 phrase 设计。
+   - 程序可以使用确定性分配、速度求解、中间关键帧和错峰来保证可执行性。
+   - 搜索/优化只能服务于“如何安全到达已设计动作”，不能反过来决定动作本身。
+
+4. **硬检查**
+   - `pf.Fii(...).save()`、`pf.read_fii(...)`、`pf.show(...)` 的 warning 都要捕获。
+   - 出现 `distance between` 或 `action isn't completed` 直接失败。
+   - 同时报告 readback 最小距离、最大单段位移、平均位移、最长停顿、角色转向分布等指标。
+
+5. **视频验收**
+   - 必须输出完整 2D/3D 视频。
+   - 看视频判断是否退化成固定车道、整体旋转、模板串联、速度过慢或动作不连贯。
+
+### 纯文本模型是否可行
+
+纯文本模型可行，但前提是把“视觉理解”从生成环节拆出去。也就是说：文本模型负责 **设计 motion brief / phrase spec / pyfii 代码**，PyFii 和本地脚本负责 **读回、采样、碰撞、速度、跨度、退化指标、渲染视频**。
+
+它适合做的事：
+
+- 生成分段动作意图、角色映射、分组关系、节奏说明和修复策略。
+- 根据用户反馈局部改 phrase，例如“30-45 秒更狠”“别全逆时针”“中段加快”“最后不要排直线”。
+- 生成可执行 pyfii 程序，并在失败报告后修代码。
+- 对指标报告做归因：哪里飞不完、哪里太慢、哪里像模板、哪里疑似固定车道。
+
+它不适合单独做的事：
+
+- 直接判断视频好不好看。
+- 仅凭文字保证没有中途对穿。
+- 仅凭坐标列表判断最终观感节奏。
+
+因此 DeepSeek-v4、Qwen、GPT、Claude 等纯文本/弱视觉模型可以这样测：
+
+1. **同题输入**
+   - 同一个 60 秒任务、同一机型 F400、同一场地、同一硬约束。
+   - 输入包含当前 README 的工作流摘要、PyFii 用法、禁止项和 v9 基线说明。
+
+2. **两阶段输出**
+   - 第一轮只输出 motion brief/phrase spec，不写代码。
+   - 第二轮根据 phrase spec 输出完整 pyfii 脚本。
+
+3. **统一本地验收**
+   - 运行脚本生成 `.fii` 和视频。
+   - 捕获 PyFii warning。
+   - 记录 readback 最小距离、动作完成、时长、单段位移、停顿、XY 跨度、角色轮换、全局旋转倾向。
+   - 输出 2D/3D 视频给人看。
+
+4. **评分**
+   - 硬失败：PyFii 报距离或动作未完成、脚本不可运行、无完整视频。
+   - 软失败：固定中心/固定车道、全局单向旋转、模板均匀串联、速度明显慢、动作不连贯。
+   - 通过：有明确原创动作句法、可读回、视频可看、能按反馈局部修改。
+
+如果要测 DeepSeek-v4，不要先假设具体模型名或视觉能力；把它当作 OpenAI-compatible 文本模型接入即可。当前 `QwenConfig` 已经有 `base_url`、`api_key`、`model`，可以用同一套文本生成入口测试不同模型；视频理解部分可以先关闭或只在最终人工观看时使用。
+
+示例配置思路：
+
+```python
+from pyfii.extensions.nl_choreo.pipeline import PipelineConfig
+from pyfii.extensions.nl_choreo.qwen_client import QwenConfig
+
+cfg = PipelineConfig(
+    audio_path="",
+    output_dir="output/text_model_deepseek_v4_trial",
+    user_intent="设计一段 60 秒 F400 原创编队，不使用 random，不使用全局旋转套路。",
+    use_qwen=True,
+    max_rounds=0,
+    direct_python_codegen=True,
+    qwen=QwenConfig(
+        base_url="YOUR_OPENAI_COMPATIBLE_BASE_URL",
+        api_key="YOUR_API_KEY",
+        model="deepseek-v4",
+        use_local_video_path=True,
+        local_video_mode="path_text",
+    ),
+)
+```
+
+这里 `max_rounds=0` 的意思是先只测“文本模型能否生成可运行脚本 + 本地渲染视频”，不让文本模型硬吃视频。等代码生成能力稳定后，再接视觉模型或人工反馈做下一轮修改。
+
 ### 阶段结论
 
 - 2.0 的重点应从“换一个显示方式”转向“建立可插拔的编队模拟与审查架构”。
 - 浏览器化仍然值得保留为方向之一，但不必成为唯一主线。
-- 强模型生成编队脚本已经可行，后续关键在于建立稳定的自动审查指标和可视化反馈。
+- 强模型生成编队脚本已经可行，但最终目标不是“套模板生成”，而是“文本设计 phrase、本地验证轨迹、视频验收结果”。
 - 关键帧审查是一个很实用的折中点：它比纯代码检查更接近观感，又比完整视频理解更可控。
 - AI 编舞提示词需要明确“角色轮换”与“每架机都有 XY 运动跨度”，否则模型容易退化成固定中心机 + 外圈旋转的单一套路。
+- 纯文本模型值得测，尤其适合 motion brief、phrase spec、代码生成和失败修复；视觉评价则交给 PyFii 渲染视频 + 人工/视觉模型复核。
 - 下一步建议优先做 `pyfii-core` 的轨迹 JSON 契约，再并行试验桌面 3D 后端和 Web viewer。
