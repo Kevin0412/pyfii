@@ -29,6 +29,8 @@ Most useful references in `examples/`:
 
 Both the `gpt55_` and `original_` example lines were directly designed with
 GPT-5.5/Codex; `original_` is an experiment-line name, not a human-authorship label.
+Several of these generated versions are valuable design references rather than
+discarded failures.
 
 For the strongest overall choreography reference, see
 `tests/dntg20220730_v3.py` in the main tree. It is a human-designed work and is
@@ -48,6 +50,8 @@ timing, and readback/video acceptance.
 - `original_flow_field_v5_70s.py`: useful flow-field progression reference.
 
 Older v4/v6/v7 scripts are mainly historical iterations.
+
+Future workflow planning lives in `doc/ai_choreography_exploration.md`.
 
 Root-level `ai_providers.example.json` is intentionally not archived; it remains
 as provider configuration scaffolding for the stronger-model path.

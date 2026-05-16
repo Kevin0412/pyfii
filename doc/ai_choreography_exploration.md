@@ -45,6 +45,10 @@
 
 归档脚本位于 `archive/nl_choreo_ai_exploration/examples/`。
 
+这些脚本里的 `gpt55_` 和 `original_` 都是 GPT-5.5/Codex 直接设计出来的编队飞行程序。它们的价值不是“复用某套固定模板”，而是展示强模型在充分约束下已经能直接提出可运行、可读回、可渲染的动作设计。
+
+文件名只作为维护者回看和经验溯源索引。后续 agent 不应把这些 `.py` 文件原文塞进系统提示词，也不要求用户显式引用某个版本名。
+
 ### gpt55 系列
 
 - `gpt55_phrase_vibe_v3_60s.py`：最有参考价值的 GPT-5.5 版本。有 phrase durations、phrase designs、动作原语、group modes、非均匀时间、局部 offset 和验证逻辑，是后续 phrase-spec 生成器的最佳桥。
@@ -61,6 +65,90 @@
 - `original_kinetic_ribbon_v8_60s.py`：连续动作参考价值高，尤其适合看 timing、速度求解、ribbon field 和 readback metrics。
 - `original_flow_field_v5_70s.py`：flow-field 方向的有效迭代，研究这条路时优先看 v5 而不是 v4。
 - `original_continuous_ribbon_v6_75s.py`、`original_kinetic_ribbon_v7_60s.py`、`original_flow_field_v4_70s.py`：主要是历史迭代，用于追踪 v8/v5 的演化即可。
+
+## Codex 设计经验
+
+从 `dntg20220730_v3.py`、`original_crosscut_v9_60s.py` 和这些 GPT-5.5/Codex 归档脚本里，可以总结出几条后续必须继承的经验：
+
+- 好编舞先有动作意图，再有坐标。模型输出应先描述“交叉切入、压缩爆开、错层换位、反向切割、收束”等动作句法，再落到点位。
+- phrase 比 keyframe 更重要。单纯关键帧直连会变成点位切换；phrase 需要包含段内节奏、分组分工、角色映射、等待、错峰和灯光。
+- `original_crosscut_v9_60s.py` 是当前 AI 生成线里最满意的基线：它不靠 random 决定动作，不靠固定模板拼接，也没有退化成单一全局旋转，而是用确定性换位、cross energy、路径验证和 3D 视频验收形成闭环。
+- `gpt55_phrase_vibe_v3_60s.py` 说明模型可以生成非均匀时间和动作原语组合；`gpt55_template_motion_v2_60s.py` 说明模板适合做动作词汇表，但不能成为最终编排方式。
+- `original_phrase_motion_v4_70s.py`、`original_kinetic_ribbon_v8_60s.py`、`original_flow_field_v5_70s.py` 分别代表三类有用结构：phrase 骨架、连续 ribbon 场、flow-field 状态规划。
+- 安全检查不能反过来支配动作设计。安全层负责指出哪里飞不完、哪里距离危险、哪里可能对穿；修复时优先调整衔接、中间点、等待、速度和角色分配，而不是把动作整体压成保守固定车道。
+- 视频理解不是主反馈。真正可靠的反馈链是 PyFii 读回、密采样、warning 捕获、指标报告和 2D/3D 视频；模型可以读报告、改 spec、再生成代码。
+
+## 未来设计规划
+
+下一阶段目标是做一个 DeepSeek/GPT 可切换、多轮对话式、可局部修改的 agent 编队工作流。它不再复活旧的视频理解闭环，而是围绕 motion brief、phrase spec、PyFii 代码和本地验收构建。
+
+### 系统提示词与知识库
+
+未来 agent 需要一个轻量知识库或系统提示词包，但内容应是从优秀脚本中归纳出的设计方法，而不是原始 `.py` 文件：
+
+- 方法：段落化编舞、phrase/action-score、分组分工、角色映射、非均匀时间、错峰、等待、速度求解、灯光节拍。
+- 设计思路：先写动作意图，再写衔接，再落到 PyFii；先保证动作有观感目标，再用验证报告修安全和执行性。
+- 避免项：固定中心绕圈、全局单向旋转、固定车道、均匀模板格、为了安全牺牲所有动作变化、用 random 直接决定最终动作。
+- 验收规则：PyFii 读回、warning 捕获、密采样指标、角色变化、XY/Z 跨度、2D/3D 视频输出。
+- 参考来源：维护者可以追溯到 `tests/dntg20220730_v3.py` 和归档脚本，但模型运行时只接收蒸馏后的原则、schema、示例 spec 和失败修复策略。
+
+### 工作流形态
+
+1. 用户用自然语言提出任务或修改意见，例如“30-45 秒更狠一点，多一些交叉切入和确定性换位”“不要全局单向旋转”“结尾不要排直线”。
+2. agent 先生成或修改 `motion_brief`，明确音乐段落、情绪曲线、动作目标、禁用退化模式和验收重点。
+3. agent 再生成 `phrase_spec`，每段包含 `time_range`、`intent`、`groups`、`role_mapping`、`motion_primitives`、`timing_notes`、`light_notes`、`risk`、`repair_strategy`。
+4. codegen 把 `phrase_spec` 转成 PyFii 脚本，自动处理目标点、中间点、速度/加速度、错峰、等待和灯光节拍。
+5. validator 运行脚本、保存 `.fii`、读回轨迹、捕获 PyFii warning、密采样并生成指标报告。
+6. renderer 输出 2D/3D 视频和关键帧，供用户验收。
+7. 用户继续用自然语言反馈，agent 只修改相关 phrase，除非结构性失败才重写全片。
+
+### 模型切换
+
+模型配置继续走根目录 `ai_providers.example.json` / 本地 `ai_providers.local.json`。工作流应支持在同一会话里切换 provider：
+
+- `custom_gpt`：用于自定义 OpenAI-compatible 服务。
+- `deepseek` / `deepseek_pro`：用于强文本推理和低成本多候选。
+- 后续 GPT 模型：用于高质量 phrase spec、复杂修复和最终代码生成。
+
+切换模型时不丢会话状态。`motion_brief`、`phrase_spec`、生成脚本、验证报告和用户反馈都作为上下文资产保存，换模型只是换下一轮执行者。
+
+### Agent 状态文件
+
+每次任务应生成一个独立工作目录，例如 `output/ai_choreo_sessions/<session_id>/`，至少包含：
+
+- `motion_brief.md`
+- `phrase_spec.json`
+- `generated.py`
+- `validation_report.json`
+- `repair_log.md`
+- `render_2d.mp4`
+- `render_3d.mp4`
+- `keyframes/`
+
+这样用户和模型都可以围绕同一份状态反复修改，而不是每次从零开始猜。
+
+### 验收硬门
+
+每轮候选必须通过这些硬门才进入人工观感验收：
+
+- Python 脚本可执行。
+- `pf.Fii(...).save()` 成功。
+- `pf.read_fii(..., fps=60)` 可读回。
+- `pf.show(..., show=False)` 或等价检查不出现 `distance between`、`action isn't completed` 等硬失败。
+- 密采样报告包含最小距离、最大单段位移、平均位移、XY/Z 跨度、最长停顿、角色变化、全局旋转倾向和固定车道风险。
+- 必须产出可观看的 2D/3D 视频。
+
+### 实现顺序
+
+1. 先定义 `motion_brief` / `phrase_spec` schema 和 session 目录结构。
+2. 抽象 OpenAI-compatible provider client，支持 `custom_gpt`、`deepseek`、`deepseek_pro`，并允许按轮次切换。
+3. 做知识库蒸馏：从 `tests/dntg20220730_v3.py` 和高价值归档脚本里提取方法、设计思路、应避免情况、验收规则和少量结构化 spec 示例，不把原始 `.py` 代码作为系统提示词。
+4. 实现两阶段生成：先 brief/spec，后 PyFii codegen。
+5. 接入本地 validator 和 renderer，失败报告回灌给模型做 repair。
+6. 做多轮修改入口：用户可以指定“改第几段/某个时间范围/某种问题”，agent 保留原 session 只改局部。
+7. 最后再做多模型对比：同一 brief 让 DeepSeek/GPT 各出一版 spec 或代码，用同一套 validator 和视频产物比较。
+
+这条线的最终验收不是“模型说它理解了视频”，而是用户能连续给反馈，agent 能保留上下文、切换模型、局部修改、稳定生成 `.fii` 和视频，并且结果具备成熟作品里的段落组织能力，同时吸收 Codex 生成版本中已经验证过的闭环经验。
 
 ## Provider 配置
 
