@@ -1,7 +1,9 @@
+import json
 import os
 import sys
 import tempfile
 import unittest
+from pathlib import Path
 from unittest.mock import patch
 
 path = os.getcwd() + r'/src/pyfii'
@@ -28,7 +30,28 @@ class _FakeResponse:
         return self._payload
 
 
+def _qwen_config_from_test_json(path):
+    payload = json.loads(Path(path).read_text(encoding="utf-8"))
+    retry = RetryPolicy(**payload.pop("retry", {}))
+    timeout = TimeoutPolicy(**payload.pop("timeout", {}))
+    return QwenConfig(**payload, retry=retry, timeout=timeout)
+
+
 class TestNlChoreoQwenClient(unittest.TestCase):
+    def test_default_config_has_empty_endpoint_fields(self):
+        cfg = QwenConfig()
+        self.assertEqual(cfg.base_url, "")
+        self.assertEqual(cfg.api_key, "")
+        self.assertEqual(cfg.upload_endpoint, "")
+
+    def test_test_side_json_loader_builds_qwen_config(self):
+        cfg = _qwen_config_from_test_json(Path(__file__).with_name("nl_choreo_qwen.example.json"))
+        self.assertEqual(cfg.base_url, "https://ai.kevin0412.top/v1")
+        self.assertEqual(cfg.api_key, "EMPTY")
+        self.assertEqual(cfg.upload_endpoint, "https://ai.kevin0412.top/video-upload/v1/videos")
+        self.assertEqual(cfg.retry.max_attempts, 2)
+        self.assertEqual(cfg.timeout.inspect_sec, 2.0)
+
     @patch("extensions.nl_choreo.qwen_client.httpx.post")
     def test_upload_retry_then_success(self, mock_post):
         calls = [
@@ -38,6 +61,7 @@ class TestNlChoreoQwenClient(unittest.TestCase):
         mock_post.side_effect = calls
 
         cfg = QwenConfig(
+            upload_endpoint="http://example/upload",
             retry=RetryPolicy(max_attempts=3, backoff_base_sec=0.01, backoff_factor=1.0, backoff_max_sec=0.02),
             timeout=TimeoutPolicy(upload_sec=2.0, inspect_sec=2.0),
         )
@@ -51,7 +75,7 @@ class TestNlChoreoQwenClient(unittest.TestCase):
     @patch("extensions.nl_choreo.qwen_client.httpx.post")
     def test_upload_non_retryable(self, mock_post):
         mock_post.return_value = _FakeResponse(status_code=401, payload={}, text="unauthorized")
-        cfg = QwenConfig(retry=RetryPolicy(max_attempts=2))
+        cfg = QwenConfig(upload_endpoint="http://example/upload", retry=RetryPolicy(max_attempts=2))
         client = QwenVideoClient(cfg)
         with tempfile.NamedTemporaryFile(suffix=".mp4") as f:
             with self.assertRaises(Exception):

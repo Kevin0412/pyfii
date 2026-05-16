@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# 该文件封装本地/私有部署 Qwen 视频理解调用，并提供超时重试能力
+# 该文件封装 Qwen 视频理解调用，并提供超时重试能力
 
 from __future__ import annotations
 
@@ -41,10 +41,10 @@ class TimeoutPolicy:
 
 @dataclass
 class QwenConfig:
-    # Qwen 接入配置：默认指向本机环境中的本地部署域名
-    base_url: str = "https://ai.kevin0412.top/v1"
-    api_key: str = "EMPTY"
-    upload_endpoint: str = "https://ai.kevin0412.top/video-upload/v1/videos"
+    # Qwen 接入配置
+    base_url: str = ""
+    api_key: str = ""
+    upload_endpoint: str = ""
     model: str = "Qwen3.5-35B-A3B-FP8"
     fps: int = 2
     use_local_video_path: bool = False
@@ -109,7 +109,7 @@ class QwenVideoClient:
     # 视频理解客户端：上传视频后走 OpenAI 兼容接口
     def __init__(self, config: QwenConfig | None = None, telemetry_path: str | Path | None = None):
         self.config = config or QwenConfig()
-        self.client = OpenAI(base_url=self.config.base_url, api_key=self.config.api_key) if OpenAI is not None else None
+        self.client: OpenAI | None = None
         self.telemetry_path = Path(telemetry_path) if telemetry_path else None
         self._token_usage = {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0}
 
@@ -148,6 +148,19 @@ class QwenVideoClient:
     def _is_retryable_status(self, status_code: int) -> bool:
         # 状态码分类：429/5xx/408 可重试
         return status_code in {408, 429, 500, 502, 503, 504}
+
+    def _openai_client(self) -> OpenAI:
+        if self.client is None:
+            if OpenAI is None:
+                raise QwenNonRetryableError("openai package is required when use_qwen=True")
+            if not self.config.base_url:
+                raise QwenNonRetryableError(
+                    "Qwen base_url is not configured. Pass QwenConfig(base_url=..., api_key=..., "
+                    "upload_endpoint=...) from the calling workflow."
+                )
+            api_key = self.config.api_key or "EMPTY"
+            self.client = OpenAI(base_url=self.config.base_url, api_key=api_key)
+        return self.client
 
     def _sleep_backoff(self, attempt: int) -> None:
         # 指数退避 + 抖动
@@ -217,6 +230,11 @@ class QwenVideoClient:
         path = Path(video_path)
         if not path.is_file():
             raise FileNotFoundError(f"video file not found: {path}")
+        if not self.config.upload_endpoint:
+            raise QwenNonRetryableError(
+                "Qwen upload_endpoint is not configured. Pass QwenConfig(base_url=..., api_key=..., "
+                "upload_endpoint=...) from the calling workflow."
+            )
 
         def _do_upload() -> str:
             if httpx is None:
@@ -281,8 +299,7 @@ class QwenVideoClient:
 
         def _do_inspect() -> dict[str, Any]:
             try:
-                client = self._require_client()
-                response = client.chat.completions.create(
+                response = self._openai_client().chat.completions.create(
                     **self._completion_kwargs(
                         model=self.config.model,
                         messages=messages,
@@ -308,6 +325,8 @@ class QwenVideoClient:
                     }
                 )
                 return dumped
+            except QwenNonRetryableError:
+                raise
             except Exception as exc:
                 msg = str(exc)
                 lower = msg.lower()
@@ -324,8 +343,7 @@ class QwenVideoClient:
                         local_mode="file_url",
                     )
                     retry_messages = [{"role": "user", "content": retry_content}]
-                    client = self._require_client()
-                    response = client.chat.completions.create(
+                    response = self._openai_client().chat.completions.create(
                         model=self.config.model,
                         messages=retry_messages,
                         max_tokens=max_tokens,
@@ -372,8 +390,7 @@ class QwenVideoClient:
 
         def _do_generate() -> str:
             try:
-                client = self._require_client()
-                response = client.chat.completions.create(
+                response = self._openai_client().chat.completions.create(
                     **self._completion_kwargs(
                         model=self.config.model,
                         messages=messages,
@@ -398,6 +415,8 @@ class QwenVideoClient:
                 if not choices:
                     raise QwenRetryableError("code generation empty choices")
                 return extract_response_text(dumped)
+            except QwenNonRetryableError:
+                raise
             except Exception as exc:
                 msg = str(exc)
                 lower = msg.lower()

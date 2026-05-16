@@ -1,6 +1,11 @@
 /dist
 .pypirc
 __token__
+.env
+.env.*
+*.local.json
+tests/*qwen*.json
+!tests/*qwen*.example.json
 **/__pycache__
 output
 测试
