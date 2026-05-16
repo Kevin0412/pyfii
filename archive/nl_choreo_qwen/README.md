@@ -19,5 +19,21 @@ Archived contents:
 - `examples/`: demos and generated choreography scripts that depended on the
   retired workflow package.
 
+Most useful references in `examples/`:
+
+- `gpt55_phrase_vibe_v3_60s.py`: best GPT-5.5 phrase-based reference; keep it
+  for future motion-spec generation ideas.
+- `gpt55_template_motion_v2_60s.py`: useful action vocabulary and debug
+  baseline, but not a final architecture.
+- `original_crosscut_v9_60s.py`: strongest handwritten baseline; phrase design,
+  deterministic role exchange, PyFii hard checks, and 3D video acceptance.
+- `original_phrase_motion_v4_70s.py`: clear phrase skeleton for spec-to-code
+  experiments.
+- `original_kinetic_ribbon_v8_60s.py`: useful continuous ribbon and timing
+  reference.
+- `original_flow_field_v5_70s.py`: useful flow-field progression reference.
+
+Older v4/v6/v7 scripts are mainly historical iterations.
+
 Root-level `ai_providers.example.json` is intentionally not archived; it remains
 as provider configuration scaffolding for the stronger-model path.
