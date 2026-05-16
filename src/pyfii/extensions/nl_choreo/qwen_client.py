@@ -4,8 +4,10 @@
 from __future__ import annotations
 
 import json
+import os
 import random
 import time
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -41,7 +43,7 @@ class TimeoutPolicy:
 
 @dataclass
 class QwenConfig:
-    # Qwen 接入配置
+    # OpenAI-compatible provider 接入配置
     base_url: str = ""
     api_key: str = ""
     upload_endpoint: str = ""
@@ -55,8 +57,156 @@ class QwenConfig:
     codegen_temperature: float = 0.1
     codegen_top_p: float = 0.9
     enable_thinking: bool | None = None
+    reasoning_effort: str | None = None
+    max_output_tokens: int | None = None
+    thinking: dict[str, Any] = field(default_factory=dict)
+    extra_body: dict[str, Any] = field(default_factory=dict)
     retry: RetryPolicy = field(default_factory=RetryPolicy)
     timeout: TimeoutPolicy = field(default_factory=TimeoutPolicy)
+
+
+_PROVIDER_ENV_PREFIXES = {
+    "qwen": "PYFII_QWEN",
+    "custom_gpt": "PYFII_CUSTOM_GPT",
+    "deepseek": "PYFII_DEEPSEEK",
+    "deepseek_pro": "PYFII_DEEPSEEK_PRO",
+}
+
+_QWEN_CONFIG_KEYS = {
+    "base_url",
+    "api_key",
+    "upload_endpoint",
+    "model",
+    "fps",
+    "use_local_video_path",
+    "local_video_mode",
+    "inspect_auto_fallback_to_upload",
+    "design_temperature",
+    "design_top_p",
+    "codegen_temperature",
+    "codegen_top_p",
+    "enable_thinking",
+    "reasoning_effort",
+    "max_output_tokens",
+    "thinking",
+    "extra_body",
+}
+
+_ROOT_PROVIDER_OWNED_KEYS = {
+    "api_key",
+    "base_url",
+    "enable_thinking",
+    "extra_body",
+    "max_output_tokens",
+    "model",
+    "reasoning_effort",
+    "thinking",
+    "upload_endpoint",
+}
+
+
+def _mapping(value: Any) -> Mapping[str, Any]:
+    return value if isinstance(value, Mapping) else {}
+
+
+def _provider_env_prefix(provider: str) -> str:
+    return _PROVIDER_ENV_PREFIXES.get(provider, f"PYFII_{provider.upper().replace('-', '_')}")
+
+
+def _first_value(*values: Any, default: Any = "") -> Any:
+    for value in values:
+        if value is not None and value != "":
+            return value
+    return default
+
+
+def _as_bool(value: Any, default: bool = False) -> bool:
+    if value is None:
+        return default
+    if isinstance(value, bool):
+        return value
+    return str(value).strip().lower() in {"1", "true", "yes", "on"}
+
+
+def qwen_config_from_dict(
+    data: Mapping[str, Any],
+    *,
+    provider: str | None = None,
+    environ: Mapping[str, str] | None = None,
+) -> QwenConfig:
+    env = os.environ if environ is None else environ
+    provider_name = str(provider or data.get("provider") or env.get("PYFII_NL_CHOREO_PROVIDER") or "qwen")
+    providers = _mapping(data.get("providers"))
+    provider_data = _mapping(providers.get(provider_name) or data.get(provider_name))
+
+    merged: dict[str, Any] = {}
+    for key in _QWEN_CONFIG_KEYS:
+        if key in data and (provider_name == "qwen" or key not in _ROOT_PROVIDER_OWNED_KEYS):
+            merged[key] = data[key]
+    merged.update({k: v for k, v in provider_data.items() if k in _QWEN_CONFIG_KEYS})
+
+    retry_data = dict(_mapping(data.get("retry")))
+    retry_data.update(_mapping(provider_data.get("retry")))
+    timeout_data = dict(_mapping(data.get("timeout")))
+    timeout_data.update(_mapping(provider_data.get("timeout")))
+    extra_body = dict(_mapping(data.get("extra_body")))
+    extra_body.update(_mapping(provider_data.get("extra_body")))
+    thinking = dict(_mapping(data.get("thinking")))
+    thinking.update(_mapping(provider_data.get("thinking")))
+
+    prefix = _provider_env_prefix(provider_name)
+    max_output_tokens = _first_value(
+        merged.get("max_output_tokens"),
+        env.get(f"{prefix}_MAX_OUTPUT_TOKENS"),
+        default=None,
+    )
+    enable_thinking = _first_value(merged.get("enable_thinking"), env.get(f"{prefix}_ENABLE_THINKING"), default=None)
+    return QwenConfig(
+        base_url=str(_first_value(merged.get("base_url"), env.get(f"{prefix}_BASE_URL"))),
+        api_key=str(_first_value(merged.get("api_key"), env.get(f"{prefix}_API_KEY"))),
+        upload_endpoint=str(
+            _first_value(merged.get("upload_endpoint"), env.get(f"{prefix}_UPLOAD_ENDPOINT"), env.get("PYFII_QWEN_UPLOAD_ENDPOINT"))
+        ),
+        model=str(_first_value(merged.get("model"), env.get(f"{prefix}_MODEL"), default=QwenConfig.model)),
+        fps=int(_first_value(merged.get("fps"), env.get(f"{prefix}_FPS"), default=QwenConfig.fps)),
+        use_local_video_path=_as_bool(merged.get("use_local_video_path"), QwenConfig.use_local_video_path),
+        local_video_mode=str(_first_value(merged.get("local_video_mode"), default=QwenConfig.local_video_mode)),
+        inspect_auto_fallback_to_upload=_as_bool(
+            merged.get("inspect_auto_fallback_to_upload"),
+            QwenConfig.inspect_auto_fallback_to_upload,
+        ),
+        design_temperature=float(
+            _first_value(merged.get("design_temperature"), default=QwenConfig.design_temperature)
+        ),
+        design_top_p=float(_first_value(merged.get("design_top_p"), default=QwenConfig.design_top_p)),
+        codegen_temperature=float(
+            _first_value(merged.get("codegen_temperature"), default=QwenConfig.codegen_temperature)
+        ),
+        codegen_top_p=float(_first_value(merged.get("codegen_top_p"), default=QwenConfig.codegen_top_p)),
+        enable_thinking=None if enable_thinking is None else _as_bool(enable_thinking),
+        reasoning_effort=_first_value(
+            merged.get("reasoning_effort"),
+            env.get(f"{prefix}_REASONING_EFFORT"),
+            default=None,
+        ),
+        max_output_tokens=None if max_output_tokens is None else int(max_output_tokens),
+        thinking=thinking,
+        extra_body=extra_body,
+        retry=RetryPolicy(**retry_data),
+        timeout=TimeoutPolicy(**timeout_data),
+    )
+
+
+AIProviderConfig = QwenConfig
+
+
+def ai_provider_config_from_dict(
+    data: Mapping[str, Any],
+    *,
+    provider: str | None = None,
+    environ: Mapping[str, str] | None = None,
+) -> AIProviderConfig:
+    return qwen_config_from_dict(data, provider=provider, environ=environ)
 
 
 class QwenRetryableError(RuntimeError):
@@ -155,7 +305,7 @@ class QwenVideoClient:
                 raise QwenNonRetryableError("openai package is required when use_qwen=True")
             if not self.config.base_url:
                 raise QwenNonRetryableError(
-                    "Qwen base_url is not configured. Pass QwenConfig(base_url=..., api_key=..., "
+                    "AI provider base_url is not configured. Pass AIProviderConfig(base_url=..., api_key=..., "
                     "upload_endpoint=...) from the calling workflow."
                 )
             api_key = self.config.api_key or "EMPTY"
@@ -232,7 +382,7 @@ class QwenVideoClient:
             raise FileNotFoundError(f"video file not found: {path}")
         if not self.config.upload_endpoint:
             raise QwenNonRetryableError(
-                "Qwen upload_endpoint is not configured. Pass QwenConfig(base_url=..., api_key=..., "
+                "AI provider upload_endpoint is not configured. Pass AIProviderConfig(base_url=..., api_key=..., "
                 "upload_endpoint=...) from the calling workflow."
             )
 
@@ -285,9 +435,21 @@ class QwenVideoClient:
 
     def _completion_kwargs(self, **kwargs: Any) -> dict[str, Any]:
         payload = dict(kwargs)
+        if self.config.reasoning_effort:
+            payload["reasoning_effort"] = self.config.reasoning_effort
+
+        extra_body = dict(self.config.extra_body)
+        extra_body.update(dict(payload.get("extra_body") or {}))
+        if self.config.thinking:
+            extra_body["thinking"] = dict(self.config.thinking)
+        if extra_body.get("thinking"):
+            payload.pop("temperature", None)
+            payload.pop("top_p", None)
         if self.config.enable_thinking is not None:
-            extra_body = dict(payload.get("extra_body") or {})
-            extra_body["chat_template_kwargs"] = {"enable_thinking": bool(self.config.enable_thinking)}
+            chat_template_kwargs = dict(extra_body.get("chat_template_kwargs") or {})
+            chat_template_kwargs["enable_thinking"] = bool(self.config.enable_thinking)
+            extra_body["chat_template_kwargs"] = chat_template_kwargs
+        if extra_body:
             payload["extra_body"] = extra_body
         return payload
 
@@ -344,16 +506,18 @@ class QwenVideoClient:
                     )
                     retry_messages = [{"role": "user", "content": retry_content}]
                     response = self._openai_client().chat.completions.create(
-                        model=self.config.model,
-                        messages=retry_messages,
-                        max_tokens=max_tokens,
-                        temperature=0.2,
-                        top_p=0.9,
-                        timeout=self.config.timeout.inspect_sec,
-                        extra_body={
-                            "top_k": 20,
-                            "mm_processor_kwargs": {"fps": self.config.fps, "do_sample_frames": True},
-                        },
+                        **self._completion_kwargs(
+                            model=self.config.model,
+                            messages=retry_messages,
+                            max_tokens=max_tokens,
+                            temperature=0.2,
+                            top_p=0.9,
+                            timeout=self.config.timeout.inspect_sec,
+                            extra_body={
+                                "top_k": 20,
+                                "mm_processor_kwargs": {"fps": self.config.fps, "do_sample_frames": True},
+                            },
+                        )
                     )
                     dumped = response.model_dump()
                     usage = self._accumulate_usage(dumped)
@@ -380,13 +544,20 @@ class QwenVideoClient:
         self,
         prompt_zh: str,
         *,
-        max_tokens: int = 8192,
+        max_tokens: int | None = None,
         temperature: float | None = None,
         top_p: float | None = None,
         action_name: str = "generate_python_code",
     ) -> str:
         # 通用文本生成：允许按阶段设置不同温度参数
         messages = [{"role": "user", "content": [{"type": "text", "text": prompt_zh}]}]
+        effective_max_tokens = int(
+            max_tokens
+            if max_tokens is not None
+            else self.config.max_output_tokens
+            if self.config.max_output_tokens is not None
+            else 8192
+        )
 
         def _do_generate() -> str:
             try:
@@ -394,7 +565,7 @@ class QwenVideoClient:
                     **self._completion_kwargs(
                         model=self.config.model,
                         messages=messages,
-                        max_tokens=max_tokens,
+                        max_tokens=effective_max_tokens,
                         temperature=float(self.config.codegen_temperature if temperature is None else temperature),
                         top_p=float(self.config.codegen_top_p if top_p is None else top_p),
                         timeout=self.config.timeout.inspect_sec,
@@ -428,10 +599,10 @@ class QwenVideoClient:
 
         return self._retry_loop(action_name, _do_generate)
 
-    def generate_python_code(self, prompt_zh: str, max_tokens: int = 8192) -> str:
+    def generate_python_code(self, prompt_zh: str, max_tokens: int | None = None) -> str:
         return self.generate_text(prompt_zh=prompt_zh, max_tokens=max_tokens, action_name="generate_python_code")
 
-    def generate_design_text(self, prompt_zh: str, max_tokens: int = 4096) -> str:
+    def generate_design_text(self, prompt_zh: str, max_tokens: int | None = None) -> str:
         return self.generate_text(
             prompt_zh=prompt_zh,
             max_tokens=max_tokens,

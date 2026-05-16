@@ -11,11 +11,12 @@ sys.path.append(path)
 
 from extensions.nl_choreo.inspector import _extract_text_from_response
 from extensions.nl_choreo.qwen_client import (
+    AIProviderConfig,
     QwenConfig,
-    QwenRetryableError,
     QwenVideoClient,
     RetryPolicy,
     TimeoutPolicy,
+    ai_provider_config_from_dict,
     extract_response_text,
 )
 
@@ -30,27 +31,91 @@ class _FakeResponse:
         return self._payload
 
 
-def _qwen_config_from_test_json(path):
+AI_PROVIDERS_EXAMPLE = Path(__file__).resolve().parents[1] / "ai_providers.example.json"
+
+
+def _ai_provider_config_from_json(path, provider=None):
     payload = json.loads(Path(path).read_text(encoding="utf-8"))
-    retry = RetryPolicy(**payload.pop("retry", {}))
-    timeout = TimeoutPolicy(**payload.pop("timeout", {}))
-    return QwenConfig(**payload, retry=retry, timeout=timeout)
+    return ai_provider_config_from_dict(payload, provider=provider, environ={})
 
 
 class TestNlChoreoQwenClient(unittest.TestCase):
     def test_default_config_has_empty_endpoint_fields(self):
-        cfg = QwenConfig()
+        cfg = AIProviderConfig()
         self.assertEqual(cfg.base_url, "")
         self.assertEqual(cfg.api_key, "")
         self.assertEqual(cfg.upload_endpoint, "")
 
-    def test_test_side_json_loader_builds_qwen_config(self):
-        cfg = _qwen_config_from_test_json(Path(__file__).with_name("nl_choreo_qwen.example.json"))
-        self.assertEqual(cfg.base_url, "https://ai.kevin0412.top/v1")
-        self.assertEqual(cfg.api_key, "EMPTY")
-        self.assertEqual(cfg.upload_endpoint, "https://ai.kevin0412.top/video-upload/v1/videos")
+    def test_root_json_loader_builds_qwen_config(self):
+        cfg = _ai_provider_config_from_json(AI_PROVIDERS_EXAMPLE)
+        self.assertEqual(cfg.base_url, "")
+        self.assertEqual(cfg.api_key, "")
+        self.assertEqual(cfg.upload_endpoint, "")
+        self.assertFalse(cfg.enable_thinking)
         self.assertEqual(cfg.retry.max_attempts, 2)
         self.assertEqual(cfg.timeout.inspect_sec, 2.0)
+
+    def test_root_json_loader_selects_custom_gpt_config(self):
+        cfg = _ai_provider_config_from_json(AI_PROVIDERS_EXAMPLE, "custom_gpt")
+        self.assertEqual(cfg.base_url, "")
+        self.assertEqual(cfg.api_key, "")
+        self.assertEqual(cfg.model, "gpt-5.5")
+        self.assertEqual(cfg.upload_endpoint, "")
+        self.assertEqual(cfg.reasoning_effort, "xhigh")
+        self.assertEqual(cfg.max_output_tokens, 98304)
+        self.assertIsNone(cfg.enable_thinking)
+
+    def test_root_json_loader_selects_deepseek_config(self):
+        cfg = _ai_provider_config_from_json(AI_PROVIDERS_EXAMPLE, "deepseek")
+        self.assertEqual(cfg.base_url, "https://api.deepseek.com")
+        self.assertEqual(cfg.api_key, "")
+        self.assertEqual(cfg.model, "deepseek-v4-flash")
+        self.assertEqual(cfg.reasoning_effort, "max")
+        self.assertEqual(cfg.extra_body, {"thinking": {"type": "enabled"}})
+        self.assertIsNone(cfg.enable_thinking)
+
+    def test_root_json_loader_selects_deepseek_pro_config(self):
+        cfg = _ai_provider_config_from_json(AI_PROVIDERS_EXAMPLE, "deepseek_pro")
+        self.assertEqual(cfg.base_url, "https://api.deepseek.com")
+        self.assertEqual(cfg.api_key, "")
+        self.assertEqual(cfg.model, "deepseek-v4-pro")
+        self.assertEqual(cfg.reasoning_effort, "max")
+
+    def test_provider_config_uses_matching_env_fallbacks(self):
+        cfg = ai_provider_config_from_dict(
+            {"provider": "custom_gpt", "providers": {"custom_gpt": {"model": "gpt-test"}}},
+            environ={
+                "PYFII_CUSTOM_GPT_BASE_URL": "https://gpt.example/v1",
+                "PYFII_CUSTOM_GPT_API_KEY": "custom-key",
+            },
+        )
+        self.assertEqual(cfg.base_url, "https://gpt.example/v1")
+        self.assertEqual(cfg.api_key, "custom-key")
+        self.assertEqual(cfg.model, "gpt-test")
+
+    def test_completion_kwargs_carries_reasoning_and_provider_extra_body(self):
+        cfg = AIProviderConfig(
+            reasoning_effort="max",
+            thinking={"type": "enabled"},
+            extra_body={"provider_option": "enabled", "thinking": {"type": "disabled"}},
+        )
+        payload = QwenVideoClient(cfg)._completion_kwargs(
+            model="test-model",
+            temperature=0.7,
+            top_p=0.9,
+            extra_body={"top_k": 20},
+        )
+        self.assertEqual(payload["reasoning_effort"], "max")
+        self.assertNotIn("temperature", payload)
+        self.assertNotIn("top_p", payload)
+        self.assertEqual(payload["extra_body"]["provider_option"], "enabled")
+        self.assertEqual(payload["extra_body"]["top_k"], 20)
+        self.assertEqual(payload["extra_body"]["thinking"], {"type": "enabled"})
+
+    def test_completion_kwargs_carries_qwen_enable_thinking(self):
+        cfg = AIProviderConfig(enable_thinking=True)
+        payload = QwenVideoClient(cfg)._completion_kwargs(model="test-model")
+        self.assertTrue(payload["extra_body"]["chat_template_kwargs"]["enable_thinking"])
 
     @patch("extensions.nl_choreo.qwen_client.httpx.post")
     def test_upload_retry_then_success(self, mock_post):

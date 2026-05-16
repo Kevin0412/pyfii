@@ -25,6 +25,7 @@ from .motion_phrase import (
     validate_motion_design_spec,
     validate_phrase_design_direction,
 )
+from .qwen_client import AIProviderConfig, QwenConfig, ai_provider_config_from_dict, qwen_config_from_dict
 
 try:
     from .pipeline import PipelineConfig, run_nl_choreo_pipeline
@@ -35,6 +36,7 @@ except ModuleNotFoundError as _pipeline_import_error:  # pragma: no cover - opti
         raise _pipeline_import_error
 
 __all__ = [
+    "AIProviderConfig",
     "DialogueManager",
     "emit_gpt55_burst_recompose_program",
     "FleetSpec",
@@ -46,11 +48,14 @@ __all__ = [
     "MotionPhraseMetrics",
     "MotionPrimitive",
     "PipelineConfig",
+    "QwenConfig",
     "Scene",
     "ScenePlan",
     "SegmentIssue",
     "SegmentSpec",
+    "ai_provider_config_from_dict",
     "evaluate_motion_phrase_flexibility",
+    "qwen_config_from_dict",
     "run_nl_choreo_pipeline",
     "validate_motion_design_spec",
     "validate_phrase_design_direction",

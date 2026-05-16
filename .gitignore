@@ -4,8 +4,12 @@ __token__
 .env
 .env.*
 *.local.json
+ai_providers.json
+ai_providers.*.json
+!ai_providers.example.json
+api_keys*.json
+apikey*.json
 tests/*qwen*.json
-!tests/*qwen*.example.json
 **/__pycache__
 output
 测试

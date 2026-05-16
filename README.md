@@ -337,13 +337,13 @@ print(result["final_full_video_2d"])
    - 软失败：固定中心/固定车道、全局单向旋转、模板均匀串联、速度明显慢、动作不连贯。
    - 通过：有明确原创动作句法、可读回、视频可看、能按反馈局部修改。
 
-如果要测 DeepSeek-v4，不要先假设具体模型名或视觉能力；把它当作 OpenAI-compatible 文本模型接入即可。当前 `QwenConfig` 已经有 `base_url`、`api_key`、`model`，可以用同一套文本生成入口测试不同模型；视频理解部分可以先关闭或只在最终人工观看时使用。
+如果要测 DeepSeek-v4，不要先假设视觉能力；把它当作 OpenAI-compatible 文本模型接入即可。当前 `AIProviderConfig` 已经有 `base_url`、`api_key`、`model`，并支持 `reasoning_effort`、`max_output_tokens` 和 `extra_body` 透传，可以用同一套文本生成入口测试不同模型；视频理解部分可以先关闭或只在最终人工观看时使用。
 
 示例配置思路：
 
 ```python
 from pyfii.extensions.nl_choreo.pipeline import PipelineConfig
-from pyfii.extensions.nl_choreo.qwen_client import QwenConfig
+from pyfii.extensions.nl_choreo import AIProviderConfig
 
 cfg = PipelineConfig(
     audio_path="",
@@ -352,10 +352,12 @@ cfg = PipelineConfig(
     use_qwen=True,
     max_rounds=0,
     direct_python_codegen=True,
-    qwen=QwenConfig(
-        base_url="YOUR_OPENAI_COMPATIBLE_BASE_URL",
+    qwen=AIProviderConfig(
+        base_url="https://api.deepseek.com",
         api_key="YOUR_API_KEY",
-        model="deepseek-v4",
+        model="deepseek-v4-pro",
+        reasoning_effort="max",
+        extra_body={"thinking": {"type": "enabled"}},
         use_local_video_path=True,
         local_video_mode="path_text",
     ),
