@@ -112,6 +112,8 @@ pyfii 2.0 不一定要直接等同于 Web 化。更合理的目标是先把 **�
 
 ### AI 编舞工作流探索
 
+> 归档说明：`nl_choreo` / Qwen 视频理解闭环已从主线移入 `archive/nl_choreo_qwen/`。这条路的核心误判是把“视频理解”当成连续动作理解；实际模型仍然主要依赖抽帧，2fps 对无人机编队的速度、错峰、路径交叉和节奏损失太大。后续主线转向强模型直接设计 motion brief / phrase spec / pyfii 脚本，再由本地读回、密采样、安全检查和 2D/3D 视频验收。
+
 本次探索中，用 GPT 直接生成了一版 7 架 F400 编队程序，并通过 `output/gpt55_formation/review_keyframes.py` 做关键帧审查。阶段性结论是：**不必过度依赖完整视频理解闭环，强图像理解模型 + 关键帧/密采样审查也能有效推进编队质量。**
 
 复杂编排可以参考 `tests/dntg20220730_v3.py` 的设计思路。需要注意：这个脚本的编码风格比较随意，不建议大规模模仿；它的价值不在于某一个具体图案或写法，而在于它展示了更成熟的编舞组织方式：
@@ -175,12 +177,12 @@ pyfii 2.0 不一定要直接等同于 Web 化。更合理的目标是先把 **�
    - 只在需要评价连续运动、节奏跟随、镜头观感时使用。
    - 不再把视频理解作为唯一或第一道反馈机制。
 
-### GPT-5.5 成品种子已落入工作流
+### 归档记录：GPT-5.5/nl_choreo 种子
 
-这次 60 秒 `burst_recompose` 成品动作已经不再只是一次性示例，而是沉淀为 `nl_choreo` 的关键帧种子：
+以下内容保留为归档记录，不再代表主线工作流。相关代码已移动到 `archive/nl_choreo_qwen/`：
 
-- 固定时间轴与关键帧位于 `src/pyfii/extensions/nl_choreo/keyframe_workflow.py`。
-- 可通过 `PipelineConfig(direct_fallback_mode="gpt55_burst_seed")` 接入现有工作流。
+- 固定时间轴与关键帧位于 `archive/nl_choreo_qwen/src/pyfii/extensions/nl_choreo/keyframe_workflow.py`。
+- 原 `PipelineConfig(direct_fallback_mode="gpt55_burst_seed")` 路线已归档。
 - 该模式会生成完整 pyfii 程序，继续经过 `.fii` 读回、距离检查和最终 2D/3D 预览渲染。
 - 它不是新的安全限制模板，而是一条“成品动作种子”：当模型生成不稳定，或需要先有一版可运行视频时，用它打底；后续再让模型做局部优化。
 - 种子现在带有四段动作设计元信息：斜线/钻石/冠形、双三角/丝带/箭形、反向弧/反击笔画、压缩/坠落/收束。报告会把这些段落写出来，便于后续人工或模型按段修改。
@@ -189,26 +191,7 @@ pyfii 2.0 不一定要直接等同于 Web 化。更合理的目标是先把 **�
 - 动作逻辑保持“相邻关系 + 环形桥接 + 角色循环移位”的轻约束表达，用连续轨迹和读回安全检查兜底；它不会把飞机锁进固定安全区域，也不强制固定中心机。
 - 工作流现在把“不要退化成固定车道”沉淀成了动态指标：`evaluate_timeline_dynamics()` 会统计相邻关键层的角色排序变化、每架机 XY 跨度等；`validate_timeline_dynamics()` 会拒绝排序长期不变、单轴跨度过小的候选动作。当前 GPT-5.5 seed 的 19 次相邻转场中有 18 次发生角色排序变化，平均 rank change 约 11.16；每架机的 X/Y 跨度都超过 320cm。后续候选至少不能低于这个基线，否则即使安全可跑，也应视作固定车道退化。
 
-示例入口：
-
-```python
-from pyfii.extensions.nl_choreo.pipeline import PipelineConfig, run_nl_choreo_pipeline
-
-cfg = PipelineConfig(
-    audio_path="",
-    output_dir="output/nl_choreo_gpt55_seed",
-    user_intent="以 GPT-5.5 burst_recompose 成品动作为基础，先确保完整预览视频可用。",
-    use_qwen=False,
-    direct_python_codegen=True,
-    direct_fallback_mode="gpt55_burst_seed",
-    force_duration_sec=64.0,
-    render_fps=20,
-)
-result = run_nl_choreo_pipeline(cfg)
-print(result["final_full_video_2d"])
-```
-
-也可以直接运行 `examples/nl_choreo_gpt55_seed_demo.py`，它会走同一条 pipeline 并输出最终 2D/3D 预览路径。
+归档 demo 位于 `archive/nl_choreo_qwen/examples/nl_choreo_gpt55_seed_demo.py`。
 
 ### 与 `dntg20220730_v3.py` 的差距反思
 
@@ -233,7 +216,7 @@ print(result["final_full_video_2d"])
 
 ### 后续：从固定模板走向 phrase-based 设计
 
-`examples/gpt55_action_score_v2_60s.py` 和 `examples/gpt55_template_motion_v2_60s.py` 证明了一个方向：在 GPT-5.5 seed 的主关键帧之间加入动作小节、曲线中间态、垂直起伏和角色重排，比单纯关键帧直连更接近真正的编舞。但它们仍然只是过渡形态：
+`archive/nl_choreo_qwen/examples/gpt55_action_score_v2_60s.py` 和 `archive/nl_choreo_qwen/examples/gpt55_template_motion_v2_60s.py` 证明了一个方向：在 GPT-5.5 seed 的主关键帧之间加入动作小节、曲线中间态、垂直起伏和角色重排，比单纯关键帧直连更接近真正的编舞。但它们仍然只是过渡形态：
 
 - `action_score_v2` 仍然主要按场景名推导段内曲线，属于半模板化增强。
 - `template_motion_v2` 把段内动作显式拆成 `bloom_pulse`、`braid_recoil`、`orbit_sling`、`vertical_shutter`、`compression_ring` 等模板，更容易复用和调参，但本质仍是固定模板库。
@@ -268,7 +251,7 @@ print(result["final_full_video_2d"])
 - 速度慢不是安全本身。正确做法是给每段动作按距离和时长求解 `VelXY/VelZ/Acc`，飞不完就修衔接、分段或目标分配，而不是把整段降速。
 - 视频是最终验收物。代码、指标和关键帧只能辅助判断；每次声称动作优化，都必须产出可观看的 2D/3D 视频。
 
-当前手写验证版是 `examples/original_crosscut_v9_60s.py`，输出：
+当前手写验证版归档为 `archive/nl_choreo_qwen/examples/original_crosscut_v9_60s.py`，输出：
 
 - `output/original_crosscut_v9_60s/original_crosscut_v9_60s.mp4`
 - `output/original_crosscut_v9_60s/render_crosscut_v9_3d.mp4`
@@ -316,7 +299,7 @@ print(result["final_full_video_2d"])
 - 仅凭文字保证没有中途对穿。
 - 仅凭坐标列表判断最终观感节奏。
 
-因此 DeepSeek-v4、Qwen、GPT、Claude 等纯文本/弱视觉模型可以这样测：
+因此 DeepSeek-v4、GPT、Claude 等纯文本/弱视觉模型可以这样测：
 
 1. **同题输入**
    - 同一个 60 秒任务、同一机型 F400、同一场地、同一硬约束。
@@ -337,34 +320,37 @@ print(result["final_full_video_2d"])
    - 软失败：固定中心/固定车道、全局单向旋转、模板均匀串联、速度明显慢、动作不连贯。
    - 通过：有明确原创动作句法、可读回、视频可看、能按反馈局部修改。
 
-如果要测 DeepSeek-v4，不要先假设视觉能力；把它当作 OpenAI-compatible 文本模型接入即可。当前 `AIProviderConfig` 已经有 `base_url`、`api_key`、`model`，并支持 `reasoning_effort`、`max_output_tokens` 和 `extra_body` 透传，可以用同一套文本生成入口测试不同模型；视频理解部分可以先关闭或只在最终人工观看时使用。
+如果要测 DeepSeek-v4，不要先假设视觉能力；把它当作 OpenAI-compatible 文本模型接入即可。根目录 `ai_providers.example.json` 保留了 `custom_gpt`、`deepseek`、`deepseek_pro` 三条 provider 配置样例；视频理解闭环已经归档，后续只把视频作为人工或独立验收物。
 
-示例配置思路：
+示例 provider 配置：
 
-```python
-from pyfii.extensions.nl_choreo.pipeline import PipelineConfig
-from pyfii.extensions.nl_choreo import AIProviderConfig
-
-cfg = PipelineConfig(
-    audio_path="",
-    output_dir="output/text_model_deepseek_v4_trial",
-    user_intent="设计一段 60 秒 F400 原创编队，不使用 random，不使用全局旋转套路。",
-    use_qwen=True,
-    max_rounds=0,
-    direct_python_codegen=True,
-    qwen=AIProviderConfig(
-        base_url="https://api.deepseek.com",
-        api_key="YOUR_API_KEY",
-        model="deepseek-v4-pro",
-        reasoning_effort="max",
-        extra_body={"thinking": {"type": "enabled"}},
-        use_local_video_path=True,
-        local_video_mode="path_text",
-    ),
-)
+```json
+{
+  "provider": "custom_gpt",
+  "providers": {
+    "custom_gpt": {
+      "base_url": "",
+      "api_key": "",
+      "model": "gpt-5.5",
+      "reasoning_effort": "xhigh",
+      "max_output_tokens": 98304
+    },
+    "deepseek_pro": {
+      "base_url": "https://api.deepseek.com",
+      "api_key": "",
+      "model": "deepseek-v4-pro",
+      "reasoning_effort": "max",
+      "extra_body": {
+        "thinking": {
+          "type": "enabled"
+        }
+      }
+    }
+  }
+}
 ```
 
-这里 `max_rounds=0` 的意思是先只测“文本模型能否生成可运行脚本 + 本地渲染视频”，不让文本模型硬吃视频。等代码生成能力稳定后，再接视觉模型或人工反馈做下一轮修改。
+后续强模型路径应先测“模型能否产出 motion brief / phrase spec / 可运行脚本”，再由本地读回、密采样和视频渲染验收，不再让模型硬吃完整视频闭环。
 
 ### 阶段结论
 

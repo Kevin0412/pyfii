@@ -1,24 +1,5 @@
 {
-  "provider": "qwen",
-  "base_url": "",
-  "api_key": "",
-  "upload_endpoint": "",
-  "model": "Qwen3.6-35B-A3B-FP8",
-  "fps": 2,
-  "use_local_video_path": false,
-  "local_video_mode": "file_url",
-  "inspect_auto_fallback_to_upload": false,
-  "enable_thinking": false,
-  "retry": {
-    "max_attempts": 2,
-    "backoff_base_sec": 0.01,
-    "backoff_factor": 1.0,
-    "backoff_max_sec": 0.02
-  },
-  "timeout": {
-    "upload_sec": 2.0,
-    "inspect_sec": 2.0
-  },
+  "provider": "custom_gpt",
   "providers": {
     "custom_gpt": {
       "base_url": "",
