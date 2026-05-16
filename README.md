@@ -80,4 +80,4 @@ pyfii 2.0 的重点不是简单 Web 化，而是把编队核心、轨迹采样�
 - `pyfii-render`：统一渲染接口，保留 OpenCV 参考后端，并试验桌面 3D / Web viewer。
 - `pyfii-app`：面向实际调试的交互式预览工具。
 
-AI 编舞探索记录放在 [docs/ai_choreography_exploration.md](docs/ai_choreography_exploration.md)。已归档的 Qwen 视频理解闭环见 [archive/nl_choreo_qwen](archive/nl_choreo_qwen)；后续主线是强模型生成 motion brief / phrase spec / PyFii 脚本，再由本地读回、密采样、安全检查和 2D/3D 视频验收。
+AI 编舞探索记录放在 [doc/ai_choreography_exploration.md](doc/ai_choreography_exploration.md)。已归档的 Qwen 视频理解闭环见 [archive/nl_choreo_qwen](archive/nl_choreo_qwen)；后续主线是强模型生成 motion brief / phrase spec / PyFii 脚本，再由本地读回、密采样、安全检查和 2D/3D 视频验收。
