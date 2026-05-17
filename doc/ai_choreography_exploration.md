@@ -8,11 +8,12 @@
 
 后续主线改为：
 
-1. 强文本/推理模型生成 motion brief 或 phrase spec。
-2. 将 spec 转成可运行的 PyFii 脚本。
-3. 本地读回 `.fii`，做密集轨迹检查。
-4. 把 PyFii 的距离 warning 和动作未完成 warning 视为硬失败。
-5. 渲染 2D/3D 视频，作为最终观感验收物。
+1. 先分析音乐，生成 `music_brief`：tempo、beat grid、段落边界、onset 密度、能量曲线、频谱明暗、情绪代理和 hard/soft cue。
+2. 强文本/推理模型基于 `music_brief` 生成 motion brief 或 phrase spec。
+3. 将 spec 转成可运行的 PyFii 脚本。
+4. 本地读回 `.fii`，做密集轨迹检查。
+5. 把 PyFii 的距离 warning 和动作未完成 warning 视为硬失败。
+6. 渲染 2D/3D 视频，作为最终观感验收物。
 
 视频仍然有价值，但它应该是验收输出，不应作为第一或唯一反馈闭环。
 
@@ -20,11 +21,12 @@
 
 模型应先设计动作，再解决安全衔接。比较合理的生成流程是：
 
-1. 写 motion brief：音乐段落、动作意图、能量曲线、视觉目标。
-2. 写 phrase/action-score：时间范围、分组、角色映射、动作原语、节奏说明、风险和修复策略。
-3. 生成 PyFii 代码：目标点、中间点、错峰、等待、速度求解和灯光节拍。
-4. 本地验证：读回、密采样、越界、最小距离、动作完成、XY/Z 跨度、角色变化、固定车道退化和中途对穿风险。
-5. 看 2D/3D 视频；需要修改时尽量只改对应 phrase。
+1. 写 music brief：音乐段落、beat/onset、能量曲线、频谱明暗、情绪代理、歌词/主题线索和 hard/soft cue。
+2. 写 motion brief：动作意图、空间叙事、能量响应、视觉目标和禁用退化项。
+3. 写 phrase/action-score：时间范围、音乐 cue、分组、角色映射、动作原语、节奏说明、灯光同步、风险和修复策略。
+4. 生成 PyFii 代码：目标点、中间点、错峰、等待、速度求解和灯光节拍。
+5. 本地验证：读回、密采样、越界、最小距离、动作完成、XY/Z 跨度、角色变化、固定车道退化、中途对穿风险和音乐边界对齐。
+6. 看 2D/3D 视频；需要修改时尽量只改对应 phrase。
 
 重要约束不是“永远保持扇区顺序”，而是“每次转场在采样后都可解释且安全”。固定中心绕圈、均匀三秒模板格、全局单向旋转和长期静态角色，都应视为退化。
 
@@ -51,7 +53,6 @@
 - `output/competition_test_62`
 - `output/无人区`
 - `output/上海市梅园中学 凌云志 一队`
-- `output/营销号小曲`
 
 完整蒸馏记录见 [human_choreography_distillation.md](human_choreography_distillation.md)。
 
@@ -59,12 +60,14 @@
 
 需要注意：这些作品里有不少 `action isn't completed` warning，部分轨迹还会出现过近距离。旧作品的默认加速度 warning 不能直接否定设计价值，因为当时的初始视觉效果以无加速度模式为准；但它们也不能直接作为安全样板。正确用法是先在无加速度模式下提炼设计方法，再让新的 agent 用速度求解、错峰、中间点和安全检查重新实现，并在默认加速度模式下通过硬门。
 
+音乐输入也必须进入经验池。已加入 `tools/analyze_music_motion_alignment.py`，用于把源音乐的 tempo、beat、onset、能量、频谱、结构边界与 `inittime`、灯光密度和轨迹指标对齐。`大闹天宫`、`太空电梯`、`开启新征程 加速版715`、`无人区`、`上海市梅园中学 凌云志 一队` 已有可解码音乐；`competition_test_62` 当前缺源音频，只能暂作动作压力样本。
+
 初步可学习的设计经验：
 
 - 主题先行：作品名和音乐气质会约束动作语言，例如神话叙事、上升/电梯意象、新征程、无人区、校园队形等。agent 应先写主题动作词，再写坐标。
 - 空间幅度要大：优秀作品经常在 60-70 秒内覆盖 300-500cm 级 XY 变化，并配合 200cm 以上高度变化，避免整段挤在中心小范围抖动。
 - 高度层是叙事工具，不只是避撞工具。很多段落会同时使用 3-7 个高度层，形成塔、帘、斜坡、上升、坠落和聚焦。
-- 队形密度需要呼吸：宽阵、窄阵、竖线、横线、团簇、展开之间要交替出现。`营销号小曲` 虽短，但能作为“单轴推进/幕布式入场”的极简例子。
+- 队形密度需要呼吸：宽阵、窄阵、竖线、横线、团簇、展开之间要交替出现，不能让所有段落维持同一种密度。
 - 中心可以移动：人类作品不会总把重心锁在 `(280, 280)`，而是让中心随段落偏移、回收、再偏移，形成空间叙事。
 - 角色顺序要变化：按 X/Y 排序的角色顺序频繁变化，说明编舞里有换位和穿插；但新的工作流必须用中间点和错峰保证这些换位可执行。
 - 灯光应是段落的一部分：灯光不是最终装饰，而是和起飞、扩张、压缩、高潮、收束同步的节奏信号。
@@ -166,20 +169,22 @@
 未来 agent 需要一个轻量知识库或系统提示词包，但内容应是从优秀脚本中归纳出的设计方法，而不是原始 `.py` 文件：
 
 - 方法：段落化编舞、phrase/action-score、分组分工、角色映射、非均匀时间、错峰、等待、速度求解、灯光节拍。
-- 设计思路：先写动作意图，再写衔接，再落到 PyFii；先保证动作有观感目标，再用验证报告修安全和执行性。
+- 音乐理解：tempo、beat grid、onset 密度、结构边界、能量曲线、频谱明暗、歌词/主题线索、hard/soft cue 和动作边界容差。
+- 设计思路：先写音乐理解，再写动作意图，再写衔接，再落到 PyFii；先保证动作有观感目标，再用验证报告修安全和执行性。
 - 避免项：固定中心绕圈、全局单向旋转、固定车道、均匀模板格、为了安全牺牲所有动作变化、用 random 直接决定最终动作。
 - 验收规则：PyFii 读回、warning 捕获、密采样指标、角色变化、XY/Z 跨度、2D/3D 视频输出。
 - 参考来源：维护者可以追溯到 `tests/dntg20220730_v3.py`、人类作品输出目录和 AI 归档脚本，但模型运行时只接收蒸馏后的原则、schema、示例 spec 和失败修复策略。
 
 ### 工作流形态
 
-1. 用户用自然语言提出任务或修改意见，例如“30-45 秒更狠一点，多一些交叉切入和确定性换位”“不要全局单向旋转”“结尾不要排直线”。
-2. agent 先生成或修改 `motion_brief`，明确音乐段落、情绪曲线、动作目标、禁用退化模式和验收重点。
-3. agent 再生成 `phrase_spec`，每段包含 `time_range`、`intent`、`groups`、`role_mapping`、`motion_primitives`、`timing_notes`、`light_notes`、`risk`、`repair_strategy`。
-4. codegen 把 `phrase_spec` 转成 PyFii 脚本，自动处理目标点、中间点、速度/加速度、错峰、等待和灯光节拍。
-5. validator 运行脚本、保存 `.fii`、读回轨迹、捕获 PyFii warning、密采样并生成指标报告。
-6. renderer 输出 2D/3D 视频和关键帧，供用户验收。
-7. 用户继续用自然语言反馈，agent 只修改相关 phrase，除非结构性失败才重写全片。
+1. 用户提供音乐和自然语言任务，或继续给修改意见，例如“30-45 秒更狠一点，多一些交叉切入和确定性换位”“不要全局单向旋转”“结尾不要排直线”。
+2. agent 先分析音乐并生成或修改 `music_brief`，明确 tempo、beat/onset、结构边界、情绪曲线、hard/soft cue 和证据缺口。
+3. agent 再生成或修改 `motion_brief`，明确动作目标、空间叙事、音乐响应、禁用退化模式和验收重点。
+4. agent 再生成 `phrase_spec`，每段包含 `time_range`、`music_cue`、`beat_policy`、`intent`、`groups`、`role_mapping`、`motion_primitives`、`timing_notes`、`light_notes`、`risk`、`repair_strategy`。
+5. codegen 把 `phrase_spec` 转成 PyFii 脚本，自动处理目标点、中间点、速度/加速度、错峰、等待和灯光节拍。
+6. validator 运行脚本、保存 `.fii`、读回轨迹、捕获 PyFii warning、密采样并生成指标报告。
+7. renderer 输出 2D/3D 视频和关键帧，供用户验收。
+8. 用户继续用自然语言反馈，agent 只修改相关 phrase，除非结构性失败才重写全片。
 
 ### 模型切换
 
@@ -195,6 +200,9 @@
 
 每次任务应生成一个独立工作目录，例如 `output/ai_choreo_sessions/<session_id>/`，至少包含：
 
+- `music_source.*`
+- `music_analysis.json`
+- `music_brief.md`
 - `motion_brief.md`
 - `phrase_spec.json`
 - `generated.py`
@@ -216,17 +224,19 @@
 - `pf.read_fii(..., fps=60, ignore_acc=True)` 可作为视觉意图对照，但不能替代执行验证。
 - `pf.show(..., show=False)` 或等价检查不出现 `distance between`、`action isn't completed` 等硬失败。
 - 密采样报告包含最小距离、最大单段位移、平均位移、XY/Z 跨度、最长停顿、角色变化、全局旋转倾向和固定车道风险。
+- 音乐报告包含 tempo、beat/onset、段落边界、能量曲线和 hard/soft cue；`phrase_spec` 的每段必须说明对应音乐 cue 和 beat/light 策略。
 - 必须产出可观看的 2D/3D 视频。
 
 ### 实现顺序
 
-1. 先定义 `motion_brief` / `phrase_spec` schema 和 session 目录结构。
-2. 抽象 OpenAI-compatible provider client，支持 `custom_gpt`、`deepseek`、`deepseek_pro`，并允许按轮次切换。
-3. 做知识库蒸馏：从 `tests/dntg20220730_v3.py`、人类作品输出目录和高价值归档脚本里提取方法、设计思路、应避免情况、验收规则和少量结构化 spec 示例，不把原始 `.py` 代码作为系统提示词。
-4. 实现两阶段生成：先 brief/spec，后 PyFii codegen。
-5. 接入本地 validator 和 renderer，失败报告回灌给模型做 repair。
-6. 做多轮修改入口：用户可以指定“改第几段/某个时间范围/某种问题”，agent 保留原 session 只改局部。
-7. 最后再做多模型对比：同一 brief 让 DeepSeek/GPT 各出一版 spec 或代码，用同一套 validator 和视频产物比较。
+1. 先定义 `music_brief` / `motion_brief` / `phrase_spec` schema 和 session 目录结构。
+2. 抽象音乐分析入口，复用 `tools/analyze_music_motion_alignment.py` 的 tempo、beat、onset、结构边界和音乐-动作对齐指标。
+3. 抽象 OpenAI-compatible provider client，支持 `custom_gpt`、`deepseek`、`deepseek_pro`，并允许按轮次切换。
+4. 做知识库蒸馏：从 `tests/dntg20220730_v3.py`、人类作品输出目录和高价值归档脚本里提取方法、设计思路、音乐响应方式、应避免情况、验收规则和少量结构化 spec 示例，不把原始 `.py` 代码作为系统提示词。
+5. 实现三阶段生成：先 music brief，再 motion/phrase spec，后 PyFii codegen。
+6. 接入本地 validator 和 renderer，失败报告回灌给模型做 repair。
+7. 做多轮修改入口：用户可以指定“改第几段/某个时间范围/某种音乐问题”，agent 保留原 session 只改局部。
+8. 最后再做多模型对比：同一 music brief 让 DeepSeek/GPT 各出一版 spec 或代码，用同一套 validator 和视频产物比较。
 
 这条线的最终验收不是“模型说它理解了视频”，而是用户能连续给反馈，agent 能保留上下文、切换模型、局部修改、稳定生成 `.fii` 和视频，并且结果具备成熟作品里的段落组织能力，同时吸收 Codex 生成版本中已经验证过的闭环经验。
 
