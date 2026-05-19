@@ -53,6 +53,7 @@
 - `output/competition_test_62`
 - `output/无人区`
 - `output/上海市梅园中学 凌云志 一队`
+- `output/1`（西南模范中学-《Trip》-王靖平）
 
 完整蒸馏记录见 [human_choreography_distillation.md](human_choreography_distillation.md)。
 
@@ -60,7 +61,7 @@
 
 需要注意：这些作品里有不少 `action isn't completed` warning，部分轨迹还会出现过近距离。旧作品的默认加速度 warning 不能直接否定设计价值，因为当时的初始视觉效果以无加速度模式为准；但它们也不能直接作为安全样板。正确用法是先在无加速度模式下提炼设计方法，再让新的 agent 用速度求解、错峰、中间点和安全检查重新实现，并在默认加速度模式下通过硬门。
 
-音乐输入也必须进入经验池。已加入 `tools/analyze_music_motion_alignment.py`，用于把源音乐的 tempo、beat、onset、能量、频谱、结构边界与 `inittime`、灯光密度和轨迹指标对齐。`大闹天宫`、`太空电梯`、`开启新征程 加速版715`、`无人区`、`上海市梅园中学 凌云志 一队` 已有可解码音乐；`competition_test_62` 当前缺源音频，只能暂作动作压力样本。
+音乐输入也必须进入经验池。已加入 `tools/analyze_music_motion_alignment.py`，用于把源音乐的 tempo、beat、onset、能量、频谱、结构边界与 `inittime`、灯光密度和轨迹指标对齐。`大闹天宫`、`太空电梯`、`开启新征程 加速版715`、`无人区`、`上海市梅园中学 凌云志 一队`、`output/1` 已有可解码音乐；`competition_test_62` 当前缺源音频，只能暂作动作压力样本。
 
 初步可学习的设计经验：
 

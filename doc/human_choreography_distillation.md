@@ -76,6 +76,7 @@ conda run -n pyfii env PYTHONPATH=src python tools/analyze_music_motion_alignmen
 | 无人区 | `无人区.mp3`，约 136.0 BPM，onset 密度约 3.51/s | 16/23 个动作边界在 1.5s 内，21/23 个在 3s 内 | 前段短切和留白配合低能量/暗色段，20-30s 高能量强脉冲时中心移动接近全场推进，负空间和突然加速形成主题感 |
 | 上海市梅园中学 凌云志 一队 | `周深 - 向光而行 （赵-孟）2.mp3`，约 107.7 BPM，onset 密度约 2.71/s | 7/12 个动作边界在 1.5s 内，7/12 个在 3s 内 | 0-36s 与音乐边界贴合较强；44s 后检测到的频谱 novelty 较少，但动作仍按歌词/视觉句子继续分段，说明不能只依赖算法边界 |
 | competition_test_62 | 当前目录和渲染视频未找到可解码音频 | 不能判断 | 只能做动作压力样本；如果要做音乐蒸馏，需要补原始音乐或带音轨视频 |
+| output/1（西南模范中学-Trip） | `TRIP_01.mp3`，约 123.0 BPM，onset 密度约 5.61/s | 6/7 个动作边界在 1.5s 内，7/7 个在 3s 内 | 音乐前 32s 低中能段对应全体同步的 waypoint 遍历；32s 能量跃升后编舞进入分组交替，60s 能量骤降时编舞回场降落；6s 动作边界略早于音乐进入（前奏），但整体 6s/45s/46s/50s/60s/65s 切段与音乐结构贴合 |
 
 人类编舞不是简单“每个 beat 一个动作”。更常见的规律是：
 
@@ -117,7 +118,7 @@ conda run -n pyfii env PYTHONPATH=src python tools/analyze_music_motion_alignmen
 
 ## 双模式粗读回摘要
 
-以下是用 `fps=60` 对六个样本做的粗读回摘要。数字只用于判断风险等级和蒸馏方向，不作为最终安全报告。
+以下是用 `fps=60` 对七个样本做的粗读回摘要。数字只用于判断风险等级和蒸馏方向，不作为最终安全报告。
 
 | 作品 | 历史视觉模式 `ignore_acc=True` | 现代验证模式 `ignore_acc=False` | 蒸馏判断 |
 | --- | --- | --- | --- |
@@ -127,6 +128,7 @@ conda run -n pyfii env PYTHONPATH=src python tools/analyze_music_motion_alignmen
 | competition_test_62 | 约 70.7s，未完成约 2525，最小平面距约 12cm | 未完成约 7230，最小平面距约 1cm | 更像压力/脏样本，不能直接学结构 |
 | 无人区 | 约 65.6s，未完成约 68，最小平面距约 31cm | 未完成约 6106，最小平面距接近 0 | 留白和空间意象可学，换位需要拆段 |
 | 上海市梅园中学 凌云志 一队 | 约 69.5s，未完成约 248，最小平面距约 7cm | 未完成约 8873，最小平面距接近 0 | 高运动量和多层次可学，执行层必须重做 |
+| output/1（西南模范中学-Trip） | 约 65.9s，未完成 0，最小平面距约 74cm | 约 66.4s，未完成 0，最小平面距约 74cm | waypoint 几何设计和分组交替可学，缺视频和 pyfiiCode.py 限制深度蒸馏 |
 
 ## 样本蒸馏
 
@@ -195,6 +197,97 @@ conda run -n pyfii env PYTHONPATH=src python tools/analyze_music_motion_alignmen
 - 3D 观察重点：看高度层如何服务“凌云志”的上升主题，以及高运动量是否仍然有清晰图案。
 - 现代验证风险：默认加速度模式下警告很多，近距离风险很高；未来 agent 不应照搬动作密度，而应提炼“高能量、多层次、强重组”的意图后重新求解。
 - 可蒸馏原则：高运动量可以好看，但必须有段落目的；强模型要把它转成可执行的 phrase，而不是直接堆目标点。
+
+### output/1（西南模范中学-《Trip》-王靖平）
+
+- 来源：`output/1/西南模范中学-西南模范中学-《Trip》-王靖平.fii`
+- 音乐：`output/1/动作组/TRIP_01.mp3`，约 123 BPM，onset 密度高（5.61/s）；音乐前 32s 低中能（~0.28-0.40），32-60s 高能段（~0.65-0.72），60s 后能量骤降。
+- 视频：无（缺 2D/3D 视频，无法做观感验收）
+- 特殊说明：此作品无 `pyfiiCode.py`，XML 中无 `block_inittime` 标签，段落仅能从 `.fii` 的 `Controls time` 反推，推断为 Fii 原软件 Blockly 导出而非 PyFii 生成。这限制了段落设计意图的深度还原。
+- 结构：`.fii Controls time` 形成 7 个段落：0s（全体启动）、6s（全体进入）、45s（机4）、46s（机1,5,6,7）、50s（机2,3,4）、60s（机1,5,6,7）、65s（全体收束）。
+- 几何设计：预定义 18 个 waypoint，分三组同心几何——外圈六边形 a1-a6（Z=200cm）环绕场地、中圈六边形 b1-b6（Z=150cm）、内圈 c1-c6（Z=150cm）。各组在 6-45s 段通过 `MoveToPoint` 依次遍历。
+- 编舞模式：6-45s 为全体同步的 waypoint 遍历段（XY 外接框 370×470，Z 100-200cm）；45s 起进入分组交替——机4先单人动作（XY span 173），随后机1/5/6/7 和机2/3/4 交替出场，形成 A/B 组轮换的节奏变化。机1 在 6s 段有独特的 360° 旋转 `Turn` 动作（角速度 30°/s），灯光密度也高于其他机（9 TurnOn vs 6），可能承担灯光主导角色。
+- 历史视觉价值：waypoint 预定义 + 几何分组的方法是值得学习的设计模式——不逐点写坐标，而是定义几何形状后让每架机按自己的路径遍历。分组交替编排在后半段制造了段落节奏变化，避免单调。
+- 3D 观察重点：无视频，无法确认两高度层（150cm/200cm）在 3D 中的视觉关系。但从坐标看，Z 变化主要在段间切换而非段内爬升。
+- 现代验证风险：双模式差异极小（65.9s vs 66.4s，最小距均 74.2cm），说明原始时序安排对加速度模型兼容性好。这是七个样本中唯一在默认加速度模式下未完成动作为 0 的作品——但这不代表安全，74cm 的最近距离在更多机或更复杂路径中仍可能成为风险。
+- 可蒸馏原则：waypoint 设计法（先定义几何，再分配路径）、分组交替编排、灯光分配主次、时序兼容性（提前考虑速度余量）。
+
+段落卡片：
+
+```json
+{
+  "source": "output/1",
+  "visual_mode": "ignore_acc=True",
+  "validation_mode": "ignore_acc=False",
+  "segments": [
+    {
+      "time_range": [0, 6],
+      "intent": "全体起飞并到达起始高度",
+      "formation_notes_2d": "七机分布于各自起始位，XY 跨度 346×301",
+      "spatial_notes_3d": "Z 从 0 升至起飞高度 150-200cm",
+      "motion_primitives": ["takeoff", "position_initial"],
+      "light_notes": "无此段灯光记录"
+    },
+    {
+      "time_range": [6, 45],
+      "intent": "全体同步遍历外圈→中圈→内圈 waypoint",
+      "music_cue": "低中能段（~0.28-0.40），亮度渐进上升",
+      "beat_policy": "动作按 waypoint 序列推进，2s/point 节拍",
+      "formation_notes_2d": "XY 外接框接近全场（370×470），全体覆盖三组同心几何",
+      "spatial_notes_3d": "两高度层交替（200cm 外圈 → 150cm 中/内圈）",
+      "motion_primitives": ["waypoint_traversal", "同心几何", "全体同步"],
+      "light_notes": "颜色切换参与几何变化（如 #008000→#00ffff），机1灯光密度高",
+      "execution_risk": [],
+      "repair_strategy": []
+    },
+    {
+      "time_range": [45, 50],
+      "intent": "分组交替A启动：机4独动→机1/5/6/7 接场",
+      "music_cue": "高能段（~0.53-0.71），能量和亮度均处高位",
+      "beat_policy": "短切段（45-46s 机4独，46-50s 四机），快速角色切换",
+      "formation_notes_2d": "机4段 XY 跨度小（173×357），四机段 Y 跨度大（76-559）",
+      "spatial_notes_3d": "Z 150-248cm，高度层开始分化",
+      "motion_primitives": ["solo_spotlight", "group_handoff", "分组交替"],
+      "light_notes": "交替点伴随灯光颜色变化",
+      "execution_risk": [],
+      "repair_strategy": []
+    },
+    {
+      "time_range": [50, 60],
+      "intent": "分组交替B：机2/3/4 出场，覆盖全场 Y 向",
+      "music_cue": "高能段持续（~0.71-0.70），音乐高潮",
+      "beat_policy": "B 组登场呼应高潮，Y 向大幅展开（559cm）",
+      "formation_notes_2d": "XY span 239×559，Y 向几乎覆盖全场",
+      "spatial_notes_3d": "Z 176-250cm，高度在高位稳定",
+      "motion_primitives": ["group_alternate_B", "全场展开"],
+      "light_notes": "灯光配合节奏",
+      "execution_risk": [],
+      "repair_strategy": []
+    },
+    {
+      "time_range": [60, 65],
+      "intent": "分组交替A回场：机1/5/6/7 再出场",
+      "music_cue": "能量回落段（~0.45），音乐收束前奏",
+      "beat_policy": "A 组回场呼应收束，X 向大幅展开（558cm）",
+      "formation_notes_2d": "XY span 558×320，X 向几乎覆盖全场",
+      "spatial_notes_3d": "Z 104-176cm，高度整体下移",
+      "motion_primitives": ["group_alternate_A_return", "回场"],
+      "light_notes": "灯光收束",
+      "execution_risk": [],
+      "repair_strategy": []
+    },
+    {
+      "time_range": [65, 66],
+      "intent": "全体降落结束",
+      "music_cue": "能量几乎归零（~0.03-0.01）",
+      "formation_notes_2d": "从当前位置直线降落",
+      "spatial_notes_3d": "Z 从高位降至 0",
+      "motion_primitives": ["land", "全体"],
+      "light_notes": "无"
+    }
+  ]
+}
+```
 
 ## 可进入知识库的经验
 
