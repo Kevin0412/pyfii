@@ -124,24 +124,22 @@ def phrase_step_count(phrase):
 
 ## 五、生成前安全验证
 
-在调用 pyfii API 之前先检查目标点：
+在调用 pyfii API 之前可做轻量预检查，但不应在 pyfii 已有的安全边界之外叠加额外的安全常量。
 
 ```python
 def validate_planned_keypoints():
     for phrase in PHRASES:
         for sample_idx in range(samples + 1):
             points = [phrase_point(phrase, idx, t) for idx in range(DRONE_COUNT)]
-            dist, pair = min_horizontal_distance(points)
-            if dist < SAFE_DISTANCE_CM:
-                raise RuntimeError(f"planned keypoint distance failed: {dist:.1f}cm")
+            # 检查是否超出 pyfii 已有的场地边界（xyRange/zRange）
+            for p in points:
+                if p[0] < 0 or p[0] > 560 or p[1] < 0 or p[1] > 560:
+                    raise RuntimeError(f"point out of field: {p}")
 ```
 
-安全常量显式声明：
+**注意**：pyfii 的 `drone_config` 已定义了完整的合法范围（xyRange、zRange、velRange、accRange、ArateRange）。不应额外定义如 `F400_SAFE_DISTANCE_CM = 70` 之类的安全距离常量——这会在 pyfii 已有的安全余量之上再叠加约束，变成限制动作设计的枷锁。真正的安全验收应交给 `read_fii` 的 `distance between` 和 `action isn't completed` warning，这些才是硬失败标准。如果动作设计有冲突风险，修复手段是调整时间、速度、中间点和错峰，而不是降低设计野心。
 
-```python
-F400_SAFE_DISTANCE_CM = 70
-MAX_2S_SEGMENT_DISTANCE_CM = 285
-```
+
 
 ## 六、四步验证闭环
 
@@ -167,7 +165,7 @@ pf.show(data, t0, [music_path], field=6, save=PROJECT_NAME, FPS=25)
 
 ```
 1. 常量声明
-   DRONE_COUNT, LAND_TIME_SEC, SAFE_DISTANCE_CM
+   DRONE_COUNT, LAND_TIME_SEC
 
 2. 设计声明（声明层，AI 生成的主要内容）
    PHRASE_DURATIONS, FORMATIONS, PHRASE_DESIGNS
