@@ -1,14 +1,12 @@
 #!/usr/bin/env python3
-"""DeepSeek Cannon 设计草稿
-音乐: 卡农 68s 156BPM, 渐进叠加结构
-草稿:
-  0-16s 低能(0.25): 单机独舞S形, 其他悬停 → 安全(只有1机动)
-  16-32s 中能(0.37): 三机三角对话, 其他微动 → 安全(3机三角间距>150)
-  32-48s 中高(0.52): 七机六边形呼吸+中心起伏 → 安全(六边形半径140-190,邻距>120)
-  48-64s 高能(0.58): 七机左右分区交叉 → 安全(左右各3机,中心1机,区间隔>200)
-  64-72s 收束: 原地降落 → 安全(不交叉,各降各的)
-速度规划: 段1=60/120, 段2=100/200, 段3=140/280, 段4=180/360, 段5=60/120
-起始: 六边形140cm+中心, 保证初始间距>140
+"""DeepSeek Cannon v6 — 全机活动，不悬停，不绕圈
+设计草稿:
+  段1 0-16s: 散布呼吸(各机独立区域, 间距>120)
+  段2 16-32s: 对角线交换(3对互换, d6起伏)
+  段3 32-48s: 左右分区扫场(不交叉)
+  段4 48-64s: 汇聚+展开
+  段5 64-68s: 原地降落
+速度: 段1=60/120, 段2=100/200, 段3=140/280, 段4=180/360, 段5=60/120
 """
 import sys,math,os
 from pathlib import Path
@@ -19,81 +17,96 @@ import pyfii as pf
 N=7;OUT=REPO_ROOT/"output"/"deepseek_cannon";MUSIC=str(REPO_ROOT/"cannon_in_D.mp3")
 ds=[pf.Drone(0,0,pf.drone_config_6m,f"192.168.51.{51+i}") for i in range(N)]
 
-# 六边形起始 R=140
-for i,d in enumerate(ds):
-    if i==6: x,y=280,280
-    else:
-        a=2*math.pi*i/6+math.pi/6
-        x=280+140*math.cos(a);y=280+140*math.sin(a)
-    d.X=d.x=int(round(x));d.Y=d.y=int(round(y))
-    d.takeoff(1,110 if i!=6 else 150)
-
 def st(t):return t*t*(3-2*t)
 def i3(x):return int(round(x))
 
-# ---- 段1: 0-16s 单机独舞 ----
+# 散布起始 (全场分散, >130cm间距)
+starts=[(60,100),(180,50),(350,50),(500,150),(500,350),(350,500),(160,500)]
 for i,d in enumerate(ds):
-    d.intime(4)  # d6从0s开始, 其他4s开始悬停
-    d.VelXY(60,120);d.VelZ(50,100)
-for stp in range(3):
-    t=(stp+1)/4;s=st(t)
-    for i,d in enumerate(ds):
-        if i==6:  # 独舞S形
-            x=280+70*math.sin(s*3*math.pi)
-            y=280+70*math.cos(s*2*math.pi)
-            z=140+60*math.sin(s*math.pi)
-        else:
-            x,y,z = d.x, d.y, 110
-        if i==6:
-            d.move2(i3(x),i3(y),i3(z))
-            d.TurnOnAll("#4dd7ff")
-            d.delay(1500)  # 独舞机有灯光delay, 其他瞬间完成
-    for i,d in enumerate(ds):
-        if i==6: d.TurnOffAll();d.delay(1500)
+    d.X=d.x=starts[i][0];d.Y=d.y=starts[i][1]
+    d.takeoff(1,100)
 
-
-
-# ---- 段2: 16-32s 三角对话 ----
+# ---- 段1: 0-16s 散布呼吸,全机微动 ----
 for i,d in enumerate(ds):
-    d.intime(16);d.VelXY(100,200);d.VelZ(80,160)
-for stp in range(4):
-    t=(stp+1)/4;s=st(t)
+    d.intime(4);d.VelXY(50,100);d.VelZ(40,80)
+for step in range(4):
+    t=(step+1)/4;s=st(t)
     for i,d in enumerate(ds):
-        if i in [1,3,5]:  # 对话组: 独立三角(中心200,380), 远离悬停机
-            ang=2*math.pi*(i+1)/3+0.3*math.pi*s
-            r=100+30*math.sin(s*math.pi)
-            x=200+r*math.cos(ang);y=380+r*math.sin(ang)
-            z=160+40*math.sin(s*math.pi+i)
-            d.move2(i3(x),i3(y),i3(z))
-            d.TurnOnAll("#ffdd59");d.delay(2000)
-        elif i==6:  # 中心微动
-            x=280+30*math.sin(s*2*math.pi);y=280+30*math.cos(s*3*math.pi)
-            z=170
-            d.move2(i3(x),i3(y),i3(z))
-            d.TurnOnAll("#ffdd59");d.delay(2000)
-        # 其他机不活动
-    for i,d in enumerate(ds):
-        if i in [1,3,5,6]: d.TurnOffAll();d.delay(1000)
-
-
-# ---- 段3: 32-48s 六边形呼吸 ----
-for i,d in enumerate(ds):
-    d.intime(32);d.VelXY(140,280);d.VelZ(120,240)
-for stp in range(4):
-    t=(stp+1)/4;s=st(t)
-    r=140+50*math.sin(s*2*math.pi)
-    for i,d in enumerate(ds):
-        if i<6:
-            ang=2*math.pi*i/6+0.1*math.pi*s
-            x=280+r*math.cos(ang);y=280+r*math.sin(ang)
-        else:
-            x=280;y=280
-        z=150+50*math.sin(s*math.pi+i)
+        r=40*math.sin(s*math.pi+i)
+        x=starts[i][0]+r*math.cos(i*1.7)
+        y=starts[i][1]+r*math.sin(i*1.3)
+        z=110+30*math.sin(s*math.pi+i)
         d.move2(i3(x),i3(y),i3(z))
-        if i<6: d.TurnOnAll("#ff6b9a");d.delay(2000)
-        else: d.TurnOnAll("#ff4488");d.delay(2000)
+        d.TurnOnAll("#4dd7ff");d.delay(1500)
+    for i,d in enumerate(ds):
+        d.TurnOffAll();d.delay(1500)
+
+# ---- 段2: 16-32s 对角线交换 ----
+# 交换对: d0↔d3, d1↔d4, d2↔d5, d6居中起伏
+swap=[(0,3),(1,4),(2,5)]
+for i,d in enumerate(ds):
+    d.intime(16);d.VelXY(80,160);d.VelZ(60,120)
+for step in range(4):
+    t=(step+1)/4;s=st(t)
+    for i,d in enumerate(ds):
+        target=i
+        for a,b in swap:
+            if i==a:target=b
+            elif i==b:target=a
+        # 从当前位置平滑过渡到目标起始位
+        x=d.x+(starts[target][0]-d.x)*s
+        y=d.y+(starts[target][1]-d.y)*s
+        if i==6:  # 中心机起伏
+            x=280+50*math.sin(s*math.pi)
+            y=280+50*math.cos(s*2*math.pi)
+        z=130+50*math.sin(s*math.pi+i)
+        d.move2(i3(x),i3(y),i3(z))
+        d.TurnOnAll("#ffdd59");d.delay(2000)
     for i,d in enumerate(ds):
         d.TurnOffAll();d.delay(1000)
+
+# ---- 段3: 32-48s 左右分区扫场 ----
+for i,d in enumerate(ds):
+    d.intime(32);d.VelXY(120,240);d.VelZ(100,200)
+for step in range(4):
+    t=(step+1)/4;s=st(t)
+    for i,d in enumerate(ds):
+        if i<3:  # 左区: X[60,160], Y扫
+            x=80+60*math.sin(s*math.pi+i)
+            y=120+i*140+80*math.sin(s*2*math.pi)
+        elif i<6:  # 右区: X[400,500]
+            x=480-60*math.sin(s*math.pi+i)
+            y=120+(i-3)*140+80*math.sin(s*2*math.pi)
+        else:  # 中
+            x=280+80*math.sin(s*3*math.pi)
+            y=280+80*math.cos(s*2*math.pi)
+        z=150+40*math.sin(s*math.pi+i)
+        d.move2(i3(x),i3(y),i3(z))
+        d.TurnOnAll("#ff6b9a");d.delay(2000)
+    for i,d in enumerate(ds):
+        d.TurnOffAll();d.delay(2000)
+
+# ---- 段4: 48-64s 汇聚+展开 ----
+for i,d in enumerate(ds):
+    d.intime(48);d.VelXY(160,320);d.VelZ(140,280)
+for step in range(4):
+    t=(step+1)/4;s=st(t)
+    for i,d in enumerate(ds):
+        ang=2*math.pi*i/N+0.3*math.pi*s
+        r=120+100*math.sin(s*math.pi)
+        x=280+r*math.cos(ang)
+        y=280+r*math.sin(ang)
+        z=160+70*abs(math.sin(s*2*math.pi))
+        d.move2(i3(x),i3(y),i3(z))
+        d.TurnOnAll("#ffffff");d.delay(2000)
+    for i,d in enumerate(ds):
+        d.TurnOffAll();d.delay(2000)
+
+# ---- 段5: 64-68s 原地降落 ----
+for i,d in enumerate(ds):
+    d.intime(64);d.VelXY(50,100);d.VelZ(40,80)
+    d.land()
+
 for d in ds: d.end()
 os.makedirs(str(OUT),exist_ok=True)
 pf.Fii(str(OUT),ds,music=MUSIC).save(field=6)
@@ -119,8 +132,8 @@ print(f"dist:{len(dw)} act:{len(aw)}")
 from collections import Counter
 times=Counter()
 for w in dw:
-    msg=str(w.message);p=msg.split('s,');t=int(p[0].split()[-1])if p else 0;times[t]+=1
-if times: print(f"时间:{min(times)}-{max(times)}s top3:{times.most_common(3)}")
+    p=str(w.message).split('s,');t=int(p[0].split()[-1])if p else 0;times[t]+=1
+if times:print(f"time:{times.most_common(3)}")
 pf.show(data,t0,[str(MUSIC)],field=field,device=dev,max_fps=60,save=str(OUT/'2d'),FPS=25)
 pf.show(data,t0,[str(MUSIC)],field=field,device=dev,max_fps=60,save=str(OUT/'3d'),FPS=25,ThreeD=True,imshow=[90,0],d=(600,450))
 print("done")
