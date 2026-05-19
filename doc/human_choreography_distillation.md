@@ -644,6 +644,70 @@ conda run -n pyfii env PYTHONPATH=src python tools/analyze_music_motion_alignmen
 - 现代验证风险：ignore_acc=True 下 340 次未完成，ignore_acc=False 下 1332 次。最小距离 2.3-6.0cm。早期设计与现代加速度模型不兼容。
 - 可蒸馏原则：叠加式灯光设计流程、HorseRace 跑马灯应用、动作密度分级的早期实践。
 
+段落卡片：
+
+```json
+{
+  "source": "output/d/比赛现场程序（修改版）",
+  "note": "无 inittime，段落从 Controls time 反推。动作与 2021比赛 完全一致，此为补灯光版。",
+  "segments": [
+    {
+      "time_range": [0, 3],
+      "intent": "全体起飞，各机从分散起始位（覆盖全场四角+中心）到达起飞高度",
+      "formation_notes_2d": "起始位分散：d1(280,460)上中、d2(160,175)左、d3(100,61)左下、d4(400,403)右上、d5(280,118)下中、d6(460,289)右、d7(400,175)中右",
+      "spatial_notes_3d": "Z 0→起飞高度",
+      "motion_primitives": ["takeoff", "分散起始"],
+      "light_notes": "HorseRace 跑马灯（#ffff00→#ff0000）在起飞段"
+    },
+    {
+      "time_range": [3, 7],
+      "intent": "首段编队展开，全体同步",
+      "beat_policy": "3s→7s 两节点",
+      "formation_notes_2d": "XY 开始覆盖全场",
+      "motion_primitives": ["队形展开"],
+      "light_notes": "TurnOnAll #ffffff 首次全白"
+    },
+    {
+      "time_range": [7, 13],
+      "intent": "第二段：持续队形变换",
+      "beat_policy": "7s→13s 单段 6s",
+      "motion_primitives": ["队形变换"],
+      "light_notes": "TurnOnAll 颜色切换"
+    },
+    {
+      "time_range": [13, 22],
+      "intent": "密集切换段：13→15→16→17→22s 五节点，机4 有独段 15s，机5/6 独段 16s",
+      "beat_policy": "1-2s 级密集切换，部分机错峰",
+      "formation_notes_2d": "分组差异初显",
+      "motion_primitives": ["密集切换", "分组错峰"],
+      "light_notes": "TurnOnAllSingleColor #ff0000 红色标记切换点"
+    },
+    {
+      "time_range": [22, 40],
+      "intent": "中场段：22→33→35→38→40s，机4 有 38s 独段，机1/7 有 33s 同步点",
+      "beat_policy": "5-11s 大段 + 错峰独段",
+      "formation_notes_2d": "全场覆盖，焦点机（d1/d4/d7）承担更多动作",
+      "motion_primitives": ["中场展开", "焦点机突出"],
+      "light_notes": "TurnOnAll #0000ff 蓝色切换"
+    },
+    {
+      "time_range": [40, 52],
+      "intent": "高潮段：40→52s 大段 12s，全体同步密集动作",
+      "beat_policy": "12s 连续动作",
+      "formation_notes_2d": "XY 464×401 接近全场极限",
+      "motion_primitives": ["高潮", "全场极限展开"],
+      "light_notes": "HorseRace 跑马灯回归 + TurnOnAll #00ff00 绿色"
+    },
+    {
+      "time_range": [52, 57],
+      "intent": "收束降落",
+      "motion_primitives": ["收束", "land"],
+      "light_notes": "无此段灯光记录"
+    }
+  ]
+}
+```
+
 > 另见 `output/d/2021比赛`（同动作、无灯光版本），可作为"灯光有无"的对照样本。
 
 ### output/d/比赛用无人机（早期设计，pyfii 诞生前）
@@ -669,6 +733,70 @@ conda run -n pyfii env PYTHONPATH=src python tools/analyze_music_motion_alignmen
 - 历史视觉价值：展示了"动作→灯光"的叠加式设计流程——先跑通动作，再在关键节点补灯光。与后来的 dntg→大闹天宫（灯光与动作同步数学驱动）形成对比，两种设计流程各有适用场景。
 - 现代验证风险：ignore_acc=True 下 340 次未完成，ignore_acc=False 下 1332 次。最小距离 2.3-6.0cm。早期设计与现代加速度模型不兼容。
 - 可蒸馏原则：叠加式灯光设计流程、HorseRace 跑马灯应用、动作密度分级的早期实践。
+
+段落卡片：
+
+```json
+{
+  "source": "output/d/比赛现场程序（修改版）",
+  "note": "无 inittime，段落从 Controls time 反推。动作与 2021比赛 完全一致，此为补灯光版。",
+  "segments": [
+    {
+      "time_range": [0, 3],
+      "intent": "全体起飞，各机从分散起始位（覆盖全场四角+中心）到达起飞高度",
+      "formation_notes_2d": "起始位分散：d1(280,460)上中、d2(160,175)左、d3(100,61)左下、d4(400,403)右上、d5(280,118)下中、d6(460,289)右、d7(400,175)中右",
+      "spatial_notes_3d": "Z 0→起飞高度",
+      "motion_primitives": ["takeoff", "分散起始"],
+      "light_notes": "HorseRace 跑马灯（#ffff00→#ff0000）在起飞段"
+    },
+    {
+      "time_range": [3, 7],
+      "intent": "首段编队展开，全体同步",
+      "beat_policy": "3s→7s 两节点",
+      "formation_notes_2d": "XY 开始覆盖全场",
+      "motion_primitives": ["队形展开"],
+      "light_notes": "TurnOnAll #ffffff 首次全白"
+    },
+    {
+      "time_range": [7, 13],
+      "intent": "第二段：持续队形变换",
+      "beat_policy": "7s→13s 单段 6s",
+      "motion_primitives": ["队形变换"],
+      "light_notes": "TurnOnAll 颜色切换"
+    },
+    {
+      "time_range": [13, 22],
+      "intent": "密集切换段：13→15→16→17→22s 五节点，机4 有独段 15s，机5/6 独段 16s",
+      "beat_policy": "1-2s 级密集切换，部分机错峰",
+      "formation_notes_2d": "分组差异初显",
+      "motion_primitives": ["密集切换", "分组错峰"],
+      "light_notes": "TurnOnAllSingleColor #ff0000 红色标记切换点"
+    },
+    {
+      "time_range": [22, 40],
+      "intent": "中场段：22→33→35→38→40s，机4 有 38s 独段，机1/7 有 33s 同步点",
+      "beat_policy": "5-11s 大段 + 错峰独段",
+      "formation_notes_2d": "全场覆盖，焦点机（d1/d4/d7）承担更多动作",
+      "motion_primitives": ["中场展开", "焦点机突出"],
+      "light_notes": "TurnOnAll #0000ff 蓝色切换"
+    },
+    {
+      "time_range": [40, 52],
+      "intent": "高潮段：40→52s 大段 12s，全体同步密集动作",
+      "beat_policy": "12s 连续动作",
+      "formation_notes_2d": "XY 464×401 接近全场极限",
+      "motion_primitives": ["高潮", "全场极限展开"],
+      "light_notes": "HorseRace 跑马灯回归 + TurnOnAll #00ff00 绿色"
+    },
+    {
+      "time_range": [52, 57],
+      "intent": "收束降落",
+      "motion_primitives": ["收束", "land"],
+      "light_notes": "无此段灯光记录"
+    }
+  ]
+}
+```
 
 > 另见 `output/d/2021比赛`（同动作、无灯光版本），可作为"灯光有无"的对照样本。
 
