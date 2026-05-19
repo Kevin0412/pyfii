@@ -161,17 +161,9 @@
 - 安全检查不能反过来支配动作设计。安全层负责指出哪里飞不完、哪里距离危险、哪里可能对穿；修复时优先调整衔接、中间点、等待、速度和角色分配，而不是把动作整体压成保守固定车道。
 - 视频理解不是主反馈。真正可靠的反馈链是 PyFii 读回、密采样、warning 捕获、指标报告和 2D/3D 视频；模型可以读报告、改 spec、再生成代码。
 
-完整的脚本设计模式分析见 [pyfii_script_patterns.md](pyfii_script_patterns.md)。
-
-从 `dntg20220730_v3.py`、`original_crosscut_v9_60s.py` 和这些 GPT-5.5/Codex 归档脚本里，可以总结出几条后续必须继承的经验：
-
-- 好编舞先有动作意图，再有坐标。模型输出应先描述“交叉切入、压缩爆开、错层换位、反向切割、收束”等动作句法，再落到点位。
-- phrase 比 keyframe 更重要。单纯关键帧直连会变成点位切换；phrase 需要包含段内节奏、分组分工、角色映射、等待、错峰和灯光。
-- `original_crosscut_v9_60s.py` 是当前 AI 生成线里最满意的基线：它不靠 random 决定动作，不靠固定模板拼接，也没有退化成单一全局旋转，而是用确定性换位、cross energy、路径验证和 3D 视频验收形成闭环。
-- `gpt55_phrase_vibe_v3_60s.py` 说明模型可以生成非均匀时间和动作原语组合；`gpt55_template_motion_v2_60s.py` 说明模板适合做动作词汇表，但不能成为最终编排方式。
-- `original_phrase_motion_v4_70s.py`、`original_kinetic_ribbon_v8_60s.py`、`original_flow_field_v5_70s.py` 分别代表三类有用结构：phrase 骨架、连续 ribbon 场、flow-field 状态规划。
-- 安全检查不能反过来支配动作设计。安全层负责指出哪里飞不完、哪里距离危险、哪里可能对穿；修复时优先调整衔接、中间点、等待、速度和角色分配，而不是把动作整体压成保守固定车道。
-- 视频理解不是主反馈。真正可靠的反馈链是 PyFii 读回、密采样、warning 捕获、指标报告和 2D/3D 视频；模型可以读报告、改 spec、再生成代码。
+完整的脚本设计模式分析见：
+- 人类设计编码模式：[pyfii_script_patterns_human.md](pyfii_script_patterns_human.md)
+- AI 生成编码模式：[pyfii_script_patterns_ai.md](pyfii_script_patterns_ai.md)
 
 ## 未来设计规划
 
