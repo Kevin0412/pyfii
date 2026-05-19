@@ -205,6 +205,6 @@ pf.show(data, t0, [music_path], field=6, save=PROJECT_NAME, FPS=25)
 
 - 逐点硬编码全部坐标
 - 固定角色分配
-- 灯光事后添加
+
 - 跳过读回验证
 - 用 random 决定最终动作

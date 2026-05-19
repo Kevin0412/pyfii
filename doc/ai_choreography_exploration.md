@@ -165,6 +165,10 @@
 - 人类设计编码模式：[pyfii_script_patterns_human.md](pyfii_script_patterns_human.md)
 - AI 生成编码模式：[pyfii_script_patterns_ai.md](pyfii_script_patterns_ai.md)
 
+AI 产物轨迹蒸馏见：[ai_generated_distillation.md](ai_generated_distillation.md)
+- 人类设计编码模式：[pyfii_script_patterns_human.md](pyfii_script_patterns_human.md)
+- AI 生成编码模式：[pyfii_script_patterns_ai.md](pyfii_script_patterns_ai.md)
+
 ## 未来设计规划
 
 下一阶段目标是做一个 DeepSeek/GPT 可切换、多轮对话式、可局部修改的 agent 编队工作流。它不再复活旧的视频理解闭环，而是围绕 motion brief、phrase spec、PyFii 代码和本地验收构建。
