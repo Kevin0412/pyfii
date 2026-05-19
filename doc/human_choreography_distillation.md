@@ -842,5 +842,5 @@ conda run -n pyfii env PYTHONPATH=src python tools/analyze_music_motion_alignmen
 2. 生成 `motion_brief` 时使用主题、音乐能量曲线、空间叙事和禁用退化项。
 3. 生成 `phrase_spec` 时使用段落卡片中的动作原语、分组、角色换位、灯光节拍、音乐 cue 和风险说明。
 4. 生成 PyFii 代码时重做速度、等待、错峰、中间点和高度层，不照抄旧坐标。
-5. 验证时先跑 `ignore_acc=True` 对照视觉意图，再跑 `ignore_acc=False` 作为硬门。
+5. 验证时跑 `ignore_acc=False` 作为硬门。
 6. 输出 2D/3D 视频和关键帧，人工只验收已经通过执行验证的候选。
