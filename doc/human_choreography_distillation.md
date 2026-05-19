@@ -122,7 +122,7 @@ conda run -n pyfii env PYTHONPATH=src python tools/analyze_music_motion_alignmen
 
 | 作品 | 历史视觉模式 `ignore_acc=True` | 现代验证模式 `ignore_acc=False` | 蒸馏判断 |
 | --- | --- | --- | --- |
-| 大闹天宫 | 约 64.5s，未完成 0，最小平面距约 43cm | 未完成约 647，最小平面距约 50cm | 视觉组织很强，主要重修速度/时间衔接 |
+| 大闹天宫 | 约 65.1s，未完成 0，最小平面距约 48cm | 约 65.6s，未完成约 647，最小平面距约 59cm | 视觉组织很强，灯光100ms级颜色编舞，主要重修速度/时间衔接 |
 | 太空电梯 | 约 65.6s，未完成约 50，最小平面距约 45cm | 未完成约 3581，最小平面距接近 0 | 垂直主题很好，但现代实现需要重建安全层 |
 | 开启新征程 加速版715 | 约 65.9s，未完成约 290，最小平面距约 4cm | 未完成约 2479，最小平面距约 16cm | 推进和扩张意图可学，时间预算需要重排 |
 | competition_test_62 | 约 70.7s，未完成约 2525，最小平面距约 12cm | 未完成约 7230，最小平面距约 1cm | 更像压力/脏样本，不能直接学结构 |
@@ -135,24 +135,215 @@ conda run -n pyfii env PYTHONPATH=src python tools/analyze_music_motion_alignmen
 ### 大闹天宫
 
 - 来源：`output/大闹天宫/大闹天宫.fii`
-- 音乐：`output/大闹天宫/动作组/云宫迅音_缩混3.mp3`，约 123 BPM；动作边界与音乐变化高度贴合，灯光密集段承担鼓点/脉冲表达。
-- 视频：`output/大闹天宫.mp4`、`output/大闹天宫_3D.mp4`、`output/大闹天宫_3D2.mp4`
-- 结构：`inittime` 标志很清晰，约在 0、4、7、10、16、21、29、37、45、54、59、64 秒形成段落。
-- 历史视觉价值：主题性强，平面幅度大，横切、展开、压缩、换位和灯光推进都很明确；适合学习“神话/战斗感”的高能段落组织。
-- 3D 观察重点：这类作品主要靠大 XY 范围和角色交换产生冲击，3D 视频用于确认高度层是否只是避让，还是参与了空间叙事。
-- 现代验证风险：默认加速度模式下会出现大量动作未完成；这不是设计思路不可取，而是说明需要把宏大换位拆成更长时间、更合理速度和中间点。
-- 可蒸馏原则：主题先行、大范围平面调度、段落节奏清楚、灯光是动作的一部分。
+- 音乐：`output/大闹天宫/动作组/云宫迅音_缩混3.mp3`，约 122 BPM，onset 密度 1.14/s；音乐全长 174.5s，编舞仅用前 64s（音乐前 1/3），64s 后音乐仍有内容但编舞已结束。
+- 视频：`output/大闹天宫.mp4`（2D）、`output/大闹天宫_3D.mp4`、`output/大闹天宫_3D2.mp4`（3D）
+- pyfiiCode.py：有，可直接读取设计意图。
+- 结构：`inittime` 形成 11 个清晰段落：0s（起飞）、4、7、10、16、21、29、37、45、54、59、64s。7 架机完全同步，段落结构统一。
+- 几何设计：7 机以 d7（280,280）为中心呈对称分布——d1/d2、d4/d5 形成上下镜像对，d3/d6 形成左右镜像对。每段的 move2 坐标构成以中心机为锚点的对称几何图案：4-7s 段六边形扩张，10-16s 段大幅横切换位，后续各段分别呈现压缩、展开、角色交换和收束。
+- 灯光设计（核心亮点）：每架机有 260-320 个 TurnOn 调用，总计约 2100 个灯光指令。灯光不是简单开关，而是 100ms 级别的颜色渐变序列——4-7s 段红色系 16 步渐变（#170000→#ff0000），10-16s 段绿色→紫色渐变。灯光节拍与 delay(100) 交替，TurnOff 极少（3-8 个），策略是"持续变色"而非"开关闪烁"。
+- 速度设计：每段有独立的 VelXY/VelZ 设置，速度范围 50-400 cm/s。首段高速展开，后续根据几何复杂度切换速度，速度本身参与节奏设计。
+- 中心机角色：d7 起飞高度 120cm（其他为 90cm），前几段专注垂直运动（Z 163→206→249），是视觉锚点和高度标尺。后半段参与横向运动。
+- 历史视觉价值：灯光设计最精致的样本——100ms 级颜色编舞直接参与音乐表达。对称几何编排和中心锚点设计使七机编队有清晰视觉层次。
+- 3D 观察重点：Z 在 80-250cm 之间频繁变化（段间切换），配合灯光颜色变化形成高度层与色层的双重叙事。
+- 现代验证风险：ignore_acc=False 下 647 次动作未完成（集中在 38s 附近，d2 反复触发），原始速度安排在默认加速度模型下不够。最小距离 59cm 在七机密集队形下可接受。
+- 可蒸馏原则：100ms 级灯光编舞、对称几何+中心锚点、分段速度设计、段落内颜色主题。
+
+段落卡片：
+
+```json
+{
+  "source": "output/大闹天宫",
+  "visual_mode": "ignore_acc=True",
+  "validation_mode": "ignore_acc=False",
+  "segments": [
+    {
+      "time_range": [0, 4],
+      "intent": "全体起飞，d7 升至 120cm 锚定中心角色",
+      "music_cue": "能量初起（~0.38），4s 处 novelty 峰值 1.00",
+      "formation_notes_2d": "七机保持起始对称位",
+      "spatial_notes_3d": "Z 0→90-120cm，d7 单独较高",
+      "motion_primitives": ["takeoff", "中心锚定"],
+      "light_notes": "无"
+    },
+    {
+      "time_range": [4, 7],
+      "intent": "六边形扩张→内收，红色系灯光渐变",
+      "music_cue": "高能首段（~0.65）",
+      "beat_policy": "灯光 100ms 节拍，16 步红色渐变",
+      "formation_notes_2d": "XY 120-440 × 141-419",
+      "spatial_notes_3d": "Z 90-249cm",
+      "motion_primitives": ["hex_expand", "同心几何"],
+      "light_notes": "#170000→#ff0000 16步渐变",
+      "execution_risk": [],
+      "repair_strategy": []
+    },
+    {
+      "time_range": [7, 10],
+      "intent": "向中心收缩蓄力",
+      "music_cue": "能量微降（~0.60）",
+      "formation_notes_2d": "队形压缩向中心",
+      "spatial_notes_3d": "Z 升至 239cm 高位",
+      "motion_primitives": ["compress", "蓄力"],
+      "light_notes": "无"
+    },
+    {
+      "time_range": [10, 16],
+      "intent": "大幅横切换位 + 绿色→紫色灯光渐变",
+      "music_cue": "能量回落但 onset 密集（13个）",
+      "beat_policy": "灯光 100ms 节拍，10步渐变",
+      "formation_notes_2d": "XY 15-545 × 95-465 接近全场",
+      "spatial_notes_3d": "Z 91-239cm 大幅波动",
+      "motion_primitives": ["全场横切", "颜色主题切换"],
+      "light_notes": "#a0ffa0→#d842fe 绿→紫渐变",
+      "execution_risk": [],
+      "repair_strategy": []
+    },
+    {
+      "time_range": [16, 37],
+      "intent": "持续全场覆盖 + 角色交换（16-21s、21-29s、29-37s 三段）",
+      "music_cue": "能量渐升（~0.35→0.52）",
+      "formation_notes_2d": "XY 40-520 全场均匀分布",
+      "spatial_notes_3d": "Z 114-248cm",
+      "motion_primitives": ["持续变换", "全场覆盖", "角色交换"],
+      "light_notes": "灯光持续配速"
+    },
+    {
+      "time_range": [37, 54],
+      "intent": "高能段：快速变换（37-45s）+ 高密度维持（45-54s）",
+      "music_cue": "能量爬升→高位（~0.52→0.60）",
+      "formation_notes_2d": "45-54s: XY 50-510 × 50-510",
+      "spatial_notes_3d": "Z 80-250cm 全范围使用",
+      "motion_primitives": ["快速变换", "高密度"],
+      "light_notes": "灯光密度上升"
+    },
+    {
+      "time_range": [54, 59],
+      "intent": "收束准备：X 收窄",
+      "music_cue": "能量持续高位（~0.52-0.59）",
+      "formation_notes_2d": "XY 112-448 × 56-448",
+      "spatial_notes_3d": "Z 97-216cm",
+      "motion_primitives": ["收束准备"],
+      "light_notes": "配合收束"
+    },
+    {
+      "time_range": [59, 64],
+      "intent": "最后变换，准备降落",
+      "music_cue": "能量回落（~0.57→0.40）",
+      "formation_notes_2d": "XY 40-520 × 40-480",
+      "spatial_notes_3d": "Z 92-226cm",
+      "motion_primitives": ["收束"],
+      "light_notes": "灯光收束"
+    },
+    {
+      "time_range": [64, 65],
+      "intent": "全体降落",
+      "music_cue": "能量归零，剩余 110s 音乐未使用",
+      "formation_notes_2d": "降落",
+      "spatial_notes_3d": "Z→0",
+      "motion_primitives": ["land"],
+      "light_notes": "无"
+    }
+  ]
+}
+```
+
 
 ### 太空电梯
 
 - 来源：`output/太空电梯/太空电梯.fii`
-- 音乐：`output/太空电梯/动作组/阿鲲-太空电梯.mp3`，约 112 BPM；1s 级短段密集贴合音乐推进，适合学习机械层级、上升和阶段切换。
-- 视频：`output/太空电梯.mp4`、`output/太空电梯_ignore_acc.mp4`、`output/太空电梯_3D_process.mp4`
-- 结构：有多处明确段落，约在 5、12、15、22、24、26、33、39、50、51、63 秒附近发生显著变化。
-- 历史视觉价值：垂直意象非常明确，适合作为“上升、平台、电梯、塔形、层级切换”的样本。
-- 3D 观察重点：必须看 3D，因为它的核心不是平面图案，而是高度层的升降、聚合和空间纵深。
-- 现代验证风险：默认加速度模式下距离和未完成动作都很激进；未来重做时要把垂直主轴、旁路线、等待层和安全间距分开建模。
-- 可蒸馏原则：高度层可以承载主题，不只是避撞；强模型应先写“垂直叙事”，再写具体坐标。
+- 音乐：`output/太空电梯/动作组/阿鲲-太空电梯.mp3`，约 115 BPM，onset 密度 3.07/s；音乐全长 70.7s，编舞覆盖约 66s（几乎全曲使用）。能量渐进上升（0.20→0.66），段落能量结构清晰。
+- 视频：无（GPT-5.5 文档中列出的视频文件在当前目录未找到，标记为证据缺口）
+- pyfiiCode.py：无（Fii 原软件 Blockly 导出）
+- 设备：F600（七个样本中唯一使用 F600 的作品）
+- 结构：异步分段编排，每架机有独立 Controls time 序列。机1 段落最丰富（27-36s 有 10 个逐秒分段——"电梯层级"模式），其余机在主要时间节点（4、12、15、24、26、33、37、38、39、50、51、58、62、63、65s）异步参与。0s 和 5s 也有全体同步点。
+- 几何设计：无预定义 waypoint，全部使用直接坐标 MoveToPoint。每架机 57-60 个 move2 动作，密度极高。机1 在 27-36s 的逐秒分段暗示了逐级高度变化——这是"太空电梯"主题的核心动作语言。
+- 灯光设计：机1 灯光密度最高（33 TurnOn），其他机 21-23 个。灯光密度不如大闹天宫，但段间切换时有颜色变化标记。TurnOff 极少（2-3 个），策略与大闹天宫类似。
+- 异步编排（核心亮点）：不是全体同步的七机齐舞，而是各机在独立时间点进入、退出、再进入。这种异步模式更像"机械组件各司其职"——呼应电梯/机械主题。机1 是视觉焦点和时间锚，其余机作为伴随层和背景层。
+- 历史视觉价值：F600 机型 + 异步编排 + 垂直主题的组合在样本中独一无二。适合学习"机械/工业感"的主题表达、异步时间线设计、以及如何让单一焦点机承担叙事主线。
+- 3D 观察重点：无视频，但坐标显示 Z 在 0-250cm 之间大幅变化，机1 可能承担逐级上升的视觉任务。XY 范围 X[100,460] Y[80,480] 覆盖全场但不如大闹天宫极端。
+- 现代验证风险：ignore_acc=False 下 3581 次未完成、最小距离仅 2.1cm——七个样本中安全性最差之一。垂直动作激进 + 异步穿插 + 高密度 move2 是主因。未来重做：1）合并逐秒分段为可执行 phrase；2）异步时间线留安全间距；3）垂直与水平运动分离规划。
+- 可蒸馏原则：异步编排、F600 机型应用、逐级高度叙事（"电梯"模式）、焦点机+伴随机的角色分工。
+
+段落卡片：
+
+```json
+{
+  "source": "output/太空电梯",
+  "visual_mode": "ignore_acc=True",
+  "validation_mode": "ignore_acc=False",
+  "segments": [
+    {
+      "time_range": [0, 4],
+      "intent": "全体异步起飞，各机按不同时间进入",
+      "music_cue": "能量低位（~0.20），前奏",
+      "formation_notes_2d": "起始位：机1(280,280)居中，其余六角分布",
+      "spatial_notes_3d": "Z 0→起飞高度",
+      "motion_primitives": ["takeoff", "async_start"],
+      "light_notes": "无"
+    },
+    {
+      "time_range": [4, 15],
+      "intent": "全体同步段：首次队形展开（4-5s 密集短切，12-15s 全体同步）",
+      "music_cue": "能量稳健上升（~0.37），onset 密度 3/s",
+      "beat_policy": "2 个密集节点（4-5s、12-15s）",
+      "formation_notes_2d": "全体覆盖 XY 全场",
+      "spatial_notes_3d": "Z 开始分层",
+      "motion_primitives": ["全体同步", "队形展开"],
+      "light_notes": "灯光标记节点切换"
+    },
+    {
+      "time_range": [15, 26],
+      "intent": "异步分段展开：部分机在 22s、24s、26s 各自切换",
+      "music_cue": "能量稳定（~0.35-0.40），音乐推进",
+      "beat_policy": "异步时间线，各机节奏独立",
+      "formation_notes_2d": "全体覆盖",
+      "spatial_notes_3d": "Z 分化加剧",
+      "motion_primitives": ["async_phase", "独立时间线"],
+      "light_notes": "段间颜色变化"
+    },
+    {
+      "time_range": [27, 36],
+      "intent": "机1 逐秒分段——"电梯层级"逐级上升（27→28→29→30→31→32→33→34→35→36s，共 10 级）",
+      "music_cue": "能量中位（~0.39-0.45），频谱亮度上升",
+      "beat_policy": "1s/step 逐级上升节拍，模拟电梯层级",
+      "formation_notes_2d": "机1 可能伴随 XY 小范围移动",
+      "spatial_notes_3d": "机1 逐级 Z 上升，高度层递增",
+      "motion_primitives": ["elevator_steps", "逐级上升", "solo_focus"],
+      "light_notes": "可能逐级灯光变化",
+      "execution_risk": ["action_unfinished（现代模式）"],
+      "repair_strategy": ["合并逐秒为 phrase", "增加每级时间"]
+    },
+    {
+      "time_range": [37, 50],
+      "intent": "回到异步群舞：37-39s 密集全体+分组切换，40-50s 维持场域",
+      "music_cue": "能量中高（~0.41-0.53）",
+      "formation_notes_2d": "XY 覆盖全场",
+      "spatial_notes_3d": "各机维持不同高度层",
+      "motion_primitives": ["async_ensemble", "高度层维持"],
+      "light_notes": "灯光标记组切换"
+    },
+    {
+      "time_range": [50, 58],
+      "intent": "收束前奏：50-51s 密集短段，58s 全体同步",
+      "music_cue": "能量爬升（~0.53→0.61），推向高潮",
+      "formation_notes_2d": "队形收束",
+      "spatial_notes_3d": "Z 开始整体下移",
+      "motion_primitives": ["收束前奏", "全体同步"],
+      "light_notes": "灯光配合收束"
+    },
+    {
+      "time_range": [58, 65],
+      "intent": "最终段：58-65s 全体密集分段（58→59→60→62→63→65s），六机高频切换+降落",
+      "music_cue": "能量峰值（~0.61→0.66→0.38回落）",
+      "beat_policy": "1-2s 级密集切换，呼应电梯的"楼层到达"感",
+      "formation_notes_2d": "XY 100-460 × 80-480",
+      "spatial_notes_3d": "Z 逐步降至 0",
+      "motion_primitives": ["密集收束", "floor_arrival", "land"],
+      "light_notes": "灯光收束"
+    }
+  ]
+}
+```
 
 ### 开启新征程 加速版715
 
