@@ -31,15 +31,6 @@ data2, t02, music2, field2, device2 = pf.read_fii(path, fps=60, ignore_acc=False
 9. 输出段落卡片 JSON，不输出原始源码。
 10. 有 `pyfiiCode.py` 时，源码分析可独立输出为编码模式文档（见 `pyfii_script_patterns_human.md`）。
 
-1. 先找 `.fii`、对应 2D/3D 视频和原始音乐文件。没有源音乐时必须标成证据缺口，不从静音视频硬猜。
-2. 先分析音乐：BPM、beat grid、onset 密度、RMS 能量、频谱亮度、低/中/高频变化、chroma/MFCC 结构边界、段落 novelty 和情绪代理描述。
-3. 读取 `webCodeAll.xml` 和 `pyfiiCode.py`，用 `block_inittime` / `inittime(...)` 作为第一层动作段落标志。
-4. 对每段统计目标点、XY/Z 外接框、高度层、中心偏移、速度设置、delay 和灯光密度。
-5. 用 `pf.read_fii(..., fps=60, ignore_acc=True)` 读回历史视觉轨迹，给段落命名。
-6. 用 `pf.read_fii(..., fps=60, ignore_acc=False)` 读回现代验证轨迹，记录未完成动作、近距离和节奏漂移。
-7. 把动作边界和音乐边界对齐，看人类是在强拍、段落切换、能量爬升、drop 之前还是歌词/旋律延长处换动作。
-8. 对 2D/3D 视频按 `inittime`、段中点和强变化点抽帧，确认视觉描述是否成立。
-9. 输出段落卡片，不输出原始源码。
 
 建议的段落卡片结构：
 
