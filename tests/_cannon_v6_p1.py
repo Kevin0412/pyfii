@@ -81,7 +81,7 @@ for step in range(4):
 
 # ---- 段4: 48-64s 汇聚+展开 ----
 for i,d in enumerate(ds):
-    d.intime(48);d.VelXY(160,320);d.VelZ(140,280)
+    d.intime(49);d.VelXY(160,320);d.VelZ(140,280)
 for step in range(4):
     t=(step+1)/4;s=st(t)
     for i,d in enumerate(ds):
@@ -100,6 +100,28 @@ for i,d in enumerate(ds):
     d.intime(64);d.VelXY(50,100);d.VelZ(40,80)
     d.land()
 
+
+
+# ---- 段4: 48-64s X固定Y扫场 ----
+for i,d in enumerate(ds):
+    d.intime(49);d.VelXY(160,320);d.VelZ(140,280)
+for step in range(4):
+    t=(step+1)/4;s=st(t)
+    for i,d in enumerate(ds):
+        if i<3:  # 左区: X=80固定, Y上下扫
+            y=80+i*160+200*math.sin(s*2*math.pi)
+            x=80
+        elif i<6:  # 右区: X=480固定, Y上下扫(反向)
+            y=80+(i-3)*160+200*math.sin(s*2*math.pi+math.pi)
+            x=480
+        else:  # 中: 起伏
+            x=280+100*math.sin(s*3*math.pi)
+            y=280+100*math.cos(s*2*math.pi)
+        z=160+60*math.sin(s*math.pi+i)
+        d.move2(i3(x),i3(y),i3(z))
+        d.TurnOnAll("#ffffff");d.delay(2000)
+    for i,d in enumerate(ds):
+        d.TurnOffAll();d.delay(2000)
 
 for d in ds: d.end()
 os.makedirs(str(OUT),exist_ok=True)
