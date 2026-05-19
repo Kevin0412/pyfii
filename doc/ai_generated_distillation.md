@@ -20,6 +20,26 @@ gpt55 系列四项的 XY 跨度和 Z 范围完全一致（477×492, Z 0-221）�
 
 ---
 
+
+
+---
+
+## AI 候选产物对比
+
+`ai_choreo_candidates_60s` 下的三个候选展示了 AI 在设计空间中的探索路径：
+
+| 候选 | XY 跨度 | 未完成 | 最小距 | 特征 |
+|---|---|---|---|---|
+| burst_recompose | 477×492 | 85 | 70cm | 与 gpt55 系列共享安全边界 |
+| weave_exchange | 482×473 | 59 | 72cm | d7 Y 范围偏窄（241cm） |
+| calligraphy_lines | **518×490** | **3** | **73cm** | 最接近场地极限，最少未完成 |
+
+**calligraphy_lines 是当前所有 AI 产物中空间利用最好的**：X 跨度 518cm（gpt55 为 477），Y 跨度 490cm（gpt55 为 492），在突破安全边界的同时保持极少未完成（3 次）和最大安全距离（73cm）。说明 AI 在 phrase 驱动架构下有可能做到"既大胆又安全"。
+
+nl_choreo_gpt55_seed 和 nl_choreo_gpt55_seed_check 的产物完全一致，与 gpt55 系列共享同一安全配置——说明这些是同一基线的变体。
+
+weave_exchange 和 ai_keyframe_workflow 的产物完全相同——不同实验路径收敛到了同一输出。
+
 ## 退化模式分析
 
 ### 车道退化（固定 X 或 Y 范围）
