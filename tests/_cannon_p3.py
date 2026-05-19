@@ -79,6 +79,29 @@ for stp in range(4):
         d.delay(2000 if i in [1,3,5,6] else 0)
     for i,d in enumerate(ds):
         if i in [1,3,5,6]: d.TurnOffAll();d.delay(1000)
+
+# ---- 段3: 32-48s 六边形呼吸+展开 ----
+for i,d in enumerate(ds):
+    d.intime(33);d.VelXY(140,280);d.VelZ(120,240)
+for stp in range(4):
+    t=(stp+1)/4;s=st(t)
+    for i,d in enumerate(ds):
+        if i<6:
+            # 各机保持段2的半径差异，缓慢旋转+微呼吸
+            r0 = 180 if i in [1,3,5] else 120
+            r = r0 + 30*math.sin(s*2*math.pi)
+            ang=2*math.pi*i/6+0.2*math.pi*s
+            x=280+r*math.cos(ang);y=280+r*math.sin(ang)
+            z=150+50*math.sin(s*math.pi+i)
+        else:
+            x=280+40*math.sin(s*3*math.pi)
+            y=280+40*math.cos(s*2*math.pi)
+            z=190
+        d.move2(i3(x),i3(y),i3(z))
+        d.TurnOnAll("#ff6b9a");d.delay(2000)
+    for i,d in enumerate(ds):
+        d.TurnOffAll();d.delay(1000)
+
 for d in ds: d.end()
 os.makedirs(str(OUT),exist_ok=True)
 pf.Fii(str(OUT),ds,music=MUSIC).save(field=6)

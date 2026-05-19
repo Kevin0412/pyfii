@@ -35,7 +35,7 @@ def i3(x):return int(round(x))
 for i,d in enumerate(ds):
     d.intime(4)  # d6从0s开始, 其他4s开始悬停
     d.VelXY(60,120);d.VelZ(50,100)
-for stp in range(4):
+for stp in range(3):
     t=(stp+1)/4;s=st(t)
     for i,d in enumerate(ds):
         if i==6:  # 独舞S形
@@ -52,6 +52,48 @@ for stp in range(4):
         if i==6: d.TurnOffAll();d.delay(1500)
 
 
+
+# ---- 段2: 16-32s 三角对话 ----
+for i,d in enumerate(ds):
+    d.intime(16);d.VelXY(100,200);d.VelZ(80,160)
+for stp in range(4):
+    t=(stp+1)/4;s=st(t)
+    for i,d in enumerate(ds):
+        if i in [1,3,5]:  # 对话组: 独立三角(中心200,380), 远离悬停机
+            ang=2*math.pi*(i+1)/3+0.3*math.pi*s
+            r=100+30*math.sin(s*math.pi)
+            x=200+r*math.cos(ang);y=380+r*math.sin(ang)
+            z=160+40*math.sin(s*math.pi+i)
+            d.move2(i3(x),i3(y),i3(z))
+            d.TurnOnAll("#ffdd59");d.delay(2000)
+        elif i==6:  # 中心微动
+            x=280+30*math.sin(s*2*math.pi);y=280+30*math.cos(s*3*math.pi)
+            z=170
+            d.move2(i3(x),i3(y),i3(z))
+            d.TurnOnAll("#ffdd59");d.delay(2000)
+        # 其他机不活动
+    for i,d in enumerate(ds):
+        if i in [1,3,5,6]: d.TurnOffAll();d.delay(1000)
+
+
+# ---- 段3: 32-48s 六边形呼吸 ----
+for i,d in enumerate(ds):
+    d.intime(32);d.VelXY(140,280);d.VelZ(120,240)
+for stp in range(4):
+    t=(stp+1)/4;s=st(t)
+    r=140+50*math.sin(s*2*math.pi)
+    for i,d in enumerate(ds):
+        if i<6:
+            ang=2*math.pi*i/6+0.1*math.pi*s
+            x=280+r*math.cos(ang);y=280+r*math.sin(ang)
+        else:
+            x=280;y=280
+        z=150+50*math.sin(s*math.pi+i)
+        d.move2(i3(x),i3(y),i3(z))
+        if i<6: d.TurnOnAll("#ff6b9a");d.delay(2000)
+        else: d.TurnOnAll("#ff4488");d.delay(2000)
+    for i,d in enumerate(ds):
+        d.TurnOffAll();d.delay(1000)
 for d in ds: d.end()
 os.makedirs(str(OUT),exist_ok=True)
 pf.Fii(str(OUT),ds,music=MUSIC).save(field=6)
