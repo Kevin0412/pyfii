@@ -79,6 +79,33 @@ for step in range(4):
     for i,d in enumerate(ds):
         d.TurnOffAll();d.delay(2000)
 
+
+# ---- 段4: 49-64s 分区摆动 ----
+for i,d in enumerate(ds):
+    d.intime(49);d.VelXY(120,240);d.VelZ(100,200)
+for step in range(3):
+    t=(step+1)/3;s=st(t)
+    for i,d in enumerate(ds):
+        if i<3:  # 左区: X=80±40
+            x=80+40*math.sin(s*2*math.pi+i)
+            y=100+i*140+80*math.sin(s*math.pi)
+        elif i<6:  # 右区: X=480±40
+            x=480+40*math.sin(s*2*math.pi+i)
+            y=100+(i-3)*140+80*math.sin(s*math.pi)
+        else:  # 中
+            x=280+80*math.sin(s*3*math.pi)
+            y=280+80*math.cos(s*2*math.pi)
+        z=150+50*math.sin(s*math.pi+i)
+        d.move2(i3(x),i3(y),i3(z))
+        d.TurnOnAll("#ffffff");d.delay(2500)
+    for i,d in enumerate(ds):
+        d.TurnOffAll();d.delay(2500)
+
+# ---- 段5: 65-68s 原地降落 ----
+for i,d in enumerate(ds):
+    d.intime(65);d.VelXY(50,100);d.VelZ(40,80)
+    d.land()
+
 for d in ds: d.end()
 os.makedirs(str(OUT),exist_ok=True)
 pf.Fii(str(OUT),ds,music=MUSIC).save(field=6)
