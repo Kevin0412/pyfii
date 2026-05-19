@@ -20,6 +20,17 @@ data2, t02, music2, field2, device2 = pf.read_fii(path, fps=60, ignore_acc=False
 
 ## 蒸馏流程
 
+1. 确认 `.fii` 存在，标注证据完整性：是否有音乐、2D/3D 视频、`pyfiiCode.py`。缺项标记为证据缺口，不阻塞蒸馏。
+2. 分析音乐（如果存在）：BPM、onset 密度、RMS 能量曲线、频谱亮度、结构边界（chroma novelty），生成段落能量描述。
+3. 从 `.fii` 提取 `Controls time` 和起始位置。从 `webCodeAll.xml` 提取 `block_inittime`（如果存在）。老作品可能无 inittime，用 Controls time 作为段落标志。
+4. 用 `pf.read_fii(..., fps=60, ignore_acc=True)` 和 `ignore_acc=False` 双模式读回轨迹，统计未完成动作、最小平面距、XY/Z 全跨度。
+5. 从 `webCodeAll.xml` 统计每机动作类型（move2/move/灯光）；如果有 `pyfiiCode.py`，提取 inittime 段落和设计意图。
+6. 按段统计 XY/Z 外接框、高度层、中心偏移、灯光密度。
+7. 对齐音乐能量/结构边界与动作段落边界，标注贴合程度。
+8. 有 2D/3D 视频时按 inittime 和段中点抽帧确认观感；无视频则标注"缺视频，无法做观感验收"。
+9. 输出段落卡片 JSON，不输出原始源码。
+10. 有 `pyfiiCode.py` 时，源码分析可独立输出为编码模式文档（见 `pyfii_script_patterns_human.md`）。
+
 1. 先找 `.fii`、对应 2D/3D 视频和原始音乐文件。没有源音乐时必须标成证据缺口，不从静音视频硬猜。
 2. 先分析音乐：BPM、beat grid、onset 密度、RMS 能量、频谱亮度、低/中/高频变化、chroma/MFCC 结构边界、段落 novelty 和情绪代理描述。
 3. 读取 `webCodeAll.xml` 和 `pyfiiCode.py`，用 `block_inittime` / `inittime(...)` 作为第一层动作段落标志。
