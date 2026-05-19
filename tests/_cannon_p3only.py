@@ -79,28 +79,6 @@ for step in range(4):
     for i,d in enumerate(ds):
         d.TurnOffAll();d.delay(2000)
 
-# ---- 段4: 48-64s 汇聚+展开 ----
-for i,d in enumerate(ds):
-    d.intime(48);d.VelXY(160,320);d.VelZ(140,280)
-for step in range(4):
-    t=(step+1)/4;s=st(t)
-    for i,d in enumerate(ds):
-        ang=2*math.pi*i/N+0.3*math.pi*s
-        r=120+100*math.sin(s*math.pi)
-        x=280+r*math.cos(ang)
-        y=280+r*math.sin(ang)
-        z=160+70*abs(math.sin(s*2*math.pi))
-        d.move2(i3(x),i3(y),i3(z))
-        d.TurnOnAll("#ffffff");d.delay(2000)
-    for i,d in enumerate(ds):
-        d.TurnOffAll();d.delay(2000)
-
-# ---- 段5: 64-68s 原地降落 ----
-for i,d in enumerate(ds):
-    d.intime(64);d.VelXY(50,100);d.VelZ(40,80)
-    d.land()
-
-
 for d in ds: d.end()
 os.makedirs(str(OUT),exist_ok=True)
 pf.Fii(str(OUT),ds,music=MUSIC).save(field=6)

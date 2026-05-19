@@ -65,11 +65,11 @@ for step in range(4):
     t=(step+1)/4;s=st(t)
     for i,d in enumerate(ds):
         if i<3:  # 左区: X[60,160], Y扫
-            x=80+60*math.sin(s*math.pi+i)
-            y=120+i*140+80*math.sin(s*2*math.pi)
+            x=80
+            y=80+i*200+40*math.sin(s*2*math.pi)
         elif i<6:  # 右区: X[400,500]
-            x=480-60*math.sin(s*math.pi+i)
-            y=120+(i-3)*140+80*math.sin(s*2*math.pi)
+            x=480
+            y=80+(i-3)*200+40*math.sin(s*2*math.pi)
         else:  # 中
             x=280+80*math.sin(s*3*math.pi)
             y=280+80*math.cos(s*2*math.pi)
