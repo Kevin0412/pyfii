@@ -54,7 +54,7 @@
 - `output/无人区`
 - `output/校园作品A`
 - `output/1`（校园作品B-Trip）
-- `output/d/2021比赛`（早期设计，无灯光，纯动作编排）
+- `output/d/比赛现场程序（修改版）`（早期设计，补灯光版）
 - `output/d/比赛用无人机`（早期设计，极简灯光）
 
 完整蒸馏记录见 [human_choreography_distillation.md](human_choreography_distillation.md)。
