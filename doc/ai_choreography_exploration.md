@@ -166,8 +166,6 @@
 - AI 生成编码模式：[pyfii_script_patterns_ai.md](pyfii_script_patterns_ai.md)
 
 AI 产物轨迹蒸馏见：[ai_generated_distillation.md](ai_generated_distillation.md)
-- 人类设计编码模式：[pyfii_script_patterns_human.md](pyfii_script_patterns_human.md)
-- AI 生成编码模式：[pyfii_script_patterns_ai.md](pyfii_script_patterns_ai.md)
 
 ## 未来设计规划
 
