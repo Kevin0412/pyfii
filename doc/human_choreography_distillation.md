@@ -435,18 +435,44 @@ conda run -n pyfii env PYTHONPATH=src python tools/analyze_music_motion_alignmen
 }
 ```
 
-### competition_test_62### competition_test_62
+### competition_test_62
 
 - 来源：`output/competition_test_62/competition_test_62.fii`
-- 音乐：当前样本目录和渲染视频未找到可解码音频，音乐配合暂不能蒸馏；需要补原始音乐或带音轨视频。
-- 视频：`output/competition_test_62.mp4`、`output/competition_test_62_3D.mp4`
-- 结构：XML 中 0-1 秒附近动作密度异常高，`inittime` 不能单独作为可靠段落标志。
-- 历史视觉价值：适合观察高密度路径、快速切换和高度实验，但更像压力样本，不适合直接当成理想结构。
-- 3D 观察重点：确认高度层和快速动作是否形成可读空间图案，还是只是密集调度。
-- 现代验证风险：两种模式都有大量未完成，默认加速度模式下尤其严重；未来重做时应先重切 phrase，再重新分配速度、等待和目标点。
-- 可蒸馏原则：当元数据脏或动作扎堆时，agent 必须回到轨迹和视频分段，不能机械相信 `inittime`。
+- 音乐：无（目录和渲染视频未找到可解码音频，标记为证据缺口）
+- 视频：无（GPT-5.5 文档中列出的视频文件在当前目录未找到）
+- pyfiiCode.py：无（Fii 原软件 Blockly 导出）
+- 设备：F400
+- 结构：无 inittime 标签，段落无法从 XML 直接提取。XML 中 0-1s 附近动作密度异常高，Controls time 几乎全部堆在初始时刻。Z 最高达 300cm（超过常规 F400 的 250cm 上限），说明设计时可能未考虑安全约束。
+- 动作密度：每架机 152-374 个 move2 动作——是普通作品的 5-10 倍密度。灯光 61-93 个 LED 指令。机7（152 move2）相对最少但 LED 最多（93 个），可能有特殊灯光角色。
+- 历史视觉价值：不适合作为正面设计样本。价值在于作为"压力测试"——展示了什么样的密度和时序会导致即使在无加速度模式下也大量未完成（2525 次）。可帮助设定 agent 的动作密度上限和段落切分粒度下限。
+- 现代验证风险：ignore_acc=True 下已有 2525 次未完成，ignore_acc=False 下 7230 次——两种模式都是严重失败级别。最小距离 5-24cm，Z 超限至 300cm。不应从该样本中提取任何设计方法，只提取"不应做什么"的教训。
+- 可蒸馏原则：动作密度上限参考、inittime 的必要性、Z 范围约束的重要性。
 
-### 无人区
+段落卡片：
+
+```json
+{
+  "source": "output/competition_test_62",
+  "visual_mode": "ignore_acc=True",
+  "validation_mode": "ignore_acc=False",
+  "note": "压力样本，无音乐，无 inittime，不可作为正面设计参考",
+  "segments": [
+    {
+      "time_range": [0, 72],
+      "intent": "全时段高密度连续动作，无清晰段落切分",
+      "music_cue": "无音乐",
+      "formation_notes_2d": "XY 80-480 × 36-480",
+      "spatial_notes_3d": "Z 0-300cm（超限至 300cm）",
+      "motion_primitives": ["高密度连续运动", "无段落"],
+      "light_notes": "61-93 LED 指令",
+      "execution_risk": ["action_unfinished（2525-7230次）", "Z超限", "距离危险"],
+      "repair_strategy": ["完全重做：先定义 inittime 段落", "控制 move2 密度 <50/机", "Z 限制在 250cm 内"]
+    }
+  ]
+}
+```
+
+### 无人区### 无人区
 
 - 来源：`output/无人区/无人区.fii`
 - 音乐：`output/无人区/动作组/无人区.mp3`，约 136 BPM；低能量暗色段用于留白和准备，20-30s 强脉冲段触发大中心移动。
