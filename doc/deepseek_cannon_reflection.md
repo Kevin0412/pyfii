@@ -70,7 +70,7 @@ AI 脚本(gpt55)中的`validate_planned_keypoints()`函数是多余的——pyfi
 反复触发的错误：
 - 坐标越界（XY 0-560, Z 80-250 for F400）
 - 时间倒退（intime 不能早于当前时间）
-- 浮点数坐标（pyfii read_fii bug，需手动 int()）
+- 起始坐标和move2坐标必须int()——pyfii设计为整数坐标，math.cos返回值需手动取整
 - 段间时间冲突（需留 > 1s 过渡余量）
 - `np.mat` 在新 numpy 被移除（需用 pyfii conda 环境）
 
