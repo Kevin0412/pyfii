@@ -33,14 +33,14 @@ def best_assign(starts, targets):
 S=[(60,120),(180,60),(350,60),(500,160),(500,380),(350,480),(160,480)]
 for i,d in enumerate(ds):
     d.X=d.x=S[i][0];d.Y=d.y=S[i][1];d.takeoff(1,110)
-for i,d in enumerate(ds): d.intime(4); d.VelXY(60,120); d.VelZ(40,80)
+for i,d in enumerate(ds): d.intime(4); d.VelXY(60,120); d.VelZ(60,120)
 
 # 段1: 4几何
 geo = [
-    [(S[i][0]+20*math.sin(i), S[i][1]+20*math.cos(i), 120) for i in range(N)],
-    [(280+140*math.cos(2*math.pi*i/N), 280+140*math.sin(2*math.pi*i/N), 135) for i in range(N)],
+    [(S[i][0]+20*math.sin(i), S[i][1]+20*math.cos(i), 120+5*i) for i in range(N)],
+    [(280+140*math.cos(2*math.pi*i/N), 280+140*math.sin(2*math.pi*i/N), 135+5*i) for i in range(N)],
     [(80+i*120, 180, 145) if i<4 else (80+(i-3)*120, 400, 145) for i in range(N)],
-    [(80,80,150),(480,80,150),(80,480,150),(480,480,150),(280,280,150),(200,200,150),(360,360,150)],
+    [(80,80,150+5*i),(480,80,150+5*i),(80,480,150+5*i),(480,480,150+5*i),(280,280,150+5*i),(200,200,150+5*i),(360,360,150+5*i)],
 ]
 colors = ["#2266aa","#3388cc","#44aadd","#4dd7ff"]
 
@@ -49,7 +49,7 @@ for gi in range(4):
     targets = best_assign(prev_pos, geo[gi])
     for i,d in enumerate(ds):
         tx, ty, tz = targets[i]
-        d.move2(cl(tx), cl(ty), cz(tz))
+        d.move2(cl(tx), cl(ty), cz(tz+20*math.sin(i)))
         d.TurnOnAll(colors[gi])
         if gi < 3: d.delay(3000)
         else: d.delay(1500); d.TurnOffAll(); d.delay(1500)
@@ -58,18 +58,18 @@ for gi in range(4):
 
 # 段2: 4个安全几何
 geo2 = [
-    [(280+150*math.cos(2*math.pi*i/N), 280+150*math.sin(2*math.pi*i/N), 155) for i in range(N)],  # 环
-    [(60+120*i, 160, 160) if i<4 else (180+120*(i-3), 400, 160) for i in range(N)],  # 双排(120间距)
+    [(280+150*math.cos(2*math.pi*i/N), 280+150*math.sin(2*math.pi*i/N), 140+25*math.sin(2*math.pi*i/N)) for i in range(N)],  # 环
+    [(60+120*i, 160, 140+10*i) if i<4 else (180+120*(i-3), 400, 160) for i in range(N)],  # 双排(120间距)
     [(80,80,165),(480,80,165),(80,480,165),(480,480,165),(280,280,165),(200,200,165),(360,360,165)],  # 四角+内
-    [(280+150*math.cos(2*math.pi*i/N+math.pi/7), 280+150*math.sin(2*math.pi*i/N+math.pi/7), 170) for i in range(N)],  # 旋转环
+    [(280+150*math.cos(2*math.pi*i/N+math.pi/7), 280+150*math.sin(2*math.pi*i/N+math.pi/7), 150+20*math.sin(2*math.pi*i/N+math.pi/7)) for i in range(N)],  # 旋转环
 ]
 colors2 = ["#ffbb33","#ffaa22","#ff9911","#ffdd59"]
-for i,d in enumerate(ds): d.intime(16); d.VelXY(90,180); d.VelZ(70,140)
+for i,d in enumerate(ds): d.intime(16); d.VelXY(90,180); d.VelZ(90,180)
 for gi in range(4):
     targets = best_assign(prev_pos, geo2[gi])
     for i,d in enumerate(ds):
         tx, ty, tz = targets[i]
-        d.move2(cl(tx), cl(ty), cz(tz))
+        d.move2(cl(tx), cl(ty), cz(tz+20*math.sin(i)))
         d.TurnOnAll(colors2[gi]); d.delay(4000)
     prev_pos = targets
 
@@ -82,12 +82,12 @@ geo3 = [
     [(280+170*math.cos(2*math.pi*i/N+math.pi/7), 280+170*math.sin(2*math.pi*i/N+math.pi/7), 200) for i in range(N)],  # 旋转环
 ]
 colors3 = ["#ff5588","#ff4477","#ff3366","#ff2266"]
-for i,d in enumerate(ds): d.intime(32); d.VelXY(120,240); d.VelZ(100,200)
+for i,d in enumerate(ds): d.intime(32); d.VelXY(120,240); d.VelZ(120,240)
 for gi in range(4):
     targets = best_assign(prev_pos, geo3[gi])
     for i,d in enumerate(ds):
         tx, ty, tz = targets[i]
-        d.move2(cl(tx), cl(ty), cz(tz))
+        d.move2(cl(tx), cl(ty), cz(tz+20*math.sin(i)))
         d.TurnOnAll(colors3[gi]); d.delay(4000)
     prev_pos = targets
 
@@ -100,24 +100,25 @@ geo4 = [
     [(280+190*math.cos(2*math.pi*i/N+math.pi/7), 280+190*math.sin(2*math.pi*i/N+math.pi/7), 220) for i in range(N)],  # 旋转环
 ]
 colors4 = ["#ffffff","#ffeeee","#ffdddd","#ffcccc"]
-for i,d in enumerate(ds): d.intime(48); d.VelXY(160,320); d.VelZ(140,280)
+for i,d in enumerate(ds): d.intime(48); d.VelXY(160,320); d.VelZ(160,320)
 for gi in range(4):
     targets = best_assign(prev_pos, geo4[gi])
     for i,d in enumerate(ds):
         tx, ty, tz = targets[i]
-        d.move2(cl(tx), cl(ty), cz(tz))
+        d.move2(cl(tx), cl(ty), cz(tz+20*math.sin(i)))
         d.TurnOnAll(colors4[gi]); d.delay(4000)
     prev_pos = targets
 
 # 段5: 收束降落
-for i,d in enumerate(ds): d.intime(64); d.VelXY(60,120); d.VelZ(40,80)
+for i,d in enumerate(ds): d.intime(64); d.VelXY(60,120); d.VelZ(60,120)
 geo5 = [(280+100*math.cos(2*math.pi*i/N), 280+100*math.sin(2*math.pi*i/N), 150) for i in range(N)]
 targets = best_assign(prev_pos, geo5)
 for i,d in enumerate(ds):
     tx, ty, tz = targets[i]
-    d.move2(cl(tx), cl(ty), cz(tz))
+    d.move2(cl(tx), cl(ty), cz(tz+20*math.sin(i)))
     d.TurnOnAll("#48dbfb"); d.delay(2000); d.TurnOffAll(); d.delay(2000)
-for i,d in enumerate(ds): d.intime(68); d.land()
+for i,d in enumerate(ds):
+    d.intime(70); d.land()
 
 for d in ds: d.end()
 os.makedirs(str(OUT),exist_ok=True)
@@ -141,6 +142,6 @@ with warnings.catch_warnings(record=True)as c:
 dw=[x for x in c if'distance between'in str(x.message)]
 aw=[x for x in c if'completed'in str(x.message)]
 print(f"dist:{len(dw)} act:{len(aw)}")
-pf.show(data,t0,[str(MUSIC)],field=field,device=dev,max_fps=60,save=str(OUT/'2d'),FPS=25)
-pf.show(data,t0,[str(MUSIC)],field=field,device=dev,max_fps=60,save=str(OUT/'3d'),FPS=25,ThreeD=True,imshow=[90,0],d=(600,450))
+pf.show(data,t0,[str(MUSIC)],field=field,device=dev,max_fps=60,save=str(OUT/"2d"),FPS=25)
+pf.show(data,t0,[str(MUSIC)],field=field,device=dev,max_fps=60,save=str(OUT/"3d"),FPS=25,ThreeD=True,imshow=[90,0],d=(600,450))
 print("done")
