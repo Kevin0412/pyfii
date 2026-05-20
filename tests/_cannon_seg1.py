@@ -33,7 +33,7 @@ def best_assign(starts, targets):
 S=[(60,120),(180,60),(350,60),(500,160),(500,380),(350,480),(160,480)]
 for i,d in enumerate(ds):
     d.X=d.x=S[i][0];d.Y=d.y=S[i][1];d.takeoff(1,110)
-for i,d in enumerate(ds): d.intime(4); d.VelXY(120,240); d.VelZ(120,240)
+for i,d in enumerate(ds): d.intime(4); d.VelXY(150,300); d.VelZ(150,300)
 
 # 段1: 4几何
 geo = [
@@ -46,7 +46,10 @@ colors = ["#2266aa","#3388cc","#44aadd","#4dd7ff"]
 
 prev_pos = [(d.x, d.y, 110) for d in ds]
 for gi in range(4):
-    targets = best_assign(prev_pos, geo[gi])
+    if gi == 0:
+        targets = geo[gi]  # 散布呼吸直接匹配, 不搜索
+    else:
+        targets = best_assign(prev_pos, geo[gi])
     for i,d in enumerate(ds):
         tx, ty, tz = targets[i]
         d.move2(cl(tx), cl(ty), cz(tz+20*math.sin(i)))
@@ -82,7 +85,7 @@ geo3 = [
     [(280+170*math.cos(2*math.pi*i/N+math.pi/7), 280+170*math.sin(2*math.pi*i/N+math.pi/7), 200) for i in range(N)],  # 旋转环
 ]
 colors3 = ["#ff5588","#ff4477","#ff3366","#ff2266"]
-for i,d in enumerate(ds): d.intime(32); d.VelXY(120,240); d.VelZ(120,240)
+for i,d in enumerate(ds): d.intime(32); d.VelXY(150,300); d.VelZ(150,300)
 for gi in range(4):
     targets = best_assign(prev_pos, geo3[gi])
     for i,d in enumerate(ds):
