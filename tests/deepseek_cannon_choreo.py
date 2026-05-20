@@ -159,8 +159,9 @@ geo7 = [
     [(280+190*math.cos(2*math.pi*i/N+math.pi/4), 280+190*math.sin(2*math.pi*i/N+math.pi/4), 215) for i in range(N)],
     [(280+180*math.cos(2*math.pi*i/N-math.pi/5), 280+180*math.sin(2*math.pi*i/N-math.pi/5), 220) for i in range(N)],
     [(280+170*math.cos(2*math.pi*i/N+math.pi/6), 280+170*math.sin(2*math.pi*i/N+math.pi/6), 210) for i in range(N)],
+    [(280+160*math.cos(2*math.pi*i/N-math.pi/7), 280+160*math.sin(2*math.pi*i/N-math.pi/7), 215) for i in range(N)],
 ]
-colors7 = ["#ffddee","#ffccdd","#ffaabb"]
+colors7 = ["#ffddee","#ffccdd","#ffbbcc","#ffaabb"]
 for i,d in enumerate(ds): d.intime(50); d.VelXY(160,320); d.VelZ(160,320); d.delay(i*500)
 for gi in range(3):
     targets = best_assign(prev, geo7[gi])
@@ -172,7 +173,7 @@ for gi in range(3):
     prev = targets
 
 # ---- 段8: 63-70s D字署名+降落 ----
-geo8 = [(180,150,180),(180,410,180),(250,80,190),(340,150,190),(360,280,190),(330,410,190),(240,460,190)]
+geo8 = [(180,120,180),(180,280,180),(180,440,180),(300,100,190),(380,200,190),(380,360,190),(300,460,190)]  # D:左竖3+右弧4
 for i,d in enumerate(ds): d.intime(63); d.VelXY(120,240); d.VelZ(120,240)
 targets = best_assign(prev, geo8)
 for i,d in enumerate(ds):
