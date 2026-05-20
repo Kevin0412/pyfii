@@ -261,23 +261,23 @@ for segment in music_segments:
     },
     {
       "time_range": [4, 14],
-      "intent": "从散布渐入有序：呼吸→环130→双排",
+      "intent": "从散布渐入有序：呼吸→环130→双排(每几何3s全距飞行)",
       "music_cue": "能量0.25-0.33，主题引入",
-      "formation": "每几何×2子步(中点过渡)，3几何=6运动阶段",
+      "formation": "3几何直接move2+light+delay，无子步",
       "z_range": "115-155cm，高度差5cm/机",
       "speed": "VelXY(120,240)，子步内按距离动态调速",
-      "light": "#2255aa/#3388cc正弦渐变, 8+8 tick每子步",
-      "key_technique": "中点子步增加复杂度但不增加碰撞风险"
+      "light": "#2255aa/#3388cc/#44aadd正弦渐变, 15tick(1.5s)每几何",
+      "key_technique": "全距飞行+满速200/400确保动作完成"
     },
     {
       "time_range": [14, 24],
-      "intent": "几何丰富展开：对角线→大环150→四角",
+      "intent": "几何丰富展开：对角线→大环150→四角(每几何3s全距飞行)",
       "music_cue": "能量0.37-0.40，声部叠加",
-      "formation": "3几何×2子步，对角线(80间距)→环→四角外扩",
+      "formation": "3几何直接move2+light+delay，无子步",
       "z_range": "155-180cm",
-      "speed": "VelXY(120,240)，排队100ms，按距离调速",
-      "light": "#cc6600/#cc8800/#ddaa00渐变, 8+8 tick",
-      "key_technique": "排列搜索处理非安全几何(对角线)的过渡"
+      "speed": "VelXY(200,400)，排队100ms，按距离调速",
+      "light": "#cc6600/#cc8800/#ddaa00渐变, 15tick(1.5s)每几何",
+      "key_technique": "排列搜索(w=2000)处理非安全几何(对角线)的过渡，满速确保动作完成"
     },
     {
       "time_range": [24, 34],
@@ -453,4 +453,4 @@ while True:
 - **信 pyfii，不信自己**：pyfii 的 warning 是权威。不要自己写验证函数，不要设自定义安全常量。
 - **action warning 和 distance warning 同等重要**：长期忽略 action warning 导致轨迹误差。
 - **速度是最后一个变量**：先确定几何和时间线，最后调速度。
-- **200 是硬上限**：VelXY max=200。如果 200 都飞不完，必须调时间或距离。
+- **速度200+加速度400是硬上限**：VelXY(200,400) 拉满还飞不完，才是真的时间/距离规划出问题了。
