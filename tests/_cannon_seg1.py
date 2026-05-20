@@ -71,14 +71,14 @@ geo2 = [
     [(280+150*math.cos(2*math.pi*i/N+math.pi/7), 280+150*math.sin(2*math.pi*i/N+math.pi/7), 150+20*math.sin(2*math.pi*i/N+math.pi/7)) for i in range(N)],  # 旋转环
 ]
 colors2 = ["#ffbb33","#ffaa22","#ff9911","#ffdd59"]
-for i,d in enumerate(ds): d.intime(16); d.VelXY(90,180); d.VelZ(90,180)
+for i,d in enumerate(ds): d.intime(16); d.VelXY(90,180); d.VelZ(90,180); d.delay(i*100)
 for gi in range(4):
     targets = best_assign(prev_pos, geo2[gi])
     for i,d in enumerate(ds):
         tx, ty, tz = targets[i]
         d.move2(cl(tx), cl(ty), cz(tz+20*math.sin(i)))
-        for tick in range(40):
-            bright = int(100+155*math.sin(tick*math.pi/40))
+        for tick in range(39):
+            bright = int(100+155*math.sin(tick*math.pi/39))
             r = int(colors2[gi][1:3],16)*bright//255
             g = int(colors2[gi][3:5],16)*bright//255
             b = int(colors2[gi][5:7],16)*bright//255
@@ -94,14 +94,14 @@ geo3 = [
     [(280+170*math.cos(2*math.pi*i/N+math.pi/7), 280+170*math.sin(2*math.pi*i/N+math.pi/7), 200) for i in range(N)],  # 旋转环
 ]
 colors3 = ["#ff5588","#ff4477","#ff3366","#ff2266"]
-for i,d in enumerate(ds): d.intime(32); d.VelXY(150,300); d.VelZ(150,300)
+for i,d in enumerate(ds): d.intime(33); d.VelXY(150,300); d.VelZ(150,300); d.delay(i*80)
 for gi in range(4):
     targets = best_assign(prev_pos, geo3[gi])
     for i,d in enumerate(ds):
         tx, ty, tz = targets[i]
         d.move2(cl(tx), cl(ty), cz(tz+20*math.sin(i)))
-        for tick in range(40):
-            bright = int(100+155*math.sin(tick*math.pi/40))
+        for tick in range(39):
+            bright = int(100+155*math.sin(tick*math.pi/39))
             r = int(colors3[gi][1:3],16)*bright//255
             g = int(colors3[gi][3:5],16)*bright//255
             b = int(colors3[gi][5:7],16)*bright//255
@@ -117,14 +117,14 @@ geo4 = [
     [(280+190*math.cos(2*math.pi*i/N+math.pi/7), 280+190*math.sin(2*math.pi*i/N+math.pi/7), 220) for i in range(N)],  # 旋转环
 ]
 colors4 = ["#ffffff","#ffeeee","#ffdddd","#ffcccc"]
-for i,d in enumerate(ds): d.intime(48); d.VelXY(160,320); d.VelZ(160,320)
+for i,d in enumerate(ds): d.intime(50); d.VelXY(160,320); d.VelZ(160,320); d.delay(i*80)
 for gi in range(4):
     targets = best_assign(prev_pos, geo4[gi])
     for i,d in enumerate(ds):
         tx, ty, tz = targets[i]
         d.move2(cl(tx), cl(ty), cz(tz+20*math.sin(i)))
-        for tick in range(40):
-            bright = int(100+155*math.sin(tick*math.pi/40))
+        for tick in range(39):
+            bright = int(100+155*math.sin(tick*math.pi/39))
             r = int(colors4[gi][1:3],16)*bright//255
             g = int(colors4[gi][3:5],16)*bright//255
             b = int(colors4[gi][5:7],16)*bright//255
@@ -132,7 +132,7 @@ for gi in range(4):
     prev_pos = targets
 
 # 段5: 收束降落
-for i,d in enumerate(ds): d.intime(64); d.VelXY(60,120); d.VelZ(60,120)
+for i,d in enumerate(ds): d.intime(67); d.VelXY(60,120); d.VelZ(60,120)
 geo5 = [(280+100*math.cos(2*math.pi*i/N), 280+100*math.sin(2*math.pi*i/N), 150) for i in range(N)]
 targets = best_assign(prev_pos, geo5)
 for i,d in enumerate(ds):
@@ -140,7 +140,7 @@ for i,d in enumerate(ds):
     d.move2(cl(tx), cl(ty), cz(tz+20*math.sin(i)))
     d.TurnOnAll("#48dbfb"); d.delay(2000); d.TurnOffAll(); d.delay(2000)
 for i,d in enumerate(ds):
-    d.intime(70); d.land()
+    d.intime(73); d.land()
 
 for d in ds: d.end()
 os.makedirs(str(OUT),exist_ok=True)
