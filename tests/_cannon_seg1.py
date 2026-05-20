@@ -180,6 +180,70 @@ pf.show(data,t0,[str(MUSIC)],field=field,device=dev,max_fps=60,save=str(OUT/"2d"
 pf.show(data,t0,[str(MUSIC)],field=field,device=dev,max_fps=60,save=str(OUT/"3d"),FPS=25,ThreeD=True,imshow=[90,0],d=(600,450))
 print("done")
 
+
+geo1 = [  # 段1: 散布 → 环 → 蛇形 → 钻石
+    [(S[i][0]+20*math.sin(i), S[i][1]+20*math.cos(i), 115) for i in range(N)],  # 散布
+    [(280+130*math.cos(2*math.pi*i/N), 280+130*math.sin(2*math.pi*i/N), 130) for i in range(N)],  # 环
+    [(80+70*i, 120+200*(i%2), 140) for i in range(N)],  # 蛇形
+    [(280,60,145),(140,200,145),(420,200,145),(280,340,145),(200,200,150),(360,200,150),(280,200,155)],  # 钻石
+]
+geo2 = [  # 段2: 阶梯 → 扇形 → 十字 → 括号 → 箭头 → 反阶梯
+    [(80+80*i, 80+80*i, 155) for i in range(N)],  # 阶梯
+    [(160+i*60, 200+120*math.sin(i), 160) for i in range(N)],  # 扇形
+    [(280,60,165),(120,280,165),(440,280,165),(280,500,165),(200,200,170),(360,200,170),(280,280,175)],  # 十字
+    [(80,280,168),(200,120,168),(360,120,168),(480,280,168),(360,440,168),(200,440,168),(280,280,172)],  # 括号
+    [(280,80,170),(120,280,170),(440,280,170),(200,400,170),(360,400,170),(280,500,170),(280,280,175)],  # 箭头
+    [(500-80*i, 80+80*i, 172) for i in range(N)],  # 反阶梯
+]
+geo3 = [  # 段3: T形 → L形 → 螺旋 → 散射2
+    [(280,60,180),(120,280,180),(440,280,180),(280,500,180),(200,200,185),(360,200,185),(280,280,190)],  # T形
+    [(80,80,185),(80,200,185),(80,320,185),(80,440,185),(200,440,190),(280,440,195),(280,280,195)],  # L形
+    [(120,160,190),(280,120,190),(440,160,190),(400,320,190),(240,360,190),(160,320,190),(280,280,195)],  # 替代：螺旋改用阶梯三角形
+    [(100,100,195),(400,100,195),(250,400,195),(460,460,195),(160,250,200),(300,200,200),(280,280,205)],  # 散射2
+]
+geo4 = [  # 段4: V形 → 括号2 → 散射3 → 星形 → 收束环
+    [(80,80,200),(280,280,200),(480,80,200),(200,280,205),(360,280,205),(280,480,205),(280,280,210)],  # V形
+    [(280,80,205),(160,160,205),(400,160,205),(80,280,205),(480,280,205),(160,400,205),(400,400,205)],  # 括号2
+    [(120,120,210),(380,100,210),(200,400,210),(460,350,210),(100,280,215),(400,200,215),(280,280,220)],  # 散射3
+    [(280,60,215),(200,150,215),(400,150,215),(120,280,215),(440,280,215),(200,410,215),(360,410,215)],  # 星形
+]
+# 段5: 收束降落
+for i,d in enumerate(ds): d.intime(67); d.VelXY(60,120); d.VelZ(60,120)
+geo5 = [(280+100*math.cos(2*math.pi*i/N), 280+100*math.sin(2*math.pi*i/N), 150) for i in range(N)]
+targets = best_assign(prev_pos, geo5)
+for i,d in enumerate(ds):
+    tx, ty, tz = targets[i]
+    d.move2(cl(tx), cl(ty), cz(tz+20*math.sin(i)))
+    d.TurnOnAll("#48dbfb"); d.delay(2000); d.TurnOffAll(); d.delay(2000)
+for i,d in enumerate(ds):
+    d.intime(73); d.land()
+
+for d in ds: d.end()
+os.makedirs(str(OUT),exist_ok=True)
+pf.Fii(str(OUT),ds,music=MUSIC).save(field=6)
+print("saved")
+
+import numpy as np,warnings;warnings.filterwarnings('ignore')
+data,t0,music,field,dev=pf.read_fii(str(OUT),fps=60,ignore_acc=False)
+ax=[p[1]for d in data for p in d if p[1]>0];ay=[p[2]for d in data for p in d if p[1]>0]
+md=9999;mf=min(len(d)for d in data)
+for t in range(0,mf,60):
+    pos=[(data[i][t][1],data[i][t][2])for i in range(N)]
+    for i in range(N):
+        for j in range(i+1,N):
+            dd=np.sqrt((pos[i][0]-pos[j][0])**2+(pos[i][1]-pos[j][1])**2)
+            if 0<dd<md:md=dd
+print(f"{N}d {dev} {t0/60:.1f}s XY({max(ax)-min(ax):.0f},{max(ay)-min(ay):.0f}) minD={md:.1f}cm")
+with warnings.catch_warnings(record=True)as c:
+    warnings.simplefilter('always')
+    pf.show(data,t0,[str(MUSIC)],field=field,device=dev,max_fps=60,show=False)
+dw=[x for x in c if'distance between'in str(x.message)]
+aw=[x for x in c if'completed'in str(x.message)]
+print(f"dist:{len(dw)} act:{len(aw)}")
+pf.show(data,t0,[str(MUSIC)],field=field,device=dev,max_fps=60,save=str(OUT/"2d"),FPS=25)
+pf.show(data,t0,[str(MUSIC)],field=field,device=dev,max_fps=60,save=str(OUT/"3d"),FPS=25,ThreeD=True,imshow=[90,0],d=(600,450))
+print("done")
+
 geo1 = [  # 段1: 呼吸 → 环 → 双排 → 四角
     [(S[i][0]+20*math.sin(i), S[i][1]+20*math.cos(i), 115) for i in range(N)],
     [(280+130*math.cos(2*math.pi*i/N), 280+130*math.sin(2*math.pi*i/N), 130) for i in range(N)],
