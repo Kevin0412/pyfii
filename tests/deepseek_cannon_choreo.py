@@ -97,28 +97,22 @@ for gi in range(3):
     prev = targets
 
 
-# ---- 段3: 24-34s 大转移 ----
+
+
+# ---- 段3: 24-34s 排队大转移 ----
 geo3 = [
-    [(80+90*i, 80+90*i, 185) for i in range(N)],  # 对角线大扫
-    [(500-90*i, 80+90*i, 195) for i in range(N)],  # 反扫
-    [(280+170*math.cos(2*math.pi*i/N), 280+170*math.sin(2*math.pi*i/N), 205) for i in range(N)],  # 大环汇聚
+    [(160+60*i, 200+120*math.sin(i), 195) for i in range(N)],  # 对角线大扫
 ]
-colors3 = ["#cc2244","#cc4466","#dd6688"]
-for i,d in enumerate(ds): d.intime(24); d.VelXY(150,300); d.VelZ(150,300); d.delay(i*80)
-for gi in range(3):
-    targets = best_assign(prev, geo3[gi])
-    mid = [((prev[i][0]+targets[i][0])/2, (prev[i][1]+targets[i][1])/2, (prev[i][2]+targets[i][2])/2+15*math.sin(i)) for i in range(N)]
-    for i,d in enumerate(ds):
-        dd = math.dist((prev[i][0],prev[i][1]),(mid[i][0],mid[i][1]))
-        spd = min(200, max(120, int(dd/1.3))); d.VelXY(spd, spd*2); d.VelZ(spd, spd*2)
-        d.move2(cl(mid[i][0]), cl(mid[i][1]), cz(mid[i][2]))
-        light(d, colors3[gi], 10); d.delay(800)
-    for i,d in enumerate(ds):
-        dd = math.dist((mid[i][0],mid[i][1]),(targets[i][0],targets[i][1]))
-        spd = min(200, max(120, int(dd/1.3))); d.VelXY(spd, spd*2); d.VelZ(spd, spd*2)
-        d.move2(cl(targets[i][0]), cl(targets[i][1]), cz(targets[i][2]+15*math.sin(i)))
-        light(d, colors3[gi], 10); d.delay(1000)
-    prev = targets
+for i,d in enumerate(ds): d.intime(24); d.VelXY(180,360); d.VelZ(180,360)
+# 排队错峰: 每机延迟i*500ms出发
+for i,d in enumerate(ds): d.delay(i*700)
+targets = best_assign(prev, geo3[0])
+for i,d in enumerate(ds):
+    dd = math.dist((prev[i][0],prev[i][1]),(targets[i][0],targets[i][1]))
+    spd = min(200, max(150, int(dd/3.5))); d.VelXY(spd, spd*2); d.VelZ(spd, spd*2)
+    d.move2(cl(targets[i][0]), cl(targets[i][1]), cz(targets[i][2]+15*math.sin(i)))
+    light(d, "#cc2244", 30);  # 3s灯光
+prev = targets
 
 for d in ds: d.end()
 os.makedirs(str(OUT),exist_ok=True)
