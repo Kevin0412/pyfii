@@ -117,14 +117,8 @@ for i,d in enumerate(ds):
     tx, ty, tz = targets[i]
     d.move2(cl(tx), cl(ty), cz(tz+20*math.sin(i)))
     d.TurnOnAll("#48dbfb"); d.delay(2000); d.TurnOffAll(); d.delay(2000)
-# 降落到最低高度
-geo_land = [(x, y, 80) for x,y,_ in prev_pos]
-targets = best_assign(prev_pos, geo_land)
 for i,d in enumerate(ds):
-    d.intime(70); d.VelXY(40,80); d.VelZ(30,60)
-    tx,ty,tz = targets[i]
-    d.move2(cl(tx), cl(ty), cz(tz+20*math.sin(i)))
-    d.delay(2000)
+    d.intime(70); d.land()
 
 for d in ds: d.end()
 os.makedirs(str(OUT),exist_ok=True)
