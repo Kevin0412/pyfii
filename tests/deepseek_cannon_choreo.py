@@ -169,18 +169,26 @@ for gi in range(3):
         dd = math.dist((prev[i][0],prev[i][1]),(targets[i][0],targets[i][1]))
         spd = min(200, max(140, int(dd/2.5))); d.VelXY(spd, spd*2); d.VelZ(spd, spd*2)
         d.move2(cl(targets[i][0]), cl(targets[i][1]), cz(targets[i][2]+15*math.sin(i)))
-        light(d, colors7[gi], 18)
+        light(d, colors7[gi], 10)
     prev = targets
 
-# ---- 段8: 63-70s D字署名+降落 ----
-geo8 = [(180,120,180),(180,280,180),(180,440,180),(300,100,190),(380,200,190),(380,360,190),(300,460,190)]  # D:左竖3+右弧4
-for i,d in enumerate(ds): d.intime(63); d.VelXY(120,240); d.VelZ(120,240)
-targets = best_assign(prev, geo8)
+# ---- 段8a: 58-60s S字署名 ----
+geo8a = [(140,120,190),(300,120,190),(300,220,190),(140,280,190),(140,380,190),(300,440,190),(300,460,190)]
+for i,d in enumerate(ds): d.intime(58); d.VelXY(120,240); d.VelZ(120,240)
+targets = best_assign(prev, geo8a)
 for i,d in enumerate(ds):
     d.move2(cl(targets[i][0]), cl(targets[i][1]), cz(targets[i][2]))
-    light(d, "#44aadd", 15)
-for i,d in enumerate(ds): d.delay(3000)
-for i,d in enumerate(ds): d.intime(69); d.land()
+    light(d, "#44aadd", 10)
+prev = targets
+
+# ---- 段8b: 60-63s D字署名 ----
+geo8b = [(180,120,180),(180,280,180),(180,440,180),(300,100,190),(380,200,190),(380,360,190),(300,460,190)]
+for i,d in enumerate(ds): d.intime(60); d.VelXY(120,240); d.VelZ(120,240)
+targets = best_assign(prev, geo8b)
+for i,d in enumerate(ds):
+    d.move2(cl(targets[i][0]), cl(targets[i][1]), cz(targets[i][2]))
+    light(d, "#44aadd", 10)
+for i,d in enumerate(ds): d.intime(63); d.land()
 
 for d in ds: d.end()
 os.makedirs(str(OUT),exist_ok=True)
