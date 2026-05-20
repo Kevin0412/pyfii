@@ -37,10 +37,10 @@ for i,d in enumerate(ds): d.intime(4); d.VelXY(60,120); d.VelZ(40,80)
 
 # 段1: 4几何
 geo = [
-    [(S[i][0]+20*math.sin(i), S[i][1]+20*math.cos(i), 120) for i in range(N)],
-    [(280+140*math.cos(2*math.pi*i/N), 280+140*math.sin(2*math.pi*i/N), 135) for i in range(N)],
+    [(S[i][0]+20*math.sin(i), S[i][1]+20*math.cos(i), 120+5*i) for i in range(N)],
+    [(280+140*math.cos(2*math.pi*i/N), 280+140*math.sin(2*math.pi*i/N), 135+5*i) for i in range(N)],
     [(80+i*120, 180, 145) if i<4 else (80+(i-3)*120, 400, 145) for i in range(N)],
-    [(80,80,150),(480,80,150),(80,480,150),(480,480,150),(280,280,150),(200,200,150),(360,360,150)],
+    [(80,80,150+5*i),(480,80,150+5*i),(80,480,150+5*i),(480,480,150+5*i),(280,280,150+5*i),(200,200,150+5*i),(360,360,150+5*i)],
 ]
 colors = ["#2266aa","#3388cc","#44aadd","#4dd7ff"]
 
@@ -49,7 +49,7 @@ for gi in range(4):
     targets = best_assign(prev_pos, geo[gi])
     for i,d in enumerate(ds):
         tx, ty, tz = targets[i]
-        d.move2(cl(tx), cl(ty), cz(tz))
+        d.move2(cl(tx), cl(ty), cz(tz+5*i))
         d.TurnOnAll(colors[gi])
         if gi < 3: d.delay(3000)
         else: d.delay(1500); d.TurnOffAll(); d.delay(1500)
@@ -69,7 +69,7 @@ for gi in range(4):
     targets = best_assign(prev_pos, geo2[gi])
     for i,d in enumerate(ds):
         tx, ty, tz = targets[i]
-        d.move2(cl(tx), cl(ty), cz(tz))
+        d.move2(cl(tx), cl(ty), cz(tz+5*i))
         d.TurnOnAll(colors2[gi]); d.delay(4000)
     prev_pos = targets
 
@@ -87,7 +87,7 @@ for gi in range(4):
     targets = best_assign(prev_pos, geo3[gi])
     for i,d in enumerate(ds):
         tx, ty, tz = targets[i]
-        d.move2(cl(tx), cl(ty), cz(tz))
+        d.move2(cl(tx), cl(ty), cz(tz+5*i))
         d.TurnOnAll(colors3[gi]); d.delay(4000)
     prev_pos = targets
 
@@ -105,7 +105,7 @@ for gi in range(4):
     targets = best_assign(prev_pos, geo4[gi])
     for i,d in enumerate(ds):
         tx, ty, tz = targets[i]
-        d.move2(cl(tx), cl(ty), cz(tz))
+        d.move2(cl(tx), cl(ty), cz(tz+5*i))
         d.TurnOnAll(colors4[gi]); d.delay(4000)
     prev_pos = targets
 
@@ -115,9 +115,9 @@ geo5 = [(280+100*math.cos(2*math.pi*i/N), 280+100*math.sin(2*math.pi*i/N), 150) 
 targets = best_assign(prev_pos, geo5)
 for i,d in enumerate(ds):
     tx, ty, tz = targets[i]
-    d.move2(cl(tx), cl(ty), cz(tz))
+    d.move2(cl(tx), cl(ty), cz(tz+5*i))
     d.TurnOnAll("#48dbfb"); d.delay(2000); d.TurnOffAll(); d.delay(2000)
-for i,d in enumerate(ds): d.intime(68); d.land()
+for i,d in enumerate(ds): d.intime(70); d.land()
 
 for d in ds: d.end()
 os.makedirs(str(OUT),exist_ok=True)
@@ -141,3 +141,6 @@ with warnings.catch_warnings(record=True)as c:
 dw=[x for x in c if'distance between'in str(x.message)]
 aw=[x for x in c if'completed'in str(x.message)]
 print(f"dist:{len(dw)} act:{len(aw)}")
+pf.show(data,t0,[str(MUSIC)],field=field,device=dev,max_fps=60,save=str(OUT/"2d"),FPS=25)
+pf.show(data,t0,[str(MUSIC)],field=field,device=dev,max_fps=60,save=str(OUT/"3d"),FPS=25,ThreeD=True,imshow=[90,0],d=(600,450))
+print("done")
