@@ -360,3 +360,97 @@ for segment in music_segments:
   ]
 }
 ```
+
+## 七、代码修改方法论（避免文件损坏）
+
+### 7.1 问题根因
+
+两天内文件损坏 10+ 次，根因：
+
+1. **`edit_file` 的搜索/替换不精确**：old_string 和 new_string 有细微差异（缩进、空格、变量名）时产生混合代码
+2. **Python `str.replace` 的字符串匹配失败**：代码中看似相同的行实际有不同的尾随空格或注释
+3. **`write_file` 覆盖整个文件**：一旦用错，所有段丢失
+4. **多次增量修改累积错误**：每次改一点，5次后代码面目全非
+5. **没有验证步骤**：改完直接跑，SyntaxError 才回头找
+
+### 7.2 Agent 代码修改规范
+
+**原则一：最小修改单元**
+
+不要用 `edit_file` / `str.replace` 修改已有代码。改为：
+
+```
+1. 读取完整文件
+2. 用 ast/parso 解析 AST
+3. 在 AST 层面修改（替换函数体、修改变量值）
+4. 用 ast.unparse() 写回
+5. 语法检查（compile）
+6. 运行验证（read_fii + show）
+```
+
+若 AST 不可用，退而求其次：用精确的行号范围替换，避免字符串匹配。
+
+**原则二：修改前备份**
+
+```
+cp script.py script.py.bak.$(date +%s)
+```
+
+任何修改失败后，从备份恢复。
+
+**原则三：单次修改单次验证**
+
+```
+修改 → compile检查语法 → 运行 → read_fii → 警告为0 → 提交
+```
+
+不在一个修改中做多件事。一次只改一个参数（速度、间距、delay）。
+
+**原则四：增量追加优于修改已有**
+
+对于逐段设计，最佳方式是不修改已有段：
+```
+# 段1 (锁定)
+... 
+# 段2 (锁定)
+...
+# 段3 (新段) ← 只追加，不修改前面
+```
+
+### 7.3 常见补丁模式
+
+| 问题 | 检测 | 修复方式 |
+|------|------|----------|
+| 动作未完成(action warning) | `grep -c 'action isn'` | 提速 VelXY(200,400) / 减 light ticks / 增 delay |
+| 距离过近(distance warning) | show(show=False) | 增几何间距 / 提排列搜索权重 / 换安全几何 |
+| 坐标越界 | `Exception: Out of range` | `max(10, min(550, x))`  clamp |
+| 时间冲突 | `Time arrangement error` | 推后 intime / 减 delay / 合并几何 |
+| 浮点坐标 | `ValueError: invalid literal` | `int(round(x))` |
+| 语法错误 | `compile(script)` | 从 git 回退，重新改 |
+
+### 7.4 Agent 自修复流程
+
+```
+while True:
+    run script
+    if SyntaxError:
+        restore from git
+        retry with different strategy
+    if action_warnings > 0:
+        increase speed or reduce light ticks
+    if distance_warnings > 0:
+        increase geometry spacing or search weight
+    if time_error:
+        push intime forward
+    if out_of_range:
+        add clamp
+    if all_zero:
+        break
+```
+
+### 7.5 重要教训
+
+- **信 pyfii，不信自己**：pyfii 的 warning 是权威。不要自己写验证函数，不要设自定义安全常量。
+- **action warning 和 distance warning 同等重要**：长期忽略 action warning 导致轨迹误差。
+- **速度是最后一个变量**：先确定几何和时间线，最后调速度。
+- **200 是硬上限**：VelXY max=200。如果 200 都飞不完，必须调时间或距离。
