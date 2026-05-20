@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+"""Cannon v4: 16种不同几何 + 飞行中嵌灯 + 距离调速 + 异步"""
 import sys,math,os,itertools
 from pathlib import Path
 REPO_ROOT=Path(__file__).resolve().parents[1]
@@ -33,116 +34,108 @@ def best_assign(starts, targets):
 S=[(60,120),(180,60),(350,60),(500,160),(500,380),(350,480),(160,480)]
 for i,d in enumerate(ds):
     d.X=d.x=S[i][0];d.Y=d.y=S[i][1];d.takeoff(1,110)
-for i,d in enumerate(ds): d.intime(4); d.VelXY(150,300); d.VelZ(150,300)
 
-# 段1: 4几何
-geo = [
-    [(S[i][0]+20*math.sin(i), S[i][1]+20*math.cos(i), 120+5*i) for i in range(N)],
-    [(280+140*math.cos(2*math.pi*i/N), 280+140*math.sin(2*math.pi*i/N), 135+5*i) for i in range(N)],
-    [(80+i*120, 180, 145) if i<4 else (80+(i-3)*120, 400, 145) for i in range(N)],
-    [(80,80,150+5*i),(480,80,150+5*i),(80,480,150+5*i),(480,480,150+5*i),(280,280,150+5*i),(200,200,150+5*i),(360,360,150+5*i)],
+def light_gradient(d, color, ticks, total=40):
+    """飞行中嵌灯: 100ms正弦渐变"""
+    for tick in range(ticks):
+        bright = int(100+155*math.sin(tick*math.pi/total))
+        r = int(color[1:3],16)*bright//255
+        g = int(color[3:5],16)*bright//255
+        b = int(color[5:7],16)*bright//255
+        d.TurnOnAll(f"#{r:02x}{g:02x}{b:02x}"); d.delay(100)
+
+# ====== 段1: 4-16s, 4几何 ======
+geo1 = [
+    [(S[i][0]+20*math.sin(i), S[i][1]+20*math.cos(i), 115+i*5) for i in range(N)],  # 呼吸
+    [(280+130*math.cos(2*math.pi*i/N), 280+130*math.sin(2*math.pi*i/N), 130+25*math.sin(2*math.pi*i/N)) for i in range(N)],  # 环
+    [(80+i*115, 170, 140) if i<4 else (90+(i-3)*120, 390, 155) for i in range(N)],  # 双排错位
+    [(80,80,145),(480,80,155),(80,480,160),(480,480,150),(280,280,170),(200,200,145),(360,360,155)],  # 四角
 ]
-colors = ["#2266aa","#3388cc","#44aadd","#4dd7ff"]
-
-prev_pos = [(d.x, d.y, 110) for d in ds]
+for i,d in enumerate(ds): d.intime(4); d.VelXY(120,240); d.VelZ(120,240)
+prev = [(d.x, d.y, 110) for d in ds]
 for gi in range(4):
-    if gi == 0:
-        targets = geo[gi]  # 散布呼吸直接匹配, 不搜索
-    else:
-        targets = best_assign(prev_pos, geo[gi])
+    targets = geo1[gi] if gi==0 else best_assign(prev, geo1[gi])
     for i,d in enumerate(ds):
-        tx, ty, tz = targets[i]
+        dist = math.dist((prev[i][0],prev[i][1]),(targets[i][0],targets[i][1]))
+        v = min(200, max(150, int(dist/2.5)))  # 距离调速
+        d.VelXY(v, v*2); d.VelZ(v, v*2)
+        tx,ty,tz = targets[i]
         d.move2(cl(tx), cl(ty), cz(tz+20*math.sin(i)))
-        for tick in range(30 if gi<3 else 15):
-            bright = int(100+155*math.sin(tick*math.pi/30))
-            r = int(colors[gi][1:3],16)*bright//255
-            g = int(colors[gi][3:5],16)*bright//255
-            b = int(colors[gi][5:7],16)*bright//255
-            d.TurnOnAll(f"#{r:02x}{g:02x}{b:02x}"); d.delay(100)
-        if gi == 3: d.TurnOffAll()
-    prev_pos = targets
+        light_gradient(d, "#2266aa" if gi<2 else "#44aadd", 15, 30)
+        d.delay(1500)
+    prev = targets
 
-
-# 段2: 4个安全几何
+# ====== 段2: 16-33s, 4不同几何 ======
 geo2 = [
-    [(280+150*math.cos(2*math.pi*i/N), 280+150*math.sin(2*math.pi*i/N), 140+25*math.sin(2*math.pi*i/N)) for i in range(N)],  # 环
-    [(60+120*i, 160, 140+10*i) if i<4 else (180+120*(i-3), 400, 160) for i in range(N)],  # 双排(120间距)
-    [(80,80,165),(480,80,165),(80,480,165),(480,480,165),(280,280,165),(200,200,165),(360,360,165)],  # 四角+内
-    [(280+150*math.cos(2*math.pi*i/N+math.pi/7), 280+150*math.sin(2*math.pi*i/N+math.pi/7), 150+20*math.sin(2*math.pi*i/N+math.pi/7)) for i in range(N)],  # 旋转环
+    [(80+90*i, 80+90*i, 155) for i in range(N)],  # 对角线
+    [(480-90*i, 80+90*i, 160) for i in range(N)],  # 反对角
+    [(100+70*i, 240+80*math.sin(i), 165) for i in range(N)],  # 波动线
+    [(80,80,170),(480,80,170),(80,480,170),(480,480,170),(280,160,180),(280,400,175),(160,280,185)],  # 十字+中
 ]
-colors2 = ["#ffbb33","#ffaa22","#ff9911","#ffdd59"]
-for i,d in enumerate(ds): d.intime(16); d.VelXY(90,180); d.VelZ(90,180); d.delay(i*100)
+for i,d in enumerate(ds): d.intime(16); d.VelXY(100,200); d.VelZ(100,200); d.delay(i*120)
 for gi in range(4):
-    targets = best_assign(prev_pos, geo2[gi])
+    targets = best_assign(prev, geo2[gi])
     for i,d in enumerate(ds):
-        tx, ty, tz = targets[i]
+        dist = math.dist((prev[i][0],prev[i][1]),(targets[i][0],targets[i][1]))
+        v = min(200, max(100, int(dist/3.5)))
+        d.VelXY(v, v*2); d.VelZ(v, v*2)
+        tx,ty,tz = targets[i]
         d.move2(cl(tx), cl(ty), cz(tz+20*math.sin(i)))
-        for tick in range(39):
-            bright = int(100+155*math.sin(tick*math.pi/39))
-            r = int(colors2[gi][1:3],16)*bright//255
-            g = int(colors2[gi][3:5],16)*bright//255
-            b = int(colors2[gi][5:7],16)*bright//255
-            d.TurnOnAll(f"#{r:02x}{g:02x}{b:02x}"); d.delay(100)
-    prev_pos = targets
+        light_gradient(d, "#ffbb33", 20, 35)
+        d.delay(1500)
+    prev = targets
 
-
-# 段3: 4个安全几何
+# ====== 段3: 33-50s, 4几何 ======
 geo3 = [
-    [(280+170*math.cos(2*math.pi*i/N), 280+170*math.sin(2*math.pi*i/N), 185) for i in range(N)],  # 大环
-    [(60+120*i, 180, 190) if i<4 else (180+120*(i-3), 380, 190) for i in range(N)],  # 双排
-    [(80,80,195),(480,80,195),(80,480,195),(480,480,195),(280,280,195),(200,200,195),(360,360,195)],  # 四角
-    [(280+170*math.cos(2*math.pi*i/N+math.pi/7), 280+170*math.sin(2*math.pi*i/N+math.pi/7), 200) for i in range(N)],  # 旋转环
+    [(280+160*math.cos(2*math.pi*i/N), 280+160*math.sin(2*math.pi*i/N), 180) for i in range(N)],  # 大环
+    [(100+80*i, 440-80*i, 185) for i in range(N)],  # 反斜线
+    [(180+i*65, 200+120*math.sin(i), 190) for i in range(N)],  # 之字
+    [(60,60,195),(500,60,195),(60,500,195),(500,500,195),(280,280,205),(180,180,200),(380,380,200)],  # 四角内收
 ]
-colors3 = ["#ff5588","#ff4477","#ff3366","#ff2266"]
-for i,d in enumerate(ds): d.intime(33); d.VelXY(150,300); d.VelZ(150,300); d.delay(i*80)
+for i,d in enumerate(ds): d.intime(33); d.VelXY(130,260); d.VelZ(130,260); d.delay(i*80)
 for gi in range(4):
-    targets = best_assign(prev_pos, geo3[gi])
+    targets = best_assign(prev, geo3[gi])
     for i,d in enumerate(ds):
-        tx, ty, tz = targets[i]
+        dist = math.dist((prev[i][0],prev[i][1]),(targets[i][0],targets[i][1]))
+        v = min(200, max(100, int(dist/3.5)))
+        d.VelXY(v, v*2); d.VelZ(v, v*2)
+        tx,ty,tz = targets[i]
         d.move2(cl(tx), cl(ty), cz(tz+20*math.sin(i)))
-        for tick in range(39):
-            bright = int(100+155*math.sin(tick*math.pi/39))
-            r = int(colors3[gi][1:3],16)*bright//255
-            g = int(colors3[gi][3:5],16)*bright//255
-            b = int(colors3[gi][5:7],16)*bright//255
-            d.TurnOnAll(f"#{r:02x}{g:02x}{b:02x}"); d.delay(100)
-    prev_pos = targets
+        light_gradient(d, "#ff5588", 20, 35)
+        d.delay(1500)
+    prev = targets
 
-
-# 段4: 4个几何
+# ====== 段4: 50-67s, 4几何 ======
 geo4 = [
-    [(280+190*math.cos(2*math.pi*i/N), 280+190*math.sin(2*math.pi*i/N), 205) for i in range(N)],  # 大环
-    [(60+120*i, 200, 210) if i<4 else (180+120*(i-3), 360, 210) for i in range(N)],  # 双排
-    [(80,80,215),(480,80,215),(80,480,215),(480,480,215),(280,280,215),(200,200,215),(360,360,215)],  # 四角
-    [(280+190*math.cos(2*math.pi*i/N+math.pi/7), 280+190*math.sin(2*math.pi*i/N+math.pi/7), 220) for i in range(N)],  # 旋转环
+    [(120+70*i, 120+70*i, 200) for i in range(N)],  # 对角展开
+    [(440-70*i, 120+70*i, 205) for i in range(N)],  # 反斜展开
+    [(280+180*math.cos(2*math.pi*i/N+0.3), 280+180*math.sin(2*math.pi*i/N+0.3), 210) for i in range(N)],  # 偏转环
+    [(60,200,215),(500,200,215),(280,60,220),(280,500,215),(200,200,225),(360,360,220),(280,280,230)],  # 十字爆发
 ]
-colors4 = ["#ffffff","#ffeeee","#ffdddd","#ffcccc"]
-for i,d in enumerate(ds): d.intime(50); d.VelXY(160,320); d.VelZ(160,320); d.delay(i*80)
+for i,d in enumerate(ds): d.intime(50); d.VelXY(150,300); d.VelZ(150,300); d.delay(i*80)
 for gi in range(4):
-    targets = best_assign(prev_pos, geo4[gi])
+    targets = best_assign(prev, geo4[gi])
     for i,d in enumerate(ds):
-        tx, ty, tz = targets[i]
+        dist = math.dist((prev[i][0],prev[i][1]),(targets[i][0],targets[i][1]))
+        v = min(200, max(120, int(dist/3.5)))
+        d.VelXY(v, v*2); d.VelZ(v, v*2)
+        tx,ty,tz = targets[i]
         d.move2(cl(tx), cl(ty), cz(tz+20*math.sin(i)))
-        for tick in range(39):
-            bright = int(100+155*math.sin(tick*math.pi/39))
-            r = int(colors4[gi][1:3],16)*bright//255
-            g = int(colors4[gi][3:5],16)*bright//255
-            b = int(colors4[gi][5:7],16)*bright//255
-            d.TurnOnAll(f"#{r:02x}{g:02x}{b:02x}"); d.delay(100)
-    prev_pos = targets
+        light_gradient(d, "#ffffff", 20, 35)
+        d.delay(1500)
+    prev = targets
 
 # 段5: 收束降落
 for i,d in enumerate(ds): d.intime(67); d.VelXY(60,120); d.VelZ(60,120)
 geo5 = [(280+100*math.cos(2*math.pi*i/N), 280+100*math.sin(2*math.pi*i/N), 150) for i in range(N)]
-targets = best_assign(prev_pos, geo5)
+targets = best_assign(prev, geo5)
 for i,d in enumerate(ds):
-    tx, ty, tz = targets[i]
+    tx,ty,tz = targets[i]
     d.move2(cl(tx), cl(ty), cz(tz+20*math.sin(i)))
-    d.TurnOnAll("#48dbfb"); d.delay(2000); d.TurnOffAll(); d.delay(2000)
-for i,d in enumerate(ds):
-    d.intime(73); d.land()
-
+    light_gradient(d, "#48dbfb", 20, 40)
+for i,d in enumerate(ds): d.intime(73); d.land()
 for d in ds: d.end()
+
 os.makedirs(str(OUT),exist_ok=True)
 pf.Fii(str(OUT),ds,music=MUSIC).save(field=6)
 print("saved")
