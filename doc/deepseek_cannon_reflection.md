@@ -112,3 +112,31 @@ GPT crosscut_v9 的优势：
 - 段4-5 缺乏设计感（固定 X 分区虽然安全但单调）
 - 音乐响应表面化
 - 灯光设计简陋（简单的 TurnOnAll/TurnOffAll 交替）
+
+## 五、版本演进记录
+
+| 版本 | commit | 描述 | 几何方式 | 警告 | XY覆盖 |
+|------|--------|------|----------|------|---------|
+| v5.5 | `842bfa2` | 5段手动几何，分区摆动 | 函数式 | 0 | 519×534 |
+| v6 | `474564c` | 全机活动，散布+分区 | 函数式 | 0→171 | 519×534 |
+| v7 | 未提交 | phrase waypoints + 排列搜索 | 手工waypoints | 0 | 440×450 |
+| v8 | 未提交 | 20密集短语 + 函数工厂 | 函数工厂 | 失败 | - |
+| v9 | 未提交 | 密集短语 + 多彩灯光 | 混合 | 4803 | 453×469 |
+| 最终 | `33576b0` | 安全几何 + 排列搜索 | 环/双排/四角/旋转环 | 0 | 480×446 |
+
+**最终脚本**: `tests/deepseek_cannon_choreo.py`  
+**副本**: `tests/_cannon_seg1.py`  
+**产出**: `output/deepseek_cannon/` (`.fii` + `2d.mp4` + `3d.mp4`)
+
+## 六、工作文件索引
+
+| 文件 | 用途 |
+|------|------|
+| `tests/deepseek_cannon_choreo.py` | 最终编舞脚本（5段，零警告） |
+| `tests/_cannon_seg1.py` | 最终版的副本（留作后续修改基准） |
+| `doc/deepseek_cannon_reflection.md` | 本文档：开发反思与版本演进 |
+| `.deepseek/workspace_state.md` | 会话状态（环境/API/已知坑） |
+
+已删除的中间文件（对应 v5.5-v6 探索阶段）：
+- `tests/_cannon_p1.py` ~ `_cannon_p3only.py`：逐段增量验证的中间稿
+- `tests/_cannon_v6_p1.py`：v6 探索稿
