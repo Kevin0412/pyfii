@@ -132,47 +132,18 @@ for gi in range(3):
         light(d, colors4[gi], 25)
     prev = targets
 
-for d in ds: d.end()
-os.makedirs(str(OUT),exist_ok=True)
-pf.Fii(str(OUT),ds,music=MUSIC).save(field=6)
-print("saved")
 
-import numpy as np,warnings;warnings.filterwarnings('ignore')
-data,t0,music,field,dev=pf.read_fii(str(OUT),fps=60,ignore_acc=False)
-ax=[p[1]for d in data for p in d if p[1]>0];ay=[p[2]for d in data for p in d if p[1]>0]
-md=9999;mf=min(len(d)for d in data)
-for t in range(0,mf,60):
-    pos=[(data[i][t][1],data[i][t][2])for i in range(N)]
-    for i in range(N):
-        for j in range(i+1,N):
-            dd=np.sqrt((pos[i][0]-pos[j][0])**2+(pos[i][1]-pos[j][1])**2)
-            if 0<dd<md:md=dd
-print(f"{N}d {dev} {t0/60:.1f}s XY({max(ax)-min(ax):.0f},{max(ay)-min(ay):.0f}) minD={md:.1f}cm")
-with warnings.catch_warnings(record=True)as c:
-    warnings.simplefilter('always')
-    pf.show(data,t0,[str(MUSIC)],field=field,device=dev,max_fps=60,show=False)
-dw=[x for x in c if'distance between'in str(x.message)]
-aw=[x for x in c if'completed'in str(x.message)]
-print(f"dist:{len(dw)} act:{len(aw)}")
-pf.show(data,t0,[str(MUSIC)],field=field,device=dev,max_fps=60,save=str(OUT/'2d'),FPS=25)
-pf.show(data,t0,[str(MUSIC)],field=field,device=dev,max_fps=60,save=str(OUT/'3d'),FPS=25,ThreeD=True,imshow=[90,0],d=(600,450))
-
-# ---- 段4: 34-48s 数学几何美 ----
-geo4 = [
-    [(280+190*math.cos(2*math.pi*i/N+math.pi/6), 280+190*math.sin(2*math.pi*i/N+math.pi/6), 205) for i in range(N)],
-    [(280+180*math.cos(4*math.pi*i/N), 280+180*math.sin(4*math.pi*i/N), 215) for i in range(N)],
-    [(280+120*math.cos(2*math.pi*i/N), 280+120*math.sin(2*math.pi*i/N), 220) for i in range(N)],
-]
-colors4 = ["#ffffff","#ffddee","#ffbbdd"]
-for i,d in enumerate(ds): d.intime(31); d.VelXY(150,300); d.VelZ(150,300); d.delay(i*600)
-for gi in range(3):
-    targets = best_assign(prev, geo4[gi])
-    for i,d in enumerate(ds):
-        dd = math.dist((prev[i][0],prev[i][1]),(targets[i][0],targets[i][1]))
-        spd = min(200, max(140, int(dd/3.0))); d.VelXY(spd, spd*2); d.VelZ(spd, spd*2)
-        d.move2(cl(targets[i][0]), cl(targets[i][1]), cz(targets[i][2]+15*math.sin(i)))
-        light(d, colors4[gi], 25)
-    prev = targets
+# ---- 段5: 42-49s 鳞次栉比收束 ----
+for i,d in enumerate(ds): d.delay(42); d.VelXY(100,200); d.VelZ(100,200)
+# 排队错峰
+for i,d in enumerate(ds): d.delay(i*300)
+# 一个收束环
+geo5 = [(280+80*math.cos(2*math.pi*i/N), 280+80*math.sin(2*math.pi*i/N), 150) for i in range(N)]
+targets = best_assign(prev, geo5)
+for i,d in enumerate(ds):
+    d.move2(cl(targets[i][0]), cl(targets[i][1]), cz(targets[i][2]+10*math.sin(i)))
+    light(d, "#ffbb88", 15)
+for i,d in enumerate(ds): d.intime(47); d.land()
 
 for d in ds: d.end()
 os.makedirs(str(OUT),exist_ok=True)
@@ -216,6 +187,32 @@ for gi in range(3):
         light(d, colors4[gi], 25)
     prev = targets
 
+
+# ---- 段5: 42-48s 鳞次栉比收束 ----
+for i,d in enumerate(ds): d.intime(42); d.VelXY(120,240); d.VelZ(120,240)
+# 3层弧线，每机独立路径，排队错峰
+for i,d in enumerate(ds): d.delay(i*400)  # 鳞次栉比: 依次出发
+for step in range(3):
+    t = (step+1)/3
+    for i,d in enumerate(ds):
+        # 弧形收束: 半径从外向内螺旋
+        r = 150 - step*40 + 20*math.sin(i)
+        ang = 2*math.pi*i/N + 0.5*math.pi*t
+        x = 280 + r*math.cos(ang)
+        y = 280 + r*math.sin(ang)
+        z = 200 - step*40 - 15*math.sin(i)
+        d.move2(cl(x), cl(y), cz(z))
+        # 灯光随层变化
+        color = ["#ffddcc","#ffccaa","#ffbb88"][step]
+        light(d, color, 10)
+    # 层间微延迟，形成递进感
+    for i,d in enumerate(ds): d.delay(200)
+
+# 降落到中心
+for i,d in enumerate(ds):
+    d.move2(cl(280), cl(280), cz(100))
+    light(d, "#4488aa", 12)
+for i,d in enumerate(ds): d.intime(50); d.land()
 for d in ds: d.end()
 os.makedirs(str(OUT),exist_ok=True)
 pf.Fii(str(OUT),ds,music=MUSIC).save(field=6)
@@ -258,6 +255,100 @@ for gi in range(3):
         light(d, colors4[gi], 25)
     prev = targets
 
+
+# ---- 段5: 42-48s 鳞次栉比收束 ----
+for i,d in enumerate(ds): d.intime(42); d.VelXY(120,240); d.VelZ(120,240)
+# 3层弧线，每机独立路径，排队错峰
+for i,d in enumerate(ds): d.delay(i*400)  # 鳞次栉比: 依次出发
+for step in range(3):
+    t = (step+1)/3
+    for i,d in enumerate(ds):
+        # 弧形收束: 半径从外向内螺旋
+        r = 150 - step*40 + 20*math.sin(i)
+        ang = 2*math.pi*i/N + 0.5*math.pi*t
+        x = 280 + r*math.cos(ang)
+        y = 280 + r*math.sin(ang)
+        z = 200 - step*40 - 15*math.sin(i)
+        d.move2(cl(x), cl(y), cz(z))
+        # 灯光随层变化
+        color = ["#ffddcc","#ffccaa","#ffbb88"][step]
+        light(d, color, 10)
+    # 层间微延迟，形成递进感
+    for i,d in enumerate(ds): d.delay(200)
+
+# 降落到中心
+for i,d in enumerate(ds):
+    d.move2(cl(280), cl(280), cz(100))
+    light(d, "#4488aa", 12)
+for i,d in enumerate(ds): d.intime(50); d.land()
+for d in ds: d.end()
+os.makedirs(str(OUT),exist_ok=True)
+pf.Fii(str(OUT),ds,music=MUSIC).save(field=6)
+print("saved")
+
+import numpy as np,warnings;warnings.filterwarnings('ignore')
+data,t0,music,field,dev=pf.read_fii(str(OUT),fps=60,ignore_acc=False)
+ax=[p[1]for d in data for p in d if p[1]>0];ay=[p[2]for d in data for p in d if p[1]>0]
+md=9999;mf=min(len(d)for d in data)
+for t in range(0,mf,60):
+    pos=[(data[i][t][1],data[i][t][2])for i in range(N)]
+    for i in range(N):
+        for j in range(i+1,N):
+            dd=np.sqrt((pos[i][0]-pos[j][0])**2+(pos[i][1]-pos[j][1])**2)
+            if 0<dd<md:md=dd
+print(f"{N}d {dev} {t0/60:.1f}s XY({max(ax)-min(ax):.0f},{max(ay)-min(ay):.0f}) minD={md:.1f}cm")
+with warnings.catch_warnings(record=True)as c:
+    warnings.simplefilter('always')
+    pf.show(data,t0,[str(MUSIC)],field=field,device=dev,max_fps=60,show=False)
+dw=[x for x in c if'distance between'in str(x.message)]
+aw=[x for x in c if'completed'in str(x.message)]
+print(f"dist:{len(dw)} act:{len(aw)}")
+pf.show(data,t0,[str(MUSIC)],field=field,device=dev,max_fps=60,save=str(OUT/'2d'),FPS=25)
+pf.show(data,t0,[str(MUSIC)],field=field,device=dev,max_fps=60,save=str(OUT/'3d'),FPS=25,ThreeD=True,imshow=[90,0],d=(600,450))
+
+# ---- 段4: 34-48s 数学几何美 ----
+geo4 = [
+    [(280+190*math.cos(2*math.pi*i/N+math.pi/6), 280+190*math.sin(2*math.pi*i/N+math.pi/6), 205) for i in range(N)],
+    [(280+180*math.cos(4*math.pi*i/N), 280+180*math.sin(4*math.pi*i/N), 215) for i in range(N)],
+    [(280+120*math.cos(2*math.pi*i/N), 280+120*math.sin(2*math.pi*i/N), 220) for i in range(N)],
+]
+colors4 = ["#ffffff","#ffddee","#ffbbdd"]
+for i,d in enumerate(ds): d.intime(31); d.VelXY(150,300); d.VelZ(150,300); d.delay(i*600)
+for gi in range(3):
+    targets = best_assign(prev, geo4[gi])
+    for i,d in enumerate(ds):
+        dd = math.dist((prev[i][0],prev[i][1]),(targets[i][0],targets[i][1]))
+        spd = min(200, max(140, int(dd/3.0))); d.VelXY(spd, spd*2); d.VelZ(spd, spd*2)
+        d.move2(cl(targets[i][0]), cl(targets[i][1]), cz(targets[i][2]+15*math.sin(i)))
+        light(d, colors4[gi], 25)
+    prev = targets
+
+
+# ---- 段5: 42-48s 鳞次栉比收束 ----
+for i,d in enumerate(ds): d.intime(42); d.VelXY(120,240); d.VelZ(120,240)
+# 3层弧线，每机独立路径，排队错峰
+for i,d in enumerate(ds): d.delay(i*400)  # 鳞次栉比: 依次出发
+for step in range(3):
+    t = (step+1)/3
+    for i,d in enumerate(ds):
+        # 弧形收束: 半径从外向内螺旋
+        r = 150 - step*40 + 20*math.sin(i)
+        ang = 2*math.pi*i/N + 0.5*math.pi*t
+        x = 280 + r*math.cos(ang)
+        y = 280 + r*math.sin(ang)
+        z = 200 - step*40 - 15*math.sin(i)
+        d.move2(cl(x), cl(y), cz(z))
+        # 灯光随层变化
+        color = ["#ffddcc","#ffccaa","#ffbb88"][step]
+        light(d, color, 10)
+    # 层间微延迟，形成递进感
+    for i,d in enumerate(ds): d.delay(200)
+
+# 降落到中心
+for i,d in enumerate(ds):
+    d.move2(cl(280), cl(280), cz(100))
+    light(d, "#4488aa", 12)
+for i,d in enumerate(ds): d.intime(50); d.land()
 for d in ds: d.end()
 os.makedirs(str(OUT),exist_ok=True)
 pf.Fii(str(OUT),ds,music=MUSIC).save(field=6)
