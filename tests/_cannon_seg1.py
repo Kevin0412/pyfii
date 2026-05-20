@@ -181,6 +181,72 @@ pf.show(data,t0,[str(MUSIC)],field=field,device=dev,max_fps=60,save=str(OUT/"3d"
 print("done")
 
 
+
+geo1 = [  # 散射 → 圆 → 双排 → 矩形框
+    [(S[i][0]+20*math.sin(i), S[i][1]+20*math.cos(i), 115) for i in range(N)],  # 散射
+    [(280+130*math.cos(2*math.pi*i/N), 280+130*math.sin(2*math.pi*i/N), 130) for i in range(N)],  # 圆
+    [(80+i*120, 170, 145) if i<4 else (90+(i-3)*120, 390, 155) for i in range(N)],  # 双排
+    [(80,80,145),(480,80,155),(80,480,160),(480,480,150),(280,280,170),(200,200,145),(360,360,155)],  # 矩形框
+]
+geo2 = [  # 阶梯 → 直线 → 三角形 → L形 → S曲线 → 弧线
+    [(80+80*i, 80+80*i, 155) for i in range(N)],  # 阶梯
+    [(80+70*i, 280, 160) for i in range(N)],  # 直线
+    [(280,80,165),(120,280,165),(440,280,165),(280,440,165),(200,200,170),(360,200,170),(280,280,175)],  # 三角形
+    [(80,80,168),(80,200,168),(80,320,168),(80,440,168),(280,440,172),(280,280,172),(280,280,175)],  # L形
+    [(80+70*i, 160+130*(i%2), 170) for i in range(N)],  # S曲线
+    [(160+i*60, 200+120*math.sin(i), 172) for i in range(N)],  # 弧线
+]
+geo3 = [  # T形 → 十字 → V形 → 菱形 → 星形
+    [(280,60,180),(120,280,180),(440,280,180),(280,500,180),(200,200,185),(360,200,185),(280,280,190)],  # T形
+    [(280,80,185),(120,280,185),(440,280,185),(280,480,185),(80,280,190),(480,280,190),(280,280,195)],  # 十字
+    [(80,80,190),(280,280,190),(480,80,190),(200,280,195),(360,280,195),(280,480,195),(280,280,200)],  # V形
+    [(280,60,195),(140,200,195),(420,200,195),(280,340,195),(200,200,200),(360,200,200),(280,200,205)],  # 菱形
+    [(280,60,200),(200,150,200),(400,150,200),(120,280,200),(440,280,200),(200,410,205),(360,410,205)],  # 星形
+]
+geo4 = [  # 汇聚 → 反阶梯 → 散射大 → 双V → 收束
+    [(280+120*math.cos(2*math.pi*i/N), 280+120*math.sin(2*math.pi*i/N), 205) for i in range(N)],  # 汇聚
+    [(500-80*i, 80+80*i, 208) for i in range(N)],  # 反阶梯
+    [(100,100,210),(400,100,210),(250,400,210),(460,350,210),(160,250,215),(300,200,215),(280,280,220)],  # 散射大
+    [(80,80,215),(280,280,215),(480,80,215),(200,200,220),(360,200,220),(120,400,220),(440,400,220)],  # 双V
+]
+# 段5: 收束降落
+for i,d in enumerate(ds): d.intime(67); d.VelXY(60,120); d.VelZ(60,120)
+geo5 = [(280+100*math.cos(2*math.pi*i/N), 280+100*math.sin(2*math.pi*i/N), 150) for i in range(N)]
+targets = best_assign(prev_pos, geo5)
+for i,d in enumerate(ds):
+    tx, ty, tz = targets[i]
+    d.move2(cl(tx), cl(ty), cz(tz+20*math.sin(i)))
+    d.TurnOnAll("#48dbfb"); d.delay(2000); d.TurnOffAll(); d.delay(2000)
+for i,d in enumerate(ds):
+    d.intime(73); d.land()
+
+for d in ds: d.end()
+os.makedirs(str(OUT),exist_ok=True)
+pf.Fii(str(OUT),ds,music=MUSIC).save(field=6)
+print("saved")
+
+import numpy as np,warnings;warnings.filterwarnings('ignore')
+data,t0,music,field,dev=pf.read_fii(str(OUT),fps=60,ignore_acc=False)
+ax=[p[1]for d in data for p in d if p[1]>0];ay=[p[2]for d in data for p in d if p[1]>0]
+md=9999;mf=min(len(d)for d in data)
+for t in range(0,mf,60):
+    pos=[(data[i][t][1],data[i][t][2])for i in range(N)]
+    for i in range(N):
+        for j in range(i+1,N):
+            dd=np.sqrt((pos[i][0]-pos[j][0])**2+(pos[i][1]-pos[j][1])**2)
+            if 0<dd<md:md=dd
+print(f"{N}d {dev} {t0/60:.1f}s XY({max(ax)-min(ax):.0f},{max(ay)-min(ay):.0f}) minD={md:.1f}cm")
+with warnings.catch_warnings(record=True)as c:
+    warnings.simplefilter('always')
+    pf.show(data,t0,[str(MUSIC)],field=field,device=dev,max_fps=60,show=False)
+dw=[x for x in c if'distance between'in str(x.message)]
+aw=[x for x in c if'completed'in str(x.message)]
+print(f"dist:{len(dw)} act:{len(aw)}")
+pf.show(data,t0,[str(MUSIC)],field=field,device=dev,max_fps=60,save=str(OUT/"2d"),FPS=25)
+pf.show(data,t0,[str(MUSIC)],field=field,device=dev,max_fps=60,save=str(OUT/"3d"),FPS=25,ThreeD=True,imshow=[90,0],d=(600,450))
+print("done")
+
+
 geo1 = [  # 段1: 散布 → 环 → 蛇形 → 钻石
     [(S[i][0]+20*math.sin(i), S[i][1]+20*math.cos(i), 115) for i in range(N)],  # 散布
     [(280+130*math.cos(2*math.pi*i/N), 280+130*math.sin(2*math.pi*i/N), 130) for i in range(N)],  # 环
@@ -263,6 +329,7 @@ geo3 = [  # 段3: 大环 → 反斜线 → 交错三角 → 内收框
     [(120,120,185),(380,100,185),(200,400,185),(460,350,185),(100,280,190),(400,200,190),(280,280,195)],
     [(80,80,190),(80,180,190),(80,280,190),(80,380,190),(80,480,190),(280,480,195),(280,280,200)],
     [(80,80,195),(480,80,195),(80,480,195),(480,480,195),(280,280,205),(180,180,200),(380,380,200)],
+    [(280+120*math.cos(2*math.pi*i/N), 280+120*math.sin(2*math.pi*i/N), 200) for i in range(N)],
 ]
 geo4 = [  # 段4: 偏转环 → 对角梳 → 放射线 → 爆发点
     [(280+180*math.cos(2*math.pi*i/N+0.5), 280+180*math.sin(2*math.pi*i/N+0.5), 200) for i in range(N)],
