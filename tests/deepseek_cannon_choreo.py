@@ -172,23 +172,14 @@ for gi in range(3):
         light(d, colors7[gi], 10)
     prev = targets
 
-# ---- 段8a: 58-60s S字署名 ----
-geo8a = [(140,120,190),(300,120,190),(300,220,190),(140,280,190),(140,380,190),(300,440,190),(300,460,190)]
+# ---- 段8: 58-64s D字署名+降落 ----
+geo8 = [(180,120,180),(180,280,180),(180,440,180),(300,100,190),(380,200,190),(380,360,190),(300,460,190)]
 for i,d in enumerate(ds): d.intime(58); d.VelXY(120,240); d.VelZ(120,240)
-targets = best_assign(prev, geo8a)
+targets = best_assign(prev, geo8)
 for i,d in enumerate(ds):
     d.move2(cl(targets[i][0]), cl(targets[i][1]), cz(targets[i][2]))
-    light(d, "#44aadd", 10)
-prev = targets
-
-# ---- 段8b: 60-63s D字署名 ----
-geo8b = [(180,120,180),(180,280,180),(180,440,180),(300,100,190),(380,200,190),(380,360,190),(300,460,190)]
-for i,d in enumerate(ds): d.intime(60); d.VelXY(120,240); d.VelZ(120,240)
-targets = best_assign(prev, geo8b)
-for i,d in enumerate(ds):
-    d.move2(cl(targets[i][0]), cl(targets[i][1]), cz(targets[i][2]))
-    light(d, "#44aadd", 10)
-for i,d in enumerate(ds): d.intime(63); d.land()
+    light(d, "#44aadd", 12)
+for i,d in enumerate(ds): d.intime(62); d.land()
 
 for d in ds: d.end()
 os.makedirs(str(OUT),exist_ok=True)
