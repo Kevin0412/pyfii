@@ -30,10 +30,13 @@ def video_add_audio(video_path: str, audio_path: str,output_path:str):
         _codec = 'copy'
         if _ext_audio == 'wav':
             _codec = 'aac'
+        cap = cv2.VideoCapture(video_path)
+        video_duration = cap.get(cv2.CAP_PROP_FRAME_COUNT) / cap.get(cv2.CAP_PROP_FPS)
+        cap.release()
         result =output_path.format(uuid.uuid4(), _ext_video)
         ff = FFmpeg(
             inputs={video_path: None, audio_path: None},
-            outputs={result: '-map 0:v -map 1:a -c:v copy -c:a {} -shortest'.format(_codec)})
+            outputs={result: '-map 0:v -map 1:a -c:v copy -c:a {} -t {}'.format(_codec, video_duration)})
         print(ff.cmd)
         ff.run()
         return result
