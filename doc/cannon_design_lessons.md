@@ -56,7 +56,10 @@ crosscut_v9 的成功在于 phrase 命名和 waypoint 手工设计。代码只�
 
 ### 2.3 时间预算
 
-**pyfii飞行时间公式**: `t = v/a + d/v` (v=最大速度cm/s, a=加速度200cm/s², d=距离cm)
+**pyfii飞行时间公式** (a=200cm/s²默认):
+- 大距离(d ≥ v²/a): `t = v/a + d/v` (有匀速阶段)
+- 小距离(d < v²/a): `t = 2×√(d/a)` (仅加速-减速，未达最大速度)
+- 实际配置: accRange(50,400), velRange(20,200)
 
 实际可用时间 = light_ticks×100ms + delay_ms
 
