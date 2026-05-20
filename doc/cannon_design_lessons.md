@@ -234,3 +234,129 @@ for segment in music_segments:
 - 几何"视觉差异"的量化指标
 - 自动化时间线管理(段间intime计算)
 - 灯光模式库的建设
+
+## 附录：最终版蒸馏卡片
+
+- 来源：`tests/_cannon_seg1.py` (commit `c417bfa`)
+- 音乐：`cannon_in_D.mp3`，68s，156BPM
+- 设备：F400 × 7
+- 视频：`output/deepseek_cannon/2d.mp4` + `3d.mp4`
+- 关键技术：排列搜索(权重2000)、100ms正弦渐变灯效、排队延迟(80-700ms)、距离调速、中点子步、弧形大转移
+- 几何库：散布呼吸、环(130-200)、双排、四角(四角+中心+内点)、旋转环(多角度偏移)、正七边形、4-fold星形、螺旋、D字(左竖3+右弧4)、S字(手写7点曲线)
+- XY覆盖：490×502（全场极限）
+- 安全性：0距离警告、0动作未完成、minD=51cm
+
+```json
+{
+  "source": "tests/_cannon_seg1.py",
+  "duration": "64.5s",
+  "segments": [
+    {
+      "time_range": [0, 4],
+      "intent": "七机散布起飞",
+      "music_cue": "能量0.10，前奏",
+      "formation": "六角散布(60-500范围)+中心(280,280)",
+      "z_range": "100-110cm",
+      "speed": "—"
+    },
+    {
+      "time_range": [4, 14],
+      "intent": "从散布渐入有序：呼吸→环130→双排",
+      "music_cue": "能量0.25-0.33，主题引入",
+      "formation": "每几何×2子步(中点过渡)，3几何=6运动阶段",
+      "z_range": "115-155cm，高度差5cm/机",
+      "speed": "VelXY(120,240)，子步内按距离动态调速",
+      "light": "#2255aa/#3388cc正弦渐变, 8+8 tick每子步",
+      "key_technique": "中点子步增加复杂度但不增加碰撞风险"
+    },
+    {
+      "time_range": [14, 24],
+      "intent": "几何丰富展开：对角线→大环150→四角",
+      "music_cue": "能量0.37-0.40，声部叠加",
+      "formation": "3几何×2子步，对角线(80间距)→环→四角外扩",
+      "z_range": "155-180cm",
+      "speed": "VelXY(120,240)，排队100ms，按距离调速",
+      "light": "#cc6600/#cc8800/#ddaa00渐变, 8+8 tick",
+      "key_technique": "排列搜索处理非安全几何(对角线)的过渡"
+    },
+    {
+      "time_range": [24, 34],
+      "intent": "弧形大转移——从四角飞向弧形，排队错峰避碰撞",
+      "music_cue": "能量0.47-0.55，中高能",
+      "formation": "单几何弧形(160+60i,200+120sin(i))，排队700ms/机",
+      "z_range": "195cm",
+      "speed": "VelXY(180,360)，排队后全速",
+      "light": "#cc2244, 30 tick (3s展示)",
+      "key_technique": "曲线替代对角线+排队delay=大转移零碰撞"
+    },
+    {
+      "time_range": [34, 42],
+      "intent": "数学几何美：正七边形190→4-fold星形→螺旋内收",
+      "music_cue": "能量0.55-0.61，高能高潮",
+      "formation": "3几何无子步，排队600ms，对称几何天然安全",
+      "z_range": "205-220cm",
+      "speed": "VelXY(150,300)，按距离调速",
+      "light": "#ffffff/#ffddee/#ffbbdd, 25 tick (2.5s展示)",
+      "key_technique": "对称几何天然间距大，排列搜索轻松处理"
+    },
+    {
+      "time_range": [42, 47],
+      "intent": "鳞次栉比收缩向中心环80",
+      "music_cue": "能量0.53→回落，高潮后",
+      "formation": "单几何收束环，排队300ms/机",
+      "z_range": "150cm",
+      "speed": "VelXY(100,200)",
+      "light": "#ffbb88, 15 tick",
+      "key_technique": "排队+收缩=鳞次栉比视觉效果"
+    },
+    {
+      "time_range": [47, 50],
+      "intent": "同步炸开——所有机从中心环同时爆发式外飞",
+      "music_cue": "能量骤降前最后一次爆发",
+      "formation": "大环200，所有机同步move2",
+      "z_range": "210cm",
+      "speed": "VelXY(200,400)",
+      "light": "#ffffff, 18 tick (1.8s白光)",
+      "key_technique": "同步+白光=爆发感，中心向外放射无交叉"
+    },
+    {
+      "time_range": [50, 58],
+      "intent": "空中炫技：3个环形变体(190/180/170，不同偏转角)",
+      "music_cue": "能量回落(~0.50)，收束前展示",
+      "formation": "偏转环(π/4)→偏转环(-π/5)→偏转环(π/6)",
+      "z_range": "215-220cm",
+      "speed": "VelXY(160,320)，排队500ms，按距离调速",
+      "light": "#ffddee/#ffccdd/#ffbbcc/#ffaabb, 10 tick",
+      "key_technique": "环形变体不同偏转角=避免重复感"
+    },
+    {
+      "time_range": [58, 60],
+      "intent": "D字署名——左竖3机+右弧4机",
+      "music_cue": "能量低位，收尾",
+      "formation": "D: (180,120)(180,280)(180,440)+(300,100)(380,200)(380,360)(300,460)",
+      "z_range": "180-190cm",
+      "speed": "VelXY(120,240)",
+      "light": "#44aadd, 10 tick",
+      "key_technique": "手写字母坐标，间距设计确保排列搜索零碰撞"
+    },
+    {
+      "time_range": [60, 63],
+      "intent": "S字署名——上下横线+弧线",
+      "music_cue": "音乐即将结束",
+      "formation": "S: (180,100)(320,100)(360,200)(240,280)(160,360)(240,440)(360,460)",
+      "z_range": "190cm",
+      "speed": "VelXY(120,240)",
+      "light": "#44aadd, 10 tick",
+      "key_technique": "手写S形7点，D→S排列搜索(w=2000)零碰撞过渡"
+    },
+    {
+      "time_range": [63, 65],
+      "intent": "全体降落",
+      "music_cue": "音乐结束(68s)，3s余量",
+      "formation": "land()",
+      "z_range": "→0",
+      "speed": "—"
+    }
+  ]
+}
+```
