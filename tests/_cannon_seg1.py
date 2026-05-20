@@ -72,6 +72,30 @@ for gi in range(3):
         light(d, colors[gi], 8); d.delay(700)
     prev = finals
 
+
+# ---- 段2: 14-24s, 3几何 ----
+geo2 = [
+    [(80+80*i, 80+80*i, 160) for i in range(N)],  # 对角线
+    [(280+150*math.cos(2*math.pi*i/N), 280+150*math.sin(2*math.pi*i/N), 170) for i in range(N)],  # 大环
+    [(80,80,180),(480,80,180),(80,480,180),(480,480,180),(280,280,185),(200,200,180),(360,360,180)],  # 四角
+]
+colors2 = ["#cc6600","#cc8800","#ddaa00"]
+for i,d in enumerate(ds): d.intime(14); d.VelXY(120,240); d.VelZ(120,240); d.delay(i*100)
+for gi in range(3):
+    targets = best_assign(prev, geo2[gi])
+    mid = [((prev[i][0]+targets[i][0])/2, (prev[i][1]+targets[i][1])/2, (prev[i][2]+targets[i][2])/2+15*math.sin(i)) for i in range(N)]
+    for i,d in enumerate(ds):
+        dd = math.dist((prev[i][0],prev[i][1]),(mid[i][0],mid[i][1]))
+        spd = min(200, max(100, int(dd/1.2))); d.VelXY(spd, spd*2); d.VelZ(spd, spd*2)
+        d.move2(cl(mid[i][0]), cl(mid[i][1]), cz(mid[i][2]))
+        light(d, colors2[gi], 8); d.delay(500)
+    for i,d in enumerate(ds):
+        dd = math.dist((mid[i][0],mid[i][1]),(targets[i][0],targets[i][1]))
+        spd = min(200, max(100, int(dd/1.2))); d.VelXY(spd, spd*2); d.VelZ(spd, spd*2)
+        d.move2(cl(targets[i][0]), cl(targets[i][1]), cz(targets[i][2]+15*math.sin(i)))
+        light(d, colors2[gi], 8); d.delay(700)
+    prev = targets
+
 for d in ds: d.end()
 os.makedirs(str(OUT),exist_ok=True)
 pf.Fii(str(OUT),ds,music=MUSIC).save(field=6)
