@@ -33,7 +33,7 @@ def best_assign(starts, targets):
 S=[(60,120),(180,60),(350,60),(500,160),(500,380),(350,480),(160,480)]
 for i,d in enumerate(ds):
     d.X=d.x=S[i][0];d.Y=d.y=S[i][1];d.takeoff(1,110)
-for i,d in enumerate(ds): d.intime(4); d.VelXY(60,120); d.VelZ(40,80)
+for i,d in enumerate(ds): d.intime(4); d.VelXY(60,120); d.VelZ(60,120)
 
 # 段1: 4几何
 geo = [
@@ -64,7 +64,7 @@ geo2 = [
     [(280+150*math.cos(2*math.pi*i/N+math.pi/7), 280+150*math.sin(2*math.pi*i/N+math.pi/7), 150+20*math.sin(2*math.pi*i/N+math.pi/7)) for i in range(N)],  # 旋转环
 ]
 colors2 = ["#ffbb33","#ffaa22","#ff9911","#ffdd59"]
-for i,d in enumerate(ds): d.intime(16); d.VelXY(90,180); d.VelZ(70,140)
+for i,d in enumerate(ds): d.intime(16); d.VelXY(90,180); d.VelZ(90,180)
 for gi in range(4):
     targets = best_assign(prev_pos, geo2[gi])
     for i,d in enumerate(ds):
@@ -82,7 +82,7 @@ geo3 = [
     [(280+170*math.cos(2*math.pi*i/N+math.pi/7), 280+170*math.sin(2*math.pi*i/N+math.pi/7), 200) for i in range(N)],  # 旋转环
 ]
 colors3 = ["#ff5588","#ff4477","#ff3366","#ff2266"]
-for i,d in enumerate(ds): d.intime(32); d.VelXY(120,240); d.VelZ(100,200)
+for i,d in enumerate(ds): d.intime(32); d.VelXY(120,240); d.VelZ(120,240)
 for gi in range(4):
     targets = best_assign(prev_pos, geo3[gi])
     for i,d in enumerate(ds):
@@ -100,7 +100,7 @@ geo4 = [
     [(280+190*math.cos(2*math.pi*i/N+math.pi/7), 280+190*math.sin(2*math.pi*i/N+math.pi/7), 220) for i in range(N)],  # 旋转环
 ]
 colors4 = ["#ffffff","#ffeeee","#ffdddd","#ffcccc"]
-for i,d in enumerate(ds): d.intime(48); d.VelXY(160,320); d.VelZ(140,280)
+for i,d in enumerate(ds): d.intime(48); d.VelXY(160,320); d.VelZ(160,320)
 for gi in range(4):
     targets = best_assign(prev_pos, geo4[gi])
     for i,d in enumerate(ds):
@@ -110,7 +110,7 @@ for gi in range(4):
     prev_pos = targets
 
 # 段5: 收束降落
-for i,d in enumerate(ds): d.intime(64); d.VelXY(60,120); d.VelZ(40,80)
+for i,d in enumerate(ds): d.intime(64); d.VelXY(60,120); d.VelZ(60,120)
 geo5 = [(280+100*math.cos(2*math.pi*i/N), 280+100*math.sin(2*math.pi*i/N), 150) for i in range(N)]
 targets = best_assign(prev_pos, geo5)
 for i,d in enumerate(ds):
