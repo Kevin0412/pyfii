@@ -143,8 +143,27 @@ targets = best_assign(prev, geo5)
 for i,d in enumerate(ds):
     d.move2(cl(targets[i][0]), cl(targets[i][1]), cz(targets[i][2]+10*math.sin(i)))
     light(d, "#ffbb88", 15)
-for i,d in enumerate(ds): d.intime(47); d.land()
+# 降落移除
 
+
+# ---- 段6: 47-55s 同步炸开 ----
+geo6 = [(280+200*math.cos(2*math.pi*i/N), 280+200*math.sin(2*math.pi*i/N), 210) for i in range(N)]  # 大环炸开
+for i,d in enumerate(ds): d.intime(47); d.VelXY(200,400); d.VelZ(200,400)
+targets = best_assign(prev, geo6)  # 排列搜索分配
+for i,d in enumerate(ds):
+    dd = math.dist((prev[i][0],prev[i][1]),(targets[i][0],targets[i][1]))
+    d.move2(cl(targets[i][0]), cl(targets[i][1]), cz(targets[i][2]+20*math.sin(i)))
+    light(d, "#ffffff", 30)  # 3s白光炸开
+prev = targets
+
+# ---- 段7: 55-62s 收束降落 ----
+for i,d in enumerate(ds): d.intime(55); d.VelXY(80,160); d.VelZ(80,160)
+geo7 = [(280+80*math.cos(2*math.pi*i/N), 280+80*math.sin(2*math.pi*i/N), 130) for i in range(N)]
+targets = best_assign(prev, geo7)
+for i,d in enumerate(ds):
+    d.move2(cl(targets[i][0]), cl(targets[i][1]), cz(targets[i][2]+10*math.sin(i)))
+    light(d, "#44aacc", 20)
+for i,d in enumerate(ds): d.intime(60); d.land()
 for d in ds: d.end()
 os.makedirs(str(OUT),exist_ok=True)
 pf.Fii(str(OUT),ds,music=MUSIC).save(field=6)
@@ -213,6 +232,25 @@ for i,d in enumerate(ds):
     d.move2(cl(280), cl(280), cz(100))
     light(d, "#4488aa", 12)
 for i,d in enumerate(ds): d.intime(50); d.land()
+
+# ---- 段6: 47-55s 同步炸开 ----
+geo6 = [(280+200*math.cos(2*math.pi*i/N), 280+200*math.sin(2*math.pi*i/N), 210) for i in range(N)]  # 大环炸开
+for i,d in enumerate(ds): d.intime(47); d.VelXY(200,400); d.VelZ(200,400)
+targets = best_assign(prev, geo6)  # 排列搜索分配
+for i,d in enumerate(ds):
+    dd = math.dist((prev[i][0],prev[i][1]),(targets[i][0],targets[i][1]))
+    d.move2(cl(targets[i][0]), cl(targets[i][1]), cz(targets[i][2]+20*math.sin(i)))
+    light(d, "#ffffff", 30)  # 3s白光炸开
+prev = targets
+
+# ---- 段7: 55-62s 收束降落 ----
+for i,d in enumerate(ds): d.intime(55); d.VelXY(80,160); d.VelZ(80,160)
+geo7 = [(280+80*math.cos(2*math.pi*i/N), 280+80*math.sin(2*math.pi*i/N), 130) for i in range(N)]
+targets = best_assign(prev, geo7)
+for i,d in enumerate(ds):
+    d.move2(cl(targets[i][0]), cl(targets[i][1]), cz(targets[i][2]+10*math.sin(i)))
+    light(d, "#44aacc", 20)
+for i,d in enumerate(ds): d.intime(60); d.land()
 for d in ds: d.end()
 os.makedirs(str(OUT),exist_ok=True)
 pf.Fii(str(OUT),ds,music=MUSIC).save(field=6)
@@ -281,6 +319,25 @@ for i,d in enumerate(ds):
     d.move2(cl(280), cl(280), cz(100))
     light(d, "#4488aa", 12)
 for i,d in enumerate(ds): d.intime(50); d.land()
+
+# ---- 段6: 47-55s 同步炸开 ----
+geo6 = [(280+200*math.cos(2*math.pi*i/N), 280+200*math.sin(2*math.pi*i/N), 210) for i in range(N)]  # 大环炸开
+for i,d in enumerate(ds): d.intime(47); d.VelXY(200,400); d.VelZ(200,400)
+targets = best_assign(prev, geo6)  # 排列搜索分配
+for i,d in enumerate(ds):
+    dd = math.dist((prev[i][0],prev[i][1]),(targets[i][0],targets[i][1]))
+    d.move2(cl(targets[i][0]), cl(targets[i][1]), cz(targets[i][2]+20*math.sin(i)))
+    light(d, "#ffffff", 30)  # 3s白光炸开
+prev = targets
+
+# ---- 段7: 55-62s 收束降落 ----
+for i,d in enumerate(ds): d.intime(55); d.VelXY(80,160); d.VelZ(80,160)
+geo7 = [(280+80*math.cos(2*math.pi*i/N), 280+80*math.sin(2*math.pi*i/N), 130) for i in range(N)]
+targets = best_assign(prev, geo7)
+for i,d in enumerate(ds):
+    d.move2(cl(targets[i][0]), cl(targets[i][1]), cz(targets[i][2]+10*math.sin(i)))
+    light(d, "#44aacc", 20)
+for i,d in enumerate(ds): d.intime(60); d.land()
 for d in ds: d.end()
 os.makedirs(str(OUT),exist_ok=True)
 pf.Fii(str(OUT),ds,music=MUSIC).save(field=6)
@@ -349,6 +406,25 @@ for i,d in enumerate(ds):
     d.move2(cl(280), cl(280), cz(100))
     light(d, "#4488aa", 12)
 for i,d in enumerate(ds): d.intime(50); d.land()
+
+# ---- 段6: 47-55s 同步炸开 ----
+geo6 = [(280+200*math.cos(2*math.pi*i/N), 280+200*math.sin(2*math.pi*i/N), 210) for i in range(N)]  # 大环炸开
+for i,d in enumerate(ds): d.intime(47); d.VelXY(200,400); d.VelZ(200,400)
+targets = best_assign(prev, geo6)  # 排列搜索分配
+for i,d in enumerate(ds):
+    dd = math.dist((prev[i][0],prev[i][1]),(targets[i][0],targets[i][1]))
+    d.move2(cl(targets[i][0]), cl(targets[i][1]), cz(targets[i][2]+20*math.sin(i)))
+    light(d, "#ffffff", 30)  # 3s白光炸开
+prev = targets
+
+# ---- 段7: 55-62s 收束降落 ----
+for i,d in enumerate(ds): d.intime(55); d.VelXY(80,160); d.VelZ(80,160)
+geo7 = [(280+80*math.cos(2*math.pi*i/N), 280+80*math.sin(2*math.pi*i/N), 130) for i in range(N)]
+targets = best_assign(prev, geo7)
+for i,d in enumerate(ds):
+    d.move2(cl(targets[i][0]), cl(targets[i][1]), cz(targets[i][2]+10*math.sin(i)))
+    light(d, "#44aacc", 20)
+for i,d in enumerate(ds): d.intime(60); d.land()
 for d in ds: d.end()
 os.makedirs(str(OUT),exist_ok=True)
 pf.Fii(str(OUT),ds,music=MUSIC).save(field=6)
