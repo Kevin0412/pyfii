@@ -24,7 +24,7 @@ def best_assign(starts, targets):
                     aj = tuple(starts[j][k]*ratio + tt[j][k]*(1-ratio) for k in range(2))
                     d = hd(ai, aj)
                     if d < md: md = d
-        score = md*100 - max(math.dist(starts[i],tt[i]) for i in range(N))*0.5
+        score = md*500 - max(math.dist(starts[i],tt[i]) for i in range(N))*0.1
         if score > best_score:
             best_score = score
             best = tt
@@ -143,6 +143,66 @@ for gi in range(4):
             d.TurnOnAll(f"#{r:02x}{g:02x}{b:02x}"); d.delay(100)
     prev_pos = targets
 
+# 段5: 收束降落
+for i,d in enumerate(ds): d.intime(67); d.VelXY(60,120); d.VelZ(60,120)
+geo5 = [(280+100*math.cos(2*math.pi*i/N), 280+100*math.sin(2*math.pi*i/N), 150) for i in range(N)]
+targets = best_assign(prev_pos, geo5)
+for i,d in enumerate(ds):
+    tx, ty, tz = targets[i]
+    d.move2(cl(tx), cl(ty), cz(tz+20*math.sin(i)))
+    d.TurnOnAll("#48dbfb"); d.delay(2000); d.TurnOffAll(); d.delay(2000)
+for i,d in enumerate(ds):
+    d.intime(73); d.land()
+
+for d in ds: d.end()
+os.makedirs(str(OUT),exist_ok=True)
+pf.Fii(str(OUT),ds,music=MUSIC).save(field=6)
+print("saved")
+
+import numpy as np,warnings;warnings.filterwarnings('ignore')
+data,t0,music,field,dev=pf.read_fii(str(OUT),fps=60,ignore_acc=False)
+ax=[p[1]for d in data for p in d if p[1]>0];ay=[p[2]for d in data for p in d if p[1]>0]
+md=9999;mf=min(len(d)for d in data)
+for t in range(0,mf,60):
+    pos=[(data[i][t][1],data[i][t][2])for i in range(N)]
+    for i in range(N):
+        for j in range(i+1,N):
+            dd=np.sqrt((pos[i][0]-pos[j][0])**2+(pos[i][1]-pos[j][1])**2)
+            if 0<dd<md:md=dd
+print(f"{N}d {dev} {t0/60:.1f}s XY({max(ax)-min(ax):.0f},{max(ay)-min(ay):.0f}) minD={md:.1f}cm")
+with warnings.catch_warnings(record=True)as c:
+    warnings.simplefilter('always')
+    pf.show(data,t0,[str(MUSIC)],field=field,device=dev,max_fps=60,show=False)
+dw=[x for x in c if'distance between'in str(x.message)]
+aw=[x for x in c if'completed'in str(x.message)]
+print(f"dist:{len(dw)} act:{len(aw)}")
+pf.show(data,t0,[str(MUSIC)],field=field,device=dev,max_fps=60,save=str(OUT/"2d"),FPS=25)
+pf.show(data,t0,[str(MUSIC)],field=field,device=dev,max_fps=60,save=str(OUT/"3d"),FPS=25,ThreeD=True,imshow=[90,0],d=(600,450))
+print("done")
+geo1 = [
+    [(S[i][0]+20*math.sin(i), S[i][1]+20*math.cos(i), 115+i*5) for i in range(N)],
+    [(280+130*math.cos(2*math.pi*i/N), 280+130*math.sin(2*math.pi*i/N), 130+25*math.sin(2*math.pi*i/N)) for i in range(N)],
+    [(80+i*115, 170, 140) if i<4 else (90+(i-3)*120, 390, 155) for i in range(N)],
+    [(80,80,145),(480,80,155),(80,480,160),(480,480,150),(280,280,170),(200,200,145),(360,360,155)],
+]
+geo2 = [
+    [(80+90*i, 80+90*i, 155) for i in range(N)],
+    [(480-90*i, 80+90*i, 160) for i in range(N)],
+    [(100+70*i, 240+80*math.sin(i), 165) for i in range(N)],
+    [(80,80,170),(480,80,170),(80,480,170),(480,480,170),(280,160,180),(280,400,175),(160,280,185)],
+]
+geo3 = [
+    [(280+160*math.cos(2*math.pi*i/N), 280+160*math.sin(2*math.pi*i/N), 180) for i in range(N)],
+    [(100+80*i, 440-80*i, 185) for i in range(N)],
+    [(180+i*65, 200+120*math.sin(i), 190) for i in range(N)],
+    [(60,60,195),(500,60,195),(60,500,195),(500,500,195),(280,280,205),(180,180,200),(380,380,200)],
+]
+geo4 = [
+    [(120+70*i, 120+70*i, 200) for i in range(N)],
+    [(440-70*i, 120+70*i, 205) for i in range(N)],
+    [(280+180*math.cos(2*math.pi*i/N+0.3), 280+180*math.sin(2*math.pi*i/N+0.3), 210) for i in range(N)],
+    [(60,200,215),(500,200,215),(280,60,220),(280,500,215),(200,200,225),(360,360,220),(280,280,230)],
+]
 # 段5: 收束降落
 for i,d in enumerate(ds): d.intime(67); d.VelXY(60,120); d.VelZ(60,120)
 geo5 = [(280+100*math.cos(2*math.pi*i/N), 280+100*math.sin(2*math.pi*i/N), 150) for i in range(N)]
