@@ -53,24 +53,12 @@ colors = ["#2255aa","#3388cc","#44aadd"]
 for gi in range(3):
     targets = geo[gi] if gi==0 else best_assign(prev, geo[gi])
     
-    # 阶段1: 飞到中点 (直飞自己的50%路径)
-    mid = [((prev[i][0]+targets[i][0])/2, (prev[i][1]+targets[i][1])/2, (prev[i][2]+targets[i][2])/2+20*math.sin(i)) for i in range(N)]
-    mids = mid
     for i,d in enumerate(ds):
-        dd = math.dist((prev[i][0],prev[i][1]),(mids[i][0],mids[i][1]))
-        spd = min(200, max(100, int(dd/1.2))); d.VelXY(spd, spd*2); d.VelZ(spd, spd*2)
-        d.move2(cl(mids[i][0]), cl(mids[i][1]), cz(mids[i][2]))
-        light(d, colors[gi], 8); d.delay(500)
-    prev_mid = mids
-    
-    # 阶段2: 飞到终点 (直飞)
-    finals = targets
-    for i,d in enumerate(ds):
-        dd = math.dist((prev_mid[i][0],prev_mid[i][1]),(finals[i][0],finals[i][1]))
-        spd = min(200, max(100, int(dd/1.2))); d.VelXY(spd, spd*2); d.VelZ(spd, spd*2)
-        d.move2(cl(finals[i][0]), cl(finals[i][1]), cz(finals[i][2]+20*math.sin(i)))
-        light(d, colors[gi], 8); d.delay(700)
-    prev = finals
+        dd = math.dist((prev[i][0],prev[i][1]),(targets[i][0],targets[i][1]))
+        spd = min(200, max(150, int(dd/2.0))); d.VelXY(spd, spd*2); d.VelZ(spd, spd*2)
+        d.move2(cl(targets[i][0]), cl(targets[i][1]), cz(targets[i][2]+20*math.sin(i)))
+        light(d, colors[gi], 15); d.delay(1500)
+    prev = targets
 
 
 # ---- 段2: 14-24s, 3几何 ----
@@ -83,19 +71,12 @@ colors2 = ["#cc6600","#cc8800","#ddaa00"]
 for i,d in enumerate(ds): d.intime(13); d.VelXY(120,240); d.VelZ(120,240); d.delay(i*100)
 for gi in range(3):
     targets = best_assign(prev, geo2[gi])
-    mid = [((prev[i][0]+targets[i][0])/2, (prev[i][1]+targets[i][1])/2, (prev[i][2]+targets[i][2])/2+15*math.sin(i)) for i in range(N)]
     for i,d in enumerate(ds):
-        dd = math.dist((prev[i][0],prev[i][1]),(mid[i][0],mid[i][1]))
-        spd = min(200, max(100, int(dd/1.2))); d.VelXY(spd, spd*2); d.VelZ(spd, spd*2)
-        d.move2(cl(mid[i][0]), cl(mid[i][1]), cz(mid[i][2]))
-        light(d, colors2[gi], 8); d.delay(500)
-    for i,d in enumerate(ds):
-        dd = math.dist((mid[i][0],mid[i][1]),(targets[i][0],targets[i][1]))
-        spd = min(200, max(100, int(dd/1.2))); d.VelXY(spd, spd*2); d.VelZ(spd, spd*2)
-        d.move2(cl(targets[i][0]), cl(targets[i][1]), cz(targets[i][2]+15*math.sin(i)))
-        light(d, colors2[gi], 8); d.delay(700)
+        dd = math.dist((prev[i][0],prev[i][1]),(targets[i][0],targets[i][1]))
+        spd = min(200, max(150, int(dd/2.0))); d.VelXY(spd, spd*2); d.VelZ(spd, spd*2)
+        d.move2(cl(targets[i][0]), cl(targets[i][1]), cz(targets[i][2]+20*math.sin(i)))
+        light(d, colors2[gi], 15); d.delay(1500)
     prev = targets
-
 
 
 
@@ -162,12 +143,12 @@ geo7 = [
     [(280+160*math.cos(2*math.pi*i/N-math.pi/7), 280+160*math.sin(2*math.pi*i/N-math.pi/7), 215) for i in range(N)],
 ]
 colors7 = ["#ffddee","#ffccdd","#ffbbcc","#ffaabb"]
-for i,d in enumerate(ds): d.intime(50); d.VelXY(160,320); d.VelZ(160,320); d.delay(i*500)
+for i,d in enumerate(ds): d.intime(50); d.VelXY(200,400); d.VelZ(200,400); d.delay(i*500)
 for gi in range(3):
     targets = best_assign(prev, geo7[gi])
     for i,d in enumerate(ds):
         dd = math.dist((prev[i][0],prev[i][1]),(targets[i][0],targets[i][1]))
-        spd = min(200, max(140, int(dd/2.5))); d.VelXY(spd, spd*2); d.VelZ(spd, spd*2)
+        spd = min(200, max(190, int(dd/1.0))); d.VelXY(spd, spd*2); d.VelZ(spd, spd*2)
         d.move2(cl(targets[i][0]), cl(targets[i][1]), cz(targets[i][2]+15*math.sin(i)))
         light(d, colors7[gi], 10)
     prev = targets
