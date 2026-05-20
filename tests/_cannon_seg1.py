@@ -53,9 +53,13 @@ for gi in range(4):
     for i,d in enumerate(ds):
         tx, ty, tz = targets[i]
         d.move2(cl(tx), cl(ty), cz(tz+20*math.sin(i)))
-        d.TurnOnAll(colors[gi])
-        if gi < 3: d.delay(3000)
-        else: d.delay(1500); d.TurnOffAll(); d.delay(1500)
+        for tick in range(30 if gi<3 else 15):
+            bright = int(100+155*math.sin(tick*math.pi/30))
+            r = int(colors[gi][1:3],16)*bright//255
+            g = int(colors[gi][3:5],16)*bright//255
+            b = int(colors[gi][5:7],16)*bright//255
+            d.TurnOnAll(f"#{r:02x}{g:02x}{b:02x}"); d.delay(100)
+        if gi == 3: d.TurnOffAll()
     prev_pos = targets
 
 
@@ -73,7 +77,12 @@ for gi in range(4):
     for i,d in enumerate(ds):
         tx, ty, tz = targets[i]
         d.move2(cl(tx), cl(ty), cz(tz+20*math.sin(i)))
-        d.TurnOnAll(colors2[gi]); d.delay(4000)
+        for tick in range(40):
+            bright = int(100+155*math.sin(tick*math.pi/40))
+            r = int(colors2[gi][1:3],16)*bright//255
+            g = int(colors2[gi][3:5],16)*bright//255
+            b = int(colors2[gi][5:7],16)*bright//255
+            d.TurnOnAll(f"#{r:02x}{g:02x}{b:02x}"); d.delay(100)
     prev_pos = targets
 
 
@@ -91,7 +100,12 @@ for gi in range(4):
     for i,d in enumerate(ds):
         tx, ty, tz = targets[i]
         d.move2(cl(tx), cl(ty), cz(tz+20*math.sin(i)))
-        d.TurnOnAll(colors3[gi]); d.delay(4000)
+        for tick in range(40):
+            bright = int(100+155*math.sin(tick*math.pi/40))
+            r = int(colors3[gi][1:3],16)*bright//255
+            g = int(colors3[gi][3:5],16)*bright//255
+            b = int(colors3[gi][5:7],16)*bright//255
+            d.TurnOnAll(f"#{r:02x}{g:02x}{b:02x}"); d.delay(100)
     prev_pos = targets
 
 
@@ -109,7 +123,12 @@ for gi in range(4):
     for i,d in enumerate(ds):
         tx, ty, tz = targets[i]
         d.move2(cl(tx), cl(ty), cz(tz+20*math.sin(i)))
-        d.TurnOnAll(colors4[gi]); d.delay(4000)
+        for tick in range(40):
+            bright = int(100+155*math.sin(tick*math.pi/40))
+            r = int(colors4[gi][1:3],16)*bright//255
+            g = int(colors4[gi][3:5],16)*bright//255
+            b = int(colors4[gi][5:7],16)*bright//255
+            d.TurnOnAll(f"#{r:02x}{g:02x}{b:02x}"); d.delay(100)
     prev_pos = targets
 
 # 段5: 收束降落
