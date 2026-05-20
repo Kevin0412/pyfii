@@ -49,7 +49,7 @@ for gi in range(4):
     targets = best_assign(prev_pos, geo[gi])
     for i,d in enumerate(ds):
         tx, ty, tz = targets[i]
-        d.move2(cl(tx), cl(ty), cz(tz+5*i))
+        d.move2(cl(tx), cl(ty), cz(tz+20*math.sin(i)))
         d.TurnOnAll(colors[gi])
         if gi < 3: d.delay(3000)
         else: d.delay(1500); d.TurnOffAll(); d.delay(1500)
@@ -58,10 +58,10 @@ for gi in range(4):
 
 # 段2: 4个安全几何
 geo2 = [
-    [(280+150*math.cos(2*math.pi*i/N), 280+150*math.sin(2*math.pi*i/N), 155) for i in range(N)],  # 环
-    [(60+120*i, 160, 160) if i<4 else (180+120*(i-3), 400, 160) for i in range(N)],  # 双排(120间距)
+    [(280+150*math.cos(2*math.pi*i/N), 280+150*math.sin(2*math.pi*i/N), 140+25*math.sin(2*math.pi*i/N)) for i in range(N)],  # 环
+    [(60+120*i, 160, 140+10*i) if i<4 else (180+120*(i-3), 400, 160) for i in range(N)],  # 双排(120间距)
     [(80,80,165),(480,80,165),(80,480,165),(480,480,165),(280,280,165),(200,200,165),(360,360,165)],  # 四角+内
-    [(280+150*math.cos(2*math.pi*i/N+math.pi/7), 280+150*math.sin(2*math.pi*i/N+math.pi/7), 170) for i in range(N)],  # 旋转环
+    [(280+150*math.cos(2*math.pi*i/N+math.pi/7), 280+150*math.sin(2*math.pi*i/N+math.pi/7), 150+20*math.sin(2*math.pi*i/N+math.pi/7)) for i in range(N)],  # 旋转环
 ]
 colors2 = ["#ffbb33","#ffaa22","#ff9911","#ffdd59"]
 for i,d in enumerate(ds): d.intime(16); d.VelXY(90,180); d.VelZ(70,140)
@@ -69,7 +69,7 @@ for gi in range(4):
     targets = best_assign(prev_pos, geo2[gi])
     for i,d in enumerate(ds):
         tx, ty, tz = targets[i]
-        d.move2(cl(tx), cl(ty), cz(tz+5*i))
+        d.move2(cl(tx), cl(ty), cz(tz+20*math.sin(i)))
         d.TurnOnAll(colors2[gi]); d.delay(4000)
     prev_pos = targets
 
@@ -87,7 +87,7 @@ for gi in range(4):
     targets = best_assign(prev_pos, geo3[gi])
     for i,d in enumerate(ds):
         tx, ty, tz = targets[i]
-        d.move2(cl(tx), cl(ty), cz(tz+5*i))
+        d.move2(cl(tx), cl(ty), cz(tz+20*math.sin(i)))
         d.TurnOnAll(colors3[gi]); d.delay(4000)
     prev_pos = targets
 
@@ -105,7 +105,7 @@ for gi in range(4):
     targets = best_assign(prev_pos, geo4[gi])
     for i,d in enumerate(ds):
         tx, ty, tz = targets[i]
-        d.move2(cl(tx), cl(ty), cz(tz+5*i))
+        d.move2(cl(tx), cl(ty), cz(tz+20*math.sin(i)))
         d.TurnOnAll(colors4[gi]); d.delay(4000)
     prev_pos = targets
 
@@ -115,9 +115,16 @@ geo5 = [(280+100*math.cos(2*math.pi*i/N), 280+100*math.sin(2*math.pi*i/N), 150) 
 targets = best_assign(prev_pos, geo5)
 for i,d in enumerate(ds):
     tx, ty, tz = targets[i]
-    d.move2(cl(tx), cl(ty), cz(tz+5*i))
+    d.move2(cl(tx), cl(ty), cz(tz+20*math.sin(i)))
     d.TurnOnAll("#48dbfb"); d.delay(2000); d.TurnOffAll(); d.delay(2000)
-for i,d in enumerate(ds): d.intime(70); d.land()
+# 降落到最低高度
+geo_land = [(x, y, 80) for x,y,_ in prev_pos]
+targets = best_assign(prev_pos, geo_land)
+for i,d in enumerate(ds):
+    d.intime(70); d.VelXY(40,80); d.VelZ(30,60)
+    tx,ty,tz = targets[i]
+    d.move2(cl(tx), cl(ty), cz(tz+20*math.sin(i)))
+    d.delay(2000)
 
 for d in ds: d.end()
 os.makedirs(str(OUT),exist_ok=True)
