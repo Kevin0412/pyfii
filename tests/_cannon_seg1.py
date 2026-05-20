@@ -33,7 +33,7 @@ def best_assign(starts, targets):
 S=[(60,120),(180,60),(350,60),(500,160),(500,380),(350,480),(160,480)]
 for i,d in enumerate(ds):
     d.X=d.x=S[i][0];d.Y=d.y=S[i][1];d.takeoff(1,110)
-for i,d in enumerate(ds): d.intime(4); d.VelXY(60,120); d.VelZ(60,120)
+for i,d in enumerate(ds): d.intime(4); d.VelXY(120,240); d.VelZ(120,240)
 
 # 段1: 4几何
 geo = [
