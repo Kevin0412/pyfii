@@ -73,7 +73,7 @@ def apply_light(drone, color, ticks):
         drone.delay(100)
 ```
 
-推荐 10-20 ticks (1-2s)。每段不同颜色。
+推荐 10-20 ticks (1-2s)。每段不同颜色。**每个 move2 之后必须调用 。**
 
 ## 排队错峰
 
