@@ -35,57 +35,29 @@ def build_segment_prompt(
 
     user = f"""生成 Pyfii 编舞段 {segment_id}。
 
-## 音乐信息
-- 时间段: {start_time}s - {end_time}s ({end_time - start_time:.0f}s)
+## 音乐
+- 时间: {start_time}s - {end_time}s ({end_time - start_time:.0f}s)
 - 能量: {music_cue.get('energy', 'unknown')}
 - 情绪: {music_cue.get('emotion', 'unknown')}
 
 ## 设计意图
 {intent}
 
-## 上一段出口状态 (prev)
+## 上一段出口
 ```python
 prev = {prev_state}
 ```
 
-## 输出要求
-只输出段代码（从 marker start 到 marker end），包含:
-1. 几何定义 (2-4个几何)，几何内部点间距 > 51cm
-2. inittime + VelXY/VelZ (两者值必须一致)
-3. best_assign 离线调用结果硬编码为 perm = (...)
-4. move2 + apply_light + delay
-5. 结束更新 prev = targets
-6. 生成前先计算飞行时间: 确保 light_ticks*100ms + delay_ms > flight_time(max_distance, speed)
-
-格式:
-```python
-# === PYFII_AGENT_SEGMENT_START id={segment_id} locked=false ===
-# start_time: {start_time}
-# end_time: {end_time}
-# intent: {intent}
-
-geo = [...]
-
-for i, drone in enumerate(drones):
-    drone.inittime({start_time})
-    drone.VelXY(200, 400)
-    drone.VelZ(200, 400)
-
-prev = [(drone.x, drone.y, drone.z) for drone in drones]
-for gi in range(len(geo)):
-    perm = (?, ?, ?, ?, ?, ?, ?)  # 用 best_assign 硬编码
-    for i, drone in enumerate(drones):
-        tx, ty, tz = geo[gi][perm[i]]
-        drone.move2(clamp_xy(tx), clamp_xy(ty), clamp_z(tz))
-        apply_light(drone, "#xxxxxx", 15)
-        drone.delay(1500)
-    prev = [(geo[gi][perm[i]][0], geo[gi][perm[i]][1], geo[gi][perm[i]][2]) for i in range(N)]
-
-# === PYFII_AGENT_SEGMENT_END {segment_id} ===
-```
+## 要求
+- 段代码必须在 marker 之间（见 segment_protocol）
+- 几何内部点间距 > 51cm
+- best_assign 结果硬编码为 perm = (...)
+- 生成前先算飞行时间，确保 light + delay 够
+- 不要只做一个 move2 —— 可以多几何、条件分支、相对移动、排队错峰
+- VelXY 和 VelZ 值必须一致
 """
 
     if feedback:
-        user += f"\n\n## 人类反馈\n{feedback}\n请根据反馈修改。"
+        user += f"\n\n## 人类反馈\n{feedback}"
 
     return system, user
