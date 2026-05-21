@@ -62,7 +62,8 @@ def flight_time(d, v, a=200):
         return 2 * math.sqrt(d/a)
 ```
 
-确保 `light_ticks * 100ms + delay_ms > flight_time(d, v) * 1000`
+确保 
+- **生成段代码前必须先算每个几何的最远飞行距离和对应时间，确认 time budget 足够。**`light_ticks * 100ms + delay_ms > flight_time(d, v) * 1000`
 
 ## 错误处理
 
