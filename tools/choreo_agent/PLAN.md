@@ -1,56 +1,108 @@
-# Choreo Agent 方案
+# Choreo Agent 完整方案
+
+> 暂时不拆仓库，直接在 Pyfii 仓库内做一个 `tools/choreo_agent/` TUI 编舞 agent
+> 核心重点："逐段生成 + 人类确认 + Pyfii 自定义库上下文包 + 安全修改 .py + checkpoint/resume"
 
 ## 当前进度
 
 | Phase | 内容 | 状态 |
 |-------|------|------|
-| 0 | context_packs (8个) | ✅ 完成 |
-| 1 | core state system | ✅ 完成 |
-| 2 | script_editor (marker+lock+hash) | ✅ 完成 |
-| 3 | validator (四层验证+hover+assign_feedback) | ✅ 完成 |
-| 4 | TUI | ⏳ CLI原型可用，Textual待做 |
-| 5 | LLM 接入 (deepseek-v4-flash) | ✅ 完成 |
-| 6 | 真实项目试跑 | ⏳ S01通过，S02待注入 |
+| 0 | context_packs (8个) | ✅ |
+| 1 | core state system | ✅ |
+| 2 | script_editor | ✅ |
+| 3 | validator (四层+hover+assign_feedback) | ✅ |
+| 4 | TUI | CLI可用，Textual待做 |
+| 5 | LLM 接入 | ✅ |
+| 6 | 试跑 | S01自动生成通过 |
 
 ## 待做
+- Safe/Fast 模式 (approval.py)
+- Textual TUI
+- 音乐分析自动化
+- best_assign 自动注入闭环
+- S02-S08 生成
+- Context 文件自动更新 (design_memory.md, handoff.md)
+- 退化检测集成
 
-### 核心缺失
-- **Safe/Fast 模式切换** (approval.py)
-- **Context 文件自动更新** (design_memory.md, handoff.md)
-- **音乐分析自动化** (music_analysis.json 生成)
-- **视频导出器** (video_exporter.py)
-- **Segment Cards 生成** (segment_cards/Sxx.md)
-- **退化检测** (detect_degradation 集成)
-- **恢复机制** (recovery.py, 从 handoff 恢复)
+---
 
-### TUI (Textual)
-- dashboard, segment_workspace, validation_panel, diff_panel
+# 1. 项目定位
 
-### 生成闭环
-- best_assign 自动注入 → validator.compute_assign_feedback 已就绪
-- 多段自动推进 (S02-S08)
-- hover 检测 fix
+Pyfii TUI 编舞工作台 = 常驻进程 + 当前段上下文内存 + 人类多轮反馈 + AI 修改当前段 + Pyfii 验证闭环 + 视频验收 + 段落锁定 + 退出恢复
 
-## 关键决策
+核心目标：音乐分段确认 → 逐段生成 → 当前段反复修改 → warning=0 → 导出视频 → 人类验收 → 锁定 → 下一段
 
-1. **best_assign 离线工具**: AI 不运行时调用，validator bridge 计算 perm 反馈
-2. **marker 机制**: 安全替换，locked hash 检查
-3. **7 context_packs 全量加载**: 每次调用上下文一致
-4. **起飞由 agent 定义**: 不硬编码模板
-5. **VelXY(speed, acc)**: 不是 min/max，VelXY/VelZ 必须一致
+# 2. 仓库内目录设计
 
-## 编码风格约束
+```
+tools/choreo_agent/
+  main.py
+  tui/           # Textual TUI
+  core/          # 核心模块(已实现7个)
+  context_packs/ # 8个文档
+  project_template/
+agent_projects/
+  cannon_in_d/   # 测试项目
+```
 
-两套独立风格，不能混用：
+# 3. 总体工作流
 
-1. **`tools/choreo_agent/` 工具代码** → 加载 `agent_coding_style.md`
-   - 工程化、可维护、pathlib、dataclass、类型标注
-   - 单文件200-400行，单函数20-80行
-   - TUI只展示不写业务逻辑
+## 3.1 初始化: 创建项目 → 复制模板 → 导入音乐 → 初始化state
+## 3.2 音乐分析: AI分析 → 输出music_analysis.json → TUI展示 → 人类确认
+## 3.3 当前段生成: 构造prompt → 调用LLM → 写入marker → compile → read_fii → show → 验证 → 视频
+## 3.4 人类反馈: 只能改当前段，不能改locked段
+## 3.5 锁定: locked=true → 写segment_card → 更新memory → checkpoint → 下一段
 
-2. **`scripts/design.py` 编舞脚本** → 加载 `pyfii_*` context packs
-   - 结构稳定、marker清晰、局部可替换
-   - 禁止DeepSeek式极限压缩（一行多语句、分号连写）
-   - 每段必须有marker、必须更新prev
+# 4. TUI (Textual待实现)
 
-详见: `context_packs/agent_coding_style.md`
+主界面包含: 项目信息、当前段面板、验证面板、操作按钮(G/V/E/A/R/D/M/S/Q)
+内存上下文: ActiveSegmentContext 保存当前段所有状态
+
+# 5. Safe / Fast 模式
+
+- Safe: 音乐分析+意图+视频+锁定 全部人类确认
+- Fast: AI自动推进，但验证不跳过，修改locked段必须问人
+- 永远不能自动: 改locked段、改结束位置、删checkpoint
+
+# 6. Context Packs (8个, 已就绪)
+
+pyfii_api_minimal / coding_rules / segment_protocol / anti_patterns / best_assign / light_patterns / validation_rules / agent_coding_style
+
+# 7. Prompt Builder (已实现)
+
+7个context_packs全量加载为system prompt，user prompt包含音乐+意图+prev+feedback+design.py参考
+
+# 8. Script Editor (已实现)
+
+marker机制: # === PYFII_AGENT_SEGMENT_START id=S01 locked=false ===
+操作: replace_active_segment, lock_segment, locked hash检查
+修改前必须checkpoint
+
+# 9. Validator (已实现)
+
+四层: 语法(compile) → 执行(run) → 读回(read_fii) → 验收(show)
++ hover检测 + compute_assign_feedback
+
+# 10. Context 文件设计
+
+- design_memory.md: 全局风格、人类偏好、已用视觉语言、被否决方案
+- handoff.md: 当前状态、锁定段、视频路径、下次步骤
+- segment_cards/Sxx.md: 每段的音乐、意图、反馈历史、验证结果、出口状态
+
+# 11. 开发阶段
+
+Phase 0-5已完成，Phase 4(Textual TUI)和Phase 6(多段试跑)进行中
+
+# 12-13. Token预算
+
+- MVP: 300-600万 tokens
+- 可用版: 800-1500万
+- 成熟版: 2000-5000万
+- 每首歌使用: 100-800万
+
+# 14. 编码风格 (两套)
+
+1. tools/choreo_agent/: 工程化, pathlib, dataclass, 类型标注
+2. scripts/design.py: marker清晰, 禁止极限压缩, 人类可读
+
+详见 context_packs/agent_coding_style.md
