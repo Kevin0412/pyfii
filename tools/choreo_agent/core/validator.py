@@ -38,6 +38,12 @@ class ValidationResult:
         parts = [f"{s:.0f}-{e:.0f}s" for s, e in self.hover_segments]
         return f"动作不丰富，存在整体悬停: {', '.join(parts)}。请增加 move2 或减少 delay/light 空闲时间。"
 
+    def compute_assign_feedback(self, starts_xy, targets_xy):
+        """计算 best_assign 并返回修复建议"""
+        from core.best_assign import best_assign
+        perm, min_d = best_assign(starts_xy, targets_xy)
+        return f"使用排列 perm={perm} (min_d={min_d:.1f}cm) 替换当前恒等映射。"
+
 
 def validate(script_path: Path, output_dir: Path) -> ValidationResult:
     result = ValidationResult()

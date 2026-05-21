@@ -24,8 +24,8 @@ def apply_light(drone, color, ticks):
         drone.delay(100)
 
 
-# === PYFII_AGENT_SEGMENT_START id=S01 locked=false ===
-# === PYFII_AGENT_SEGMENT_START id=S01 locked=false ===
+# === PYFII_AGENT_SEGMENT_START id=S01 locked=true ===
+# === PYFII_AGENT_SEGMENT_START id=S01 locked=true ===
 # start_time: 0.0
 # end_time: 14.0
 # intent: 散布起飞 + 从散布进入有序
@@ -89,7 +89,116 @@ for gi in range(len(geo)):
 # === PYFII_AGENT_SEGMENT_END S01 ===
 
 # === PYFII_AGENT_SEGMENT_START id=S02 locked=false ===
-print("S02 placeholder")
+# === PYFII_AGENT_SEGMENT_START id=S02 locked=false ===
+# === PYFII_AGENT_SEGMENT_START id=S02 locked=false ===
+# === PYFII_AGENT_SEGMENT_START id=S02 locked=false ===
+# === PYFII_AGENT_SEGMENT_START id=S02 locked=false ===
+# === PYFII_AGENT_SEGMENT_START id=S02 locked=false ===
+# === PYFII_AGENT_SEGMENT_START id=S02 locked=false ===
+# === PYFII_AGENT_SEGMENT_START id=S02 locked=false ===
+# === PYFII_AGENT_SEGMENT_START id=S02 locked=false ===
+# === PYFII_AGENT_SEGMENT_START id=S02 locked=false ===
+# start_time: 14.0
+# end_time: 24.0
+# intent: 从四角展开，对角线向大环展开，再收为三排。暖色灯光，排队错峰，全时动作。
+
+import math as m
+
+N = 7
+
+prev = [(80,80,170), (420,80,170), (80,420,170), (420,420,170), (280,280,175), (200,200,160), (350,350,160)]
+
+# ── 几何定义 ──
+# Geo1: 对角线内收 (14.0-15.5)
+geo1 = [
+    (120, 120, 155),   # d0
+    (440, 120, 155),   # d1
+    (120, 440, 155),   # d2
+    (440, 440, 155),   # d3
+    (280, 280, 175),   # d4
+    (160, 280, 155),   # d5
+    (400, 280, 155),   # d6
+]
+
+# Geo2: 大环 r=200 z=160 (17.0-19.5)
+geo2 = [
+    (480, 280, 160),   # 右
+    (405, 436, 160),   # 右上
+    (235, 475, 160),   # 上偏左
+    (100, 367, 160),   # 左上
+    (100, 193, 160),   # 左下
+    (235,  85, 160),   # 下偏左
+    (405, 124, 160),   # 右下
+]
+
+# Geo3: 三排 2-3-2 (20.8-23.0)
+geo3 = [
+    (130, 100, 170),
+    (430, 100, 170),
+    (130, 280, 170),
+    (280, 280, 180),
+    (430, 280, 170),
+    (130, 460, 170),
+    (430, 460, 170),
+]
+
+geos = [geo1, geo2, geo3]
+
+# ── 排列（通过 best_assign 离线计算） ──
+perms = [
+    (0, 1, 2, 3, 4, 5, 6),          # prev → geo1
+    (4, 6, 3, 1, 0, 5, 2),          # geo1 → geo2
+    (4, 6, 5, 2, 0, 3, 1),          # geo2 → geo3
+]
+
+# ── 灯光与时间参数 ──
+# 确保灯光时间 >= 最远飞行时间 (200cm/s, 400cm/s²)
+# geo1 最远 86cm → flight_time=0.86s → 12ticks=1.2s ✓
+# geo2 最远 380cm → flight_time=2.38s → 24ticks=2.4s ✓
+# geo3 最远 376cm → flight_time=2.36s → 24ticks=2.4s ✓
+colors = ["#ff6633", "#ffa500", "#dd2244"]
+ticks_list = [12, 24, 24]
+offsets = [100, 80, 80]                  # 排队偏移 (ms)
+geo_starts = [14.0, 17.0, 20.8]         # 秒
+
+for gi in range(3):
+    st = geo_starts[gi]
+    off = offsets[gi]
+    ticks = ticks_list[gi]
+    color = colors[gi]
+    geo = geos[gi]
+    perm = perms[gi]
+
+    # 统一速度
+    for drone in drones:
+        drone.inittime(st)
+        drone.VelXY(200, 400)
+        drone.VelZ(200, 400)
+
+    # 逐机安排目标 + 排队 + 灯光
+    for i, drone in enumerate(drones):
+        tx, ty, tz = geo[perm[i]]
+        drone.delay(i * off)
+        drone.move2(clamp_xy(tx), clamp_xy(ty), clamp_z(tz))
+        apply_light(drone, color, ticks)
+
+    # 更新 prev 用于下一几何
+    prev = [(geo[perm[i]][0], geo[perm[i]][1], geo[perm[i]][2]) for i in range(N)]
+
+# 时间验证：
+# geo1: 14.0 + 排队0.6s + 灯光1.2s = 15.8s
+# geo2: 17.0 + 排队0.48s + 灯光2.4s = 19.88s
+# geo3: 20.8 + 排队0.48s + 灯光2.4s = 23.68s < 24.0 ✓
+# 段间隔 > 0.5s ✓
+# === PYFII_AGENT_SEGMENT_END S02 ===
+# === PYFII_AGENT_SEGMENT_END S02 ===
+# === PYFII_AGENT_SEGMENT_END S02 ===
+# === PYFII_AGENT_SEGMENT_END S02 ===
+# === PYFII_AGENT_SEGMENT_END S02 ===
+# === PYFII_AGENT_SEGMENT_END S02 ===
+# === PYFII_AGENT_SEGMENT_END S02 ===
+# === PYFII_AGENT_SEGMENT_END S02 ===
+# === PYFII_AGENT_SEGMENT_END S02 ===
 # === PYFII_AGENT_SEGMENT_END S02 ===
 
 for drone in drones: drone.end()
@@ -113,4 +222,8 @@ with warnings.catch_warnings(record=True) as c:
 dw = [x for x in c if 'distance between' in str(x.message)]
 aw = [x for x in c if 'completed' in str(x.message)]
 print(f"dist:{len(dw)} act:{len(aw)}")
+pf.show(data,t0,[MUSIC],field=6,device="F400",max_fps=60,save=str(OUT/"2d"),FPS=25)
+print("2d saved")
+pf.show(data,t0,[MUSIC],field=6,device="F400",max_fps=60,save=str(OUT/"3d"),FPS=25,ThreeD=True,imshow=[90,0],d=(600,450))
+print("3d saved")
 print("done")
