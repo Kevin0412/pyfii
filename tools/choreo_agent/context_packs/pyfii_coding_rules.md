@@ -41,6 +41,8 @@ for gi in range(len(geo)):
 
 ## 速度设置
 
+- **VelXY 和 VelZ 必须使用相同的速度和加速度值**
+
 - 优先 VelXY(200, 400)，VelZ(200, 400)
 - 如果动作未完成(action warning)，先检查是否已到200上限
 - 200+400都拉满还飞不完，才需要延长 light ticks 或 delay
