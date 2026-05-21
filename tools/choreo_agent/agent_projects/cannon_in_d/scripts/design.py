@@ -25,47 +25,67 @@ def apply_light(drone, color, ticks):
 
 
 # === PYFII_AGENT_SEGMENT_START id=S01 locked=false ===
+# === PYFII_AGENT_SEGMENT_START id=S01 locked=false ===
 # start_time: 0.0
 # end_time: 14.0
 # intent: 散布起飞 + 从散布进入有序
 
-# TAKEOFF (0-4s)
 S = [(60,120),(180,60),(350,60),(500,160),(500,380),(350,480),(160,480)]
+
+# TAKE-OFF (0-4s)
 for i, drone in enumerate(drones):
     drone.X = drone.x = S[i][0]
     drone.Y = drone.y = S[i][1]
     drone.takeoff(1, 110)
 
-# MOTION (4-14s)
-
+# GEOMETRIES
+import math as m
+N = 7
 geo = [
-    [(280+140*math.cos(2*math.pi*i/N), 280+140*math.sin(2*math.pi*i/N), 135) for i in range(N)],
-    [(80+120*i, 180, 155) if i<4 else (90+120*(i-3), 390, 165) for i in range(N)],
-    [(80,80,170),(480,80,170),(80,480,170),(480,480,170),(280,280,175),(200,200,160),(360,360,160)],
+    # 环 r=140, z=135
+    [(280+140*m.cos(2*m.pi*i/N), 280+140*m.sin(2*m.pi*i/N), 135) for i in range(N)],
+    # 双排: 上排前4, 下排后3
+    [(80+120*i, 180, 155) if i < 4 else (90+120*(i-3), 390, 165) for i in range(N)],
+    # 四角 + 中心附近
+    [(80,80,170),(480,80,170),(80,480,170),(480,480,170),(280,280,175),(200,200,160),(360,360,160)]
 ]
+perms = [
+    (4,5,6,0,1,2,3),
+    (0,1,3,6,5,4,2),
+    (0,5,1,3,6,2,4)
+]
+colors = ["#2255aa", "#33aa33", "#aa3333"]
 
-perms = [(4, 5, 6, 0, 1, 2, 3), (0, 1, 3, 6, 5, 4, 2), (0, 5, 1, 3, 6, 2, 4)]
-colors = ["#2255aa", "#3388cc", "#44aadd"]
-
-for i, drone in enumerate(drones):
-    drone.inittime(4)
-    drone.VelXY(200, 400)
-    drone.VelZ(200, 400)
+# 几何时间预算
+geo_starts = [4.0, 8.0, 11.5]           # 秒
+offsets    = [200, 200, 0]              # 机间排队延迟 (ms)
+ticks_list = [8, 5, 5]                 # 灯光步数 (每步100ms)
 
 prev = [(drone.x, drone.y, 110) for drone in drones]
+
 for gi in range(len(geo)):
+    start_t = geo_starts[gi]
+    off = offsets[gi]
+    ticks = ticks_list[gi]
     perm = perms[gi]
+
+    # 统一设置初始时间和速度
+    for drone in drones:
+        drone.inittime(start_t)
+        drone.VelXY(200, 400)
+        drone.VelZ(200, 400)
+
+    # 逐机安排
     for i, drone in enumerate(drones):
         tx, ty, tz = geo[gi][perm[i]]
-        dist_cm = math.dist((prev[i][0], prev[i][1]), (tx, ty))
-        speed = min(200, max(150, int(dist_cm / 2.0)))
-        drone.VelXY(speed, speed * 2)
-        drone.VelZ(speed, speed * 2)
-        drone.move2(clamp_xy(tx), clamp_xy(ty), clamp_z(tz + 10 * math.sin(i)))
-        apply_light(drone, colors[gi], 15)
-        drone.delay(1500)
+        drone.delay(i * off)                      # 排队偏移
+        drone.move2(clamp_xy(tx), clamp_xy(ty), clamp_z(tz))
+        apply_light(drone, colors[gi], ticks)     # 灯光 + 延迟
+
+    # 更新上一帧位置
     prev = [(geo[gi][perm[i]][0], geo[gi][perm[i]][1], geo[gi][perm[i]][2]) for i in range(N)]
 
+# === PYFII_AGENT_SEGMENT_END S01 ===
 # === PYFII_AGENT_SEGMENT_END S01 ===
 
 # === PYFII_AGENT_SEGMENT_START id=S02 locked=false ===

@@ -1,9 +1,9 @@
-"""Validator — 四层验证"""
+"""Validator — 四层验证 + 悬停检测"""
 import subprocess
 import sys
 import warnings
 from pathlib import Path
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 PYTHON = "/home/kevin0412/.conda/envs/pyfii/bin/python"
@@ -18,6 +18,7 @@ class ValidationResult:
     action_warnings: int = -1
     min_distance_cm: float | None = None
     xy_span: tuple[float, float] | None = None
+    hover_segments: list[tuple[float, float]] = field(default_factory=list)
     error_message: str = ""
 
     @property
@@ -29,6 +30,13 @@ class ValidationResult:
             and self.distance_warnings == 0
             and self.action_warnings == 0
         )
+
+    @property
+    def hover_feedback(self) -> str:
+        if not self.hover_segments:
+            return ""
+        parts = [f"{s:.0f}-{e:.0f}s" for s, e in self.hover_segments]
+        return f"动作不丰富，存在整体悬停: {', '.join(parts)}。请增加 move2 或减少 delay/light 空闲时间。"
 
 
 def validate(script_path: Path, output_dir: Path) -> ValidationResult:
@@ -57,12 +65,10 @@ def validate(script_path: Path, output_dir: Path) -> ValidationResult:
             return result
         result.run_ok = True
 
-        # 解析输出
         output = proc.stdout + proc.stderr
         for line in output.splitlines():
             if "dist:" in line and "act:" in line:
-                parts = line.split()
-                for p in parts:
+                for p in line.split():
                     if p.startswith("dist:"):
                         result.distance_warnings = int(p.split(":")[1])
                     if p.startswith("act:"):
@@ -80,9 +86,63 @@ def validate(script_path: Path, output_dir: Path) -> ValidationResult:
         if result.distance_warnings >= 0:
             result.read_fii_ok = True
 
+        # 悬停检测
+        result.hover_segments = _detect_hover(output_dir)
+
     except subprocess.TimeoutExpired:
         result.error_message = "Script timed out"
     except Exception as e:
         result.error_message = str(e)
 
     return result
+
+
+def _detect_hover(output_dir: Path, threshold_cm: float = 5, min_duration_s: float = 2.0) -> list[tuple[float, float]]:
+    """检测整体悬停：所有机位移 < threshold 持续 > min_duration_s"""
+    import numpy as np
+    import pyfii as pf
+
+    fii_dir = output_dir
+    if not (fii_dir / "动作组").exists():
+        # 找子目录
+        for child in fii_dir.iterdir():
+            if child.is_dir() and (child / "动作组").exists():
+                fii_dir = child
+                break
+
+    try:
+        data, t0, *_ = pf.read_fii(str(fii_dir), fps=60, ignore_acc=True)
+    except Exception:
+        return []
+
+    N = len(data)
+    fps = 60
+    min_frames = int(min_duration_s * fps)
+    min_len = min(len(d) for d in data)
+
+    hover_segments = []
+    hover_start = None
+
+    for frame in range(1, min_len):
+        max_move = 0.0
+        for i in range(N):
+            if frame < len(data[i]):
+                dx = abs(data[i][frame][1] - data[i][frame - 1][1])
+                dy = abs(data[i][frame][2] - data[i][frame - 1][2])
+                if dx > max_move:
+                    max_move = dx
+                if dy > max_move:
+                    max_move = dy
+
+        if max_move < threshold_cm:
+            if hover_start is None:
+                hover_start = frame
+        else:
+            if hover_start is not None and (frame - hover_start) >= min_frames:
+                hover_segments.append((hover_start / fps, frame / fps))
+            hover_start = None
+
+    if hover_start is not None and (min_len - hover_start) >= min_frames:
+        hover_segments.append((hover_start / fps, min_len / fps))
+
+    return hover_segments
