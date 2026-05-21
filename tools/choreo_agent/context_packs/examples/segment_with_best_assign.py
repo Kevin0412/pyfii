@@ -11,7 +11,7 @@ geo = [
 
 colors = ["#2255aa", "#3388cc", "#44aadd"]
 for i, drone in enumerate(drones):
-    drone.intime(4)
+    drone.inittime(4)
     drone.VelXY(200, 400)
     drone.VelZ(200, 400)
 

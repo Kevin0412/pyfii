@@ -19,9 +19,9 @@ drones = [pf.Drone(0, 0, pf.drone_config_6m, f"192.168.51.{51+i}") for i in rang
 drone.X = drone.x = 280       # 起始 X
 drone.Y = drone.y = 280       # 起始 Y
 drone.takeoff(1, 110)         # (耗时秒, 目标高度cm)
-drone.intime(4)               # 开始时间秒，必须是整数
+drone.inittime(4)               # 开始时间秒，必须是整数
 # ... moves and lights ...
-drone.intime(68)
+drone.inittime(68)
 drone.land()
 drone.end()
 ```
@@ -29,7 +29,7 @@ drone.end()
 ## Time
 
 ```python
-drone.intime(24)   # 秒，整数。不可倒退。
+drone.inittime(24)   # 秒，整数。不可倒退。
 drone.delay(100)   # 毫秒。delay(42) 是 42ms，不是 42s。
 ```
 

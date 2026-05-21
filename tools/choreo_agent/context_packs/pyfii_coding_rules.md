@@ -6,7 +6,7 @@
 2. **不允许修改 locked segment。**
 3. **不允许提前设计下一段。**
 4. **不要猜不存在的 Pyfii API。** 优先模仿已有代码。
-5. **`intime()` 是秒级整数。**
+5. **`inittime()` 是秒级整数。**
 6. **`delay()` 是毫秒。**
 7. **所有坐标必须 `int(round())`。** `math.cos/sin` 返回值是浮点数。
 8. **每段结束必须更新 `prev = targets`。**
@@ -24,7 +24,7 @@
 geo = [...]              # 几何定义
 
 for i,d in enumerate(ds):
-    d.intime(start)
+    d.inittime(start)
     d.VelXY(v, v*2)
     d.VelZ(v, v*2)
 

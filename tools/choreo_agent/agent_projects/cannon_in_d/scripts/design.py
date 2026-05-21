@@ -23,19 +23,20 @@ def apply_light(drone, color, ticks):
         drone.TurnOnAll(f"#{r:02x}{g:02x}{b:02x}")
         drone.delay(100)
 
-# === PYFII_AGENT_SEGMENT_START id=S00 locked=true ===
-# TAKEOFF segment (agent-defined)
+
+# === PYFII_AGENT_SEGMENT_START id=S01 locked=false ===
+# start_time: 0.0
+# end_time: 14.0
+# intent: 散布起飞 + 从散布进入有序
+
+# TAKEOFF (0-4s)
 S = [(60,120),(180,60),(350,60),(500,160),(500,380),(350,480),(160,480)]
 for i, drone in enumerate(drones):
     drone.X = drone.x = S[i][0]
     drone.Y = drone.y = S[i][1]
     drone.takeoff(1, 110)
-# === PYFII_AGENT_SEGMENT_END S00 ===
 
-# === PYFII_AGENT_SEGMENT_START id=S01 locked=false ===
-# start_time: 4.0
-# end_time: 14.0
-# intent: 从散布进入有序
+# MOTION (4-14s)
 
 geo = [
     [(280+140*math.cos(2*math.pi*i/N), 280+140*math.sin(2*math.pi*i/N), 135) for i in range(N)],
@@ -47,7 +48,7 @@ perms = [(4, 5, 6, 0, 1, 2, 3), (0, 1, 3, 6, 5, 4, 2), (0, 5, 1, 3, 6, 2, 4)]
 colors = ["#2255aa", "#3388cc", "#44aadd"]
 
 for i, drone in enumerate(drones):
-    drone.intime(4)
+    drone.inittime(4)
     drone.VelXY(200, 400)
     drone.VelZ(200, 400)
 

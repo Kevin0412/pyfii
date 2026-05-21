@@ -45,7 +45,7 @@ prev = {prev_state}
 ## 输出要求
 只输出段代码（从 marker start 到 marker end），包含:
 1. 几何定义 (2-4个几何)
-2. intime + VelXY/VelZ
+2. inittime + VelXY/VelZ
 3. best_assign 离线调用结果硬编码
 4. move2 + apply_light + delay
 5. 结束更新 prev = targets
@@ -60,7 +60,7 @@ prev = {prev_state}
 geo = [...]
 
 for i, drone in enumerate(drones):
-    drone.intime({start_time})
+    drone.inittime({start_time})
     drone.VelXY(200, 400)
     drone.VelZ(200, 400)
 
