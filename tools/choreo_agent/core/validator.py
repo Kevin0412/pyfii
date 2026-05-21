@@ -6,6 +6,7 @@ from pathlib import Path
 from dataclasses import dataclass
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
+PYTHON = "/home/kevin0412/.conda/envs/pyfii/bin/python"
 
 
 @dataclass
@@ -45,7 +46,7 @@ def validate(script_path: Path, output_dir: Path) -> ValidationResult:
     # 2-4. 执行+读回+验收
     try:
         proc = subprocess.run(
-            [sys.executable, str(script_path)],
+            [PYTHON, str(script_path)],
             cwd=str(REPO_ROOT),
             capture_output=True,
             text=True,

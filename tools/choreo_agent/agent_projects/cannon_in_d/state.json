@@ -1,0 +1,35 @@
+{
+  "name": "cannon_in_d",
+  "music_path": "../../cannon_in_D.mp3",
+  "music_duration": 68.0,
+  "music_confirmed": true,
+  "mode": "safe",
+  "segments": [
+    {
+      "id": "S01",
+      "start_time": 4.0,
+      "end_time": 14.0,
+      "locked": false,
+      "music_cue": {
+        "energy": 0.25
+      },
+      "intent": "从散布进入有序",
+      "attempts": [],
+      "exit_state": null
+    },
+    {
+      "id": "S02",
+      "start_time": 14.0,
+      "end_time": 24.0,
+      "locked": false,
+      "music_cue": {
+        "energy": 0.4
+      },
+      "intent": "几何丰富展开",
+      "attempts": [],
+      "exit_state": null
+    }
+  ],
+  "current_segment_index": 0,
+  "locked_segment_ids": []
+}
