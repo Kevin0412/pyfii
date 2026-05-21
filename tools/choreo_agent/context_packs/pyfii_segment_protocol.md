@@ -41,35 +41,29 @@ geo = [
 
 ```python
 def best_assign(starts, targets):
-    best_score = -1e9
-    best = None
+    """全排列搜索路径最短距离最大的分配。用作离线工具，结果硬编码。"""
+    N = len(starts)
+    best_md, best_perm = -1, None
     for perm in itertools.permutations(range(N)):
         tt = [targets[i] for i in perm]
-        min_dist = 1e9
-        for ratio in [0.2, 0.4, 0.6, 0.8]:
-            for i in range(N):
-                for j in range(i + 1, N):
-                    ai_x = starts[i][0] * ratio + tt[i][0] * (1 - ratio)
-                    ai_y = starts[i][1] * ratio + tt[i][1] * (1 - ratio)
-                    aj_x = starts[j][0] * ratio + tt[j][0] * (1 - ratio)
-                    aj_y = starts[j][1] * ratio + tt[j][1] * (1 - ratio)
-                    d = math.hypot(ai_x - aj_x, ai_y - aj_y)
-                    if d < min_dist:
-                        min_dist = d
-        max_dist = max(math.dist(starts[i], tt[i]) for i in range(N))
-        score = min_dist * 2000 - max_dist * 0.01
-        if score > best_score:
-            best_score = score
-            best = tt
-    return best
-```
+        md = 1e9
+        for i in range(N):
+            for j in range(i+1, N):
+                d = _segment_distance(starts[i], targets[perm[i]], starts[j], targets[perm[j]])
+                if d < md: md = d
+        if md > best_md:
+            best_md = md
+            best_perm = perm
+    return best_perm, best_md
 
+线段距离用计算几何精确解（叉积+投影），不采样。
 权重 `md*2000` 强烈倾向最安全分配。`max_d*0.01` 几乎不影响。
 
 ## 灯光
 
 ```python
 def apply_light(drone, color, ticks):
+    """正弦渐变灯光，ticks=步数(每步100ms)"""
     for tick in range(ticks):
         bright = int(100 + 155 * math.sin(tick * math.pi / ticks))
         r = int(color[1:3], 16) * bright // 255

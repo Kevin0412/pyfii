@@ -1,64 +1,38 @@
 # Best Assign — 离线匹配工具
 
-> **定位**: AI 编码阶段一次性调用，结果直接写入 `design.py`。
-> **不要**: 作为运行时函数放在 `design.py` 中。
-> **原因**: AI 有充分 token 预算做离线搜索，硬编码结果更可审计。
+> 用作 AI 编码阶段的工具，结果硬编码写入 `design.py`。不放运行时代码。
 
-## 匹配策略（6种）
-
-AI 生成段代码时调用本工具，拿到 permutation 后硬编码写入。
-
-| 策略 | 评分函数 | 视觉效果 | 适用场景 |
-|------|----------|----------|----------|
-| `first_match` | 第一个不碰撞的排列 | 一般 | 快速原型 |
-| `min_distance` | 最大化路径最小间距 | 最安全 | 保守设计 |
-| `max_min_distance` | 同上但更激进 | 惊险安全 | 大动作展示 |
-| `min_max_move` | 最小化最远移动距离 | 动作快 | 密集几何 |
-| `max_total_move` | 最大化总移动距离 | 视觉丰富 | 展开段 |
-| `max_max_move` | 最大化最远单机移动 | 冲击力 | 爆发展开 |
-
-## 剪枝
-
-7 机全排列 5040 < 50ms，不需要剪枝。
-9 机可启用：对向交换且两线段最近距离 < 51cm → 剪。
+## 接口
 
 ```python
-def segment_dist(a1, a2, b1, b2):
-    """两条线段最短距离，闭式解"""
-    # 详见 core/best_assign.py
-    ...
+from tools.choreo_agent.core.best_assign import best_assign
+
+perm, min_d = best_assign(starts, targets)
+# starts:  [(x0,y0), ...]
+# targets: [(x0,y0), ...]
+# perm:    (3,0,5,1,6,2,4)  — drone i → target perm[i]
+# min_d:   85.9              — 路径上任意两机最短距离(cm)
 ```
 
-注意：两线段距离 < 51cm 不保证碰撞（异步可错开），但离线工具不建模异步，保守剪枝。
+## 算法
 
-## 离线工具接口
+全排列 7! = 5040，每条排列计算 21 对路径线段的最短距离（叉积+投影精确解，不采样）。取最小间距最大的排列。
 
-```python
-from tools.choreo_agent.core.best_assign import assign, Strategy
+< 50ms，AI编码阶段可直接调用。
 
-result = assign(
-    starts=[(x0,y0), ..., (x6,y6)],
-    targets=[(x0,y0), ..., (x6,y6)],
-    strategy=Strategy.MIN_DISTANCE,
-)
-# result.permutation: (2, 5, 0, 3, 6, 1, 4)
-# result.min_distance_cm: 57.0
-# result.max_move_cm: 320.0
-```
-
-AI 硬编码结果：
+## AI 硬编码示例
 
 ```python
+perm, _ = best_assign(prev_xy, geo_xy)
+# AI 将结果写成:
 for i, drone in enumerate(drones):
     tx, ty, tz = geo_targets[perm[i]]
     drone.move2(tx, ty, tz)
 ```
 
-## 测试结果 (7 机 scattered → ring r=140)
+## 测试
 
 ```
-first_match:          min_d=57.3cm  max_move=394cm  perm=(0,4,1,2,6,3,5)
-min_distance(安全):    min_d=123.6cm max_move=144cm  perm=(4,5,6,0,1,2,3)
-min_max_move(最快):    min_d=123.6cm max_move=144cm  perm=(4,5,6,0,1,2,3)
-max_total_move(丰富):  min_d=55.3cm  max_move=359cm  perm=(6,0,1,2,3,5,4)
+starts: 7机散布  →  targets: 7点环 r=140
+perm=(4, 5, 6, 0, 1, 2, 3)  min_d=85.9cm  max_move=144cm
 ```
