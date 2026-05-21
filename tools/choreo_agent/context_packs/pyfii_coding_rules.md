@@ -11,7 +11,7 @@
 7. **所有坐标必须 `int(round())`。** `math.cos/sin` 返回值是浮点数。
 8. **每段结束必须更新 `prev = targets`。**
 9. **所有机始终有动作**，不悬停。长时间小范围运动效果等同悬停。
-10. **段间留 >0.5s 余量**避免 intime 冲突。
+10. **段间留 >0.5s 余量**避免 inittime 冲突。
 
 ## 段内结构
 
@@ -65,7 +65,7 @@ def flight_time(d, v, a=200):
 | 错误 | 原因 | 修复 |
 |------|------|------|
 | `Out of range` | XY超出[0,560]或Z超出[80,250] | clamp坐标 |
-| `Time arrangement error` | intime倒退或段间冲突 | 推后intime |
+| `Time arrangement error` | inittime倒退或段间冲突 | 推后inittime |
 | `action isn't completed` | 飞行时间不够 | 提速或加delay |
 | `distance between` | 两机<51cm | 增间距或提搜索权重 |
 | `ValueError: invalid literal` | 坐标含浮点数 | int(round(x)) |

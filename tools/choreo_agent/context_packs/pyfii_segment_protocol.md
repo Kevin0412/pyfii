@@ -81,7 +81,7 @@ def apply_light(drone, color, ticks):
 for i,d in enumerate(ds): d.delay(i*offset_ms)  # offset=100-600ms
 ```
 
-排在 intime 之后、第一个 move2 之前。
+排在 inittime 之后、第一个 move2 之前。
 
 ## 示例完整段
 

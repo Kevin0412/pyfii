@@ -69,7 +69,7 @@ Z range: 80-220
 | SyntaxError | compile | 检查缩进/括号 |
 | ModuleNotFoundError | import | 确保 `sys.path.insert(0,'src')` |
 | Out of range | move2 | clamp 坐标 (10,550) / (80,240) |
-| Time arrangement error | intime | 推后 intime，确保段间 >0.5s |
+| Time arrangement error | inittime | 推后 inittime，确保段间 >0.5s |
 | ValueError: invalid literal | read_fii | 坐标 int(round(x)) |
 | distance between | show | 增间距或提搜索权重 |
 | action isn't completed | show | 提速或加delay |

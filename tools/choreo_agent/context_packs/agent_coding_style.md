@@ -256,7 +256,7 @@ for i, drone in enumerate(drones):
 
 ### 每段结束必须更新 prev
 
-### intime 是秒，delay 是毫秒
+### inittime 是秒，delay 是毫秒
 
 ---
 
@@ -276,7 +276,7 @@ for i, drone in enumerate(drones):
 10. design.py 中每个 segment 必须有 marker。
 11. 编舞脚本可脚本式，但不要一行多动作。
 12. 每段结束必须更新 prev = targets。
-13. intime 是秒，delay 是毫秒，坐标必须 int(round())。
+13. inittime 是秒，delay 是毫秒，坐标必须 int(round())。
 14. 出错要带上下文，不要裸 except。
 15. 先实现最小可用功能，不引入复杂框架。
 ```
