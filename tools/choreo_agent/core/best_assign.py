@@ -5,9 +5,9 @@ import math, itertools
 
 def best_assign(starts, targets):
     """
-    starts: [(x0,y0), ...]  7个起点
-    targets: [(x0,y0), ...]  7个目标
-    返回: [(permutation), min_distance_cm]
+    starts: [(x0,y0), ...]
+    targets: [(x0,y0), ...]
+    返回: (permutation, min_distance_cm)
     """
     N = len(starts)
     best_md = -1
@@ -16,7 +16,6 @@ def best_assign(starts, targets):
     for perm in itertools.permutations(range(N)):
         tt = [targets[i] for i in perm]
         md = _path_min_distance(starts, tt)
-
         if md > best_md:
             best_md = md
             best_perm = perm
@@ -25,17 +24,68 @@ def best_assign(starts, targets):
 
 
 def _path_min_distance(starts, targets):
-    """4个采样点上的最小两机距离"""
+    """7机中任意两机路径线段的最短距离"""
     N = len(starts)
     md = 1e9
-    for ratio in [0.2, 0.4, 0.6, 0.8]:
-        for i in range(N):
-            for j in range(i + 1, N):
-                ax = starts[i][0] * ratio + targets[i][0] * (1 - ratio)
-                ay = starts[i][1] * ratio + targets[i][1] * (1 - ratio)
-                bx = starts[j][0] * ratio + targets[j][0] * (1 - ratio)
-                by = starts[j][1] * ratio + targets[j][1] * (1 - ratio)
-                d = math.hypot(ax - bx, ay - by)
-                if d < md:
-                    md = d
+    for i in range(N):
+        for j in range(i + 1, N):
+            d = _segment_distance(
+                starts[i], targets[i],
+                starts[j], targets[j],
+            )
+            if d < md:
+                md = d
     return md
+
+
+def _segment_distance(a1, a2, b1, b2):
+    """两条线段 AB 和 CD 的最短距离（计算几何精确解）"""
+    # 先检查线段是否相交
+    if _segments_intersect(a1, a2, b1, b2):
+        return 0.0
+
+    # 最短距离 = min(端点到另一线段距离, 端点距离)
+    return min(
+        _point_to_segment(a1, b1, b2),
+        _point_to_segment(a2, b1, b2),
+        _point_to_segment(b1, a1, a2),
+        _point_to_segment(b2, a1, a2),
+    )
+
+
+def _segments_intersect(a1, a2, b1, b2):
+    """两条线段是否相交"""
+    d1 = _cross(a2, a1, b1)
+    d2 = _cross(a2, a1, b2)
+    d3 = _cross(b2, b1, a1)
+    d4 = _cross(b2, b1, a2)
+    return (d1 > 0) != (d2 > 0) and (d3 > 0) != (d4 > 0)
+
+
+def _cross(a, b, c):
+    """叉积 (b-a) × (c-a)"""
+    return (b[0] - a[0]) * (c[1] - a[1]) - (b[1] - a[1]) * (c[0] - a[0])
+
+
+def _point_to_segment(p, a, b):
+    """点 p 到线段 ab 的最短距离"""
+    ax, ay = a
+    bx, by = b
+    px, py = p
+
+    abx = bx - ax
+    aby = by - ay
+    apx = px - ax
+    apy = py - ay
+
+    # 投影参数 t
+    t = (apx * abx + apy * aby) / (abx * abx + aby * aby)
+
+    if t <= 0:
+        return math.hypot(px - ax, py - ay)
+    elif t >= 1:
+        return math.hypot(px - bx, py - by)
+    else:
+        proj_x = ax + t * abx
+        proj_y = ay + t * aby
+        return math.hypot(px - proj_x, py - proj_y)
