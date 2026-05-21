@@ -17,23 +17,19 @@ AI 生成段代码时调用本工具，拿到 permutation 后硬编码写入。
 | `max_total_move` | 最大化总移动距离 | 视觉丰富 | 展开段 |
 | `max_max_move` | 最大化最远单机移动 | 冲击力 | 爆发展开 |
 
-## 剪枝规则
+## 剪枝
 
-对 7 机 (5040 排列) **不需要剪枝**——全排列 < 50ms。
-对 9 机 (362880 排列) 建议启用。推荐阈值 80cm（30次测试零误杀，剪枝率~35%）：
+7 机全排列 5040 < 50ms，不需要剪枝。
+9 机可启用：对向交换且两线段最近距离 < 51cm → 剪。
 
 ```python
-def prune(perm, starts, threshold=80):
-    """剪对向交换且起始距离<threshold的排列"""
-    for i in range(N):
-        for j in range(i+1, N):
-            if perm[i] == j and perm[j] == i:
-                if math.dist(starts[i], starts[j]) < threshold:
-                    return True
-    return False
+def segment_dist(a1, a2, b1, b2):
+    """两条线段最短距离，闭式解"""
+    # 详见 core/best_assign.py
+    ...
 ```
 
-阈值 80cm：剪枝率 ~35%，测试零误杀最优解。
+注意：两线段距离 < 51cm 不保证碰撞（异步可错开），但离线工具不建模异步，保守剪枝。
 
 ## 离线工具接口
 
@@ -44,31 +40,25 @@ result = assign(
     starts=[(x0,y0), ..., (x6,y6)],
     targets=[(x0,y0), ..., (x6,y6)],
     strategy=Strategy.MIN_DISTANCE,
-    prune_enabled=False,  # 7机不需要
 )
 # result.permutation: (2, 5, 0, 3, 6, 1, 4)
 # result.min_distance_cm: 57.0
 # result.max_move_cm: 320.0
 ```
 
-AI 拿到 `permutation` 后硬编码：
+AI 硬编码结果：
 
 ```python
-geo_targets = [(100,200,180), (300,150,175), ...]
-# AI 硬编码分配
 for i, drone in enumerate(drones):
     tx, ty, tz = geo_targets[perm[i]]
     drone.move2(tx, ty, tz)
 ```
 
-## 测试结果
+## 测试结果 (7 机 scattered → ring r=140)
 
 ```
-=== best_assign 测试 ===
-start: 7 drones scattered
-target: 7-point ring r=140
-  first_match:          min_d=57.3cm  max_move=394cm  perm=(0,4,1,2,6,3,5)
-  min_distance(安全):    min_d=123.6cm max_move=144cm  perm=(4,5,6,0,1,2,3)
-  min_max_move(最快):    min_d=123.6cm max_move=144cm  perm=(4,5,6,0,1,2,3)
-  max_total_move(丰富):  min_d=55.3cm  max_move=359cm  perm=(6,0,1,2,3,5,4)
+first_match:          min_d=57.3cm  max_move=394cm  perm=(0,4,1,2,6,3,5)
+min_distance(安全):    min_d=123.6cm max_move=144cm  perm=(4,5,6,0,1,2,3)
+min_max_move(最快):    min_d=123.6cm max_move=144cm  perm=(4,5,6,0,1,2,3)
+max_total_move(丰富):  min_d=55.3cm  max_move=359cm  perm=(6,0,1,2,3,5,4)
 ```
