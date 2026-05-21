@@ -50,12 +50,12 @@ Pyfii F400 要求坐标在合法范围内：
 
 ```python
 def clamp_xy(v):
-    """将 XY 坐标限制在场地 [10, 550] 范围内"""
-    return max(10, min(550, int(round(v))))
+    """将 XY 坐标限制在场地 [0, 560] 范围内"""
+    return max(0, min(560, int(round(v))))
 
 def clamp_z(v):
-    """将 Z 坐标限制在安全高度 [80, 240] 范围内"""
-    return max(80, min(240, int(round(v))))
+    """将 Z 坐标限制在安全高度 [80, 250] 范围内"""
+    return max(80, min(250, int(round(v))))
 ```
 
 ## Speed
