@@ -193,6 +193,6 @@ with warnings.catch_warnings(record=True)as cw:
 dw=[x for x in cw if"distance between"in str(x.message)]
 aw=[x for x in cw if"completed"in str(x.message)]
 print(f"dist:{len(dw)} act:{len(aw)}")
-pf.show(data,t0,[str(MUSIC)],field=field,device=dev,max_fps=60,save=str(OUT/"2d"),FPS=25)
-pf.show(data,t0,[str(MUSIC)],field=field,device=dev,max_fps=60,save=str(OUT/"3d"),FPS=25,ThreeD=True,imshow=[90,0],d=(600,450))
+pf.show(data,t0,[str(MUSIC)],field=field,device=dev,max_fps=60,save=str(OUT/"2d"),FPS=60,size=3,ssaa=2)
+pf.show(data,t0,[str(MUSIC)],field=field,device=dev,max_fps=60,save=str(OUT/"3d"),FPS=60,ThreeD=True,imshow=[90,3],d=(600,450))
 print("done")
