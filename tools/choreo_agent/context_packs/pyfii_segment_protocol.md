@@ -41,19 +41,26 @@ geo = [
 
 ```python
 def best_assign(starts, targets):
-    best_score, best = -1e9, None
+    best_score = -1e9
+    best = None
     for perm in itertools.permutations(range(N)):
         tt = [targets[i] for i in perm]
-        md = 1e9
+        min_dist = 1e9
         for ratio in [0.2, 0.4, 0.6, 0.8]:
             for i in range(N):
-                for j in range(i+1, N):
-                    ai = tuple(starts[i][k]*ratio + tt[i][k]*(1-ratio) for k in range(2))
-                    aj = tuple(starts[j][k]*ratio + tt[j][k]*(1-ratio) for k in range(2))
-                    d = math.hypot(ai[0]-aj[0], ai[1]-aj[1])
-                    if d < md: md = d
-        score = md*2000 - max(math.dist(starts[i],tt[i]) for i in range(N))*0.01
-        if score > best_score: best_score = score; best = tt
+                for j in range(i + 1, N):
+                    ai_x = starts[i][0] * ratio + tt[i][0] * (1 - ratio)
+                    ai_y = starts[i][1] * ratio + tt[i][1] * (1 - ratio)
+                    aj_x = starts[j][0] * ratio + tt[j][0] * (1 - ratio)
+                    aj_y = starts[j][1] * ratio + tt[j][1] * (1 - ratio)
+                    d = math.hypot(ai_x - aj_x, ai_y - aj_y)
+                    if d < min_dist:
+                        min_dist = d
+        max_dist = max(math.dist(starts[i], tt[i]) for i in range(N))
+        score = min_dist * 2000 - max_dist * 0.01
+        if score > best_score:
+            best_score = score
+            best = tt
     return best
 ```
 
@@ -62,14 +69,14 @@ def best_assign(starts, targets):
 ## 灯光
 
 ```python
-def light(d, color, ticks):
+def apply_light(drone, color, ticks):
     for tick in range(ticks):
-        bright = int(100 + 155*math.sin(tick*math.pi/ticks))
-        r = int(color[1:3], 16)*bright//255
-        g = int(color[3:5], 16)*bright//255
-        b = int(color[5:7], 16)*bright//255
-        d.TurnOnAll(f"#{r:02x}{g:02x}{b:02x}")
-        d.delay(100)
+        bright = int(100 + 155 * math.sin(tick * math.pi / ticks))
+        r = int(color[1:3], 16) * bright // 255
+        g = int(color[3:5], 16) * bright // 255
+        b = int(color[5:7], 16) * bright // 255
+        drone.TurnOnAll(f"#{r:02x}{g:02x}{b:02x}")
+        drone.delay(100)
 ```
 
 推荐 10-20 ticks (1-2s)。每段不同颜色。

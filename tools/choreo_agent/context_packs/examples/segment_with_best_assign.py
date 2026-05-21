@@ -13,18 +13,20 @@ import pyfii as pf
 OUT = REPO_ROOT / "agent_projects" / "my_project" / "output"
 MUSIC = str(REPO_ROOT / "agent_projects" / "my_project" / "music.mp3")
 
-ds = [pf.Drone(0, 0, pf.drone_config_6m, f"192.168.51.{51+i}") for i in range(N)]
+drones = [pf.Drone(0, 0, pf.drone_config_6m, f"192.168.51.{51+i}") for i in range(N)]
 
-def cl(x): return max(10, min(550, int(round(x))))
-def cz(z): return max(80, min(240, int(round(z))))
-def light(d, color, ticks):
+def clamp_xy(v):
+    return max(10, min(550, int(round(v))))
+def clamp_z(v):
+    return max(80, min(240, int(round(v))))
+def apply_light(drone, color, ticks):
     for tick in range(ticks):
-        bright = int(100 + 155*math.sin(tick*math.pi/ticks))
-        r = int(color[1:3], 16)*bright//255
-        g = int(color[3:5], 16)*bright//255
-        b = int(color[5:7], 16)*bright//255
-        d.TurnOnAll(f"#{r:02x}{g:02x}{b:02x}")
-        d.delay(100)
+        bright = int(100 + 155 * math.sin(tick * math.pi / ticks))
+        r = int(color[1:3], 16) * bright // 255
+        g = int(color[3:5], 16) * bright // 255
+        b = int(color[5:7], 16) * bright // 255
+        drone.TurnOnAll(f"#{r:02x}{g:02x}{b:02x}")
+        drone.delay(100)
 
 def best_assign(starts, targets):
     best_score, best = -1e9, None
@@ -38,17 +40,19 @@ def best_assign(starts, targets):
                     aj = tuple(starts[j][k]*ratio + tt[j][k]*(1-ratio) for k in range(2))
                     d = math.hypot(ai[0]-aj[0], ai[1]-aj[1])
                     if d < md: md = d
-        score = md*2000 - max(math.dist(starts[i],tt[i]) for i in range(N))*0.01
-        if score > best_score: best_score = score; best = tt
+        score = md * 2000 - max(math.dist(starts[i], tt[i]) for i in range(N)) * 0.01
+        if score > best_score:
+            best_score = score
+            best = tt
     return best
 
 # --- 固定头部结束 ---
 
 # 起始散布
 S = [(60,120),(180,60),(350,60),(500,160),(500,380),(350,480),(160,480)]
-for i,d in enumerate(ds):
-    d.X = d.x = S[i][0]; d.Y = d.y = S[i][1]
-    d.takeoff(1, 110)
+for i, drone in enumerate(drones):
+    drone.X = drone.x = S[i][0]; drone.Y = drone.y = S[i][1]
+    drone.takeoff(1, 110)
 
 # === AGENT_SEGMENT_START S01 locked=false ===
 # intent: 初始展开，安全几何引导
@@ -62,25 +66,29 @@ geo = [
 ]
 
 colors = ["#2255aa", "#3388cc", "#44aadd"]
-for i,d in enumerate(ds): d.intime(4); d.VelXY(200, 400); d.VelZ(200, 400)
+for i, drone in enumerate(drones):
+    drone.intime(4)
+    drone.VelXY(200, 400)
+    drone.VelZ(200, 400)
 
-prev = [(d.x, d.y, 110) for d in ds]
-for gi in range(3):
+prev = [(d.x, d.y, 110) for drone in drones]
+for gi in range(len(geo)):
     targets = geo[gi] if gi == 0 else best_assign(prev, geo[gi])
-    for i,d in enumerate(ds):
-        dd = math.dist((prev[i][0],prev[i][1]),(targets[i][0],targets[i][1]))
-        spd = min(200, max(150, int(dd/2.0)))
-        d.VelXY(spd, spd*2); d.VelZ(spd, spd*2)
-        d.move2(cl(targets[i][0]), cl(targets[i][1]), cz(targets[i][2]+20*math.sin(i)))
+    for i, drone in enumerate(drones):
+        dist_cm = math.dist((prev[i][0], prev[i][1]),
+                          (targets[i][0], targets[i][1]))
+        speed = min(200, max(150, int(dist_cm / 2.0)))
+        drone.VelXY(spd, spd*2); drone.VelZ(spd, spd*2)
+        drone.move2(clamp_xy(targets[i][0]), clamp_xy(targets[i][1]), clamp_z(targets[i][2]+20*math.sin(i)))
         light(d, colors[gi], 15)
         d.delay(1500)
     prev = targets
 
 # === AGENT_SEGMENT_END S01 ===
 
-for d in ds: d.end()
+for drone in drones: drone.end()
 os.makedirs(str(OUT), exist_ok=True)
-pf.Fii(str(OUT), ds, music=MUSIC).save(field=6)
+pf.Fii(str(OUT), drones, music=MUSIC).save(field=6)
 
 # 验证
 import numpy as np, warnings; warnings.filterwarnings('ignore')
