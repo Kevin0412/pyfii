@@ -20,11 +20,11 @@ AI 生成段代码时调用本工具，拿到 permutation 后硬编码写入。
 ## 剪枝规则
 
 对 7 机 (5040 排列) **不需要剪枝**——全排列 < 50ms。
-对 9 机 (362880 排列) 建议启用：
+对 9 机 (362880 排列) 建议启用。推荐阈值 80cm（30次测试零误杀，剪枝率~35%）：
 
 ```python
-def prune(perm, starts, threshold=51):
-    """只剪起始距离<51cm的对向交换（已处碰撞范围）"""
+def prune(perm, starts, threshold=80):
+    """剪对向交换且起始距离<threshold的排列"""
     for i in range(N):
         for j in range(i+1, N):
             if perm[i] == j and perm[j] == i:
@@ -33,7 +33,7 @@ def prune(perm, starts, threshold=51):
     return False
 ```
 
-阈值 = F400 碰撞阈值。100 次随机测试零误杀最优解。
+阈值 80cm：剪枝率 ~35%，测试零误杀最优解。
 
 ## 离线工具接口
 
