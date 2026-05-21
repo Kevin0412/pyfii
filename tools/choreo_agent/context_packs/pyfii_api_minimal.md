@@ -35,8 +35,11 @@ drone.delay(100)   # 毫秒。delay(42) 是 42ms，不是 42s。
 
 ## Move
 
+`drone.x`, `drone.y`, `drone.z` 记录当前目标点，可用于相对移动：
+
 ```python
-drone.move2(x, y, z)
+drone.move2(x, y, z)       # 绝对坐标
+drone.move(drone.x+dx, drone.y+dy, drone.z+dz)  # 相对移动
 ```
 
 坐标必须是整数。`math.cos/sin` 返回浮点数，必须取整：
