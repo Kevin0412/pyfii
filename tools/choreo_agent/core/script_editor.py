@@ -94,6 +94,17 @@ def replace_active_segment(
 def lock_segment(script_path: Path, segment_id: str) -> bool:
     """将段标记为 locked=true"""
     content = script_path.read_text(encoding="utf-8")
+    old = f"{MARKER_START} id={segment_id} locked=false"
+    new = f"{MARKER_START} id={segment_id} locked=true"
+    if old in content:
+        content = content.replace(old, new)
+        tmp = script_path.with_suffix(".tmp")
+        tmp.write_text(content, encoding="utf-8")
+        tmp.replace(script_path)
+        return True
+    return False
+    """将段标记为 locked=true"""
+    content = script_path.read_text(encoding="utf-8")
     old = f"{MARKER_START} {segment_id} locked=false"
     new = f"{MARKER_START} {segment_id} locked=true"
     if old in content:
