@@ -83,6 +83,24 @@ for i,d in enumerate(ds): d.delay(i*offset_ms)  # offset=100-600ms
 
 排在 inittime 之后、第一个 move2 之前。
 
+
+## dntg 技巧：相对移动 + 条件分支
+
+```python
+# 相对移动：从当前位置偏移
+drone.move(drone.x + dx, drone.y + dy, drone.z + dz)
+
+# 条件分支：不同机走不同路径
+for i, drone in enumerate(drones):
+    drone.inittime(10)
+    if i < 3:
+        drone.move2(280 + 80*i, 280, 180)
+    elif i == 3:
+        drone.move2(280, 280, 200)
+    else:
+        drone.move2(280, 280 + 80*(i-4), 180)
+```
+
 ## 示例完整段
 
 见 `context_packs/examples/segment_with_best_assign.py`
