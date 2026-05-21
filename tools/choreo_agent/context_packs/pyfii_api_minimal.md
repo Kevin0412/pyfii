@@ -61,11 +61,11 @@ def clamp_z(v):
 ## Speed
 
 ```python
-drone.VelXY(120, 240)   # (min_speed, max_speed) cm/s
+drone.VelXY(120, 240)   # (speed cm/s, acc cm/s²)
 drone.VelZ(120, 240)    # 纵向速度
 ```
 
-max speed = 200 cm/s。acceleration 默认 ~200 cm/s²，范围 (50, 400)。
+speed range = (20, 200) cm/s。acceleration 默认 ~200 cm/s²，范围 (50, 400)。
 
 速度 200 + 加速度 400 都拉满还飞不完，才需要延长 delay。
 
