@@ -23,15 +23,48 @@ def apply_light(drone, color, ticks):
         drone.TurnOnAll(f"#{r:02x}{g:02x}{b:02x}")
         drone.delay(100)
 
-# 散布起飞
+# === PYFII_AGENT_SEGMENT_START id=S00 locked=true ===
+# TAKEOFF segment (agent-defined)
 S = [(60,120),(180,60),(350,60),(500,160),(500,380),(350,480),(160,480)]
 for i, drone in enumerate(drones):
     drone.X = drone.x = S[i][0]
     drone.Y = drone.y = S[i][1]
     drone.takeoff(1, 110)
+# === PYFII_AGENT_SEGMENT_END S00 ===
 
 # === PYFII_AGENT_SEGMENT_START id=S01 locked=false ===
-print("S01 placeholder")
+# start_time: 4.0
+# end_time: 14.0
+# intent: 从散布进入有序
+
+geo = [
+    [(280+140*math.cos(2*math.pi*i/N), 280+140*math.sin(2*math.pi*i/N), 135) for i in range(N)],
+    [(80+120*i, 180, 155) if i<4 else (90+120*(i-3), 390, 165) for i in range(N)],
+    [(80,80,170),(480,80,170),(80,480,170),(480,480,170),(280,280,175),(200,200,160),(360,360,160)],
+]
+
+perms = [(4, 5, 6, 0, 1, 2, 3), (0, 1, 3, 6, 5, 4, 2), (0, 5, 1, 3, 6, 2, 4)]
+colors = ["#2255aa", "#3388cc", "#44aadd"]
+
+for i, drone in enumerate(drones):
+    drone.intime(4)
+    drone.VelXY(200, 400)
+    drone.VelZ(200, 400)
+
+prev = [(drone.x, drone.y, 110) for drone in drones]
+for gi in range(len(geo)):
+    perm = perms[gi]
+    for i, drone in enumerate(drones):
+        tx, ty, tz = geo[gi][perm[i]]
+        dist_cm = math.dist((prev[i][0], prev[i][1]), (tx, ty))
+        speed = min(200, max(150, int(dist_cm / 2.0)))
+        drone.VelXY(speed, speed * 2)
+        drone.VelZ(speed, speed * 2)
+        drone.move2(clamp_xy(tx), clamp_xy(ty), clamp_z(tz + 10 * math.sin(i)))
+        apply_light(drone, colors[gi], 15)
+        drone.delay(1500)
+    prev = [(geo[gi][perm[i]][0], geo[gi][perm[i]][1], geo[gi][perm[i]][2]) for i in range(N)]
+
 # === PYFII_AGENT_SEGMENT_END S01 ===
 
 # === PYFII_AGENT_SEGMENT_START id=S02 locked=false ===
