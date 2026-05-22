@@ -1,0 +1,73 @@
+:root {
+  color-scheme: dark;
+  font-family: "JetBrains Mono", "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  background: #090909;
+  color: #e8e8e8;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+  min-height: 100vh;
+  background: #090909;
+}
+
+button,
+input,
+select {
+  font: inherit;
+}
+
+button,
+select,
+input[type="file"]::file-selector-button {
+  border: 1px solid #d8d8d8;
+  background: #141414;
+  color: #f0f0f0;
+  padding: 6px 10px;
+  cursor: pointer;
+}
+
+button:disabled,
+select:disabled {
+  color: #777;
+  border-color: #555;
+  cursor: not-allowed;
+}
+
+button:hover:not(:disabled),
+select:hover:not(:disabled),
+input[type="file"]::file-selector-button:hover {
+  background: #202020;
+}
+
+input[type="range"] {
+  accent-color: #f2f2f2;
+}
+
+.level-ok {
+  color: #42d47d;
+}
+
+.level-warning {
+  color: #ffd15c;
+}
+
+.level-error {
+  color: #ff5b5b;
+}
+
+.muted {
+  color: #8b8b8b;
+}
+
+.mono-grid {
+  display: grid;
+  gap: 6px;
+}

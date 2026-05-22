@@ -24,3 +24,6 @@ gui.png
 build
 *.csv
 .deepseek/
+apps/pyfii-gui/backend/.runtime/
+apps/pyfii-gui/frontend/dist/
+apps/pyfii-gui/frontend/node_modules/
