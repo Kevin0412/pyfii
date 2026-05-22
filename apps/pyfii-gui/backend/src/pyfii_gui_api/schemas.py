@@ -1,0 +1,72 @@
+from typing import Any, Dict, List, Literal, Optional, Union
+
+from pydantic import BaseModel, Field
+
+
+JsonNumber = Union[int, float]
+
+
+class MusicInfo(BaseModel):
+    available: bool
+    files: List[str] = Field(default_factory=list)
+
+
+class SafetySummary(BaseModel):
+    level: Literal["ok", "warning", "error"]
+    error_count: int
+    warning_count: int
+    min_distance_cm: Optional[float] = None
+
+
+class ProjectMeta(BaseModel):
+    project_id: str
+    name: str
+    field: Optional[int] = None
+    device: Optional[str] = None
+    drone_count: int
+    duration_ms: float
+    source_fps: int
+    frame_count: int
+    music: MusicInfo
+    safety_summary: SafetySummary
+
+
+class ProjectCreateResponse(ProjectMeta):
+    warnings: List[str] = Field(default_factory=list)
+
+
+class DroneTrackResponse(BaseModel):
+    id: int
+    samples: List[List[JsonNumber]]
+
+
+class TracksResponse(BaseModel):
+    project_id: str
+    fps: int
+    duration_ms: float
+    field: Optional[int] = None
+    device: Optional[str] = None
+    drones: List[DroneTrackResponse]
+
+
+class SafetyEvent(BaseModel):
+    id: str
+    time_ms: float
+    frame: int
+    level: Literal["warning", "error"]
+    type: str
+    drone_a: Optional[int] = None
+    drone_b: Optional[int] = None
+    distance_cm: Optional[float] = None
+    threshold_cm: Optional[float] = None
+    message: str
+    details: Dict[str, Any] = Field(default_factory=dict)
+
+
+class SafetyResponse(BaseModel):
+    summary: SafetySummary
+    events: List[SafetyEvent]
+
+
+class DeleteResponse(BaseModel):
+    ok: bool

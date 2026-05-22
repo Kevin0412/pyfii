@@ -1,0 +1,20 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pyfii-gui-api"
+version = "0.1.0"
+description = "FastAPI adapter for the standalone Pyfii GUI prototype."
+requires-python = ">=3.9"
+dependencies = [
+  "fastapi>=0.110",
+  "uvicorn[standard]>=0.27",
+  "python-multipart>=0.0.9",
+  "pydantic>=2.0",
+  "orjson>=3.9",
+  "pyfii>=1.5.0",
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
