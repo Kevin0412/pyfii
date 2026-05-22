@@ -60,6 +60,7 @@ prev = {prev_state}
 """
 
     user += """## 要求
+- 不要输出 marker 行（START/END），只输出段内部的 Python 代码
 - 段代码必须在 marker 之间（见 segment_protocol）
 - 几何内部点间距 > 51cm
 - best_assign 结果硬编码为 perm = (...)

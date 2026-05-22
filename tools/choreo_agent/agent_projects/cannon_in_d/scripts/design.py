@@ -191,15 +191,6 @@ for gi in range(3):
 # geo3: 20.8 + 排队0.48s + 灯光2.4s = 23.68s < 24.0 ✓
 # 段间隔 > 0.5s ✓
 # === PYFII_AGENT_SEGMENT_END S02 ===
-# === PYFII_AGENT_SEGMENT_END S02 ===
-# === PYFII_AGENT_SEGMENT_END S02 ===
-# === PYFII_AGENT_SEGMENT_END S02 ===
-# === PYFII_AGENT_SEGMENT_END S02 ===
-# === PYFII_AGENT_SEGMENT_END S02 ===
-# === PYFII_AGENT_SEGMENT_END S02 ===
-# === PYFII_AGENT_SEGMENT_END S02 ===
-# === PYFII_AGENT_SEGMENT_END S02 ===
-# === PYFII_AGENT_SEGMENT_END S02 ===
 
 for drone in drones: drone.end()
 os.makedirs(str(OUT), exist_ok=True)
