@@ -25,7 +25,6 @@ def apply_light(drone, color, ticks):
 
 
 # === PYFII_AGENT_SEGMENT_START id=S01 locked=true ===
-# === PYFII_AGENT_SEGMENT_START id=S01 locked=true ===
 # start_time: 0.0
 # end_time: 14.0
 # intent: 散布起飞 + 从散布进入有序
@@ -87,15 +86,6 @@ for gi in range(len(geo)):
 
 # === PYFII_AGENT_SEGMENT_END S01 ===
 
-# === PYFII_AGENT_SEGMENT_START id=S02 locked=false ===
-# === PYFII_AGENT_SEGMENT_START id=S02 locked=false ===
-# === PYFII_AGENT_SEGMENT_START id=S02 locked=false ===
-# === PYFII_AGENT_SEGMENT_START id=S02 locked=false ===
-# === PYFII_AGENT_SEGMENT_START id=S02 locked=false ===
-# === PYFII_AGENT_SEGMENT_START id=S02 locked=false ===
-# === PYFII_AGENT_SEGMENT_START id=S02 locked=false ===
-# === PYFII_AGENT_SEGMENT_START id=S02 locked=false ===
-# === PYFII_AGENT_SEGMENT_START id=S02 locked=false ===
 # === PYFII_AGENT_SEGMENT_START id=S02 locked=false ===
 # start_time: 14.0
 # end_time: 24.0
