@@ -86,7 +86,6 @@ for gi in range(len(geo)):
     prev = [(geo[gi][perm[i]][0], geo[gi][perm[i]][1], geo[gi][perm[i]][2]) for i in range(N)]
 
 # === PYFII_AGENT_SEGMENT_END S01 ===
-# === PYFII_AGENT_SEGMENT_END S01 ===
 
 # === PYFII_AGENT_SEGMENT_START id=S02 locked=false ===
 # === PYFII_AGENT_SEGMENT_START id=S02 locked=false ===
