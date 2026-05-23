@@ -2,11 +2,13 @@ function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value));
 }
 
-function hslToRgb(h: number, s: number, l: number): [number, number, number] {
+function hsvToRgb(h: number, s: number, v: number): [number, number, number] {
   const hue = ((h % 360) + 360) % 360;
-  const chroma = (1 - Math.abs(2 * l - 1)) * s;
+  const saturation = clamp(s, 0, 1);
+  const value = clamp(v, 0, 1);
+  const chroma = value * saturation;
   const x = chroma * (1 - Math.abs(((hue / 60) % 2) - 1));
-  const match = l - chroma / 2;
+  const match = value - chroma;
   let r = 0;
   let g = 0;
   let b = 0;
@@ -38,11 +40,24 @@ function hslToRgb(h: number, s: number, l: number): [number, number, number] {
   ];
 }
 
-export function droneColor(id: number, shade = 0): string {
-  const hue = 180 - ((id - 1) * 180) / 7;
-  const lightness = clamp(0.52 + shade * 0.22, 0.22, 0.75);
-  const [r, g, b] = hslToRgb(hue, 0.9, lightness);
+export function droneRgb(id: number, shade = 0): [number, number, number] {
+  const zeroBasedId = Math.max(0, id - 1);
+  const pyfiiHue = 180 - (zeroBasedId * 180) / 9;
+  const hue = ((-Math.abs(pyfiiHue)) % 180) + 180;
+  const cvHueDegrees = (hue % 180) * 2;
+  const shadeValue = clamp(shade, -125, 125);
+  const saturation = shadeValue > 0 ? (255 - shadeValue) / 255 : 1;
+  const value = shadeValue > 0 ? 1 : (255 + shadeValue) / 255;
+  return hsvToRgb(cvHueDegrees, saturation, value);
+}
+
+export function rgbCss(rgb: [number, number, number]): string {
+  const [r, g, b] = rgb;
   return `rgb(${r}, ${g}, ${b})`;
+}
+
+export function droneColor(id: number, shade = 0): string {
+  return rgbCss(droneRgb(id, shade));
 }
 
 export function ledColor(rgb: [number, number, number]): string | null {

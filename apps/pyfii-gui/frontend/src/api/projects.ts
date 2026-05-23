@@ -1,4 +1,4 @@
-import { requestJson } from "./client";
+import { API_BASE_URL, requestJson } from "./client";
 import type { ProjectMeta, SafetyResponse, TracksResponse } from "../renderer/types";
 
 export interface ProjectCreateResponse extends ProjectMeta {
@@ -27,6 +27,10 @@ export async function fetchProjectTracks(projectId: string, fps: number): Promis
 
 export async function fetchProjectSafety(projectId: string): Promise<SafetyResponse> {
   return requestJson<SafetyResponse>(`/api/projects/${projectId}/safety`);
+}
+
+export function projectMusicUrl(projectId: string): string {
+  return `${API_BASE_URL}/api/projects/${encodeURIComponent(projectId)}/music`;
 }
 
 export async function deleteProject(projectId: string): Promise<{ ok: boolean }> {

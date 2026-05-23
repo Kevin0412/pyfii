@@ -16,6 +16,10 @@ export function viewPositions(drone: DroneFrame): DroneViewPositions {
   };
 }
 
+function isF600(device: string | null | undefined): boolean {
+  return String(device || "").toUpperCase() === "F600";
+}
+
 function drawLed(ctx: CanvasRenderingContext2D, drone: DroneFrame, x: number, y: number, radius: number): void {
   const led = ledColor(drone.ledRgb);
   if (!led) {
@@ -29,12 +33,19 @@ function drawLed(ctx: CanvasRenderingContext2D, drone: DroneFrame, x: number, y:
   ctx.restore();
 }
 
-function drawTopDrone(ctx: CanvasRenderingContext2D, drone: DroneFrame, selected: boolean): void {
+function drawTopDrone(
+  ctx: CanvasRenderingContext2D,
+  drone: DroneFrame,
+  selected: boolean,
+  device: string | null | undefined,
+): void {
   const [x, y] = topViewPoint(drone.xCm, drone.yCm);
   const angle = (drone.yawDeg / 180) * Math.PI;
-  const color = droneColor(drone.id, (drone.zCm - 125) / 125);
-  const arm = 15;
-  const rotor = 7;
+  const color = droneColor(drone.id, ((drone.zCm - 125) / 125) * 125);
+  const smallDrone = isF600(device);
+  const arm = smallDrone ? 12.6 / 2 : 21 / 2;
+  const rotor = smallDrone ? 5 : 8;
+  const ledRadius = smallDrone ? 3 : 5;
   const offsets = [Math.PI / 4, (3 * Math.PI) / 4, (-3 * Math.PI) / 4, -Math.PI / 4].map((offset) => ({
     x: x - arm * Math.cos(offset + angle),
     y: y + arm * Math.sin(offset + angle),
@@ -57,16 +68,7 @@ function drawTopDrone(ctx: CanvasRenderingContext2D, drone: DroneFrame, selected
     ctx.stroke();
   }
 
-  ctx.beginPath();
-  ctx.arc(x, y, 3, 0, Math.PI * 2);
-  ctx.fill();
-
-  ctx.beginPath();
-  ctx.moveTo(x, y);
-  ctx.lineTo(x + Math.cos(angle) * 22, y - Math.sin(angle) * 22);
-  ctx.stroke();
-
-  drawLed(ctx, drone, x, y, 5);
+  drawLed(ctx, drone, x, y, ledRadius);
   ctx.restore();
 }
 
@@ -76,32 +78,47 @@ function drawSideDrone(
   point: [number, number],
   shade: number,
   selected: boolean,
+  device: string | null | undefined,
 ): void {
   const [x, y] = point;
   const color = droneColor(drone.id, shade);
+  const smallDrone = isF600(device);
+  const bodySpan = smallDrone ? 12.6 : 21;
+  const rotorX = bodySpan / Math.sqrt(2) / 2;
+  const bodyY = smallDrone ? 4.0 : 7.6;
+  const rotorRadiusX = smallDrone ? 5 : 8;
+  const rotorRadiusY = 2;
+  const ledRadius = smallDrone ? 3 : 5;
+  const topY = y - bodyY / 4;
+  const bottomY = y - (bodyY * 3) / 4;
   ctx.save();
   ctx.strokeStyle = selected ? canvasPalette.selected : color;
   ctx.lineWidth = selected ? 3 : 2;
 
   ctx.beginPath();
-  ctx.ellipse(x - 10, y - 3, 8, 2, 0, 0, Math.PI * 2);
-  ctx.ellipse(x + 10, y - 3, 8, 2, 0, 0, Math.PI * 2);
-  ctx.ellipse(x - 10, y + 3, 8, 2, 0, 0, Math.PI * 2);
-  ctx.ellipse(x + 10, y + 3, 8, 2, 0, 0, Math.PI * 2);
+  ctx.ellipse(x + rotorX, topY, rotorRadiusX, rotorRadiusY, 0, 0, Math.PI * 2);
+  ctx.ellipse(x - rotorX, topY, rotorRadiusX, rotorRadiusY, 0, 0, Math.PI * 2);
+  ctx.ellipse(x - rotorX, bottomY, rotorRadiusX, rotorRadiusY, 0, 0, Math.PI * 2);
+  ctx.ellipse(x + rotorX, bottomY, rotorRadiusX, rotorRadiusY, 0, 0, Math.PI * 2);
   ctx.stroke();
 
   ctx.beginPath();
-  ctx.moveTo(x - 10, y - 3);
-  ctx.lineTo(x + 10, y + 3);
-  ctx.moveTo(x + 10, y - 3);
-  ctx.lineTo(x - 10, y + 3);
+  ctx.moveTo(x + rotorX, topY);
+  ctx.lineTo(x - rotorX, bottomY);
+  ctx.moveTo(x - rotorX, topY);
+  ctx.lineTo(x + rotorX, bottomY);
   ctx.stroke();
 
-  drawLed(ctx, drone, x, y, 4);
+  drawLed(ctx, drone, x, y - bodyY / 2, ledRadius);
   ctx.restore();
 }
 
-export function drawDrones(ctx: CanvasRenderingContext2D, frame: RenderFrame, options: RenderOptions): void {
+export function drawDrones(
+  ctx: CanvasRenderingContext2D,
+  frame: RenderFrame,
+  options: RenderOptions,
+  device?: string | null,
+): void {
   const byX = [...frame.drones].sort((left, right) => left.xCm - right.xCm);
   const byY = [...frame.drones].sort((left, right) => right.yCm - left.yCm);
   const byZ = [...frame.drones].sort((left, right) => left.zCm - right.zCm);
@@ -111,8 +128,9 @@ export function drawDrones(ctx: CanvasRenderingContext2D, frame: RenderFrame, op
       ctx,
       drone,
       rightViewPoint(drone.yCm, drone.zCm),
-      (drone.xCm - 280) / 280,
+      ((drone.xCm - 280) / 280) * 125,
       drone.id === options.selectedDroneId,
+      device,
     );
   }
 
@@ -121,12 +139,13 @@ export function drawDrones(ctx: CanvasRenderingContext2D, frame: RenderFrame, op
       ctx,
       drone,
       frontViewPoint(drone.xCm, drone.zCm),
-      (280 - drone.yCm) / 280,
+      ((280 - drone.yCm) / 280) * 125,
       drone.id === options.selectedDroneId,
+      device,
     );
   }
 
   for (const drone of byZ) {
-    drawTopDrone(ctx, drone, drone.id === options.selectedDroneId);
+    drawTopDrone(ctx, drone, drone.id === options.selectedDroneId, device);
   }
 }

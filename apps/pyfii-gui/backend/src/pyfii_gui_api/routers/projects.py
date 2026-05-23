@@ -1,9 +1,10 @@
 from pathlib import Path
-from typing import List
-import shutil
+from typing import Any, Iterable, List, Optional
+import mimetypes
 import uuid
 
 from fastapi import APIRouter, File, Form, Query, UploadFile
+from fastapi.responses import FileResponse
 
 from ..config import settings
 from ..errors import AppError
@@ -30,6 +31,57 @@ from ..services.storage import cleanup_project, create_project_workspace
 router = APIRouter()
 
 ALLOWED_TRACK_FPS = {30, 60, 100, 200}
+AUDIO_EXTENSIONS = {".mp3", ".wav", ".ogg", ".m4a", ".aac", ".flac"}
+
+
+def _is_relative_to(path: Path, parent: Path) -> bool:
+    try:
+        path.resolve().relative_to(parent.resolve())
+        return True
+    except ValueError:
+        return False
+
+
+def _music_roots(record: ProjectRecord) -> Iterable[Path]:
+    music = record.music
+    if isinstance(music, (list, tuple)) and music:
+        root = Path(str(music[0]))
+        if root.exists() and _is_relative_to(root, record.extract_dir):
+            yield root
+    yield record.project_dir / "动作组"
+    yield record.project_dir
+
+
+def _music_names(music: Any) -> List[str]:
+    if isinstance(music, (list, tuple)):
+        return [str(item) for item in music[1:] if str(item)]
+    if music:
+        return [str(music)]
+    return []
+
+
+def _find_music_file(record: ProjectRecord) -> Optional[Path]:
+    names = _music_names(record.music)
+    if not names:
+        return None
+
+    for name in names:
+        direct = Path(name)
+        if direct.exists() and direct.is_file() and _is_relative_to(direct, record.extract_dir):
+            return direct
+
+    for root in _music_roots(record):
+        if not root.exists():
+            continue
+        for path in root.rglob("*"):
+            if not path.is_file() or path.suffix.lower() not in AUDIO_EXTENSIONS:
+                continue
+            if not _is_relative_to(path, record.extract_dir):
+                continue
+            for name in names:
+                if path.name == name or path.stem == Path(name).stem:
+                    return path
+    return None
 
 
 @router.post("", response_model=ProjectCreateResponse)
@@ -143,6 +195,17 @@ async def get_tracks(
 async def get_safety(project_id: str) -> SafetyResponse:
     record = project_cache.require(project_id)
     return SafetyResponse(summary=record.safety_summary, events=record.safety_events)
+
+
+@router.get("/{project_id}/music")
+async def get_music(project_id: str) -> FileResponse:
+    record = project_cache.require(project_id)
+    music_path = _find_music_file(record)
+    if music_path is None:
+        raise AppError(404, "music_not_found", "Project music file was not found.")
+
+    media_type = mimetypes.guess_type(music_path.name)[0] or "application/octet-stream"
+    return FileResponse(music_path, media_type=media_type, filename=music_path.name)
 
 
 @router.delete("/{project_id}", response_model=DeleteResponse)

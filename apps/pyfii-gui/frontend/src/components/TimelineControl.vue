@@ -1,6 +1,6 @@
 <template>
   <section class="timeline">
-    <button :disabled="!project.hasProject" @click="player.togglePlaying">
+    <button :disabled="!project.hasProject" @click="togglePlayback">
       {{ player.playing ? "Pause" : "Play" }}
     </button>
 
@@ -30,12 +30,28 @@
       <input v-model="player.showSafetyMarkers" type="checkbox" />
       safety
     </label>
+
+    <audio
+      v-if="musicUrl"
+      ref="audioRef"
+      class="music-player"
+      :src="musicUrl"
+      preload="metadata"
+      controls
+      @play="onAudioPlay"
+      @pause="onAudioPause"
+      @seeked="onAudioSeek"
+      @ended="player.pause"
+    />
+
+    <span v-else class="music-empty">no music</span>
   </section>
 </template>
 
 <script setup lang="ts">
-import { computed } from "vue";
+import { computed, nextTick, ref, watch } from "vue";
 
+import { projectMusicUrl } from "../api/projects";
 import { usePlayerStore } from "../stores/player";
 import { useProjectStore } from "../stores/project";
 import { useSafetyStore } from "../stores/safety";
@@ -43,6 +59,14 @@ import { useSafetyStore } from "../stores/safety";
 const player = usePlayerStore();
 const project = useProjectStore();
 const safety = useSafetyStore();
+const audioRef = ref<HTMLAudioElement | null>(null);
+
+const musicUrl = computed(() => {
+  if (!project.projectId || !project.meta?.music.available) {
+    return "";
+  }
+  return projectMusicUrl(project.projectId);
+});
 
 const currentTime = computed({
   get: () => player.currentTimeMs,
@@ -57,15 +81,117 @@ const speed = computed({
   set: (value: number) => player.setSpeed(Number(value)),
 });
 
+function syncAudioTime(force = false): void {
+  const audio = audioRef.value;
+  if (!audio || !musicUrl.value) {
+    return;
+  }
+  const targetSeconds = player.currentTimeMs / 1000;
+  if (force || Math.abs(audio.currentTime - targetSeconds) > 0.35) {
+    audio.currentTime = targetSeconds;
+  }
+}
+
+async function playAudio(): Promise<void> {
+  const audio = audioRef.value;
+  if (!audio || !musicUrl.value) {
+    return;
+  }
+  audio.playbackRate = player.speed;
+  syncAudioTime(true);
+  try {
+    await audio.play();
+  } catch {
+    // Browsers may block audio until a user gesture; the simulation can still run.
+  }
+}
+
+function pauseAudio(): void {
+  audioRef.value?.pause();
+}
+
+function togglePlayback(): void {
+  if (player.playing) {
+    player.pause();
+    pauseAudio();
+    return;
+  }
+
+  player.play();
+  void playAudio();
+}
+
+function onAudioPlay(): void {
+  if (!player.playing) {
+    player.play();
+  }
+  syncAudioTime();
+}
+
+function onAudioPause(): void {
+  if (player.playing && !audioRef.value?.ended) {
+    player.pause();
+  }
+}
+
+function onAudioSeek(): void {
+  const audio = audioRef.value;
+  if (!audio) {
+    return;
+  }
+  player.setCurrentTime(audio.currentTime * 1000);
+  safety.setActiveEvent(null);
+}
+
 function formatTime(ms: number): string {
   return `${(ms / 1000).toFixed(2)}s`;
 }
+
+watch(
+  () => player.playing,
+  (playing) => {
+    if (playing) {
+      void playAudio();
+    } else {
+      pauseAudio();
+    }
+  },
+);
+
+watch(
+  () => player.speed,
+  (value) => {
+    if (audioRef.value) {
+      audioRef.value.playbackRate = value;
+    }
+  },
+);
+
+watch(
+  () => player.currentTimeMs,
+  () => syncAudioTime(false),
+);
+
+watch(
+  musicUrl,
+  async () => {
+    await nextTick();
+    if (audioRef.value) {
+      audioRef.value.load();
+      audioRef.value.playbackRate = player.speed;
+      syncAudioTime(true);
+      if (player.playing) {
+        void playAudio();
+      }
+    }
+  },
+);
 </script>
 
 <style scoped>
 .timeline {
   display: grid;
-  grid-template-columns: auto auto minmax(180px, 1fr) auto auto;
+  grid-template-columns: auto auto minmax(180px, 1fr) auto auto minmax(180px, 260px);
   align-items: center;
   gap: 12px;
   padding: 10px 14px;
@@ -91,12 +217,25 @@ label {
   margin: 0;
 }
 
+.music-player {
+  width: 100%;
+  height: 28px;
+  filter: grayscale(1);
+}
+
+.music-empty {
+  color: #777;
+  font-size: 12px;
+}
+
 @media (max-width: 760px) {
   .timeline {
     grid-template-columns: 1fr 1fr;
   }
 
-  input[type="range"] {
+  input[type="range"],
+  .music-player,
+  .music-empty {
     grid-column: 1 / -1;
   }
 }

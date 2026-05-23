@@ -44,7 +44,7 @@ export class PyfiiCanvasRenderer {
     this.ctx.setTransform(scaleX, 0, 0, scaleY, 0, 0);
     this.ctx.clearRect(0, 0, PYFII_CLASSIC_LAYOUT.canvasWidth, PYFII_CLASSIC_LAYOUT.canvasHeight);
     drawBackground(this.ctx, input.meta);
-    drawDrones(this.ctx, input.frame, input.options);
+    drawDrones(this.ctx, input.frame, input.options, input.meta?.device);
     if (input.options.showSafetyMarkers) {
       drawSafetyMarkers(this.ctx, input.frame, input.safetyEvents);
     }

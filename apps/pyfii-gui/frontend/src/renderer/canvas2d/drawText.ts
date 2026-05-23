@@ -1,5 +1,5 @@
 import type { RenderFrame, RenderOptions } from "../types";
-import { canvasPalette } from "../palette";
+import { canvasPalette, droneColor } from "../palette";
 import { PYFII_CLASSIC_LAYOUT } from "./layout";
 
 function fitText(
@@ -9,12 +9,45 @@ function fitText(
   initialSize: number,
 ): number {
   for (let size = initialSize; size >= 9; size -= 1) {
-    ctx.font = `${size}px "JetBrains Mono", Consolas, monospace`;
+    ctx.font = infoFont(size);
     if (ctx.measureText(text).width <= maxWidth) {
       return size;
     }
   }
   return 9;
+}
+
+function infoFont(size: number): string {
+  return `700 ${size}px "JetBrains Mono", Consolas, monospace`;
+}
+
+function drawSplitCellText(
+  ctx: CanvasRenderingContext2D,
+  text: string,
+  textX: number,
+  textY: number,
+  cellX: number,
+  cellY: number,
+  cellWidth: number,
+  cellHeight: number,
+): void {
+  const splitX = cellX + cellWidth / 2;
+
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(cellX, cellY, splitX - cellX, cellHeight);
+  ctx.clip();
+  ctx.fillStyle = "#ffffff";
+  ctx.fillText(text, textX, textY);
+  ctx.restore();
+
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(splitX, cellY, cellX + cellWidth - splitX, cellHeight);
+  ctx.clip();
+  ctx.fillStyle = "#000000";
+  ctx.fillText(text, textX, textY);
+  ctx.restore();
 }
 
 export function drawPanelText(
@@ -42,13 +75,21 @@ export function drawInfoGrid(
   ctx.save();
   ctx.strokeStyle = canvasPalette.border;
   ctx.lineWidth = 1;
-  ctx.fillStyle = "rgba(0, 0, 0, 0.72)";
-  ctx.fillRect(grid.x, grid.y, grid.width, grid.height);
-
   for (let row = 0; row < grid.rows; row += 1) {
     for (let col = 0; col < grid.cols; col += 1) {
       const x = grid.x + col * grid.cellWidth;
       const y = grid.y + row * grid.cellHeight;
+      const cellIndex = row * grid.cols + col + 1;
+      if (cellIndex <= 9) {
+        const gradient = ctx.createLinearGradient(x, y, x + grid.cellWidth, y);
+        gradient.addColorStop(0, droneColor(cellIndex, -125));
+        gradient.addColorStop(0.5, droneColor(cellIndex, 0));
+        gradient.addColorStop(1, droneColor(cellIndex, 125));
+        ctx.fillStyle = gradient;
+      } else {
+        ctx.fillStyle = "rgba(0, 0, 0, 0.82)";
+      }
+      ctx.fillRect(x, y, grid.cellWidth, grid.cellHeight);
       ctx.strokeRect(x, y, grid.cellWidth, grid.cellHeight);
     }
   }
@@ -60,8 +101,10 @@ export function drawInfoGrid(
     const index = id - 1;
     const col = index % 5;
     const row = Math.floor(index / 5);
-    const x = grid.x + col * grid.cellWidth + 6;
-    const y = grid.y + row * grid.cellHeight + 20;
+    const cellX = grid.x + col * grid.cellWidth;
+    const cellY = grid.y + row * grid.cellHeight;
+    const x = cellX + 6;
+    const y = cellY + 20;
     const drone = droneById.get(id);
     if (!drone) {
       continue;
@@ -69,9 +112,17 @@ export function drawInfoGrid(
 
     const label = `D${id} (${Math.round(drone.xCm)},${Math.round(drone.yCm)},${Math.round(drone.zCm)})`;
     const size = fitText(ctx, label, grid.cellWidth - 12, 13);
-    ctx.fillStyle = id === options.selectedDroneId ? canvasPalette.selected : canvasPalette.panelText;
-    ctx.font = `${size}px "JetBrains Mono", Consolas, monospace`;
-    ctx.fillText(label, x, y);
+    ctx.font = infoFont(size);
+    drawSplitCellText(
+      ctx,
+      label,
+      x,
+      y,
+      cellX,
+      cellY,
+      grid.cellWidth,
+      grid.cellHeight,
+    );
   }
 
   const statusX = grid.x + 4 * grid.cellWidth + 6;
