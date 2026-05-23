@@ -56,12 +56,13 @@ let ro: ResizeObserver | null = null;
 function sizeFrame(): void {
   const el = shellRef.value;
   if (!el) return;
+  void el.offsetHeight;
   const cw = el.clientWidth;
   const ch = el.clientHeight;
   if (cw <= 0 || ch <= 0) return;
   const w = Math.min(cw, ch * 2);
-  fw.value = w;
-  fh.value = w / 2;
+  fw.value = Math.round(w);
+  fh.value = Math.round(w / 2);
 }
 
 // Wait for layout to fully settle after fullscreen change
@@ -71,6 +72,8 @@ function scheduleSizeCheck(): void {
       requestAnimationFrame(() => sizeFrame());
     });
   });
+  setTimeout(() => sizeFrame(), 300);
+  setTimeout(() => sizeFrame(), 600);
 }
 
 function render(timestamp: number): void {
@@ -213,6 +216,7 @@ onMounted(() => {
     renderer = new PyfiiCanvasRenderer(canvasRef.value, player.renderScale);
   }
   document.addEventListener("fullscreenchange", onFullscreenChange);
+  window.addEventListener("resize", sizeFrame);
   ro = new ResizeObserver(() => sizeFrame());
   if (shellRef.value) ro.observe(shellRef.value);
   sizeFrame();
@@ -225,6 +229,7 @@ watch(() => player.renderScale, (newScale) => {
 
 onUnmounted(() => {
   document.removeEventListener("fullscreenchange", onFullscreenChange);
+  window.removeEventListener("resize", sizeFrame);
   ro?.disconnect();
   cancelAnimationFrame(frameRequest);
 });
