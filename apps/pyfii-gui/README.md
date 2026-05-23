@@ -88,7 +88,8 @@ https://gui.example.com/api/  -> FastAPI backend
 
 - 上传 Fii 项目 zip。
 - 安全解压并调用 `read_fii()` 解析轨迹。
-- 返回项目元信息、轨迹数据和安全日志。
+- 调用 `show(show=False)` 走 pyfii core 的无渲染距离检查。
+- 返回项目元信息、轨迹数据和由 core warnings 结构化得到的安全日志。
 - Canvas 2D 三视图预览：top / front / right。
 - 右下角 2 行 5 列无人机信息栏：D1..D9 + STATUS。
 - 基础安全检查：core warning、水平距离、场地范围、负高度。
