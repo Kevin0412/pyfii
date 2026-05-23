@@ -34,13 +34,23 @@ class Settings:
         runtime_root = os.environ.get("PYFII_GUI_RUNTIME_DIR")
         default_cors_origins = [
             "http://localhost:5173",
-            "http://127.0.0.1:5173",
         ]
+        default_cors_origin_regex = (
+            r"^http://("
+            r"localhost|"
+            r"10\.\d{1,3}\.\d{1,3}\.\d{1,3}|"
+            r"192\.168\.\d{1,3}\.\d{1,3}|"
+            r"172\.(1[6-9]|2\d|3[0-1])\.\d{1,3}\.\d{1,3}"
+            r"):5173$"
+        )
+        cors_origin_regex = os.environ.get("PYFII_GUI_CORS_ORIGIN_REGEX")
 
         self.app_title = os.environ.get("PYFII_GUI_APP_TITLE", "Pyfii GUI API")
         self.runtime_dir = Path(runtime_root) if runtime_root else backend_root / ".runtime" / "projects"
         self.cors_origins = _csv_env("PYFII_GUI_CORS_ORIGINS", default_cors_origins)
-        self.cors_origin_regex = os.environ.get("PYFII_GUI_CORS_ORIGIN_REGEX") or None
+        self.cors_origin_regex = (
+            default_cors_origin_regex if cors_origin_regex is None else cors_origin_regex or None
+        )
         self.cors_allow_credentials = _bool_env("PYFII_GUI_CORS_ALLOW_CREDENTIALS", True)
         self.default_import_fps = _int_env("PYFII_GUI_DEFAULT_IMPORT_FPS", 60)
         self.max_upload_bytes = 100 * 1024 * 1024

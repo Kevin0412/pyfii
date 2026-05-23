@@ -17,7 +17,7 @@ GUI 后端只作为 `pyfii.read.read_fii()` 的薄适配层，不把 FastAPI、V
 ```bash
 cd apps/pyfii-gui/backend
 pip install -e .
-uvicorn pyfii_gui_api.main:app --reload --port 8000
+uvicorn pyfii_gui_api.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
 如果当前环境尚未安装本仓库的 pyfii core，可先在仓库根目录执行：
@@ -34,10 +34,16 @@ npm install
 npm run dev
 ```
 
-本地开发时，前端默认通过 Vite proxy 访问 `/api`，proxy target 默认为 `http://127.0.0.1:8000`。可通过环境变量覆盖：
+本地开发时，前端默认通过 Vite proxy 访问 `/api`，proxy target 默认为 `http://localhost:8000`。可通过环境变量覆盖：
 
 ```bash
-VITE_API_PROXY_TARGET=http://127.0.0.1:8000 npm run dev
+VITE_API_PROXY_TARGET=http://localhost:8000 npm run dev
+```
+
+Vite dev server 默认监听 `0.0.0.0:5173`，局域网设备可直接打开：
+
+```text
+http://<开发机局域网IP>:5173
 ```
 
 ## 配置
@@ -48,10 +54,12 @@ VITE_API_PROXY_TARGET=http://127.0.0.1:8000 npm run dev
 PYFII_GUI_APP_TITLE="Pyfii GUI API"
 PYFII_GUI_RUNTIME_DIR=/var/lib/pyfii-gui/projects
 PYFII_GUI_CORS_ORIGINS=https://gui.example.com,https://admin.example.com
-PYFII_GUI_CORS_ORIGIN_REGEX=
+PYFII_GUI_CORS_ORIGIN_REGEX='^https://.*\.example\.com$'
 PYFII_GUI_CORS_ALLOW_CREDENTIALS=true
 PYFII_GUI_DEFAULT_IMPORT_FPS=60
 ```
+
+默认 CORS 允许 `http://localhost:5173` 和常见私有局域网 IP 的 `:5173` 开发源；生产部署建议显式设置 `PYFII_GUI_CORS_ORIGINS`。
 
 前端构建时通过环境变量配置 API 地址：
 
@@ -68,7 +76,7 @@ Vite dev server 也可配置：
 ```bash
 VITE_DEV_HOST=0.0.0.0
 VITE_DEV_PORT=5173
-VITE_API_PROXY_TARGET=http://127.0.0.1:8000
+VITE_API_PROXY_TARGET=http://localhost:8000
 ```
 
 ## 服务器部署建议
@@ -95,6 +103,21 @@ https://gui.example.com/api/  -> FastAPI backend
 - 右下角 2 行 5 列无人机信息栏：D1..D9 + STATUS。
 - 基础安全检查：core warning、水平距离、场地范围、负高度。
 - 点击安全日志跳转到对应时间。
+
+## 批量导入回归
+
+可用后端脚本把 `doc/ai_choreography_exploration.md` 中的人类作品经验池跑一遍，覆盖 clean zip 打包、安全解压、`read_fii()`、`show(show=False)`、安全日志和轨迹 JSON 序列化：
+
+```bash
+cd <repo-root>
+python apps/pyfii-gui/backend/scripts/batch_import_human_pool.py \
+  --mode both \
+  --fps 60 \
+  --timeout 180 \
+  --json /tmp/pyfii-gui-human-pool-both.json
+```
+
+`--mode modern` 只跑 `ignore_acc=False`，`--mode visual` 只跑 `ignore_acc=True`。已知老版本不兼容项目会记录为 `expected_failure`，不作为 GUI 回归失败处理。
 
 ## 当前不支持
 
