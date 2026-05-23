@@ -247,7 +247,7 @@ onUnmounted(() => {
 
 .canvas-frame {
   position: relative;
-  width: 100%;
+  max-width: 100%;
   max-height: 100%;
   aspect-ratio: 2 / 1;
   border: 1px solid #f0f0f0;
