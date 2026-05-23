@@ -1,6 +1,6 @@
 <template>
   <section ref="canvasShellRef" class="canvas-shell" :class="{ fullscreen: isFullscreen }">
-    <div class="canvas-frame">
+    <div class="canvas-frame" :style="{ width: frameWidth + 'px', height: frameHeight + 'px' }">
       <canvas
         ref="canvasRef"
         :width="canvasWidth"
@@ -39,6 +39,8 @@ const canvasShellRef = ref<HTMLElement | null>(null);
 const isFullscreen = ref(false);
 const exporting = ref(false);
 const exportProgress = ref(0);
+const frameWidth = ref(0);
+const frameHeight = ref(0);
 const project = useProjectStore();
 const player = usePlayerStore();
 const safety = useSafetyStore();
@@ -50,6 +52,18 @@ const canvasImageRendering = computed(() => player.renderScale >= 1 ? "auto" : "
 let renderer: PyfiiCanvasRenderer | null = null;
 let frameRequest = 0;
 let lastTimestamp = 0;
+let resizeObserver: ResizeObserver | null = null;
+
+function updateFrameSize(): void {
+  const shell = canvasShellRef.value;
+  if (!shell) return;
+  const cw = shell.clientWidth;
+  const ch = shell.clientHeight;
+  if (cw <= 0 || ch <= 0) return;
+  const w = Math.min(cw, ch * 2);
+  frameWidth.value = w;
+  frameHeight.value = w / 2;
+}
 
 function render(timestamp: number): void {
   if (!lastTimestamp) {
@@ -70,7 +84,6 @@ function render(timestamp: number): void {
   }
 
   if (renderer) {
-    const frame = getFrameAtTime(project.tracks, player.currentTimeMs);
     renderer.draw(buildRenderInput());
   }
 
@@ -136,7 +149,6 @@ async function exportVideo(): Promise<void> {
   const savedTime = player.currentTimeMs;
   const savedScale = player.renderScale;
 
-  // Ensure at least 1x scale for export quality
   if (player.renderScale < 1) {
     player.setRenderScale(1);
     renderer?.applyScale(1);
@@ -211,6 +223,13 @@ onMounted(() => {
     renderer = new PyfiiCanvasRenderer(canvasRef.value, player.renderScale);
   }
   document.addEventListener("fullscreenchange", onFullscreenChange);
+
+  resizeObserver = new ResizeObserver(() => updateFrameSize());
+  if (canvasShellRef.value) {
+    resizeObserver.observe(canvasShellRef.value);
+  }
+  updateFrameSize();
+
   frameRequest = requestAnimationFrame(render);
 });
 
@@ -220,6 +239,7 @@ watch(() => player.renderScale, (newScale) => {
 
 onUnmounted(() => {
   document.removeEventListener("fullscreenchange", onFullscreenChange);
+  resizeObserver?.disconnect();
   cancelAnimationFrame(frameRequest);
 });
 </script>
@@ -227,27 +247,19 @@ onUnmounted(() => {
 <style scoped>
 .canvas-shell {
   min-height: 0;
+  min-width: 0;
   display: grid;
   place-items: center;
   overflow: hidden;
 }
 
 .canvas-shell.fullscreen {
-  padding: 0;
   background: #000;
-}
-
-.canvas-shell.fullscreen .canvas-frame {
-  width: 100vw;
-  height: 100vh;
-  max-width: none;
-  border: none;
 }
 
 .canvas-frame {
   position: relative;
-  width: 100%;
-  aspect-ratio: 2 / 1;
+  overflow: hidden;
   border: 1px solid #f0f0f0;
   background: #000;
 }
