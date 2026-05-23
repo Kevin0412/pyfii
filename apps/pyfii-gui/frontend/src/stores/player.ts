@@ -7,6 +7,8 @@ interface PlayerState {
   selectedDroneId: number | null;
   showTrail: boolean;
   showSafetyMarkers: boolean;
+  seeking: boolean;
+  renderScale: number;
 }
 
 export const usePlayerStore = defineStore("player", {
@@ -17,6 +19,8 @@ export const usePlayerStore = defineStore("player", {
     selectedDroneId: null,
     showTrail: false,
     showSafetyMarkers: true,
+    seeking: false,
+    renderScale: 1,
   }),
   actions: {
     play() {
@@ -36,6 +40,16 @@ export const usePlayerStore = defineStore("player", {
     },
     setSelectedDrone(id: number | null) {
       this.selectedDroneId = id;
+    },
+    startSeeking() {
+      this.playing = false;
+      this.seeking = true;
+    },
+    endSeeking() {
+      this.seeking = false;
+    },
+    setRenderScale(scale: number) {
+      this.renderScale = scale;
     },
   },
 });
