@@ -34,7 +34,55 @@ npm install
 npm run dev
 ```
 
-默认前端 API 地址是 `http://localhost:8000`，可通过 `VITE_API_BASE_URL` 覆盖。
+本地开发时，前端默认通过 Vite proxy 访问 `/api`，proxy target 默认为 `http://127.0.0.1:8000`。可通过环境变量覆盖：
+
+```bash
+VITE_API_PROXY_TARGET=http://127.0.0.1:8000 npm run dev
+```
+
+## 配置
+
+后端通过环境变量配置，不需要改代码：
+
+```bash
+PYFII_GUI_APP_TITLE="Pyfii GUI API"
+PYFII_GUI_RUNTIME_DIR=/var/lib/pyfii-gui/projects
+PYFII_GUI_CORS_ORIGINS=https://gui.example.com,https://admin.example.com
+PYFII_GUI_CORS_ORIGIN_REGEX=
+PYFII_GUI_CORS_ALLOW_CREDENTIALS=true
+```
+
+前端构建时通过环境变量配置 API 地址：
+
+```bash
+# 同源部署时留空，浏览器会请求 /api
+VITE_API_BASE_URL=
+
+# 前后端分域部署时显式指定 API origin
+VITE_API_BASE_URL=https://api.example.com
+```
+
+Vite dev server 也可配置：
+
+```bash
+VITE_DEV_HOST=0.0.0.0
+VITE_DEV_PORT=5173
+VITE_API_PROXY_TARGET=http://127.0.0.1:8000
+```
+
+## 服务器部署建议
+
+推荐同源反向代理：
+
+```text
+https://gui.example.com/      -> frontend dist
+https://gui.example.com/api/  -> FastAPI backend
+```
+
+这种模式下前端不需要写死 API 主机，`VITE_API_BASE_URL` 保持空值即可。如果前端和后端分域部署，需要同时设置：
+
+- 前端：`VITE_API_BASE_URL=https://api.example.com`
+- 后端：`PYFII_GUI_CORS_ORIGINS=https://gui.example.com`
 
 ## 当前 MVP 支持
 
