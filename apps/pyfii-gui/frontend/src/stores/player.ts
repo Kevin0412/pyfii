@@ -8,6 +8,7 @@ interface PlayerState {
   showTrail: boolean;
   showSafetyMarkers: boolean;
   seeking: boolean;
+  wasPlayingBeforeSeek: boolean;
   renderScale: number;
   fullscreen: boolean;
 }
@@ -21,6 +22,7 @@ export const usePlayerStore = defineStore("player", {
     showTrail: false,
     showSafetyMarkers: true,
     seeking: false,
+    wasPlayingBeforeSeek: false,
     renderScale: 1,
     fullscreen: false,
   }),
@@ -44,11 +46,19 @@ export const usePlayerStore = defineStore("player", {
       this.selectedDroneId = id;
     },
     startSeeking() {
+      if (!this.seeking) {
+        this.wasPlayingBeforeSeek = this.playing;
+      }
       this.playing = false;
       this.seeking = true;
     },
     endSeeking() {
+      const shouldResume = this.wasPlayingBeforeSeek;
       this.seeking = false;
+      this.wasPlayingBeforeSeek = false;
+      if (shouldResume) {
+        this.playing = true;
+      }
     },
     setRenderScale(scale: number) {
       this.renderScale = scale;

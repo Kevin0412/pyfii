@@ -53,8 +53,12 @@ class Settings:
         )
         self.cors_allow_credentials = _bool_env("PYFII_GUI_CORS_ALLOW_CREDENTIALS", True)
         self.default_import_fps = _int_env("PYFII_GUI_DEFAULT_IMPORT_FPS", 60)
-        self.max_upload_bytes = 100 * 1024 * 1024
-        self.max_zip_files = 5000
+        self.max_upload_bytes = _int_env("PYFII_GUI_MAX_UPLOAD_BYTES", 100 * 1024 * 1024)
+        self.max_uncompressed_bytes = _int_env(
+            "PYFII_GUI_MAX_UNCOMPRESSED_BYTES",
+            500 * 1024 * 1024,
+        )
+        self.max_zip_files = _int_env("PYFII_GUI_MAX_ZIP_FILES", 5000)
 
 
 settings = Settings()

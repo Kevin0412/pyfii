@@ -59,11 +59,24 @@ def safe_extract_zip(zip_path: Path, destination: Path) -> Path:
             if file_count > settings.max_zip_files:
                 raise AppError(400, "too_many_files", "Zip archive contains too many files.")
 
+            total_uncompressed_size = 0
             for info in members:
                 if _is_zip_symlink(info):
                     raise AppError(400, "unsafe_zip_member", "Zip archive may not contain symlinks.")
-                if not info.is_dir() and info.file_size > settings.max_upload_bytes:
-                    raise AppError(400, "file_too_large", "A file inside the archive exceeds 100MB.")
+                if not info.is_dir():
+                    if info.file_size > settings.max_upload_bytes:
+                        raise AppError(
+                            400,
+                            "file_too_large",
+                            "A file inside the archive exceeds the configured size limit.",
+                        )
+                    total_uncompressed_size += info.file_size
+                    if total_uncompressed_size > settings.max_uncompressed_bytes:
+                        raise AppError(
+                            400,
+                            "archive_too_large",
+                            "Zip archive uncompressed size exceeds the configured limit.",
+                        )
 
                 target = _target_for_member(destination, _member_name(info))
                 if info.is_dir():

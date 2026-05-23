@@ -14,10 +14,11 @@
         :max="Math.max(project.durationMs, 1)"
         step="10"
         :disabled="!project.hasProject"
-        @mousedown="player.startSeeking()"
-        @touchstart="player.startSeeking()"
-        @mouseup="player.endSeeking()"
-        @touchend="player.endSeeking()"
+        @pointerdown="startSeek"
+        @pointerup="endSeek"
+        @pointercancel="endSeek"
+        @change="endSeek"
+        @blur="endSeek"
       />
       <div class="safety-ticks">
         <span
@@ -147,6 +148,18 @@ function togglePlayback(): void {
 
   player.play();
   void playAudio();
+}
+
+function startSeek(): void {
+  if (project.hasProject) {
+    player.startSeeking();
+  }
+}
+
+function endSeek(): void {
+  if (player.seeking) {
+    player.endSeeking();
+  }
 }
 
 function onAudioPlay(): void {

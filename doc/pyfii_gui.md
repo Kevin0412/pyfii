@@ -27,7 +27,7 @@ pyfii-gui -> pyfii core
 - `GET /api/projects/{project_id}/safety`：返回结构化安全日志。
 - `DELETE /api/projects/{project_id}`：删除缓存和临时文件。
 
-上传 zip 会经过 zip slip 检查、文件数量限制和单文件大小限制。运行时文件默认放在：
+上传 zip 会经过 zip slip 检查、上传体积限制、解压后总体积限制、文件数量限制和单文件大小限制。运行时文件默认放在：
 
 ```text
 apps/pyfii-gui/backend/.runtime/projects/
@@ -57,6 +57,8 @@ GUI 后端会把这些 warning 结构化成前端可展示的事件，例如 `ac
 - 右下角信息栏使用 2 行 5 列布局：D1..D9 + STATUS。
 - 时间轴播放、暂停、倍速、拖动跳转。
 - 点击安全日志跳转到对应时间。
+- 音乐文件播放和基础时间轴同步。
+- 浏览器 MediaRecorder WebM 导出，目前作为实验功能。
 
 Canvas 内部虚拟画布固定为 `1200x600`，按容器缩放显示。渲染器位于 `frontend/src/renderer/`，不依赖 Vue，便于后续复用。
 
@@ -108,6 +110,9 @@ PYFII_GUI_CORS_ORIGINS=https://gui.example.com
 PYFII_GUI_CORS_ORIGIN_REGEX='^https://.*\.example\.com$'
 PYFII_GUI_CORS_ALLOW_CREDENTIALS=true
 PYFII_GUI_DEFAULT_IMPORT_FPS=60
+PYFII_GUI_MAX_UPLOAD_BYTES=104857600
+PYFII_GUI_MAX_UNCOMPRESSED_BYTES=524288000
+PYFII_GUI_MAX_ZIP_FILES=5000
 ```
 
 前端构建环境变量：
@@ -159,5 +164,6 @@ python apps/pyfii-gui/backend/scripts/batch_import_human_pool.py \
 - 不做完整 3D Web 渲染。
 - 不把 GUI 后端或前端移入 `src/pyfii/`。
 - 不为了 GUI 兼容旧项目而修改 core 行为。
+- 不把浏览器 WebM 导出当作最终视频交付链路。
 
-未来可在保持 core/GUI 分离的前提下补充 WebM 导出、Electron + ffmpeg MP4 导出、Three.js 3D 渲染和更完整的 F400/F600 机体外形复刻。
+未来可在保持 core/GUI 分离的前提下补充更稳健的 WebM 导出队列、Electron + ffmpeg MP4 导出、Three.js 3D 渲染和更完整的 F400/F600 机体外形复刻。

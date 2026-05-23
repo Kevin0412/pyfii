@@ -57,6 +57,9 @@ PYFII_GUI_CORS_ORIGINS=https://gui.example.com,https://admin.example.com
 PYFII_GUI_CORS_ORIGIN_REGEX='^https://.*\.example\.com$'
 PYFII_GUI_CORS_ALLOW_CREDENTIALS=true
 PYFII_GUI_DEFAULT_IMPORT_FPS=60
+PYFII_GUI_MAX_UPLOAD_BYTES=104857600
+PYFII_GUI_MAX_UNCOMPRESSED_BYTES=524288000
+PYFII_GUI_MAX_ZIP_FILES=5000
 ```
 
 默认 CORS 允许 `http://localhost:5173` 和常见私有局域网 IP 的 `:5173` 开发源；生产部署建议显式设置 `PYFII_GUI_CORS_ORIGINS`。
@@ -103,6 +106,8 @@ https://gui.example.com/api/  -> FastAPI backend
 - 右下角 2 行 5 列无人机信息栏：D1..D9 + STATUS。
 - 安全日志以 pyfii core warning 为准，GUI 后端只做结构化整理。
 - 点击安全日志跳转到对应时间。
+- 音乐文件播放和基础时间轴同步。
+- 浏览器 MediaRecorder WebM 导出占位能力，当前作为实验功能使用。
 
 ## 批量导入回归
 
@@ -124,11 +129,11 @@ python apps/pyfii-gui/backend/scripts/batch_import_human_pool.py \
 - Electron。
 - MP4 导出。
 - 完整 3D 渲染。
-- 音频同步。
+- 专业级音频/视频导出同步和离线转码。
 
 ## 未来计划
 
-- WebM 导出。
 - Electron + ffmpeg MP4 导出。
+- 更稳健的 WebM 导出队列和导出错误提示。
 - 3D 渲染。
 - 更完整的 F400/F600 机体外形复刻。

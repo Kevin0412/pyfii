@@ -105,44 +105,79 @@ function onFullscreenChange(): void {
   player.setFullscreen(Boolean(document.fullscreenElement));
 }
 
+function waitMs(ms: number): Promise<void> {
+  return new Promise((resolve) => window.setTimeout(resolve, ms));
+}
+
+function waitForPaint(): Promise<void> {
+  return new Promise((resolve) => requestAnimationFrame(() => resolve()));
+}
+
+function waitForAudioReady(audio: HTMLAudioElement): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const cleanup = () => {
+      audio.oncanplaythrough = null;
+      audio.onerror = null;
+    };
+    audio.oncanplaythrough = () => {
+      cleanup();
+      resolve();
+    };
+    audio.onerror = () => {
+      cleanup();
+      reject(new Error("audio load failed"));
+    };
+    audio.load();
+  });
+}
+
+function downloadBlob(blob: Blob, filename: string): void {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
 async function exportVideo(): Promise<void> {
   const canvas = canvasRef.value;
-  if (!canvas || !project.meta) return;
+  if (!canvas || !project.meta || project.durationMs <= 0 || exporting.value) return;
 
   const captureFps = Math.min(project.trackFps, 60);
   const frameIntervalMs = 1000 / captureFps;
   const totalFrames = Math.ceil(project.durationMs / frameIntervalMs);
   const durationMs = project.durationMs;
-
-  // Video stream from canvas
   let stream = canvas.captureStream(captureFps);
-
-  // Try to add audio
+  const streamTracks: MediaStreamTrack[] = [...stream.getTracks()];
   let audioEl: HTMLAudioElement | null = null;
   let audioCtx: AudioContext | null = null;
+  let audioSource: MediaElementAudioSourceNode | null = null;
+  let audioDest: MediaStreamAudioDestinationNode | null = null;
+
   if (project.projectId && project.meta.music.available) {
     try {
       const musicUrl = projectMusicUrl(project.projectId);
       audioEl = new Audio(musicUrl);
       audioEl.preload = "auto";
-      await new Promise<void>((resolve, reject) => {
-        audioEl!.oncanplaythrough = () => resolve();
-        audioEl!.onerror = () => reject(new Error("audio load failed"));
-        audioEl!.load();
-      });
+      await waitForAudioReady(audioEl);
       audioCtx = new AudioContext();
-      const source = audioCtx.createMediaElementSource(audioEl);
-      const dest = audioCtx.createMediaStreamDestination();
-      source.connect(dest);
-      source.connect(audioCtx.destination);
+      audioSource = audioCtx.createMediaElementSource(audioEl);
+      audioDest = audioCtx.createMediaStreamDestination();
+      audioSource.connect(audioDest);
       stream = new MediaStream([
         ...stream.getVideoTracks(),
-        ...dest.stream.getAudioTracks(),
+        ...audioDest.stream.getAudioTracks(),
       ]);
+      streamTracks.push(...audioDest.stream.getTracks());
     } catch {
       audioEl = null;
       audioCtx?.close();
       audioCtx = null;
+      audioSource = null;
+      audioDest = null;
     }
   }
 
@@ -152,7 +187,11 @@ async function exportVideo(): Promise<void> {
   }
 
   const chunks: Blob[] = [];
-  const recorder = new MediaRecorder(stream, { mimeType, videoBitsPerSecond: 8000000 });
+  const recorderOptions: MediaRecorderOptions = { videoBitsPerSecond: 8000000 };
+  if (mimeType) {
+    recorderOptions.mimeType = mimeType;
+  }
+  const recorder = new MediaRecorder(stream, recorderOptions);
   recorder.ondataavailable = (e: BlobEvent) => { if (e.data.size > 0) chunks.push(e.data); };
 
   const wasPlaying = player.playing;
@@ -170,61 +209,67 @@ async function exportVideo(): Promise<void> {
   await nextTick();
   cancelAnimationFrame(frameRequest);
 
-  const exportComplete = new Promise<void>((resolve) => {
+  const exportComplete = new Promise<Blob>((resolve, reject) => {
     recorder.onstop = () => {
-      audioCtx?.close();
-      const blob = new Blob(chunks, { type: mimeType });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `${project.meta?.name ?? "simulation"}.webm`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-
-      player.setCurrentTime(savedTime);
-      if (wasPlaying) player.play();
-      if (player.renderScale !== savedScale) {
-        player.setRenderScale(savedScale);
-        renderer?.applyScale(savedScale);
-      }
-
-      exporting.value = false;
-      exportProgress.value = 0;
-      frameRequest = requestAnimationFrame(render);
-      resolve();
+      resolve(new Blob(chunks, { type: mimeType || "video/webm" }));
     };
-    recorder.start(100);
+    recorder.onerror = () => {
+      reject(new Error("MediaRecorder failed."));
+    };
   });
 
   exporting.value = true;
   exportProgress.value = 0;
 
-  if (audioEl) {
-    audioEl.currentTime = 0;
-    await audioEl.play();
-  }
+  try {
+    recorder.start(250);
 
-  let i = 0;
-  function exportTick(): void {
-    if (i > totalFrames) {
-      renderer?.draw(buildRenderInput());
-      if (audioEl) { audioEl.pause(); }
-      recorder.stop();
-      return;
+    if (audioEl) {
+      audioEl.currentTime = 0;
+      await audioCtx?.resume();
+      await audioEl.play();
     }
 
-    const simTime = Math.min(i * frameIntervalMs, durationMs);
-    player.setCurrentTime(simTime);
-    renderer?.draw(buildRenderInput());
-    exportProgress.value = (i / totalFrames) * 100;
-    i++;
-    requestAnimationFrame(exportTick);
-  }
+    for (let i = 0; i <= totalFrames; i += 1) {
+      const simTime = Math.min(i * frameIntervalMs, durationMs);
+      player.setCurrentTime(simTime);
+      renderer?.draw(buildRenderInput());
+      exportProgress.value = durationMs > 0 ? (simTime / durationMs) * 100 : 100;
+      await waitForPaint();
+      if (i < totalFrames) {
+        await waitMs(frameIntervalMs);
+      }
+    }
 
-  requestAnimationFrame(exportTick);
-  await exportComplete;
+    audioEl?.pause();
+    if (recorder.state !== "inactive") {
+      recorder.stop();
+    }
+    const blob = await exportComplete;
+    downloadBlob(blob, `${project.meta?.name ?? "simulation"}.webm`);
+  } catch (error) {
+    console.error(error);
+    audioEl?.pause();
+    if (recorder.state !== "inactive") {
+      recorder.stop();
+    }
+  } finally {
+    audioSource?.disconnect();
+    audioDest?.disconnect();
+    await audioCtx?.close();
+    streamTracks.forEach((track) => track.stop());
+    player.setCurrentTime(savedTime);
+    if (player.renderScale !== savedScale) {
+      player.setRenderScale(savedScale);
+      renderer?.applyScale(savedScale);
+    }
+    if (wasPlaying) {
+      player.play();
+    }
+    exporting.value = false;
+    exportProgress.value = 0;
+    frameRequest = requestAnimationFrame(render);
+  }
 }
 
 defineExpose({ exportVideo });

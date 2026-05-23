@@ -102,10 +102,18 @@ async def create_project(
 
     try:
         with upload_path.open("wb") as target:
+            uploaded_bytes = 0
             while True:
                 chunk = await file.read(1024 * 1024)
                 if not chunk:
                     break
+                uploaded_bytes += len(chunk)
+                if uploaded_bytes > settings.max_upload_bytes:
+                    raise AppError(
+                        413,
+                        "upload_too_large",
+                        "Uploaded zip exceeds the configured size limit.",
+                    )
                 target.write(chunk)
 
         project_dir = safe_extract_zip(upload_path, extract_dir)
