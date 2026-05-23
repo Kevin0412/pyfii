@@ -65,6 +65,8 @@ function updateFrameSize(): void {
 }
 
 function render(timestamp: number): void {
+  updateFrameSize();
+
   if (!lastTimestamp) {
     lastTimestamp = timestamp;
   }
@@ -110,11 +112,6 @@ function onFullscreenChange(): void {
   const active = Boolean(document.fullscreenElement);
   if (player.fullscreen !== active) {
     player.setFullscreen(active);
-  }
-  if (!active) {
-    // Layout may take multiple frames to settle after exiting fullscreen
-    nextTick(() => updateFrameSize());
-    setTimeout(() => updateFrameSize(), 150);
   }
 }
 
