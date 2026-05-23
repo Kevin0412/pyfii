@@ -6,18 +6,30 @@
 
     <span class="time-readout">{{ formatTime(player.currentTimeMs) }} / {{ formatTime(project.durationMs) }}</span>
 
-    <input
-      v-model.number="currentTime"
-      type="range"
-      min="0"
-      :max="Math.max(project.durationMs, 1)"
-      step="10"
-      :disabled="!project.hasProject"
-      @mousedown="player.startSeeking()"
-      @touchstart="player.startSeeking()"
-      @mouseup="player.endSeeking()"
-      @touchend="player.endSeeking()"
-    />
+    <div class="range-wrap">
+      <input
+        v-model.number="currentTime"
+        type="range"
+        min="0"
+        :max="Math.max(project.durationMs, 1)"
+        step="10"
+        :disabled="!project.hasProject"
+        @mousedown="player.startSeeking()"
+        @touchstart="player.startSeeking()"
+        @mouseup="player.endSeeking()"
+        @touchend="player.endSeeking()"
+      />
+      <div class="safety-ticks">
+        <span
+          v-for="marker in safetyMarkers"
+          :key="marker.id"
+          class="tick"
+          :class="marker.level"
+          :style="{ left: marker.position + '%' }"
+          :title="`${marker.level}: ${marker.message} @ ${marker.formattedTime}`"
+        ></span>
+      </div>
+    </div>
 
     <label>
       Speed
@@ -78,6 +90,18 @@ const currentTime = computed({
     player.setCurrentTime(Number(value));
     safety.setActiveEvent(null);
   },
+});
+
+const safetyMarkers = computed(() => {
+  const duration = project.durationMs;
+  if (duration <= 0) return [];
+  return safety.events.map((event) => ({
+    id: event.id,
+    level: event.level,
+    position: (event.time_ms / duration) * 100,
+    message: event.message,
+    formattedTime: `${(event.time_ms / 1000).toFixed(2)}s`,
+  }));
 });
 
 const speed = computed({
@@ -209,6 +233,45 @@ watch(
   font-size: 12px;
 }
 
+.range-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+
+.range-wrap input[type="range"] {
+  width: 100%;
+}
+
+.safety-ticks {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  pointer-events: none;
+}
+
+.tick {
+  position: absolute;
+  bottom: 6px;
+  transform: translateX(-50%);
+  width: 3px;
+  height: 10px;
+  border-radius: 1.5px;
+}
+
+.tick.error {
+  background: #ff3333;
+  height: 12px;
+}
+
+.tick.warning {
+  background: #ffd15c;
+  height: 8px;
+}
+
 label {
   display: inline-flex;
   align-items: center;
@@ -237,7 +300,7 @@ label {
     grid-template-columns: 1fr 1fr;
   }
 
-  input[type="range"],
+  .range-wrap,
   .music-player,
   .music-empty {
     grid-column: 1 / -1;
