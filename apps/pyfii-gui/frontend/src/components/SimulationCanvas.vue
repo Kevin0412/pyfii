@@ -177,16 +177,18 @@ async function exportVideo(): Promise<void> {
   let i = 0;
   function exportTick(): void {
     if (i > totalFrames) {
-      renderer?.draw(buildRenderInput());
-      videoTrack.requestFrame();
+      try { renderer?.draw(buildRenderInput()); videoTrack.requestFrame(); } catch { /* ignore */ }
       done();
       return;
     }
 
-    const simTime = Math.min(i * frameIntervalMs, durationMs);
-    player.setCurrentTime(simTime);
-    renderer?.draw(buildRenderInput());
-    videoTrack.requestFrame();
+    try {
+      const simTime = Math.min(i * frameIntervalMs, durationMs);
+      player.setCurrentTime(simTime);
+      renderer?.draw(buildRenderInput());
+      videoTrack.requestFrame();
+    } catch { /* ignore frame errors, keep going */ }
+
     exportProgress.value = (i / totalFrames) * 100;
     i++;
     requestAnimationFrame(exportTick);
