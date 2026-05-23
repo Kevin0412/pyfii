@@ -5,6 +5,7 @@ import uuid
 
 from fastapi import APIRouter, File, Form, Query, UploadFile
 
+from ..config import settings
 from ..errors import AppError
 from ..schemas import (
     DeleteResponse,
@@ -34,7 +35,7 @@ ALLOWED_TRACK_FPS = {30, 60, 100, 200}
 @router.post("", response_model=ProjectCreateResponse)
 async def create_project(
     file: UploadFile = File(...),
-    fps: int = Form(200),
+    fps: int = Form(settings.default_import_fps),
     ignore_acc: bool = Form(False),
 ) -> ProjectCreateResponse:
     if fps <= 0:

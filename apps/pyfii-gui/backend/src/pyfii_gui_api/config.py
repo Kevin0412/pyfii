@@ -16,6 +16,16 @@ def _bool_env(name: str, default: bool) -> bool:
     return value.strip().lower() in {"1", "true", "yes", "on"}
 
 
+def _int_env(name: str, default: int) -> int:
+    value = os.environ.get(name)
+    if value is None:
+        return default
+    try:
+        return int(value)
+    except ValueError:
+        return default
+
+
 class Settings:
     """Runtime settings for the GUI API."""
 
@@ -32,6 +42,7 @@ class Settings:
         self.cors_origins = _csv_env("PYFII_GUI_CORS_ORIGINS", default_cors_origins)
         self.cors_origin_regex = os.environ.get("PYFII_GUI_CORS_ORIGIN_REGEX") or None
         self.cors_allow_credentials = _bool_env("PYFII_GUI_CORS_ALLOW_CREDENTIALS", True)
+        self.default_import_fps = _int_env("PYFII_GUI_DEFAULT_IMPORT_FPS", 60)
         self.max_upload_bytes = 100 * 1024 * 1024
         self.max_zip_files = 5000
 

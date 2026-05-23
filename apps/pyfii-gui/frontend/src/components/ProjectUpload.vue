@@ -8,10 +8,10 @@
     <label>
       Source FPS
       <select v-model.number="sourceFps" :disabled="project.loading">
-        <option :value="200">200</option>
-        <option :value="100">100</option>
         <option :value="60">60</option>
         <option :value="30">30</option>
+        <option :value="100">100</option>
+        <option :value="200">200</option>
       </select>
     </label>
 
@@ -53,7 +53,7 @@ const player = usePlayerStore();
 const safety = useSafetyStore();
 
 const selectedFile = ref<File | null>(null);
-const sourceFps = ref(200);
+const sourceFps = ref(60);
 const trackFps = ref(60);
 const ignoreAcc = ref(false);
 

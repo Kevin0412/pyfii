@@ -50,6 +50,7 @@ PYFII_GUI_RUNTIME_DIR=/var/lib/pyfii-gui/projects
 PYFII_GUI_CORS_ORIGINS=https://gui.example.com,https://admin.example.com
 PYFII_GUI_CORS_ORIGIN_REGEX=
 PYFII_GUI_CORS_ALLOW_CREDENTIALS=true
+PYFII_GUI_DEFAULT_IMPORT_FPS=60
 ```
 
 前端构建时通过环境变量配置 API 地址：
