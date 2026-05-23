@@ -4,3 +4,4 @@
 * [内部原理](principle.md)
 * [进阶用法](more.md)
 * [灯光编写](light.md)
+* [Pyfii GUI 原型](../pyfii_gui.md)

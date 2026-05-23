@@ -5,6 +5,14 @@
 
 此外，这个库有三视图模拟飞行的功能，模拟飞行更方便观看。
 
+当前仓库还包含一个独立的 Web GUI 原型 `apps/pyfii-gui/`。它不是 PyPI core 包的一部分，只作为 pyfii core 的可视化和调试适配层：
+
+```text
+pyfii-gui -> pyfii core
+```
+
+FastAPI、Vue、Vite 等 GUI 依赖都放在 `apps/pyfii-gui/` 下，不放进 `src/pyfii/`。
+
 ## 安装
 1. 使用 pip install 安装
 
@@ -32,6 +40,8 @@
 - [内部原理](doc/tutorial/principle.md)
 - [进阶用法](doc/tutorial/more.md)
 - [灯光编写](doc/tutorial/light.md)
+- [Pyfii GUI 原型](doc/pyfii_gui.md)
+- [AI 编舞探索](doc/ai_choreography_exploration.md)
 
 ## 目录结构说明
 
@@ -58,6 +68,15 @@ read.py 用来读取和转换无人机动作文件
 
 show.py 用来预览无人机飞行效果
 
+GUI 原型位于：
+
+    apps/pyfii-gui
+    ├── backend      # FastAPI，上传 zip、调用 read_fii、返回 JSON
+    ├── frontend     # Vue 3 + Vite + TypeScript + Pinia
+    └── README.md
+
+GUI 的详细启动、部署和回归测试说明见 [doc/pyfii_gui.md](doc/pyfii_gui.md) 与 [apps/pyfii-gui/README.md](apps/pyfii-gui/README.md)。
+
 ## 许可证和作者
 
 - 许可证：GNU General Public License v3 (GPLv3)
@@ -74,7 +93,7 @@ show.py 用来预览无人机飞行效果
 
 ## 项目方向
 
-pyfii 2.0 的重点不是简单 Web 化，而是把编队核心、轨迹采样、安全审查、渲染/预览拆成可替换模块。
+pyfii 2.0 的重点不是简单 Web 化，而是把编队核心、轨迹采样、安全审查、渲染/预览拆成可替换模块。当前 `apps/pyfii-gui/` 是这一方向的 MVP 原型，但 core 仍然保持独立 PyPI 库定位。
 
 - `pyfii-core`：`.fii` 读写、动作 DSL、轨迹采样、灯光时间轴、安全规则。
 - `pyfii-render`：统一渲染接口，保留 OpenCV 参考后端，并试验桌面 3D / Web viewer。

@@ -28,14 +28,44 @@
 
     在你当前创建的环境下使用pip install命令安装pyfii
 
-        pip install -i https://pypi.org/simple pyfii==1.6
+        pip install -i https://pypi.org/simple pyfii
 
-    这个命令会从pypi官网下载pyfii
+    这个命令会从pypi官网下载pyfii。若需要固定版本，可以在包名后追加版本号，例如：
 
-        pip install opencv-python pygame ffmpy 
-    
+        pip install -i https://pypi.org/simple pyfii==1.5.0
+
+    如果你正在开发本仓库源码版本，可以在仓库根目录安装为可编辑包：
+
+        pip install -e .
+
+        pip install opencv-python pygame ffmpy
+
     这个命令会从镜像源下载pyfii的依赖库
 
     安装就完成了
 
     你可以运行pyfii源码库的示例程序测试安装是否成功
+
+- ## GUI 原型开发环境
+
+    Pyfii 的 Web GUI 原型位于 `apps/pyfii-gui/`，它是独立应用，不属于 `src/pyfii/` core 包。开发 GUI 前建议先在仓库根目录安装 core：
+
+        pip install -e .
+
+    启动后端：
+
+        cd apps/pyfii-gui/backend
+        pip install -e .
+        uvicorn pyfii_gui_api.main:app --reload --host 0.0.0.0 --port 8000
+
+    启动前端：
+
+        cd apps/pyfii-gui/frontend
+        npm install
+        npm run dev
+
+    前端默认监听 `0.0.0.0:5173`，可在局域网另一台设备访问：
+
+        http://<开发机局域网IP>:5173
+
+    更多说明见 [Pyfii GUI 原型](../pyfii_gui.md)。

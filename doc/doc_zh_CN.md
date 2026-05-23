@@ -210,3 +210,37 @@
     5. 建议提前设计动作
 
     6. 实践是检验真理的唯一标准，不要被模拟的假象所迷惑
+
+7. GUI 原型
+
+    仓库中新增了独立 Web GUI 原型，路径为：
+
+    ```text
+    apps/pyfii-gui/
+    ```
+
+    它用于上传 Fii 项目 zip、读回轨迹、查看安全日志，并用 Canvas 2D 显示 Pyfii 经典三视图。GUI 不属于 `src/pyfii/` core 包，依赖方向是 `pyfii-gui -> pyfii core`。
+
+    后端启动：
+
+    ```bash
+    cd apps/pyfii-gui/backend
+    pip install -e .
+    uvicorn pyfii_gui_api.main:app --reload --host 0.0.0.0 --port 8000
+    ```
+
+    前端启动：
+
+    ```bash
+    cd apps/pyfii-gui/frontend
+    npm install
+    npm run dev
+    ```
+
+    默认可在局域网访问：
+
+    ```text
+    http://<开发机局域网IP>:5173
+    ```
+
+    详细说明见 [Pyfii GUI 原型](pyfii_gui.md)。

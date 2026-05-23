@@ -101,7 +101,7 @@ https://gui.example.com/api/  -> FastAPI backend
 - 返回项目元信息、轨迹数据和由 core warnings 结构化得到的安全日志。
 - Canvas 2D 三视图预览：top / front / right。
 - 右下角 2 行 5 列无人机信息栏：D1..D9 + STATUS。
-- 基础安全检查：core warning、水平距离、场地范围、负高度。
+- 安全日志以 pyfii core warning 为准，GUI 后端只做结构化整理。
 - 点击安全日志跳转到对应时间。
 
 ## 批量导入回归
