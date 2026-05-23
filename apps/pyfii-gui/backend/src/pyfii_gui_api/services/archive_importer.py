@@ -12,6 +12,23 @@ def _is_zip_symlink(info: zipfile.ZipInfo) -> bool:
     return stat.S_ISLNK(mode)
 
 
+def _member_name(info: zipfile.ZipInfo) -> str:
+    if info.flag_bits & 0x800:
+        return info.filename
+
+    try:
+        raw_name = info.filename.encode("cp437")
+    except UnicodeEncodeError:
+        return info.filename
+
+    for encoding in ("utf-8", "gbk"):
+        try:
+            return raw_name.decode(encoding)
+        except UnicodeDecodeError:
+            continue
+    return info.filename
+
+
 def _target_for_member(destination: Path, member_name: str) -> Path:
     if "\\" in member_name:
         raise AppError(400, "unsafe_zip_member", "Zip entries may not contain backslash paths.")
@@ -48,7 +65,7 @@ def safe_extract_zip(zip_path: Path, destination: Path) -> Path:
                 if not info.is_dir() and info.file_size > settings.max_upload_bytes:
                     raise AppError(400, "file_too_large", "A file inside the archive exceeds 100MB.")
 
-                target = _target_for_member(destination, info.filename)
+                target = _target_for_member(destination, _member_name(info))
                 if info.is_dir():
                     target.mkdir(parents=True, exist_ok=True)
                     continue
