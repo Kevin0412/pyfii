@@ -54,7 +54,7 @@ function drawTopDrone(
   ctx.save();
   ctx.strokeStyle = selected ? canvasPalette.selected : color;
   ctx.fillStyle = color;
-  ctx.lineWidth = selected ? 3 : 2;
+  ctx.lineWidth = selected ? 3 : 1.5;
   ctx.beginPath();
   ctx.moveTo(offsets[0].x, offsets[0].y);
   ctx.lineTo(offsets[2].x, offsets[2].y);
@@ -93,14 +93,18 @@ function drawSideDrone(
   const bottomY = y - (bodyY * 3) / 4;
   ctx.save();
   ctx.strokeStyle = selected ? canvasPalette.selected : color;
-  ctx.lineWidth = selected ? 3 : 2;
+  ctx.lineWidth = selected ? 3 : 1.5;
 
-  ctx.beginPath();
-  ctx.ellipse(x + rotorX, topY, rotorRadiusX, rotorRadiusY, 0, 0, Math.PI * 2);
-  ctx.ellipse(x - rotorX, topY, rotorRadiusX, rotorRadiusY, 0, 0, Math.PI * 2);
-  ctx.ellipse(x - rotorX, bottomY, rotorRadiusX, rotorRadiusY, 0, 0, Math.PI * 2);
-  ctx.ellipse(x + rotorX, bottomY, rotorRadiusX, rotorRadiusY, 0, 0, Math.PI * 2);
-  ctx.stroke();
+  for (const [ex, ey] of [
+    [x + rotorX, topY],
+    [x - rotorX, topY],
+    [x - rotorX, bottomY],
+    [x + rotorX, bottomY],
+  ] as Array<[number, number]>) {
+    ctx.beginPath();
+    ctx.ellipse(ex, ey, rotorRadiusX, rotorRadiusY, 0, 0, Math.PI * 2);
+    ctx.stroke();
+  }
 
   ctx.beginPath();
   ctx.moveTo(x + rotorX, topY);
