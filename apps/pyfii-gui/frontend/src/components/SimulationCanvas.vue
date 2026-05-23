@@ -237,6 +237,7 @@ onUnmounted(() => {
 
 <style scoped>
 .canvas-shell {
+  contain: strict;
   min-height: 0;
   min-width: 0;
   display: grid;
