@@ -1,5 +1,5 @@
 <template>
-  <section ref="canvasShellRef" class="canvas-shell" :class="{ fullscreen: isFullscreen }">
+  <section ref="canvasShellRef" class="canvas-shell">
     <div class="canvas-frame" :style="{ width: frameWidth + 'px', height: frameHeight + 'px' }">
       <canvas
         ref="canvasRef"
@@ -10,9 +10,9 @@
       />
       <button
         class="fullscreen-btn"
-        @click="toggleFullscreen"
-        :title="isFullscreen ? 'Exit fullscreen' : 'Fullscreen'"
-      >{{ isFullscreen ? '⬚' : '⬙' }}</button>
+        @click="player.setFullscreen(!player.fullscreen)"
+        :title="player.fullscreen ? 'Exit fullscreen' : 'Fullscreen'"
+      >{{ player.fullscreen ? '⬚' : '⬙' }}</button>
       <div v-if="exporting" class="export-overlay">
         <div class="export-progress-card">
           <span>Exporting WebM...</span>
@@ -36,7 +36,6 @@ import type { RenderInput } from "../renderer/types";
 
 const canvasRef = ref<HTMLCanvasElement | null>(null);
 const canvasShellRef = ref<HTMLElement | null>(null);
-const isFullscreen = ref(false);
 const exporting = ref(false);
 const exportProgress = ref(0);
 const frameWidth = ref(0);
@@ -108,14 +107,12 @@ function buildRenderInput(): RenderInput {
 }
 
 function onFullscreenChange(): void {
-  isFullscreen.value = Boolean(document.fullscreenElement);
-}
-
-async function toggleFullscreen(): Promise<void> {
-  if (isFullscreen.value) {
-    await document.exitFullscreen();
-  } else {
-    await canvasShellRef.value?.requestFullscreen();
+  const active = Boolean(document.fullscreenElement);
+  if (player.fullscreen !== active) {
+    player.setFullscreen(active);
+  }
+  if (!active) {
+    nextTick(() => updateFrameSize());
   }
 }
 
@@ -123,8 +120,13 @@ async function exportVideo(): Promise<void> {
   const canvas = canvasRef.value;
   if (!canvas || !project.meta) return;
 
-  const outputFps = Math.min(project.trackFps, 60);
-  const stream = canvas.captureStream(outputFps);
+  const outputFps = project.trackFps;
+  const frameIntervalMs = 1000 / outputFps;
+  const totalFrames = Math.ceil(project.durationMs / frameIntervalMs);
+  const durationMs = project.durationMs;
+
+  const stream = canvas.captureStream(0);
+  const videoTrack = stream.getVideoTracks()[0];
 
   let mimeType = "";
   for (const candidate of [
@@ -161,8 +163,6 @@ async function exportVideo(): Promise<void> {
 
   cancelAnimationFrame(frameRequest);
 
-  const durationMs = project.durationMs;
-
   const exportComplete = new Promise<void>((resolve) => {
     recorder.onstop = () => {
       const blob = new Blob(chunks, { type: mimeType });
@@ -195,24 +195,16 @@ async function exportVideo(): Promise<void> {
   exporting.value = true;
   exportProgress.value = 0;
 
-  function exportLoop(_timestamp: number): void {
-    const simTime = player.currentTimeMs;
-    if (simTime >= durationMs) {
-      renderer?.draw(buildRenderInput());
-      recorder.stop();
-      return;
-    }
-
+  for (let i = 0; i <= totalFrames; i++) {
+    const simTime = Math.min(i * frameIntervalMs, durationMs);
+    player.setCurrentTime(simTime);
     renderer?.draw(buildRenderInput());
-    exportProgress.value = (simTime / durationMs) * 100;
-
-    const frameIntervalMs = 1000 / outputFps;
-    player.setCurrentTime(Math.min(simTime + frameIntervalMs, durationMs));
-
-    requestAnimationFrame(exportLoop);
+    videoTrack.requestFrame();
+    exportProgress.value = (i / totalFrames) * 100;
+    await new Promise((r) => setTimeout(r, 0));
   }
 
-  requestAnimationFrame(exportLoop);
+  recorder.stop();
   await exportComplete;
 }
 
@@ -251,10 +243,6 @@ onUnmounted(() => {
   display: grid;
   place-items: center;
   overflow: hidden;
-}
-
-.canvas-shell.fullscreen {
-  background: #000;
 }
 
 .canvas-frame {

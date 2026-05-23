@@ -26,7 +26,7 @@
       <aside class="project-column">
         <ProjectInfoPanel />
       </aside>
-      <section class="simulation-column">
+      <section ref="simColumnRef" class="simulation-column" :class="{ fullscreen: player.fullscreen }">
         <SimulationCanvas ref="simCanvasRef" />
         <TimelineControl />
       </section>
@@ -42,13 +42,38 @@ import ProjectUpload from "../components/ProjectUpload.vue";
 import SafetyLogPanel from "../components/SafetyLogPanel.vue";
 import SimulationCanvas from "../components/SimulationCanvas.vue";
 import TimelineControl from "../components/TimelineControl.vue";
-import { ref } from "vue";
+import { onMounted, onUnmounted, ref, watch } from "vue";
 import { usePlayerStore } from "../stores/player";
 import { useProjectStore } from "../stores/project";
 
 const simCanvasRef = ref<InstanceType<typeof SimulationCanvas> | null>(null);
+const simColumnRef = ref<HTMLElement | null>(null);
 const player = usePlayerStore();
 const project = useProjectStore();
+
+function onFullscreenChange(): void {
+  if (!document.fullscreenElement) {
+    player.setFullscreen(false);
+  }
+}
+
+watch(() => player.fullscreen, async (v) => {
+  if (v && !document.fullscreenElement) {
+    try {
+      await simColumnRef.value?.requestFullscreen();
+    } catch { /* user denied or unsupported */ }
+  } else if (!v && document.fullscreenElement) {
+    await document.exitFullscreen();
+  }
+});
+
+onMounted(() => {
+  document.addEventListener("fullscreenchange", onFullscreenChange);
+});
+
+onUnmounted(() => {
+  document.removeEventListener("fullscreenchange", onFullscreenChange);
+});
 </script>
 
 <style scoped>
@@ -108,6 +133,10 @@ const project = useProjectStore();
   display: grid;
   grid-template-rows: minmax(0, 1fr) auto;
   background: #050505;
+}
+
+.simulation-column.fullscreen {
+  background: #000;
 }
 
 @media (max-width: 900px) {

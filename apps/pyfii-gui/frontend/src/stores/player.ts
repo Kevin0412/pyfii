@@ -9,6 +9,7 @@ interface PlayerState {
   showSafetyMarkers: boolean;
   seeking: boolean;
   renderScale: number;
+  fullscreen: boolean;
 }
 
 export const usePlayerStore = defineStore("player", {
@@ -21,6 +22,7 @@ export const usePlayerStore = defineStore("player", {
     showSafetyMarkers: true,
     seeking: false,
     renderScale: 1,
+    fullscreen: false,
   }),
   actions: {
     play() {
@@ -50,6 +52,9 @@ export const usePlayerStore = defineStore("player", {
     },
     setRenderScale(scale: number) {
       this.renderScale = scale;
+    },
+    setFullscreen(v: boolean) {
+      this.fullscreen = v;
     },
   },
 });
