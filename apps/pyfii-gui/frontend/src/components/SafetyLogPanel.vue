@@ -48,8 +48,6 @@
             <th>
               <select v-model="timeWindow">
                 <option value="all">all time</option>
-                <option value="first30">0-30s</option>
-                <option value="first60">0-60s</option>
                 <option value="current">near current</option>
               </select>
             </th>
@@ -62,7 +60,16 @@
               </select>
             </th>
             <th>
-              <input v-model.trim="droneFilter" type="text" placeholder="D1" />
+              <details class="multi-select">
+                <summary>{{ droneFilterLabel }}</summary>
+                <div class="multi-menu">
+                  <label v-for="droneId in availableDrones" :key="droneId">
+                    <input v-model="selectedDroneIds" type="checkbox" :value="droneId" />
+                    D{{ droneId }}
+                  </label>
+                  <span v-if="availableDrones.length === 0" class="empty-option">no drones</span>
+                </div>
+              </details>
             </th>
             <th>
               <input v-model.trim="query" type="search" placeholder="filter message" />
@@ -106,10 +113,10 @@ interface CategoryOption {
 const safety = useSafetyStore();
 const player = usePlayerStore();
 const categoryFilter = ref<"all" | SafetyCategory>("all");
-const droneFilter = ref("");
+const selectedDroneIds = ref<number[]>([]);
 const query = ref("");
-const timeWindow = ref<"all" | "first30" | "first60" | "current">("all");
-const sortColumn = ref<"time" | "category" | "drone" | "message">("category");
+const timeWindow = ref<"all" | "current">("all");
+const sortColumn = ref<"time" | "category" | "drone" | "message">("time");
 const sortDirection = ref<"asc" | "desc">("desc");
 
 const categories: CategoryOption[] = [
@@ -119,24 +126,49 @@ const categories: CategoryOption[] = [
   { value: "action_incomplete", label: "动作未完成", shortLabel: "未完成" },
 ];
 
+const availableDrones = computed(() => {
+  const ids = new Set<number>();
+  for (const event of safety.events) {
+    if (event.drone_a) ids.add(event.drone_a);
+    if (event.drone_b) ids.add(event.drone_b);
+  }
+  return [...ids].sort((a, b) => a - b);
+});
+
+const droneFilterLabel = computed(() => {
+  if (selectedDroneIds.value.length === 0) {
+    return "all drones";
+  }
+  return selectedDroneIds.value
+    .slice()
+    .sort((a, b) => a - b)
+    .map((id) => `D${id}`)
+    .join(", ");
+});
+
 const hasFilters = computed(() => {
   return categoryFilter.value !== "all"
-    || droneFilter.value !== ""
+    || selectedDroneIds.value.length > 0
     || query.value !== ""
     || timeWindow.value !== "all"
-    || sortColumn.value !== "category"
+    || sortColumn.value !== "time"
     || sortDirection.value !== "desc";
 });
 
 const visibleEvents = computed(() => {
-  const normalizedDrone = droneFilter.value.replace(/^d/i, "");
-  const droneNumber = normalizedDrone === "" ? null : Number(normalizedDrone);
+  const selected = new Set(selectedDroneIds.value);
   const textQuery = query.value.toLowerCase();
 
   const events = safety.events.filter((event) => {
     if (!isInTimeWindow(event)) return false;
     if (categoryFilter.value !== "all" && event.category !== categoryFilter.value) return false;
-    if (droneNumber !== null && (event.drone_a !== droneNumber && event.drone_b !== droneNumber)) return false;
+    if (
+      selected.size > 0
+      && (!event.drone_a || !selected.has(event.drone_a))
+      && (!event.drone_b || !selected.has(event.drone_b))
+    ) {
+      return false;
+    }
     if (textQuery && !`${event.category_label} ${event.message}`.toLowerCase().includes(textQuery)) return false;
     return true;
   });
@@ -168,10 +200,10 @@ function categoryClass(category: SafetyCategory): string {
 
 function clearFilters(): void {
   categoryFilter.value = "all";
-  droneFilter.value = "";
+  selectedDroneIds.value = [];
   query.value = "";
   timeWindow.value = "all";
-  sortColumn.value = "category";
+  sortColumn.value = "time";
   sortDirection.value = "desc";
 }
 
@@ -194,12 +226,6 @@ function firstDrone(event: SafetyEvent): number {
 }
 
 function isInTimeWindow(event: SafetyEvent): boolean {
-  if (timeWindow.value === "first30") {
-    return event.time_ms <= 30000;
-  }
-  if (timeWindow.value === "first60") {
-    return event.time_ms <= 60000;
-  }
   if (timeWindow.value === "current") {
     return Math.abs(event.time_ms - player.currentTimeMs) <= 5000;
   }
@@ -212,7 +238,7 @@ function cycleSort(column: typeof sortColumn.value): void {
     return;
   }
   sortColumn.value = column;
-  sortDirection.value = column === "category" ? "desc" : "asc";
+  sortDirection.value = column === "time" || column === "category" ? "desc" : "asc";
 }
 
 function sortGlyph(column: typeof sortColumn.value): string {
@@ -304,13 +330,67 @@ th {
 }
 
 .filter-row select,
-.filter-row input {
+.filter-row input,
+.multi-select summary {
   width: 100%;
   min-width: 0;
   border: 1px solid #4a4a4a;
   background: #090909;
   color: #f0f0f0;
   padding: 5px 7px;
+}
+
+.multi-select {
+  position: relative;
+}
+
+.multi-select summary {
+  cursor: pointer;
+  list-style: none;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.multi-select summary::-webkit-details-marker {
+  display: none;
+}
+
+.multi-menu {
+  position: absolute;
+  z-index: 5;
+  top: calc(100% + 4px);
+  left: 0;
+  min-width: 140px;
+  max-height: 180px;
+  overflow: auto;
+  border: 1px solid #5a5a5a;
+  background: #090909;
+  padding: 6px;
+  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.45);
+}
+
+.multi-menu label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px;
+  color: #f0f0f0;
+  cursor: pointer;
+}
+
+.multi-menu label:hover {
+  background: #202020;
+}
+
+.multi-menu input {
+  width: auto;
+}
+
+.empty-option {
+  display: block;
+  padding: 5px;
+  color: #8b8b8b;
 }
 
 .th-button {
