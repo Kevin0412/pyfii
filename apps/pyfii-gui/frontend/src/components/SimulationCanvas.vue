@@ -175,7 +175,6 @@ async function exportVideo(): Promise<void> {
   };
 
   let i = 0;
-  let lastProgressUpdate = 0;
   function exportTick(): void {
     if (i > totalFrames) {
       renderer?.draw(buildRenderInput());
@@ -188,13 +187,7 @@ async function exportVideo(): Promise<void> {
     player.setCurrentTime(simTime);
     renderer?.draw(buildRenderInput());
     videoTrack.requestFrame();
-
-    const now = performance.now();
-    if (now - lastProgressUpdate > 80) {
-      exportProgress.value = (i / totalFrames) * 100;
-      lastProgressUpdate = now;
-    }
-
+    exportProgress.value = (i / totalFrames) * 100;
     i++;
     requestAnimationFrame(exportTick);
   }
