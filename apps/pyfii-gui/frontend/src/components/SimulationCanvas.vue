@@ -108,13 +108,12 @@ async function exportVideo(): Promise<void> {
   const canvas = canvasRef.value;
   if (!canvas || !project.meta) return;
 
-  const outputFps = project.trackFps;
-  const frameIntervalMs = 1000 / outputFps;
+  const captureFps = Math.min(project.trackFps, 60);
+  const frameIntervalMs = 1000 / captureFps;
   const totalFrames = Math.ceil(project.durationMs / frameIntervalMs);
   const durationMs = project.durationMs;
 
-  const stream = canvas.captureStream(0);
-  const videoTrack = stream.getVideoTracks()[0];
+  const stream = canvas.captureStream(captureFps);
 
   let mimeType = "";
   for (const candidate of ["video/webm; codecs=vp9", "video/webm; codecs=vp8", "video/webm"]) {
@@ -177,18 +176,14 @@ async function exportVideo(): Promise<void> {
   let i = 0;
   function exportTick(): void {
     if (i > totalFrames) {
-      try { renderer?.draw(buildRenderInput()); videoTrack.requestFrame(); } catch { /* ignore */ }
+      renderer?.draw(buildRenderInput());
       done();
       return;
     }
 
-    try {
-      const simTime = Math.min(i * frameIntervalMs, durationMs);
-      player.setCurrentTime(simTime);
-      renderer?.draw(buildRenderInput());
-      videoTrack.requestFrame();
-    } catch { /* ignore frame errors, keep going */ }
-
+    const simTime = Math.min(i * frameIntervalMs, durationMs);
+    player.setCurrentTime(simTime);
+    renderer?.draw(buildRenderInput());
     exportProgress.value = (i / totalFrames) * 100;
     i++;
     requestAnimationFrame(exportTick);
