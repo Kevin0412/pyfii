@@ -17,12 +17,19 @@ class ParsedFiiProject:
     stdout: str
 
 
+def _warning_messages(captured: List[warnings.WarningMessage]) -> List[str]:
+    return [str(item.message) for item in captured]
+
+
 def parse_fii_project(project_dir: Path, fps: int, ignore_acc: bool) -> ParsedFiiProject:
-    # Import directly from pyfii.read so the backend never touches pyfii.show GUI/video deps.
+    # Import direct modules; avoid pyfii package-level imports that pull in unrelated GUI paths.
     from pyfii.read import read_fii
+    from pyfii.show import show as validate_show
 
     stdout = io.StringIO()
-    with warnings.catch_warnings(record=True) as captured:
+    warning_messages: List[str] = []
+
+    with warnings.catch_warnings(record=True) as read_warnings:
         warnings.simplefilter("always")
         with contextlib.redirect_stdout(stdout):
             data, t0, music, field, device = read_fii(
@@ -30,6 +37,25 @@ def parse_fii_project(project_dir: Path, fps: int, ignore_acc: bool) -> ParsedFi
                 fps=fps,
                 ignore_acc=ignore_acc,
             )
+    warning_messages.extend(_warning_messages(read_warnings))
+
+    # show(show=False) is the current core path that performs distance warnings without rendering.
+    with warnings.catch_warnings(record=True) as show_warnings:
+        warnings.simplefilter("always")
+        with contextlib.redirect_stdout(stdout):
+            validate_show(
+                data,
+                t0,
+                music,
+                field=field,
+                device=device,
+                show=False,
+                save="",
+                FPS=fps,
+                max_fps=fps,
+                ThreeD=False,
+            )
+    warning_messages.extend(_warning_messages(show_warnings))
 
     return ParsedFiiProject(
         data=data,
@@ -37,6 +63,6 @@ def parse_fii_project(project_dir: Path, fps: int, ignore_acc: bool) -> ParsedFi
         music=music,
         field=field,
         device=device,
-        warnings=[str(item.message) for item in captured],
+        warnings=warning_messages,
         stdout=stdout.getvalue(),
     )
