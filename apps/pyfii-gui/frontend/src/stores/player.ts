@@ -1,5 +1,8 @@
 import { defineStore } from "pinia";
 
+export type RenderMode = "classic2d" | "three3d";
+export type ThreeProjectionMode = "orthographic" | "perspective";
+
 interface PlayerState {
   currentTimeMs: number;
   playing: boolean;
@@ -11,6 +14,12 @@ interface PlayerState {
   wasPlayingBeforeSeek: boolean;
   renderScale: number;
   fullscreen: boolean;
+  renderMode: RenderMode;
+  threeProjection: ThreeProjectionMode;
+  viewAngleA: number;
+  viewAngleB: number;
+  observerDistance: number;
+  projectionDistance: number;
 }
 
 export const usePlayerStore = defineStore("player", {
@@ -25,6 +34,12 @@ export const usePlayerStore = defineStore("player", {
     wasPlayingBeforeSeek: false,
     renderScale: 1,
     fullscreen: false,
+    renderMode: "classic2d",
+    threeProjection: "perspective",
+    viewAngleA: 90,
+    viewAngleB: 3,
+    observerDistance: 600,
+    projectionDistance: 450,
   }),
   actions: {
     play() {
@@ -65,6 +80,31 @@ export const usePlayerStore = defineStore("player", {
     },
     setFullscreen(v: boolean) {
       this.fullscreen = v;
+    },
+    setRenderMode(mode: RenderMode) {
+      this.renderMode = mode;
+    },
+    setThreeProjection(mode: ThreeProjectionMode) {
+      this.threeProjection = mode;
+    },
+    setViewAngleA(value: number) {
+      this.viewAngleA = Math.max(-180, Math.min(180, value));
+    },
+    setViewAngleB(value: number) {
+      this.viewAngleB = Math.max(-90, Math.min(90, value));
+    },
+    setObserverDistance(value: number) {
+      this.observerDistance = Math.max(50, value);
+    },
+    setProjectionDistance(value: number) {
+      this.projectionDistance = Math.max(50, value);
+    },
+    resetJudgeView() {
+      this.threeProjection = "perspective";
+      this.viewAngleA = 90;
+      this.viewAngleB = 3;
+      this.observerDistance = 600;
+      this.projectionDistance = 450;
     },
   },
 });

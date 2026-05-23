@@ -14,6 +14,39 @@
           <option :value="4">4x</option>
         </select>
       </label>
+      <label class="scale-select">
+        Render
+        <select v-model="player.renderMode">
+          <option value="classic2d">2D classic</option>
+          <option value="three3d">3D</option>
+        </select>
+      </label>
+      <template v-if="player.renderMode === 'three3d'">
+        <label class="scale-select">
+          Camera
+          <select v-model="player.threeProjection">
+            <option value="orthographic">orthographic</option>
+            <option value="perspective">perspective</option>
+          </select>
+        </label>
+        <label class="compact-input">
+          A
+          <input v-model.number="player.viewAngleA" type="number" min="-180" max="180" step="5" />
+        </label>
+        <label class="compact-input">
+          B
+          <input v-model.number="player.viewAngleB" type="number" min="-90" max="90" step="5" />
+        </label>
+        <label class="compact-input">
+          Obs
+          <input v-model.number="player.observerDistance" type="number" min="50" step="50" />
+        </label>
+        <label class="compact-input">
+          Proj
+          <input v-model.number="player.projectionDistance" type="number" min="50" step="50" />
+        </label>
+        <button class="view-reset" @click="player.resetJudgeView()">Judge</button>
+      </template>
       <ProjectUpload />
       <button
         class="export-btn"
@@ -109,6 +142,27 @@ onUnmounted(() => {
 .brand-subtitle {
   color: #858585;
   font-size: 11px;
+}
+
+.scale-select,
+.compact-input {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: #cfcfcf;
+  font-size: 12px;
+}
+
+.compact-input input {
+  width: 64px;
+  border: 1px solid #d8d8d8;
+  background: #141414;
+  color: #f0f0f0;
+  padding: 6px 7px;
+}
+
+.view-reset {
+  padding: 6px 10px;
 }
 
 .export-btn {

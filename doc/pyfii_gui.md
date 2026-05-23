@@ -54,6 +54,10 @@ GUI 后端会把这些 warning 结构化成前端可展示的事件，例如 `ac
 - 展示项目名、field、device、无人机数量、时长、FPS、安全等级。
 - 请求并缓存轨迹和安全日志。
 - 用 Canvas 2D 绘制经典 Pyfii 三视图：top / front / right。
+- 用 Three.js 提供 3D 预览模式，支持正交/透视相机切换。
+- 3D 模式保留旧 `show(ThreeD=True)` 的 A/B 视角角、观察者距离和投影距离语义。
+- 3D 模式默认评委视角 `imshow=[90,3]`、`d=(600,450)`，支持鼠标拖动转动视角和滚轮缩放。
+- 3D 模式显示高度标尺、地面投影、左上角时间/FPS/坐标 HUD，以及按 9 机编队设计的稳定机体颜色。
 - 右下角信息栏使用 2 行 5 列布局：D1..D9 + STATUS。
 - 时间轴播放、暂停、倍速、拖动跳转。
 - 安全日志按四类展示，并支持类似 Excel/文件夹列表的按列筛选和排序。
@@ -163,9 +167,9 @@ python apps/pyfii-gui/backend/scripts/batch_import_human_pool.py \
 
 - 不做 Electron。
 - 不做真正 MP4 导出。
-- 不做完整 3D Web 渲染。
+- 不完整复刻旧 OpenCV/cv3d 的全部 3D 机体细节。
 - 不把 GUI 后端或前端移入 `src/pyfii/`。
 - 不为了 GUI 兼容旧项目而修改 core 行为。
 - 不把浏览器 WebM 导出当作最终视频交付链路。
 
-未来可在保持 core/GUI 分离的前提下补充更稳健的 WebM 导出队列、Electron + ffmpeg MP4 导出、Three.js 3D 渲染和更完整的 F400/F600 机体外形复刻。
+未来可在保持 core/GUI 分离的前提下补充更稳健的 WebM 导出队列、Electron + ffmpeg MP4 导出、更完整的 Three.js 3D 交互和更完整的 F400/F600 机体外形复刻。

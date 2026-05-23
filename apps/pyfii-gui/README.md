@@ -103,6 +103,10 @@ https://gui.example.com/api/  -> FastAPI backend
 - 调用 `show(show=False)` 走 pyfii core 的无渲染距离检查。
 - 返回项目元信息、轨迹数据和由 core warnings 结构化得到的安全日志。
 - Canvas 2D 三视图预览：top / front / right。
+- Three.js 3D 预览模式，支持正交/透视相机切换。
+- 3D 模式保留旧 `show(ThreeD=True)` 的 A/B 视角角、观察者距离和投影距离语义。
+- 3D 模式默认评委视角 `imshow=[90,3]`、`d=(600,450)`，支持鼠标拖动转动视角和滚轮缩放。
+- 3D 模式显示高度标尺、地面投影、左上角时间/FPS/坐标 HUD，以及按 9 机编队设计的稳定机体颜色。
 - 右下角 2 行 5 列无人机信息栏：D1..D9 + STATUS。
 - 安全日志以 pyfii core warning 为准，GUI 后端只做结构化整理。
 - 安全日志按四类展示，并支持类似 Excel/文件夹列表的按列筛选和排序。
@@ -130,12 +134,12 @@ python apps/pyfii-gui/backend/scripts/batch_import_human_pool.py \
 
 - Electron。
 - MP4 导出。
-- 完整 3D 渲染。
 - 专业级音频/视频导出同步和离线转码。
+- 完整复刻旧 OpenCV/cv3d 的全部 3D 机体细节。
 
 ## 未来计划
 
 - Electron + ffmpeg MP4 导出。
 - 更稳健的 WebM 导出队列和导出错误提示。
-- 3D 渲染。
+- 更完整的 Three.js 3D 交互、轨迹尾迹和相机预设。
 - 更完整的 F400/F600 机体外形复刻。

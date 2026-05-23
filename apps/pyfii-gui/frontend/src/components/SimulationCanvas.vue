@@ -2,12 +2,35 @@
   <section ref="shellRef" class="canvas-shell">
     <div class="canvas-frame" :style="{ width: fw + 'px', height: fh + 'px' }">
       <canvas
-        ref="canvasRef"
+        ref="canvas2dRef"
+        class="sim-canvas"
+        :class="{ active: player.renderMode === 'classic2d' }"
         :width="canvasWidth"
         :height="canvasHeight"
         :style="{ imageRendering: canvasImageRendering }"
         aria-label="Pyfii 2D simulation canvas"
       />
+      <canvas
+        ref="canvas3dRef"
+        class="sim-canvas"
+        :class="{ active: player.renderMode === 'three3d' }"
+        :width="canvasWidth"
+        :height="canvasHeight"
+        aria-label="Pyfii 3D simulation canvas"
+        @pointerdown="onThreePointerDown"
+        @pointermove="onThreePointerMove"
+        @pointerup="onThreePointerUp"
+        @pointercancel="onThreePointerUp"
+        @wheel.prevent="onThreeWheel"
+        @contextmenu.prevent
+      />
+      <div v-if="player.renderMode === 'three3d'" class="three-hud">
+        <span>T+{{ (player.currentTimeMs / 1000).toFixed(2) }}s</span>
+        <span>{{ project.trackFps }}fps</span>
+        <span>A {{ player.viewAngleA.toFixed(0) }} / B {{ player.viewAngleB.toFixed(0) }}</span>
+        <span>d({{ player.observerDistance.toFixed(0) }}, {{ player.projectionDistance.toFixed(0) }})</span>
+        <span>{{ hudDroneText }}</span>
+      </div>
       <button
         class="fullscreen-btn"
         @click="player.setFullscreen(!player.fullscreen)"
@@ -30,12 +53,14 @@ import { computed, nextTick, onMounted, onUnmounted, ref, watch } from "vue";
 import { projectMusicUrl } from "../api/projects";
 import { getFrameAtTime } from "../renderer/frame";
 import { PyfiiCanvasRenderer } from "../renderer/canvas2d/PyfiiCanvasRenderer";
+import { PyfiiThreeRenderer } from "../renderer/three/PyfiiThreeRenderer";
 import { usePlayerStore } from "../stores/player";
 import { useProjectStore } from "../stores/project";
 import { useSafetyStore } from "../stores/safety";
-import type { RenderInput } from "../renderer/types";
+import type { RenderInput, ThreeRenderSettings } from "../renderer/types";
 
-const canvasRef = ref<HTMLCanvasElement | null>(null);
+const canvas2dRef = ref<HTMLCanvasElement | null>(null);
+const canvas3dRef = ref<HTMLCanvasElement | null>(null);
 const shellRef = ref<HTMLElement | null>(null);
 const fw = ref(0);
 const fh = ref(0);
@@ -48,11 +73,21 @@ const safety = useSafetyStore();
 const canvasWidth = computed(() => Math.max(1, Math.round(1200 * player.renderScale)));
 const canvasHeight = computed(() => Math.max(1, Math.round(600 * player.renderScale)));
 const canvasImageRendering = computed(() => player.renderScale >= 1 ? "auto" : "pixelated");
+const hudFrame = computed(() => getFrameAtTime(project.tracks, player.currentTimeMs));
+const hudDroneText = computed(() => {
+  const drone = hudFrame.value.drones.find((item) => item.id === player.selectedDroneId) ?? hudFrame.value.drones[0];
+  if (!drone) {
+    return "D- x:- y:- z:-";
+  }
+  return `D${drone.id} x:${drone.xCm.toFixed(0)} y:${drone.yCm.toFixed(0)} z:${drone.zCm.toFixed(0)}`;
+});
 
-let renderer: PyfiiCanvasRenderer | null = null;
+let canvasRenderer: PyfiiCanvasRenderer | null = null;
+let threeRenderer: PyfiiThreeRenderer | null = null;
 let frameRequest = 0;
 let lastTimestamp = 0;
 let ro: ResizeObserver | null = null;
+let dragState: { pointerId: number; x: number; y: number } | null = null;
 
 function sizeFrame(): void {
   const el = shellRef.value;
@@ -80,8 +115,36 @@ function render(timestamp: number): void {
     }
   }
 
-  if (renderer) renderer.draw(buildRenderInput());
+  drawActiveRenderer();
   frameRequest = requestAnimationFrame(render);
+}
+
+function activeCanvas(): HTMLCanvasElement | null {
+  return player.renderMode === "three3d" ? canvas3dRef.value : canvas2dRef.value;
+}
+
+function syncRendererSize(): void {
+  canvasRenderer?.applyScale(player.renderScale);
+  threeRenderer?.setSize(canvasWidth.value, canvasHeight.value);
+}
+
+function threeSettings(): ThreeRenderSettings {
+  return {
+    projection: player.threeProjection,
+    viewAngleA: player.viewAngleA,
+    viewAngleB: player.viewAngleB,
+    observerDistance: player.observerDistance,
+    projectionDistance: player.projectionDistance,
+  };
+}
+
+function drawActiveRenderer(): void {
+  const input = buildRenderInput();
+  if (player.renderMode === "three3d") {
+    threeRenderer?.draw(input, threeSettings());
+  } else {
+    canvasRenderer?.draw(input);
+  }
 }
 
 function buildRenderInput(): RenderInput {
@@ -103,6 +166,34 @@ function buildRenderInput(): RenderInput {
 
 function onFullscreenChange(): void {
   player.setFullscreen(Boolean(document.fullscreenElement));
+}
+
+function onThreePointerDown(event: PointerEvent): void {
+  if (player.renderMode !== "three3d") return;
+  dragState = { pointerId: event.pointerId, x: event.clientX, y: event.clientY };
+  canvas3dRef.value?.setPointerCapture(event.pointerId);
+}
+
+function onThreePointerMove(event: PointerEvent): void {
+  if (player.renderMode !== "three3d" || !dragState || dragState.pointerId !== event.pointerId) return;
+  const dx = event.clientX - dragState.x;
+  const dy = event.clientY - dragState.y;
+  dragState = { pointerId: event.pointerId, x: event.clientX, y: event.clientY };
+  player.setViewAngleA(player.viewAngleA + dx * 0.35);
+  player.setViewAngleB(player.viewAngleB - dy * 0.25);
+}
+
+function onThreePointerUp(event: PointerEvent): void {
+  if (dragState?.pointerId === event.pointerId) {
+    dragState = null;
+    canvas3dRef.value?.releasePointerCapture(event.pointerId);
+  }
+}
+
+function onThreeWheel(event: WheelEvent): void {
+  if (player.renderMode !== "three3d") return;
+  const factor = event.deltaY > 0 ? 1.08 : 0.92;
+  player.setObserverDistance(player.observerDistance * factor);
 }
 
 function waitMs(ms: number): Promise<void> {
@@ -143,7 +234,7 @@ function downloadBlob(blob: Blob, filename: string): void {
 }
 
 async function exportVideo(): Promise<void> {
-  const canvas = canvasRef.value;
+  const canvas = activeCanvas();
   if (!canvas || !project.meta || project.durationMs <= 0 || exporting.value) return;
 
   const captureFps = Math.min(project.trackFps, 60);
@@ -200,7 +291,7 @@ async function exportVideo(): Promise<void> {
 
   if (player.renderScale < 1) {
     player.setRenderScale(1);
-    renderer?.applyScale(1);
+    syncRendererSize();
     await nextTick();
   }
 
@@ -233,7 +324,7 @@ async function exportVideo(): Promise<void> {
     for (let i = 0; i <= totalFrames; i += 1) {
       const simTime = Math.min(i * frameIntervalMs, durationMs);
       player.setCurrentTime(simTime);
-      renderer?.draw(buildRenderInput());
+      drawActiveRenderer();
       exportProgress.value = durationMs > 0 ? (simTime / durationMs) * 100 : 100;
       await waitForPaint();
       if (i < totalFrames) {
@@ -261,7 +352,7 @@ async function exportVideo(): Promise<void> {
     player.setCurrentTime(savedTime);
     if (player.renderScale !== savedScale) {
       player.setRenderScale(savedScale);
-      renderer?.applyScale(savedScale);
+      syncRendererSize();
     }
     if (wasPlaying) {
       player.play();
@@ -275,7 +366,9 @@ async function exportVideo(): Promise<void> {
 defineExpose({ exportVideo });
 
 onMounted(() => {
-  if (canvasRef.value) renderer = new PyfiiCanvasRenderer(canvasRef.value, player.renderScale);
+  if (canvas2dRef.value) canvasRenderer = new PyfiiCanvasRenderer(canvas2dRef.value, player.renderScale);
+  if (canvas3dRef.value) threeRenderer = new PyfiiThreeRenderer(canvas3dRef.value);
+  syncRendererSize();
   document.addEventListener("fullscreenchange", onFullscreenChange);
   ro = new ResizeObserver(() => sizeFrame());
   if (shellRef.value) ro.observe(shellRef.value);
@@ -283,12 +376,27 @@ onMounted(() => {
   frameRequest = requestAnimationFrame(render);
 });
 
-watch(() => player.renderScale, (newScale) => renderer?.applyScale(newScale));
+watch(
+  () => [
+    player.renderScale,
+    player.renderMode,
+    player.threeProjection,
+    player.viewAngleA,
+    player.viewAngleB,
+    player.observerDistance,
+    player.projectionDistance,
+  ],
+  () => {
+    syncRendererSize();
+    drawActiveRenderer();
+  },
+);
 
 onUnmounted(() => {
   document.removeEventListener("fullscreenchange", onFullscreenChange);
   ro?.disconnect();
   cancelAnimationFrame(frameRequest);
+  threeRenderer?.dispose();
 });
 </script>
 
@@ -309,10 +417,46 @@ onUnmounted(() => {
   background: #000;
 }
 
-canvas {
+.sim-canvas {
   display: block;
   width: 100%;
   height: 100%;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.sim-canvas:not(:first-child) {
+  position: absolute;
+  inset: 0;
+}
+
+.sim-canvas.active {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.sim-canvas[aria-label="Pyfii 3D simulation canvas"].active {
+  cursor: grab;
+}
+
+.sim-canvas[aria-label="Pyfii 3D simulation canvas"].active:active {
+  cursor: grabbing;
+}
+
+.three-hud {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  z-index: 8;
+  display: grid;
+  gap: 3px;
+  padding: 7px 9px;
+  border: 1px solid rgba(255, 255, 255, 0.55);
+  background: rgba(0, 0, 0, 0.62);
+  color: #f1f1f1;
+  font-size: 12px;
+  line-height: 1.25;
+  pointer-events: none;
 }
 
 .fullscreen-btn {

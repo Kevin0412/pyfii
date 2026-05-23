@@ -88,6 +88,14 @@ export interface RenderOptions {
   playing: boolean;
 }
 
+export interface ThreeRenderSettings {
+  projection: "orthographic" | "perspective";
+  viewAngleA: number;
+  viewAngleB: number;
+  observerDistance: number;
+  projectionDistance: number;
+}
+
 export interface RenderInput {
   meta: ProjectMeta | null;
   frame: RenderFrame;
