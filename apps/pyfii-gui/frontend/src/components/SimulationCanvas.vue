@@ -27,6 +27,7 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from "vue";
 
+import { projectMusicUrl } from "../api/projects";
 import { getFrameAtTime } from "../renderer/frame";
 import { PyfiiCanvasRenderer } from "../renderer/canvas2d/PyfiiCanvasRenderer";
 import { usePlayerStore } from "../stores/player";
@@ -113,10 +114,40 @@ async function exportVideo(): Promise<void> {
   const totalFrames = Math.ceil(project.durationMs / frameIntervalMs);
   const durationMs = project.durationMs;
 
-  const stream = canvas.captureStream(captureFps);
+  // Video stream from canvas
+  let stream = canvas.captureStream(captureFps);
+
+  // Try to add audio
+  let audioEl: HTMLAudioElement | null = null;
+  let audioCtx: AudioContext | null = null;
+  if (project.projectId && project.meta.music.available) {
+    try {
+      const musicUrl = projectMusicUrl(project.projectId);
+      audioEl = new Audio(musicUrl);
+      audioEl.preload = "auto";
+      await new Promise<void>((resolve, reject) => {
+        audioEl!.oncanplaythrough = () => resolve();
+        audioEl!.onerror = () => reject(new Error("audio load failed"));
+        audioEl!.load();
+      });
+      audioCtx = new AudioContext();
+      const source = audioCtx.createMediaElementSource(audioEl);
+      const dest = audioCtx.createMediaStreamDestination();
+      source.connect(dest);
+      source.connect(audioCtx.destination);
+      stream = new MediaStream([
+        ...stream.getVideoTracks(),
+        ...dest.stream.getAudioTracks(),
+      ]);
+    } catch {
+      audioEl = null;
+      audioCtx?.close();
+      audioCtx = null;
+    }
+  }
 
   let mimeType = "";
-  for (const candidate of ["video/webm; codecs=vp9", "video/webm; codecs=vp8", "video/webm"]) {
+  for (const candidate of ["video/webm; codecs=vp9,opus", "video/webm; codecs=vp8,opus", "video/webm"]) {
     if (MediaRecorder.isTypeSupported(candidate)) { mimeType = candidate; break; }
   }
 
@@ -141,6 +172,7 @@ async function exportVideo(): Promise<void> {
 
   const exportComplete = new Promise<void>((resolve) => {
     recorder.onstop = () => {
+      audioCtx?.close();
       const blob = new Blob(chunks, { type: mimeType });
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
@@ -169,15 +201,17 @@ async function exportVideo(): Promise<void> {
   exporting.value = true;
   exportProgress.value = 0;
 
-  const done = () => {
-    recorder.stop();
-  };
+  if (audioEl) {
+    audioEl.currentTime = 0;
+    await audioEl.play();
+  }
 
   let i = 0;
   function exportTick(): void {
     if (i > totalFrames) {
       renderer?.draw(buildRenderInput());
-      done();
+      if (audioEl) { audioEl.pause(); }
+      recorder.stop();
       return;
     }
 
