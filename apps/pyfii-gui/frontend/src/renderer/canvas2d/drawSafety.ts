@@ -16,7 +16,7 @@ export function drawSafetyMarkers(
   const activeIds = new Set<number>();
 
   for (const event of events) {
-    if (event.level !== "error" || Math.abs(event.time_ms - frame.timeMs) >= 500) {
+    if (event.category === "action_incomplete" || Math.abs(event.time_ms - frame.timeMs) >= 500) {
       continue;
     }
     if (event.drone_a) {

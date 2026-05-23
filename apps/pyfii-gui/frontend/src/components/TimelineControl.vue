@@ -25,9 +25,9 @@
           v-for="marker in safetyMarkers"
           :key="marker.id"
           class="tick"
-          :class="marker.level"
+          :class="marker.category"
           :style="{ left: marker.position + '%' }"
-          :title="`${marker.level}: ${marker.message} @ ${marker.formattedTime}`"
+          :title="`${marker.categoryLabel}: ${marker.message} @ ${marker.formattedTime}`"
         ></span>
       </div>
     </div>
@@ -98,7 +98,8 @@ const safetyMarkers = computed(() => {
   if (duration <= 0) return [];
   return safety.events.map((event) => ({
     id: event.id,
-    level: event.level,
+    category: event.category,
+    categoryLabel: event.category_label,
     position: (event.time_ms / duration) * 100,
     message: event.message,
     formattedTime: `${(event.time_ms / 1000).toFixed(2)}s`,
@@ -275,13 +276,23 @@ watch(
   border-radius: 1.5px;
 }
 
-.tick.error {
+.tick.distance_17 {
   background: #ff3333;
   height: 12px;
 }
 
-.tick.warning {
+.tick.distance_34 {
+  background: #ff8a3d;
+  height: 11px;
+}
+
+.tick.distance_51 {
   background: #ffd15c;
+  height: 10px;
+}
+
+.tick.action_incomplete {
+  background: #b8b8b8;
   height: 8px;
 }
 

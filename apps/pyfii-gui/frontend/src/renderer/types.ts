@@ -1,4 +1,5 @@
 export type SafetyLevel = "ok" | "warning" | "error";
+export type SafetyCategory = "action_incomplete" | "distance_51" | "distance_34" | "distance_17";
 
 export interface MusicInfo {
   available: boolean;
@@ -10,6 +11,8 @@ export interface SafetySummary {
   error_count: number;
   warning_count: number;
   min_distance_cm: number | null;
+  category_counts: Partial<Record<SafetyCategory, number>>;
+  max_category: SafetyCategory | null;
 }
 
 export interface ProjectMeta {
@@ -70,6 +73,9 @@ export interface SafetyEvent {
   drone_b: number | null;
   distance_cm: number | null;
   threshold_cm: number | null;
+  category: SafetyCategory;
+  category_label: string;
+  category_rank: number;
   message: string;
   details: Record<string, unknown>;
 }

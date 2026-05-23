@@ -105,6 +105,8 @@ https://gui.example.com/api/  -> FastAPI backend
 - Canvas 2D 三视图预览：top / front / right。
 - 右下角 2 行 5 列无人机信息栏：D1..D9 + STATUS。
 - 安全日志以 pyfii core warning 为准，GUI 后端只做结构化整理。
+- 安全日志按四类展示，并支持类似 Excel/文件夹列表的按列筛选和排序。
+- 距离事件沿用 core 的 51cm / 34cm / 17cm 档位，分别对应距离过近、碰撞风险、碰撞警告。
 - 点击安全日志跳转到对应时间。
 - 音乐文件播放和基础时间轴同步。
 - 浏览器 MediaRecorder WebM 导出占位能力，当前作为实验功能使用。

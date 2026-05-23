@@ -33,8 +33,8 @@
       </div>
       <div>
         <span>safety</span>
-        <strong :class="levelClass(project.meta.safety_summary.level)">
-          {{ project.meta.safety_summary.level }}
+        <strong :class="categoryClass(project.meta.safety_summary.max_category)">
+          {{ summaryLabel(project.meta.safety_summary.max_category) }}
         </strong>
       </div>
       <div>
@@ -61,7 +61,7 @@
 
 <script setup lang="ts">
 import { useProjectStore } from "../stores/project";
-import type { SafetyLevel } from "../renderer/types";
+import type { SafetyCategory } from "../renderer/types";
 
 const project = useProjectStore();
 
@@ -69,8 +69,16 @@ function formatTime(ms: number): string {
   return `${(ms / 1000).toFixed(2)}s`;
 }
 
-function levelClass(level: SafetyLevel): string {
-  return `level-${level}`;
+function summaryLabel(category: SafetyCategory | null): string {
+  if (category === "distance_17") return "碰撞警告";
+  if (category === "distance_34") return "碰撞风险";
+  if (category === "distance_51") return "距离过近";
+  if (category === "action_incomplete") return "动作未完成";
+  return "ok";
+}
+
+function categoryClass(category: SafetyCategory | null): string {
+  return category ? `category-${category}` : "level-ok";
 }
 </script>
 
@@ -114,5 +122,21 @@ code {
   color: #8d8d8d;
   line-height: 1.6;
   font-size: 12px;
+}
+
+.category-distance_17 {
+  color: #ff3232;
+}
+
+.category-distance_34 {
+  color: #ff8a3d;
+}
+
+.category-distance_51 {
+  color: #ffd15c;
+}
+
+.category-action_incomplete {
+  color: #b8b8b8;
 }
 </style>
