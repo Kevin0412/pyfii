@@ -2,19 +2,18 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import ORJSONResponse
 
+from .config import settings
 from .errors import AppError
 from .routers.projects import router as projects_router
 
 
-app = FastAPI(title="Pyfii GUI API", default_response_class=ORJSONResponse)
+app = FastAPI(title=settings.app_title, default_response_class=ORJSONResponse)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:5173",
-        "http://127.0.0.1:5173",
-    ],
-    allow_credentials=True,
+    allow_origins=settings.cors_origins,
+    allow_origin_regex=settings.cors_origin_regex,
+    allow_credentials=settings.cors_allow_credentials,
     allow_methods=["*"],
     allow_headers=["*"],
 )
