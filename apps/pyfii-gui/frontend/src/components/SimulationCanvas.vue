@@ -1,6 +1,6 @@
 <template>
-  <section ref="canvasShellRef" class="canvas-shell">
-    <div class="canvas-frame" :style="{ width: frameWidth + 'px', height: frameHeight + 'px' }">
+  <section ref="shellRef" class="canvas-shell">
+    <div class="canvas-frame" :style="{ width: fw + 'px', height: fh + 'px' }">
       <canvas
         ref="canvasRef"
         :width="canvasWidth"
@@ -35,11 +35,11 @@ import { useSafetyStore } from "../stores/safety";
 import type { RenderInput } from "../renderer/types";
 
 const canvasRef = ref<HTMLCanvasElement | null>(null);
-const canvasShellRef = ref<HTMLElement | null>(null);
+const shellRef = ref<HTMLElement | null>(null);
+const fw = ref(0);
+const fh = ref(0);
 const exporting = ref(false);
 const exportProgress = ref(0);
-const frameWidth = ref(0);
-const frameHeight = ref(0);
 const project = useProjectStore();
 const player = usePlayerStore();
 const safety = useSafetyStore();
@@ -51,26 +51,32 @@ const canvasImageRendering = computed(() => player.renderScale >= 1 ? "auto" : "
 let renderer: PyfiiCanvasRenderer | null = null;
 let frameRequest = 0;
 let lastTimestamp = 0;
-let resizeObserver: ResizeObserver | null = null;
+let ro: ResizeObserver | null = null;
 
-function updateFrameSize(): void {
-  const shell = canvasShellRef.value;
-  if (!shell) return;
-  const cw = shell.clientWidth;
-  const ch = shell.clientHeight;
+function sizeFrame(): void {
+  const el = shellRef.value;
+  if (!el) return;
+  const cw = el.clientWidth;
+  const ch = el.clientHeight;
   if (cw <= 0 || ch <= 0) return;
   const w = Math.min(cw, ch * 2);
-  frameWidth.value = w;
-  frameHeight.value = w / 2;
+  fw.value = w;
+  fh.value = w / 2;
+}
+
+// Wait for layout to fully settle after fullscreen change
+function scheduleSizeCheck(): void {
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => sizeFrame());
+    });
+  });
 }
 
 function render(timestamp: number): void {
-  updateFrameSize();
+  sizeFrame();
 
-  if (!lastTimestamp) {
-    lastTimestamp = timestamp;
-  }
-
+  if (!lastTimestamp) lastTimestamp = timestamp;
   const delta = timestamp - lastTimestamp;
   lastTimestamp = timestamp;
 
@@ -110,9 +116,8 @@ function buildRenderInput(): RenderInput {
 
 function onFullscreenChange(): void {
   const active = Boolean(document.fullscreenElement);
-  if (player.fullscreen !== active) {
-    player.setFullscreen(active);
-  }
+  player.setFullscreen(active);
+  scheduleSizeCheck();
 }
 
 async function exportVideo(): Promise<void> {
@@ -141,10 +146,7 @@ async function exportVideo(): Promise<void> {
 
   const chunks: Blob[] = [];
   const recorder = new MediaRecorder(stream, { mimeType, videoBitsPerSecond: 8000000 });
-
-  recorder.ondataavailable = (e: BlobEvent) => {
-    if (e.data.size > 0) chunks.push(e.data);
-  };
+  recorder.ondataavailable = (e: BlobEvent) => { if (e.data.size > 0) chunks.push(e.data); };
 
   const wasPlaying = player.playing;
   const savedTime = player.currentTimeMs;
@@ -159,7 +161,6 @@ async function exportVideo(): Promise<void> {
   player.pause();
   player.setCurrentTime(0);
   await nextTick();
-
   cancelAnimationFrame(frameRequest);
 
   const exportComplete = new Promise<void>((resolve) => {
@@ -176,7 +177,6 @@ async function exportVideo(): Promise<void> {
 
       player.setCurrentTime(savedTime);
       if (wasPlaying) player.play();
-
       if (player.renderScale !== savedScale) {
         player.setRenderScale(savedScale);
         renderer?.applyScale(savedScale);
@@ -187,7 +187,6 @@ async function exportVideo(): Promise<void> {
       frameRequest = requestAnimationFrame(render);
       resolve();
     };
-
     recorder.start(100);
   });
 
@@ -214,13 +213,9 @@ onMounted(() => {
     renderer = new PyfiiCanvasRenderer(canvasRef.value, player.renderScale);
   }
   document.addEventListener("fullscreenchange", onFullscreenChange);
-
-  resizeObserver = new ResizeObserver(() => updateFrameSize());
-  if (canvasShellRef.value) {
-    resizeObserver.observe(canvasShellRef.value);
-  }
-  updateFrameSize();
-
+  ro = new ResizeObserver(() => sizeFrame());
+  if (shellRef.value) ro.observe(shellRef.value);
+  sizeFrame();
   frameRequest = requestAnimationFrame(render);
 });
 
@@ -230,7 +225,7 @@ watch(() => player.renderScale, (newScale) => {
 
 onUnmounted(() => {
   document.removeEventListener("fullscreenchange", onFullscreenChange);
-  resizeObserver?.disconnect();
+  ro?.disconnect();
   cancelAnimationFrame(frameRequest);
 });
 </script>
@@ -247,6 +242,7 @@ onUnmounted(() => {
 .canvas-frame {
   position: relative;
   overflow: hidden;
+  flex-shrink: 0;
   border: 1px solid #f0f0f0;
   background: #000;
 }
@@ -274,9 +270,7 @@ canvas {
 }
 
 .canvas-frame:hover .fullscreen-btn,
-.fullscreen-btn:focus-visible {
-  opacity: 1;
-}
+.fullscreen-btn:focus-visible { opacity: 1; }
 
 .export-overlay {
   position: absolute;
