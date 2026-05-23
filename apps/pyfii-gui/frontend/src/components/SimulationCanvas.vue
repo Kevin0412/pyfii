@@ -1,5 +1,5 @@
 <template>
-  <section class="canvas-shell">
+  <section ref="canvasShellRef" class="canvas-shell" :class="{ fullscreen: isFullscreen }">
     <div class="canvas-frame">
       <canvas
         ref="canvasRef"
@@ -8,6 +8,11 @@
         :style="{ imageRendering: canvasImageRendering }"
         aria-label="Pyfii 2D simulation canvas"
       />
+      <button
+        class="fullscreen-btn"
+        @click="toggleFullscreen"
+        :title="isFullscreen ? 'Exit fullscreen' : 'Fullscreen'"
+      >{{ isFullscreen ? '⬚' : '⬙' }}</button>
     </div>
   </section>
 </template>
@@ -22,6 +27,8 @@ import { useProjectStore } from "../stores/project";
 import { useSafetyStore } from "../stores/safety";
 
 const canvasRef = ref<HTMLCanvasElement | null>(null);
+const canvasShellRef = ref<HTMLElement | null>(null);
+const isFullscreen = ref(false);
 const project = useProjectStore();
 const player = usePlayerStore();
 const safety = useSafetyStore();
@@ -72,10 +79,23 @@ function render(timestamp: number): void {
   frameRequest = requestAnimationFrame(render);
 }
 
+function onFullscreenChange(): void {
+  isFullscreen.value = Boolean(document.fullscreenElement);
+}
+
+async function toggleFullscreen(): Promise<void> {
+  if (isFullscreen.value) {
+    await document.exitFullscreen();
+  } else {
+    await canvasShellRef.value?.requestFullscreen();
+  }
+}
+
 onMounted(() => {
   if (canvasRef.value) {
     renderer = new PyfiiCanvasRenderer(canvasRef.value, player.renderScale);
   }
+  document.addEventListener("fullscreenchange", onFullscreenChange);
   frameRequest = requestAnimationFrame(render);
 });
 
@@ -84,6 +104,7 @@ watch(() => player.renderScale, (newScale) => {
 });
 
 onUnmounted(() => {
+  document.removeEventListener("fullscreenchange", onFullscreenChange);
   cancelAnimationFrame(frameRequest);
 });
 </script>
@@ -98,7 +119,20 @@ onUnmounted(() => {
   overflow: auto;
 }
 
+.canvas-shell.fullscreen {
+  padding: 0;
+  background: #000;
+}
+
+.canvas-shell.fullscreen .canvas-frame {
+  width: 100vw;
+  height: 100vh;
+  max-width: none;
+  border: none;
+}
+
 .canvas-frame {
+  position: relative;
   width: min(100%, 1200px);
   aspect-ratio: 2 / 1;
   border: 1px solid #f0f0f0;
@@ -109,5 +143,26 @@ canvas {
   display: block;
   width: 100%;
   height: 100%;
+}
+
+.fullscreen-btn {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 10;
+  opacity: 0.35;
+  background: #141414;
+  border: 1px solid #555;
+  color: #f0f0f0;
+  font-size: 16px;
+  padding: 4px 8px;
+  cursor: pointer;
+  transition: opacity 0.2s;
+  line-height: 1;
+}
+
+.canvas-frame:hover .fullscreen-btn,
+.fullscreen-btn:focus-visible {
+  opacity: 1;
 }
 </style>
