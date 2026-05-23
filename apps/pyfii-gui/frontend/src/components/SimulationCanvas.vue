@@ -112,7 +112,9 @@ function onFullscreenChange(): void {
     player.setFullscreen(active);
   }
   if (!active) {
+    // Layout may take multiple frames to settle after exiting fullscreen
     nextTick(() => updateFrameSize());
+    setTimeout(() => updateFrameSize(), 150);
   }
 }
 
