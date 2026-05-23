@@ -3,7 +3,7 @@
     <header class="topbar">
       <div class="brand">
         <span class="brand-title">Pyfii GUI</span>
-        <span class="brand-subtitle">MVP Simulator</span>
+        <span class="brand-subtitle">Simulator</span>
       </div>
       <label class="scale-select">
         Scale
