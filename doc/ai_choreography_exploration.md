@@ -59,8 +59,6 @@
 
 完整蒸馏记录见 [human_choreography_distillation.md](human_choreography_distillation.md)。
 
-GUI 回归测试可用 `apps/pyfii-gui/backend/scripts/batch_import_human_pool.py` 批量跑这些项目，覆盖 zip 打包、安全解压、`read_fii()`、`show(show=False)`、安全日志和轨迹 JSON 序列化。`output/d/比赛用无人机` 属于老版本 Fii 格式不兼容样例，在该脚本中记录为 `expected_failure`。
-
 这些作品必须用两个模式一起看：`pf.read_fii(path, fps=60, ignore_acc=True)` 用来还原当时无加速度模拟语境下的视觉设计意图；`pf.read_fii(path, fps=60, ignore_acc=False)` 用来做现代执行验证。轨迹第一个返回值能提供每架机的时间、XYZ、朝向和灯光状态，适合抽取中心移动、队形外接框、高度层、角色顺序变化、最小距离、运动跨度和停顿比例。已有 2D/3D 视频则用于人工确认观感，2D 看平面队形和角色换位，3D 看高度层、纵深、升降和遮挡。
 
 需要注意：这些作品里有不少 `action isn't completed` warning，部分轨迹还会出现过近距离。旧作品的默认加速度 warning 不能直接否定设计价值，因为当时的初始视觉效果以无加速度模式为准；但它们也不能直接作为安全样板。正确用法是先在无加速度模式下提炼设计方法，再让新的 agent 用速度求解、错峰、中间点和安全检查重新实现，并在默认加速度模式下通过硬门。
