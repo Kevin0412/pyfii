@@ -170,16 +170,36 @@ async function exportVideo(): Promise<void> {
   exporting.value = true;
   exportProgress.value = 0;
 
-  for (let i = 0; i <= totalFrames; i++) {
+  const done = () => {
+    recorder.stop();
+  };
+
+  let i = 0;
+  let lastProgressUpdate = 0;
+  function exportTick(): void {
+    if (i > totalFrames) {
+      renderer?.draw(buildRenderInput());
+      videoTrack.requestFrame();
+      done();
+      return;
+    }
+
     const simTime = Math.min(i * frameIntervalMs, durationMs);
     player.setCurrentTime(simTime);
     renderer?.draw(buildRenderInput());
     videoTrack.requestFrame();
-    exportProgress.value = (i / totalFrames) * 100;
-    await new Promise((r) => setTimeout(r, 0));
+
+    const now = performance.now();
+    if (now - lastProgressUpdate > 80) {
+      exportProgress.value = (i / totalFrames) * 100;
+      lastProgressUpdate = now;
+    }
+
+    i++;
+    requestAnimationFrame(exportTick);
   }
 
-  recorder.stop();
+  requestAnimationFrame(exportTick);
   await exportComplete;
 }
 
