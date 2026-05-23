@@ -1,10 +1,18 @@
 <template>
-  <div class="sim-page">
+  <div class="sim-page" :class="`theme-${ui.theme}`">
     <header class="topbar">
       <div class="brand">
         <span class="brand-title">Pyfii GUI</span>
         <span class="brand-subtitle">Simulator</span>
       </div>
+      <button
+        class="theme-toggle"
+        type="button"
+        :aria-pressed="ui.theme === 'light'"
+        @click="ui.toggleTheme()"
+      >
+        {{ ui.theme === "dark" ? "Light" : "Dark" }}
+      </button>
       <label class="scale-select">
         Scale
         <select v-model.number="player.renderScale">
@@ -78,11 +86,13 @@ import TimelineControl from "../components/TimelineControl.vue";
 import { onMounted, onUnmounted, ref, watch } from "vue";
 import { usePlayerStore } from "../stores/player";
 import { useProjectStore } from "../stores/project";
+import { useUiStore } from "../stores/ui";
 
 const simCanvasRef = ref<InstanceType<typeof SimulationCanvas> | null>(null);
 const simColumnRef = ref<HTMLElement | null>(null);
 const player = usePlayerStore();
 const project = useProjectStore();
+const ui = useUiStore();
 
 function onFullscreenChange(): void {
   if (!document.fullscreenElement) {
@@ -111,11 +121,62 @@ onUnmounted(() => {
 
 <style scoped>
 .sim-page {
+  --app-bg: #090909;
+  --panel-bg: #101010;
+  --panel-bg-alt: #0e0e0e;
+  --panel-bg-raised: #141414;
+  --simulation-bg: #050505;
+  --fullscreen-bg: #000;
+  --border-strong: #efefef;
+  --border-soft: #303030;
+  --border-control: #d8d8d8;
+  --text: #efefef;
+  --text-strong: #f3f3f3;
+  --text-muted: #8d8d8d;
+  --text-subtle: #858585;
+  --control-bg: #141414;
+  --control-hover-bg: #202020;
+  --control-disabled: #777;
+  --danger: #ff3232;
+  --risk: #ff8a3d;
+  --warning: #ffd15c;
+  --ok: #42d47d;
+  --neutral: #b8b8b8;
+  --danger-bg: #241414;
+  --table-header-bg: #121212;
+  --shadow: rgba(0, 0, 0, 0.45);
   min-height: 100vh;
   display: grid;
   grid-template-rows: auto minmax(0, 1fr) minmax(180px, 28vh);
-  background: #090909;
-  color: #efefef;
+  background: var(--app-bg);
+  color: var(--text);
+}
+
+.theme-light {
+  --app-bg: #f3f3f3;
+  --panel-bg: #ffffff;
+  --panel-bg-alt: #ededed;
+  --panel-bg-raised: #f8f8f8;
+  --simulation-bg: #dedede;
+  --fullscreen-bg: #000;
+  --border-strong: #202020;
+  --border-soft: #c8c8c8;
+  --border-control: #555555;
+  --text: #151515;
+  --text-strong: #050505;
+  --text-muted: #5b5b5b;
+  --text-subtle: #686868;
+  --control-bg: #ffffff;
+  --control-hover-bg: #e7e7e7;
+  --control-disabled: #8c8c8c;
+  --danger: #b90000;
+  --risk: #bd4c00;
+  --warning: #8a6500;
+  --ok: #007333;
+  --neutral: #606060;
+  --danger-bg: #ffe5e5;
+  --table-header-bg: #e9e9e9;
+  --shadow: rgba(0, 0, 0, 0.18);
 }
 
 .topbar {
@@ -124,8 +185,8 @@ onUnmounted(() => {
   align-items: center;
   gap: 16px;
   padding: 10px 14px;
-  border-bottom: 1px solid #efefef;
-  background: #0e0e0e;
+  border-bottom: 1px solid var(--border-strong);
+  background: var(--panel-bg-alt);
 }
 
 .brand {
@@ -140,8 +201,12 @@ onUnmounted(() => {
 }
 
 .brand-subtitle {
-  color: #858585;
+  color: var(--text-subtle);
   font-size: 11px;
+}
+
+.theme-toggle {
+  min-width: 64px;
 }
 
 .scale-select,
@@ -149,15 +214,15 @@ onUnmounted(() => {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  color: #cfcfcf;
+  color: var(--text);
   font-size: 12px;
 }
 
 .compact-input input {
   width: 64px;
-  border: 1px solid #d8d8d8;
-  background: #141414;
-  color: #f0f0f0;
+  border: 1px solid var(--border-control);
+  background: var(--control-bg);
+  color: var(--text);
   padding: 6px 7px;
 }
 
@@ -176,8 +241,8 @@ onUnmounted(() => {
 }
 
 .project-column {
-  border-right: 1px solid #d8d8d8;
-  background: #101010;
+  border-right: 1px solid var(--border-control);
+  background: var(--panel-bg);
   overflow: auto;
 }
 
@@ -186,11 +251,11 @@ onUnmounted(() => {
   min-height: 0;
   display: grid;
   grid-template-rows: minmax(0, 1fr) auto;
-  background: #050505;
+  background: var(--simulation-bg);
 }
 
 .simulation-column.fullscreen {
-  background: #000;
+  background: var(--fullscreen-bg);
 }
 
 @media (max-width: 900px) {
@@ -209,7 +274,7 @@ onUnmounted(() => {
 
   .project-column {
     border-right: 0;
-    border-bottom: 1px solid #d8d8d8;
+    border-bottom: 1px solid var(--border-control);
   }
 }
 </style>

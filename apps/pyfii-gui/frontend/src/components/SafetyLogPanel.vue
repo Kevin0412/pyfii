@@ -258,8 +258,8 @@ function jumpToEvent(event: SafetyEvent): void {
 <style scoped>
 .safety-panel {
   min-height: 0;
-  border-top: 1px solid #efefef;
-  background: #0d0d0d;
+  border-top: 1px solid var(--border-strong);
+  background: var(--panel-bg-alt);
   display: grid;
   grid-template-rows: auto auto minmax(0, 1fr);
 }
@@ -269,7 +269,7 @@ header {
   align-items: center;
   gap: 12px;
   padding: 10px 14px;
-  border-bottom: 1px solid #303030;
+  border-bottom: 1px solid var(--border-soft);
 }
 
 h2 {
@@ -283,8 +283,8 @@ h2 {
   gap: 8px;
   align-items: center;
   padding: 8px 14px;
-  border-bottom: 1px solid #303030;
-  background: #101010;
+  border-bottom: 1px solid var(--border-soft);
+  background: var(--panel-bg);
 }
 
 .summary-bar button {
@@ -293,7 +293,7 @@ h2 {
 }
 
 .count {
-  color: #8b8b8b;
+  color: var(--text-muted);
   font-size: 11px;
 }
 
@@ -311,7 +311,7 @@ table {
 th,
 td {
   padding: 7px 10px;
-  border-bottom: 1px solid #242424;
+  border-bottom: 1px solid var(--border-soft);
   text-align: left;
   vertical-align: top;
 }
@@ -319,14 +319,14 @@ td {
 th {
   position: sticky;
   top: 0;
-  background: #121212;
-  color: #a8a8a8;
+  background: var(--table-header-bg);
+  color: var(--text-muted);
   z-index: 1;
 }
 
 .filter-row th {
   top: 31px;
-  background: #101010;
+  background: var(--panel-bg);
 }
 
 .filter-row select,
@@ -334,9 +334,9 @@ th {
 .multi-select summary {
   width: 100%;
   min-width: 0;
-  border: 1px solid #4a4a4a;
-  background: #090909;
-  color: #f0f0f0;
+  border: 1px solid var(--border-control);
+  background: var(--control-bg);
+  color: var(--text);
   padding: 5px 7px;
 }
 
@@ -364,10 +364,10 @@ th {
   min-width: 140px;
   max-height: 180px;
   overflow: auto;
-  border: 1px solid #5a5a5a;
-  background: #090909;
+  border: 1px solid var(--border-control);
+  background: var(--panel-bg);
   padding: 6px;
-  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.45);
+  box-shadow: 0 8px 18px var(--shadow);
 }
 
 .multi-menu label {
@@ -375,12 +375,12 @@ th {
   align-items: center;
   gap: 6px;
   padding: 4px;
-  color: #f0f0f0;
+  color: var(--text);
   cursor: pointer;
 }
 
 .multi-menu label:hover {
-  background: #202020;
+  background: var(--control-hover-bg);
 }
 
 .multi-menu input {
@@ -390,14 +390,14 @@ th {
 .empty-option {
   display: block;
   padding: 5px;
-  color: #8b8b8b;
+  color: var(--text-muted);
 }
 
 .th-button {
   width: 100%;
   border: 0;
   background: transparent;
-  color: #a8a8a8;
+  color: var(--text-muted);
   padding: 0;
   display: flex;
   justify-content: space-between;
@@ -405,7 +405,7 @@ th {
 }
 
 .th-button:hover {
-  color: #f0f0f0;
+  color: var(--text);
   background: transparent;
 }
 
@@ -415,7 +415,7 @@ tbody tr {
 
 tbody tr:hover,
 tbody tr.active {
-  background: #241414;
+  background: var(--danger-bg);
 }
 
 td:first-child,
@@ -425,27 +425,27 @@ td:nth-child(3) {
 }
 
 .category-distance_17 {
-  color: #ff3232;
+  color: var(--danger);
   font-weight: 800;
 }
 
 .category-distance_34 {
-  color: #ff8a3d;
+  color: var(--risk);
   font-weight: 700;
 }
 
 .category-distance_51 {
-  color: #ffd15c;
+  color: var(--warning);
   font-weight: 700;
 }
 
 .category-action_incomplete {
-  color: #b8b8b8;
+  color: var(--neutral);
   font-weight: 700;
 }
 
 .empty {
-  color: #8b8b8b;
+  color: var(--text-muted);
   text-align: center;
   cursor: default;
 }

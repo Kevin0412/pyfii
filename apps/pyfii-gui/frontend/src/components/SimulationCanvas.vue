@@ -413,7 +413,7 @@ onUnmounted(() => {
 .canvas-frame {
   position: relative;
   overflow: hidden;
-  border: 1px solid #f0f0f0;
+  border: 1px solid var(--border-strong);
   background: #000;
 }
 
@@ -465,9 +465,9 @@ onUnmounted(() => {
   right: 8px;
   z-index: 10;
   opacity: 0.35;
-  background: #141414;
-  border: 1px solid #555;
-  color: #f0f0f0;
+  background: var(--control-bg);
+  border: 1px solid var(--border-control);
+  color: var(--text);
   font-size: 16px;
   padding: 4px 8px;
   cursor: pointer;
@@ -489,8 +489,8 @@ onUnmounted(() => {
 }
 
 .export-progress-card {
-  background: #141414;
-  border: 1px solid #555;
+  background: var(--panel-bg-raised);
+  border: 1px solid var(--border-control);
   padding: 24px 36px;
   display: flex;
   flex-direction: column;

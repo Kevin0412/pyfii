@@ -101,7 +101,7 @@ async function submit(): Promise<void> {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  color: #cfcfcf;
+  color: var(--text);
   font-size: 12px;
 }
 
@@ -114,7 +114,7 @@ async function submit(): Promise<void> {
 }
 
 .selected-file {
-  color: #8e8e8e;
+  color: var(--text-muted);
   max-width: 280px;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -122,7 +122,7 @@ async function submit(): Promise<void> {
 }
 
 .upload-error {
-  color: #ff5b5b;
+  color: var(--danger);
   max-width: 360px;
   overflow: hidden;
   text-overflow: ellipsis;

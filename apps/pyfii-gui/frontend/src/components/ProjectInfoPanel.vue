@@ -91,7 +91,7 @@ h2 {
   margin: 0 0 14px;
   font-size: 15px;
   font-weight: 700;
-  color: #f3f3f3;
+  color: var(--text-strong);
 }
 
 .info-list {
@@ -103,40 +103,40 @@ h2 {
   display: grid;
   gap: 3px;
   padding-bottom: 9px;
-  border-bottom: 1px solid #303030;
+  border-bottom: 1px solid var(--border-soft);
 }
 
 span {
-  color: #8d8d8d;
+  color: var(--text-muted);
   font-size: 11px;
 }
 
 strong,
 code {
-  color: #f2f2f2;
+  color: var(--text-strong);
   font-size: 12px;
   word-break: break-word;
 }
 
 .empty {
-  color: #8d8d8d;
+  color: var(--text-muted);
   line-height: 1.6;
   font-size: 12px;
 }
 
 .category-distance_17 {
-  color: #ff3232;
+  color: var(--danger);
 }
 
 .category-distance_34 {
-  color: #ff8a3d;
+  color: var(--risk);
 }
 
 .category-distance_51 {
-  color: #ffd15c;
+  color: var(--warning);
 }
 
 .category-action_incomplete {
-  color: #b8b8b8;
+  color: var(--neutral);
 }
 </style>

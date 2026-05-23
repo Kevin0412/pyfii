@@ -7,6 +7,15 @@
   text-rendering: optimizeLegibility;
 }
 
+body[data-theme="dark"] {
+  color-scheme: dark;
+}
+
+body[data-theme="light"] {
+  color-scheme: light;
+  background: #f3f3f3;
+}
+
 * {
   box-sizing: border-box;
 }
@@ -15,7 +24,7 @@ body {
   margin: 0;
   min-width: 320px;
   min-height: 100vh;
-  background: #090909;
+  background: var(--app-bg, #090909);
 }
 
 button,
@@ -27,44 +36,44 @@ select {
 button,
 select,
 input[type="file"]::file-selector-button {
-  border: 1px solid #d8d8d8;
-  background: #141414;
-  color: #f0f0f0;
+  border: 1px solid var(--border-control, #d8d8d8);
+  background: var(--control-bg, #141414);
+  color: var(--text, #f0f0f0);
   padding: 6px 10px;
   cursor: pointer;
 }
 
 button:disabled,
 select:disabled {
-  color: #777;
-  border-color: #555;
+  color: var(--control-disabled, #777);
+  border-color: var(--border-soft, #555);
   cursor: not-allowed;
 }
 
 button:hover:not(:disabled),
 select:hover:not(:disabled),
 input[type="file"]::file-selector-button:hover {
-  background: #202020;
+  background: var(--control-hover-bg, #202020);
 }
 
 input[type="range"] {
-  accent-color: #f2f2f2;
+  accent-color: var(--text-strong, #f2f2f2);
 }
 
 .level-ok {
-  color: #42d47d;
+  color: var(--ok, #42d47d);
 }
 
 .level-warning {
-  color: #ffd15c;
+  color: var(--warning, #ffd15c);
 }
 
 .level-error {
-  color: #ff5b5b;
+  color: var(--danger, #ff5b5b);
 }
 
 .muted {
-  color: #8b8b8b;
+  color: var(--text-muted, #8b8b8b);
 }
 
 .mono-grid {

@@ -237,13 +237,13 @@ watch(
   align-items: center;
   gap: 12px;
   padding: 10px 14px;
-  border-top: 1px solid #d8d8d8;
-  background: #101010;
+  border-top: 1px solid var(--border-control);
+  background: var(--panel-bg);
 }
 
 .time-readout {
   min-width: 150px;
-  color: #dcdcdc;
+  color: var(--text);
   font-size: 12px;
 }
 
@@ -277,22 +277,22 @@ watch(
 }
 
 .tick.distance_17 {
-  background: #ff3333;
+  background: var(--danger);
   height: 12px;
 }
 
 .tick.distance_34 {
-  background: #ff8a3d;
+  background: var(--risk);
   height: 11px;
 }
 
 .tick.distance_51 {
-  background: #ffd15c;
+  background: var(--warning);
   height: 10px;
 }
 
 .tick.action_incomplete {
-  background: #b8b8b8;
+  background: var(--neutral);
   height: 8px;
 }
 
@@ -300,7 +300,7 @@ label {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  color: #cfcfcf;
+  color: var(--text);
   font-size: 12px;
 }
 
@@ -315,7 +315,7 @@ label {
 }
 
 .music-empty {
-  color: #777;
+  color: var(--text-muted);
   font-size: 12px;
 }
 
