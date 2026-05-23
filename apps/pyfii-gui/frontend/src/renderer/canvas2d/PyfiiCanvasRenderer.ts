@@ -9,34 +9,24 @@ export class PyfiiCanvasRenderer {
   private readonly canvas: HTMLCanvasElement;
   private readonly ctx: CanvasRenderingContext2D;
 
-  constructor(canvas: HTMLCanvasElement) {
+  constructor(canvas: HTMLCanvasElement, scale: number = 1) {
     const ctx = canvas.getContext("2d");
     if (!ctx) {
       throw new Error("2D canvas context is not available.");
     }
     this.canvas = canvas;
     this.ctx = ctx;
-    this.ctx.imageSmoothingEnabled = false;
-    this.resizeForDevicePixelRatio();
+    this.applyScale(scale);
   }
 
-  resizeForDevicePixelRatio(): void {
-    const rect = this.canvas.getBoundingClientRect();
-    const cssWidth = rect.width || PYFII_CLASSIC_LAYOUT.canvasWidth;
-    const cssHeight = rect.height || cssWidth / 2 || PYFII_CLASSIC_LAYOUT.canvasHeight;
-    const dpr = window.devicePixelRatio || 1;
-    const width = Math.max(1, Math.round(cssWidth * dpr));
-    const height = Math.max(1, Math.round(cssHeight * dpr));
-
-    if (this.canvas.width !== width || this.canvas.height !== height) {
-      this.canvas.width = width;
-      this.canvas.height = height;
-    }
-    this.ctx.imageSmoothingEnabled = false;
+  applyScale(scale: number): void {
+    const width = Math.max(1, Math.round(PYFII_CLASSIC_LAYOUT.canvasWidth * scale));
+    const height = Math.max(1, Math.round(PYFII_CLASSIC_LAYOUT.canvasHeight * scale));
+    this.canvas.width = width;
+    this.canvas.height = height;
   }
 
   draw(input: RenderInput): void {
-    this.resizeForDevicePixelRatio();
     const scaleX = this.canvas.width / PYFII_CLASSIC_LAYOUT.canvasWidth;
     const scaleY = this.canvas.height / PYFII_CLASSIC_LAYOUT.canvasHeight;
 

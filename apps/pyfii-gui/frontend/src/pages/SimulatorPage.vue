@@ -5,6 +5,14 @@
         <span class="brand-title">Pyfii GUI</span>
         <span class="brand-subtitle">MVP Simulator</span>
       </div>
+      <label class="scale-select">
+        Scale
+        <select v-model.number="player.renderScale">
+          <option :value="0.5">0.5x</option>
+          <option :value="1">1x</option>
+          <option :value="2">2x</option>
+        </select>
+      </label>
       <ProjectUpload />
       <button class="export-placeholder" disabled title="TODO: WebM / Electron + ffmpeg MP4 export">
         Export TODO
@@ -31,6 +39,9 @@ import ProjectUpload from "../components/ProjectUpload.vue";
 import SafetyLogPanel from "../components/SafetyLogPanel.vue";
 import SimulationCanvas from "../components/SimulationCanvas.vue";
 import TimelineControl from "../components/TimelineControl.vue";
+import { usePlayerStore } from "../stores/player";
+
+const player = usePlayerStore();
 </script>
 
 <style scoped>

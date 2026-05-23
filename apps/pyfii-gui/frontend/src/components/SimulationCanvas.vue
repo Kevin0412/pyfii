@@ -1,13 +1,19 @@
 <template>
   <section class="canvas-shell">
     <div class="canvas-frame">
-      <canvas ref="canvasRef" width="1200" height="600" aria-label="Pyfii 2D simulation canvas" />
+      <canvas
+        ref="canvasRef"
+        :width="canvasWidth"
+        :height="canvasHeight"
+        :style="{ imageRendering: canvasImageRendering }"
+        aria-label="Pyfii 2D simulation canvas"
+      />
     </div>
   </section>
 </template>
 
 <script setup lang="ts">
-import { onMounted, onUnmounted, ref } from "vue";
+import { computed, onMounted, onUnmounted, ref, watch } from "vue";
 
 import { getFrameAtTime } from "../renderer/frame";
 import { PyfiiCanvasRenderer } from "../renderer/canvas2d/PyfiiCanvasRenderer";
@@ -19,6 +25,10 @@ const canvasRef = ref<HTMLCanvasElement | null>(null);
 const project = useProjectStore();
 const player = usePlayerStore();
 const safety = useSafetyStore();
+
+const canvasWidth = computed(() => Math.max(1, Math.round(1200 * player.renderScale)));
+const canvasHeight = computed(() => Math.max(1, Math.round(600 * player.renderScale)));
+const canvasImageRendering = computed(() => player.renderScale >= 1 ? "auto" : "pixelated");
 
 let renderer: PyfiiCanvasRenderer | null = null;
 let frameRequest = 0;
@@ -62,20 +72,18 @@ function render(timestamp: number): void {
   frameRequest = requestAnimationFrame(render);
 }
 
-function resize(): void {
-  renderer?.resizeForDevicePixelRatio();
-}
-
 onMounted(() => {
   if (canvasRef.value) {
-    renderer = new PyfiiCanvasRenderer(canvasRef.value);
+    renderer = new PyfiiCanvasRenderer(canvasRef.value, player.renderScale);
   }
-  window.addEventListener("resize", resize);
   frameRequest = requestAnimationFrame(render);
 });
 
+watch(() => player.renderScale, (newScale) => {
+  renderer?.applyScale(newScale);
+});
+
 onUnmounted(() => {
-  window.removeEventListener("resize", resize);
   cancelAnimationFrame(frameRequest);
 });
 </script>
@@ -101,6 +109,5 @@ canvas {
   display: block;
   width: 100%;
   height: 100%;
-  image-rendering: pixelated;
 }
 </style>
