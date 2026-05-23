@@ -14,9 +14,11 @@
         </select>
       </label>
       <ProjectUpload />
-      <button class="export-placeholder" disabled title="TODO: WebM / Electron + ffmpeg MP4 export">
-        Export TODO
-      </button>
+      <button
+        class="export-btn"
+        :disabled="!project.hasProject"
+        @click="simCanvasRef?.exportVideo()"
+      >Export WebM</button>
     </header>
 
     <main class="workspace">
@@ -24,7 +26,7 @@
         <ProjectInfoPanel />
       </aside>
       <section class="simulation-column">
-        <SimulationCanvas />
+        <SimulationCanvas ref="simCanvasRef" />
         <TimelineControl />
       </section>
     </main>
@@ -39,9 +41,13 @@ import ProjectUpload from "../components/ProjectUpload.vue";
 import SafetyLogPanel from "../components/SafetyLogPanel.vue";
 import SimulationCanvas from "../components/SimulationCanvas.vue";
 import TimelineControl from "../components/TimelineControl.vue";
+import { ref } from "vue";
 import { usePlayerStore } from "../stores/player";
+import { useProjectStore } from "../stores/project";
 
+const simCanvasRef = ref<InstanceType<typeof SimulationCanvas> | null>(null);
 const player = usePlayerStore();
+const project = useProjectStore();
 </script>
 
 <style scoped>
@@ -79,7 +85,7 @@ const player = usePlayerStore();
   font-size: 11px;
 }
 
-.export-placeholder {
+.export-btn {
   margin-left: auto;
 }
 
