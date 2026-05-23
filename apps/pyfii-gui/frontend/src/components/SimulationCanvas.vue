@@ -56,7 +56,6 @@ let ro: ResizeObserver | null = null;
 function sizeFrame(): void {
   const el = shellRef.value;
   if (!el) return;
-  void el.offsetHeight;
   const cw = el.clientWidth;
   const ch = el.clientHeight;
   if (cw <= 0 || ch <= 0) return;
@@ -65,20 +64,7 @@ function sizeFrame(): void {
   fh.value = Math.round(w / 2);
 }
 
-// Wait for layout to fully settle after fullscreen change
-function scheduleSizeCheck(): void {
-  requestAnimationFrame(() => {
-    requestAnimationFrame(() => {
-      requestAnimationFrame(() => sizeFrame());
-    });
-  });
-  setTimeout(() => sizeFrame(), 300);
-  setTimeout(() => sizeFrame(), 600);
-}
-
 function render(timestamp: number): void {
-  sizeFrame();
-
   if (!lastTimestamp) lastTimestamp = timestamp;
   const delta = timestamp - lastTimestamp;
   lastTimestamp = timestamp;
@@ -93,10 +79,7 @@ function render(timestamp: number): void {
     }
   }
 
-  if (renderer) {
-    renderer.draw(buildRenderInput());
-  }
-
+  if (renderer) renderer.draw(buildRenderInput());
   frameRequest = requestAnimationFrame(render);
 }
 
@@ -118,9 +101,7 @@ function buildRenderInput(): RenderInput {
 }
 
 function onFullscreenChange(): void {
-  const active = Boolean(document.fullscreenElement);
-  player.setFullscreen(active);
-  scheduleSizeCheck();
+  player.setFullscreen(Boolean(document.fullscreenElement));
 }
 
 async function exportVideo(): Promise<void> {
@@ -136,15 +117,8 @@ async function exportVideo(): Promise<void> {
   const videoTrack = stream.getVideoTracks()[0];
 
   let mimeType = "";
-  for (const candidate of [
-    "video/webm; codecs=vp9",
-    "video/webm; codecs=vp8",
-    "video/webm",
-  ]) {
-    if (MediaRecorder.isTypeSupported(candidate)) {
-      mimeType = candidate;
-      break;
-    }
+  for (const candidate of ["video/webm; codecs=vp9", "video/webm; codecs=vp8", "video/webm"]) {
+    if (MediaRecorder.isTypeSupported(candidate)) { mimeType = candidate; break; }
   }
 
   const chunks: Blob[] = [];
@@ -212,24 +186,18 @@ async function exportVideo(): Promise<void> {
 defineExpose({ exportVideo });
 
 onMounted(() => {
-  if (canvasRef.value) {
-    renderer = new PyfiiCanvasRenderer(canvasRef.value, player.renderScale);
-  }
+  if (canvasRef.value) renderer = new PyfiiCanvasRenderer(canvasRef.value, player.renderScale);
   document.addEventListener("fullscreenchange", onFullscreenChange);
-  window.addEventListener("resize", sizeFrame);
   ro = new ResizeObserver(() => sizeFrame());
   if (shellRef.value) ro.observe(shellRef.value);
   sizeFrame();
   frameRequest = requestAnimationFrame(render);
 });
 
-watch(() => player.renderScale, (newScale) => {
-  renderer?.applyScale(newScale);
-});
+watch(() => player.renderScale, (newScale) => renderer?.applyScale(newScale));
 
 onUnmounted(() => {
   document.removeEventListener("fullscreenchange", onFullscreenChange);
-  window.removeEventListener("resize", sizeFrame);
   ro?.disconnect();
   cancelAnimationFrame(frameRequest);
 });
@@ -248,7 +216,6 @@ onUnmounted(() => {
 .canvas-frame {
   position: relative;
   overflow: hidden;
-  flex-shrink: 0;
   border: 1px solid #f0f0f0;
   background: #000;
 }
