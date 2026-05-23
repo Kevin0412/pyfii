@@ -13,6 +13,10 @@
       :max="Math.max(project.durationMs, 1)"
       step="10"
       :disabled="!project.hasProject"
+      @mousedown="player.startSeeking()"
+      @touchstart="player.startSeeking()"
+      @mouseup="player.endSeeking()"
+      @touchend="player.endSeeking()"
     />
 
     <label>

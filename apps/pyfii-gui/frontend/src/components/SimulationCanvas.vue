@@ -42,7 +42,7 @@ function render(timestamp: number): void {
   const delta = timestamp - lastTimestamp;
   lastTimestamp = timestamp;
 
-  if (player.playing && project.durationMs > 0) {
+  if (player.playing && !player.seeking && project.durationMs > 0) {
     const nextTime = player.currentTimeMs + delta * player.speed;
     if (nextTime >= project.durationMs) {
       player.setCurrentTime(project.durationMs);
