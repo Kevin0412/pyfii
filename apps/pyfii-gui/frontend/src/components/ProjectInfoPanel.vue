@@ -28,10 +28,6 @@
         <strong>{{ formatTime(project.meta.duration_ms) }}</strong>
       </div>
       <div>
-        <span>source_fps</span>
-        <strong>{{ project.meta.source_fps }}</strong>
-      </div>
-      <div>
         <span>frames</span>
         <strong>{{ project.meta.frame_count }}</strong>
       </div>
