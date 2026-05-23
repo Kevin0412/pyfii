@@ -228,9 +228,8 @@ onUnmounted(() => {
 .canvas-shell {
   min-height: 0;
   display: grid;
-  align-items: center;
-  justify-items: center;
-  overflow: auto;
+  place-items: center;
+  overflow: hidden;
 }
 
 .canvas-shell.fullscreen {
@@ -247,8 +246,7 @@ onUnmounted(() => {
 
 .canvas-frame {
   position: relative;
-  max-width: 100%;
-  max-height: 100%;
+  width: 100%;
   aspect-ratio: 2 / 1;
   border: 1px solid #f0f0f0;
   background: #000;
