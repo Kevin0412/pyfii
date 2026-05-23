@@ -230,7 +230,6 @@ onUnmounted(() => {
   display: grid;
   align-items: center;
   justify-items: center;
-  padding: 14px;
   overflow: auto;
 }
 
@@ -248,7 +247,8 @@ onUnmounted(() => {
 
 .canvas-frame {
   position: relative;
-  width: min(100%, 1200px);
+  width: 100%;
+  max-height: 100%;
   aspect-ratio: 2 / 1;
   border: 1px solid #f0f0f0;
   background: #000;
