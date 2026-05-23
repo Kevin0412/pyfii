@@ -1,4 +1,12 @@
-export const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || "http://localhost:8000").replace(/\/$/, "");
+function normalizeApiBaseUrl(value: string | undefined): string {
+  const baseUrl = value?.trim() || "";
+  if (baseUrl === "/") {
+    return "";
+  }
+  return baseUrl.replace(/\/$/, "");
+}
+
+export const API_BASE_URL = normalizeApiBaseUrl(import.meta.env.VITE_API_BASE_URL);
 
 export interface ApiErrorPayload {
   error?: {
