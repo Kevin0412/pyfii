@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Best Assign — 全排列搜索最小碰撞分配"""
-import math, itertools
+import itertools
+import math
 
 
 def best_assign(starts, targets):
@@ -9,15 +10,21 @@ def best_assign(starts, targets):
     targets: [(x0,y0), ...]
     返回: (permutation, min_distance_cm)
     """
+    if len(starts) != len(targets):
+        raise ValueError("starts and targets must have the same length")
+
     N = len(starts)
     best_md = -1
+    best_max_move = 1e9
     best_perm = None
 
     for perm in itertools.permutations(range(N)):
         tt = [targets[i] for i in perm]
         md = _path_min_distance(starts, tt)
-        if md > best_md:
+        max_move = max(_distance(starts[i], tt[i]) for i in range(N))
+        if md > best_md or (math.isclose(md, best_md) and max_move < best_max_move):
             best_md = md
+            best_max_move = max_move
             best_perm = perm
 
     return best_perm, best_md
@@ -69,17 +76,20 @@ def _cross(a, b, c):
 
 def _point_to_segment(p, a, b):
     """点 p 到线段 ab 的最短距离"""
-    ax, ay = a
-    bx, by = b
-    px, py = p
+    ax, ay = _xy(a)
+    bx, by = _xy(b)
+    px, py = _xy(p)
 
     abx = bx - ax
     aby = by - ay
     apx = px - ax
     apy = py - ay
+    denom = abx * abx + aby * aby
+    if denom == 0:
+        return math.hypot(px - ax, py - ay)
 
     # 投影参数 t
-    t = (apx * abx + apy * aby) / (abx * abx + aby * aby)
+    t = (apx * abx + apy * aby) / denom
 
     if t <= 0:
         return math.hypot(px - ax, py - ay)
@@ -89,3 +99,13 @@ def _point_to_segment(p, a, b):
         proj_x = ax + t * abx
         proj_y = ay + t * aby
         return math.hypot(px - proj_x, py - proj_y)
+
+
+def _distance(a, b):
+    ax, ay = _xy(a)
+    bx, by = _xy(b)
+    return math.hypot(ax - bx, ay - by)
+
+
+def _xy(point):
+    return point[0], point[1]

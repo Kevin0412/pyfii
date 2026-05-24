@@ -11,6 +11,7 @@ ALL_PACKS = [
     "pyfii_best_assign.md",
     "pyfii_light_patterns.md",
     "pyfii_validation_rules.md",
+    "agent_coding_style.md",
 ]
 
 
@@ -61,8 +62,10 @@ prev = {prev_state}
 
     user += """## 要求
 - 不要输出 marker 行（START/END），只输出段内部的 Python 代码
+- 如果使用 Markdown，只能放一个 python 代码块；不要解释设计过程
 - 段代码必须在 marker 之间（见 segment_protocol）
 - 几何内部点间距 > 51cm
+- 安全优先于视觉复杂度；如果复杂换位有碰撞风险，使用扇区保持、排队错峰和更少几何
 - best_assign 结果硬编码为 perm = (...)
 - 生成前先算飞行时间，确保 light + delay 够
 - 不要只做一个 move2 —— 可以多几何、条件分支、相对移动、排队错峰

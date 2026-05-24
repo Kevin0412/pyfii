@@ -17,8 +17,13 @@ class LlmResponse:
 
 
 def load_config(provider_name: str = "deepseek") -> dict:
+    if not CONFIG_PATH.exists():
+        raise FileNotFoundError(f"missing provider config: {CONFIG_PATH}")
     cfg = json.loads(CONFIG_PATH.read_text(encoding="utf-8"))
-    return cfg["providers"][provider_name]
+    providers = cfg.get("providers", {})
+    if provider_name not in providers:
+        raise KeyError(f"unknown provider: {provider_name}")
+    return providers[provider_name]
 
 
 def chat(
@@ -37,8 +42,9 @@ def chat(
             {"role": "user", "content": user},
         ],
         "temperature": temperature,
-        "max_tokens": 16384,
+        "max_tokens": cfg.get("max_output_tokens", 16384),
     }
+    payload.update(cfg.get("extra_body", {}))
 
     headers = {
         "Authorization": f"Bearer {cfg['api_key']}",
@@ -46,11 +52,12 @@ def chat(
     }
 
     resp = httpx.post(
-        f"{cfg['base_url']}/chat/completions",
+        f"{cfg['base_url'].rstrip('/')}/chat/completions",
         json=payload,
         headers=headers,
         timeout=300,
     )
+    resp.raise_for_status()
     data = resp.json()
 
     choice = data["choices"][0]
