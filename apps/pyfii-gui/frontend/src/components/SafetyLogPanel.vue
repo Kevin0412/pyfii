@@ -1,7 +1,7 @@
 <template>
   <section class="safety-panel">
     <header>
-      <h2>Safety Log</h2>
+      <h2>安全日志</h2>
       <template v-if="safety.summary">
         <span
           v-for="category in categories"
@@ -11,12 +11,12 @@
           {{ category.shortLabel }} {{ categoryCount(category.value) }}
         </span>
       </template>
-      <span v-else class="muted">waiting for project</span>
+      <span v-else class="muted">等待项目</span>
     </header>
 
     <div class="summary-bar">
       <span class="count">{{ visibleEvents.length }} / {{ safety.events.length }}</span>
-      <button :disabled="!hasFilters" @click="clearFilters">clear filters</button>
+      <button :disabled="!hasFilters" @click="clearFilters">清除筛选</button>
     </div>
 
     <div class="table-wrap">
@@ -25,35 +25,35 @@
           <tr>
             <th>
               <button class="th-button" @click="cycleSort('time')">
-                time <span>{{ sortGlyph("time") }}</span>
+                时间 <span>{{ sortGlyph("time") }}</span>
               </button>
             </th>
             <th>
               <button class="th-button" @click="cycleSort('category')">
-                class <span>{{ sortGlyph("category") }}</span>
+                类别 <span>{{ sortGlyph("category") }}</span>
               </button>
             </th>
             <th>
               <button class="th-button" @click="cycleSort('drone')">
-                drones <span>{{ sortGlyph("drone") }}</span>
+                无人机 <span>{{ sortGlyph("drone") }}</span>
               </button>
             </th>
             <th>
               <button class="th-button" @click="cycleSort('message')">
-                message <span>{{ sortGlyph("message") }}</span>
+                消息 <span>{{ sortGlyph("message") }}</span>
               </button>
             </th>
           </tr>
           <tr class="filter-row">
             <th>
               <select v-model="timeWindow">
-                <option value="all">all time</option>
-                <option value="current">near current</option>
+                <option value="all">全部时间</option>
+                <option value="current">当前附近</option>
               </select>
             </th>
             <th>
               <select v-model="categoryFilter">
-                <option value="all">all classes</option>
+                <option value="all">全部类别</option>
                 <option v-for="category in categories" :key="category.value" :value="category.value">
                   {{ category.label }}
                 </option>
@@ -67,12 +67,12 @@
                     <input v-model="selectedDroneIds" type="checkbox" :value="droneId" />
                     D{{ droneId }}
                   </label>
-                  <span v-if="availableDrones.length === 0" class="empty-option">no drones</span>
+                  <span v-if="availableDrones.length === 0" class="empty-option">暂无无人机</span>
                 </div>
               </details>
             </th>
             <th>
-              <input v-model.trim="query" type="search" placeholder="filter message" />
+              <input v-model.trim="query" type="search" placeholder="筛选消息" />
             </th>
           </tr>
         </thead>
@@ -137,7 +137,7 @@ const availableDrones = computed(() => {
 
 const droneFilterLabel = computed(() => {
   if (selectedDroneIds.value.length === 0) {
-    return "all drones";
+    return "全部无人机";
   }
   return selectedDroneIds.value
     .slice()
@@ -208,7 +208,7 @@ function clearFilters(): void {
 }
 
 function formatTime(ms: number): string {
-  return `${(ms / 1000).toFixed(2)}s`;
+  return `${(ms / 1000).toFixed(2)} 秒`;
 }
 
 function droneLabel(event: SafetyEvent): string {
@@ -245,7 +245,7 @@ function sortGlyph(column: typeof sortColumn.value): string {
   if (sortColumn.value !== column) {
     return "";
   }
-  return sortDirection.value === "asc" ? "up" : "down";
+  return sortDirection.value === "asc" ? "↑" : "↓";
 }
 
 function jumpToEvent(event: SafetyEvent): void {

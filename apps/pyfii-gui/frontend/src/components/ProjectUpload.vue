@@ -6,7 +6,7 @@
     </label>
 
     <label>
-      FPS
+      帧率
       <select v-model.number="fps" :disabled="project.loading">
         <option :value="60">60</option>
         <option :value="30">30</option>
@@ -17,11 +17,11 @@
 
     <label class="inline-check">
       <input v-model="ignoreAcc" type="checkbox" :disabled="project.loading" />
-      ignore_acc
+      忽略加速度
     </label>
 
     <button type="submit" :disabled="!selectedFile || project.loading">
-      {{ project.loading ? "Parsing..." : "Load" }}
+      {{ project.loading ? "解析中..." : "载入" }}
     </button>
 
     <span v-if="selectedFile" class="selected-file">{{ selectedFile.name }}</span>
@@ -58,7 +58,7 @@ function errorMessage(error: unknown): string {
   if (error instanceof Error) {
     return error.message;
   }
-  return "Unknown upload error.";
+  return "未知上传错误。";
 }
 
 async function submit(): Promise<void> {

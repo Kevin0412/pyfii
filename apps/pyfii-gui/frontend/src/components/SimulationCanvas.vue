@@ -25,21 +25,21 @@
         @contextmenu.prevent
       />
       <div v-if="player.renderMode === 'three3d'" class="three-hud">
-        <span>T+{{ (player.currentTimeMs / 1000).toFixed(2) }}s</span>
-        <span>{{ project.trackFps }}fps</span>
+        <span>时间 +{{ (player.currentTimeMs / 1000).toFixed(2) }} 秒</span>
+        <span>帧率 {{ project.trackFps }} FPS</span>
         <span>水平 {{ player.viewAngleA.toFixed(0) }}° / 俯仰 {{ player.viewAngleB.toFixed(0) }}°</span>
-        <span>观察距 {{ player.observerDistance.toFixed(0) }}cm</span>
-        <span>投影距 {{ player.projectionDistance.toFixed(0) }}cm</span>
+        <span>观察距 {{ player.observerDistance.toFixed(0) }} 厘米</span>
+        <span>投影距 {{ player.projectionDistance.toFixed(0) }} 厘米</span>
         <span>{{ hudDroneText }}</span>
       </div>
       <button
         class="fullscreen-btn"
         @click="player.setFullscreen(!player.fullscreen)"
-        :title="player.fullscreen ? 'Exit fullscreen' : 'Fullscreen'"
+        :title="player.fullscreen ? '退出全屏' : '全屏'"
       >{{ player.fullscreen ? '⬚' : '⬙' }}</button>
       <div v-if="exporting" class="export-overlay">
         <div class="export-progress-card">
-          <span>Exporting WebM...</span>
+          <span>正在导出 WebM...</span>
           <progress :value="exportProgress" max="100" />
           <span>{{ Math.round(exportProgress) }}%</span>
         </div>
@@ -78,9 +78,9 @@ const hudFrame = computed(() => getFrameAtTime(project.tracks, player.currentTim
 const hudDroneText = computed(() => {
   const drone = hudFrame.value.drones.find((item) => item.id === player.selectedDroneId) ?? hudFrame.value.drones[0];
   if (!drone) {
-    return "D- x:- y:- z:-";
+    return "无人机：无";
   }
-  return `D${drone.id} x:${drone.xCm.toFixed(0)} y:${drone.yCm.toFixed(0)} z:${drone.zCm.toFixed(0)}`;
+  return `D${drone.id} 坐标 (${drone.xCm.toFixed(0)}, ${drone.yCm.toFixed(0)}, ${drone.zCm.toFixed(0)})`;
 });
 
 let canvasRenderer: PyfiiCanvasRenderer | null = null;
@@ -217,7 +217,7 @@ function waitForAudioReady(audio: HTMLAudioElement): Promise<void> {
     };
     audio.onerror = () => {
       cleanup();
-      reject(new Error("audio load failed"));
+      reject(new Error("音频加载失败。"));
     };
     audio.load();
   });
@@ -306,7 +306,7 @@ async function exportVideo(): Promise<void> {
       resolve(new Blob(chunks, { type: mimeType || "video/webm" }));
     };
     recorder.onerror = () => {
-      reject(new Error("MediaRecorder failed."));
+      reject(new Error("MediaRecorder 录制失败。"));
     };
   });
 
@@ -338,7 +338,7 @@ async function exportVideo(): Promise<void> {
       recorder.stop();
     }
     const blob = await exportComplete;
-    downloadBlob(blob, `${project.meta?.name ?? "simulation"}.webm`);
+    downloadBlob(blob, `${project.meta?.name ?? "仿真"}.webm`);
   } catch (error) {
     console.error(error);
     audioEl?.pause();

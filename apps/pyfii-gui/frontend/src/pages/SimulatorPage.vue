@@ -3,7 +3,7 @@
     <header class="topbar">
       <div class="brand">
         <span class="brand-title">Pyfii GUI</span>
-        <span class="brand-subtitle">Simulator</span>
+        <span class="brand-subtitle">仿真器</span>
       </div>
       <button
         class="theme-toggle"
@@ -11,22 +11,22 @@
         :aria-pressed="ui.theme === 'light'"
         @click="ui.toggleTheme()"
       >
-        {{ ui.theme === "dark" ? "Light" : "Dark" }}
+        {{ ui.theme === "dark" ? "浅色" : "深色" }}
       </button>
       <label class="scale-select">
-        Scale
+        缩放
         <select v-model.number="player.renderScale">
-          <option :value="0.5">0.5x</option>
-          <option :value="1">1x</option>
-          <option :value="2">2x</option>
-          <option :value="4">4x</option>
+          <option :value="0.5">0.5 倍</option>
+          <option :value="1">1 倍</option>
+          <option :value="2">2 倍</option>
+          <option :value="4">4 倍</option>
         </select>
       </label>
       <label class="scale-select">
-        Render
+        视图
         <select v-model="player.renderMode">
-          <option value="classic2d">2D classic</option>
-          <option value="three3d">3D</option>
+          <option value="classic2d">经典 2D</option>
+          <option value="three3d">三维 3D</option>
         </select>
       </label>
       <template v-if="player.renderMode === 'three3d'">
@@ -60,7 +60,7 @@
         class="export-btn"
         :disabled="!project.hasProject"
         @click="simCanvasRef?.exportVideo()"
-      >Export WebM</button>
+      >导出 WebM</button>
     </header>
 
     <main class="workspace">

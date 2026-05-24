@@ -1,7 +1,7 @@
 <template>
   <section class="timeline">
     <button :disabled="!project.hasProject" @click="togglePlayback">
-      {{ player.playing ? "Pause" : "Play" }}
+      {{ player.playing ? "暂停" : "播放" }}
     </button>
 
     <span class="time-readout">{{ formatTime(player.currentTimeMs) }} / {{ formatTime(project.durationMs) }}</span>
@@ -27,25 +27,25 @@
           class="tick"
           :class="marker.category"
           :style="{ left: marker.position + '%' }"
-          :title="`${marker.categoryLabel}: ${marker.message} @ ${marker.formattedTime}`"
+          :title="`${marker.categoryLabel}：${marker.message}，时间 ${marker.formattedTime}`"
         ></span>
       </div>
     </div>
 
     <label>
-      Speed
+      倍速
       <select v-model.number="speed" :disabled="!project.hasProject">
-        <option :value="0.25">0.25x</option>
-        <option :value="0.5">0.5x</option>
-        <option :value="1">1x</option>
-        <option :value="2">2x</option>
-        <option :value="4">4x</option>
+        <option :value="0.25">0.25 倍</option>
+        <option :value="0.5">0.5 倍</option>
+        <option :value="1">1 倍</option>
+        <option :value="2">2 倍</option>
+        <option :value="4">4 倍</option>
       </select>
     </label>
 
     <label class="toggle">
       <input v-model="player.showSafetyMarkers" type="checkbox" />
-      safety
+      安全标记
     </label>
 
     <audio
@@ -61,7 +61,7 @@
       @ended="player.pause"
     />
 
-    <span v-else class="music-empty">no music</span>
+    <span v-else class="music-empty">无音乐</span>
   </section>
 </template>
 
@@ -186,7 +186,7 @@ function onAudioSeek(): void {
 }
 
 function formatTime(ms: number): string {
-  return `${(ms / 1000).toFixed(2)}s`;
+  return `${(ms / 1000).toFixed(2)} 秒`;
 }
 
 watch(
