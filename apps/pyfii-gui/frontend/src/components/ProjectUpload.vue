@@ -1,12 +1,12 @@
 <template>
   <form class="upload-bar" @submit.prevent="submit">
     <label class="file-control">
-      <span>上传项目</span>
+      <span>{{ tt("uploadProject") }}</span>
       <input type="file" accept=".zip,application/zip" @change="onFileChange" />
     </label>
 
     <label>
-      帧率
+      {{ tt("frameRate") }}
       <select v-model.number="fps" :disabled="project.loading">
         <option :value="60">60</option>
         <option :value="30">30</option>
@@ -17,11 +17,11 @@
 
     <label class="inline-check">
       <input v-model="ignoreAcc" type="checkbox" :disabled="project.loading" />
-      忽略加速度
+      {{ tt("ignoreAcceleration") }}
     </label>
 
     <button type="submit" :disabled="!selectedFile || project.loading">
-      {{ project.loading ? "解析中..." : "载入" }}
+      {{ project.loading ? tt("parsing") : tt("load") }}
     </button>
 
     <span v-if="selectedFile" class="selected-file">{{ selectedFile.name }}</span>
@@ -34,17 +34,24 @@ import { ref } from "vue";
 
 import { ApiError } from "../api/client";
 import { fetchProjectSafety, fetchProjectTracks, uploadProjectZip } from "../api/projects";
+import { text, type MessageKey } from "../i18n";
 import { usePlayerStore } from "../stores/player";
 import { useProjectStore } from "../stores/project";
 import { useSafetyStore } from "../stores/safety";
+import { useUiStore } from "../stores/ui";
 
 const project = useProjectStore();
 const player = usePlayerStore();
 const safety = useSafetyStore();
+const ui = useUiStore();
 
 const selectedFile = ref<File | null>(null);
 const fps = ref(60);
 const ignoreAcc = ref(false);
+
+function tt(key: MessageKey): string {
+  return text(ui.locale, key);
+}
 
 function onFileChange(event: Event): void {
   const input = event.target as HTMLInputElement;
@@ -58,7 +65,7 @@ function errorMessage(error: unknown): string {
   if (error instanceof Error) {
     return error.message;
   }
-  return "未知上传错误。";
+  return tt("unknownUploadError");
 }
 
 async function submit(): Promise<void> {

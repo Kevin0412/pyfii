@@ -12,5 +12,6 @@ const ui = useUiStore();
 
 watchEffect(() => {
   document.body.dataset.theme = ui.theme;
+  document.documentElement.lang = ui.locale === "zh" ? "zh-CN" : "en";
 });
 </script>

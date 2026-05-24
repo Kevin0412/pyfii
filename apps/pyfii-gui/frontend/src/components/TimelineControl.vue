@@ -1,7 +1,7 @@
 <template>
   <section class="timeline">
     <button :disabled="!project.hasProject" @click="togglePlayback">
-      {{ player.playing ? "暂停" : "播放" }}
+      {{ player.playing ? tt("pause") : tt("play") }}
     </button>
 
     <span class="time-readout">{{ formatTime(player.currentTimeMs) }} / {{ formatTime(project.durationMs) }}</span>
@@ -27,25 +27,25 @@
           class="tick"
           :class="marker.category"
           :style="{ left: marker.position + '%' }"
-          :title="`${marker.categoryLabel}：${marker.message}，时间 ${marker.formattedTime}`"
+          :title="markerTitle(marker)"
         ></span>
       </div>
     </div>
 
     <label>
-      倍速
+      {{ tt("speed") }}
       <select v-model.number="speed" :disabled="!project.hasProject">
-        <option :value="0.25">0.25 倍</option>
-        <option :value="0.5">0.5 倍</option>
-        <option :value="1">1 倍</option>
-        <option :value="2">2 倍</option>
-        <option :value="4">4 倍</option>
+        <option :value="0.25">0.25x</option>
+        <option :value="0.5">0.5x</option>
+        <option :value="1">1x</option>
+        <option :value="2">2x</option>
+        <option :value="4">4x</option>
       </select>
     </label>
 
     <label class="toggle">
       <input v-model="player.showSafetyMarkers" type="checkbox" />
-      安全标记
+      {{ tt("safetyMarkers") }}
     </label>
 
     <audio
@@ -61,7 +61,7 @@
       @ended="player.pause"
     />
 
-    <span v-else class="music-empty">无音乐</span>
+    <span v-else class="music-empty">{{ tt("noMusic") }}</span>
   </section>
 </template>
 
@@ -69,14 +69,21 @@
 import { computed, nextTick, ref, watch } from "vue";
 
 import { projectMusicUrl } from "../api/projects";
+import { safetyCategoryLabel, text, type MessageKey } from "../i18n";
 import { usePlayerStore } from "../stores/player";
 import { useProjectStore } from "../stores/project";
 import { useSafetyStore } from "../stores/safety";
+import { useUiStore } from "../stores/ui";
 
 const player = usePlayerStore();
 const project = useProjectStore();
 const safety = useSafetyStore();
+const ui = useUiStore();
 const audioRef = ref<HTMLAudioElement | null>(null);
+
+function tt(key: MessageKey): string {
+  return text(ui.locale, key);
+}
 
 const musicUrl = computed(() => {
   if (!project.projectId || !project.meta?.music.available) {
@@ -99,10 +106,10 @@ const safetyMarkers = computed(() => {
   return safety.events.map((event) => ({
     id: event.id,
     category: event.category,
-    categoryLabel: event.category_label,
+    categoryLabel: safetyCategoryLabel(ui.locale, event.category),
     position: (event.time_ms / duration) * 100,
     message: event.message,
-    formattedTime: `${(event.time_ms / 1000).toFixed(2)}s`,
+    formattedTime: formatTime(event.time_ms),
   }));
 });
 
@@ -186,7 +193,13 @@ function onAudioSeek(): void {
 }
 
 function formatTime(ms: number): string {
-  return `${(ms / 1000).toFixed(2)} 秒`;
+  return `${(ms / 1000).toFixed(2)} ${tt("secondUnit")}`;
+}
+
+function markerTitle(marker: { categoryLabel: string; message: string; formattedTime: string }): string {
+  return ui.locale === "zh"
+    ? `${marker.categoryLabel}：${marker.message}，时间 ${marker.formattedTime}`
+    : `${marker.categoryLabel}: ${marker.message} at ${marker.formattedTime}`;
 }
 
 watch(

@@ -17,10 +17,12 @@ GUI 后端只作为 `pyfii.read.read_fii()` 的薄适配层，不把 FastAPI、V
 ```bash
 cd apps/pyfii-gui/backend
 pip install -e .
-uvicorn pyfii_gui_api.main:app --reload --host 0.0.0.0 --port 8000
+PYTHONPATH=src:../../../src uvicorn pyfii_gui_api.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
-如果当前环境尚未安装本仓库的 pyfii core，可先在仓库根目录执行：
+`PYTHONPATH=src:../../../src` 会同时加载 GUI backend 包和本仓库的本地 `src/pyfii` core，适合在 monorepo 中直接开发测试。如果当前环境已经安装本仓库的 pyfii core，也可使用普通 uvicorn 命令。
+
+也可以先在仓库根目录安装 core：
 
 ```bash
 pip install -e .
@@ -99,6 +101,7 @@ https://gui.example.com/api/  -> FastAPI backend
 ## 当前 MVP 支持
 
 - 上传 Fii 项目 zip。
+- 默认英文界面，支持中文/英文切换。
 - 安全解压并调用 `read_fii()` 解析轨迹。
 - 调用 `show(show=False)` 走 pyfii core 的无渲染距离检查。
 - 返回项目元信息、轨迹数据和由 core warnings 结构化得到的安全日志。

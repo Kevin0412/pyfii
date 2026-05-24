@@ -25,21 +25,21 @@
         @contextmenu.prevent
       />
       <div v-if="player.renderMode === 'three3d'" class="three-hud">
-        <span>时间 +{{ (player.currentTimeMs / 1000).toFixed(2) }} 秒</span>
-        <span>帧率 {{ project.trackFps }} FPS</span>
-        <span>水平 {{ player.viewAngleA.toFixed(0) }}° / 俯仰 {{ player.viewAngleB.toFixed(0) }}°</span>
-        <span>观察距 {{ player.observerDistance.toFixed(0) }} 厘米</span>
-        <span>投影距 {{ player.projectionDistance.toFixed(0) }} 厘米</span>
+        <span>{{ tt("hudTime") }} +{{ (player.currentTimeMs / 1000).toFixed(2) }} {{ tt("secondUnit") }}</span>
+        <span>{{ tt("hudFps") }} {{ project.trackFps }} FPS</span>
+        <span>{{ tt("viewAngleA") }} {{ player.viewAngleA.toFixed(0) }}° / {{ tt("viewAngleB") }} {{ player.viewAngleB.toFixed(0) }}°</span>
+        <span>{{ tt("hudObserver") }} {{ player.observerDistance.toFixed(0) }} {{ tt("centimeterUnit") }}</span>
+        <span>{{ tt("hudProjection") }} {{ player.projectionDistance.toFixed(0) }} {{ tt("centimeterUnit") }}</span>
         <span>{{ hudDroneText }}</span>
       </div>
       <button
         class="fullscreen-btn"
         @click="player.setFullscreen(!player.fullscreen)"
-        :title="player.fullscreen ? '退出全屏' : '全屏'"
+        :title="player.fullscreen ? tt('exitFullscreen') : tt('fullscreen')"
       >{{ player.fullscreen ? '⬚' : '⬙' }}</button>
       <div v-if="exporting" class="export-overlay">
         <div class="export-progress-card">
-          <span>正在导出 WebM...</span>
+          <span>{{ tt("exportingWebm") }}</span>
           <progress :value="exportProgress" max="100" />
           <span>{{ Math.round(exportProgress) }}%</span>
         </div>
@@ -52,12 +52,14 @@
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from "vue";
 
 import { projectMusicUrl } from "../api/projects";
+import { text, type MessageKey } from "../i18n";
 import { getFrameAtTime } from "../renderer/frame";
 import { PyfiiCanvasRenderer } from "../renderer/canvas2d/PyfiiCanvasRenderer";
 import { PyfiiThreeRenderer } from "../renderer/three/PyfiiThreeRenderer";
 import { usePlayerStore } from "../stores/player";
 import { useProjectStore } from "../stores/project";
 import { useSafetyStore } from "../stores/safety";
+import { useUiStore } from "../stores/ui";
 import type { RenderInput, ThreeRenderSettings } from "../renderer/types";
 
 const canvas2dRef = ref<HTMLCanvasElement | null>(null);
@@ -70,6 +72,11 @@ const exportProgress = ref(0);
 const project = useProjectStore();
 const player = usePlayerStore();
 const safety = useSafetyStore();
+const ui = useUiStore();
+
+function tt(key: MessageKey): string {
+  return text(ui.locale, key);
+}
 
 const canvasWidth = computed(() => Math.max(1, Math.round(1200 * player.renderScale)));
 const canvasHeight = computed(() => Math.max(1, Math.round(600 * player.renderScale)));
@@ -78,9 +85,11 @@ const hudFrame = computed(() => getFrameAtTime(project.tracks, player.currentTim
 const hudDroneText = computed(() => {
   const drone = hudFrame.value.drones.find((item) => item.id === player.selectedDroneId) ?? hudFrame.value.drones[0];
   if (!drone) {
-    return "无人机：无";
+    return tt("hudNoDrone");
   }
-  return `D${drone.id} 坐标 (${drone.xCm.toFixed(0)}, ${drone.yCm.toFixed(0)}, ${drone.zCm.toFixed(0)})`;
+  return ui.locale === "zh"
+    ? `D${drone.id} 坐标 (${drone.xCm.toFixed(0)}, ${drone.yCm.toFixed(0)}, ${drone.zCm.toFixed(0)})`
+    : `D${drone.id} position (${drone.xCm.toFixed(0)}, ${drone.yCm.toFixed(0)}, ${drone.zCm.toFixed(0)})`;
 });
 
 let canvasRenderer: PyfiiCanvasRenderer | null = null;
@@ -217,7 +226,7 @@ function waitForAudioReady(audio: HTMLAudioElement): Promise<void> {
     };
     audio.onerror = () => {
       cleanup();
-      reject(new Error("音频加载失败。"));
+      reject(new Error(ui.locale === "zh" ? "音频加载失败。" : "Audio load failed."));
     };
     audio.load();
   });
@@ -306,7 +315,7 @@ async function exportVideo(): Promise<void> {
       resolve(new Blob(chunks, { type: mimeType || "video/webm" }));
     };
     recorder.onerror = () => {
-      reject(new Error("MediaRecorder 录制失败。"));
+      reject(new Error(ui.locale === "zh" ? "MediaRecorder 录制失败。" : "MediaRecorder failed."));
     };
   });
 
@@ -338,7 +347,7 @@ async function exportVideo(): Promise<void> {
       recorder.stop();
     }
     const blob = await exportComplete;
-    downloadBlob(blob, `${project.meta?.name ?? "仿真"}.webm`);
+    downloadBlob(blob, `${project.meta?.name ?? "simulation"}.webm`);
   } catch (error) {
     console.error(error);
     audioEl?.pause();

@@ -1,22 +1,22 @@
 <template>
   <section class="safety-panel">
     <header>
-      <h2>安全日志</h2>
+      <h2>{{ tt("safetyLog") }}</h2>
       <template v-if="safety.summary">
         <span
           v-for="category in categories"
           :key="category.value"
           :class="categoryClass(category.value)"
         >
-          {{ category.shortLabel }} {{ categoryCount(category.value) }}
+          {{ categoryLabel(category.value, true) }} {{ categoryCount(category.value) }}
         </span>
       </template>
-      <span v-else class="muted">等待项目</span>
+      <span v-else class="muted">{{ tt("waitingForProject") }}</span>
     </header>
 
     <div class="summary-bar">
       <span class="count">{{ visibleEvents.length }} / {{ safety.events.length }}</span>
-      <button :disabled="!hasFilters" @click="clearFilters">清除筛选</button>
+      <button :disabled="!hasFilters" @click="clearFilters">{{ tt("clearFilters") }}</button>
     </div>
 
     <div class="table-wrap">
@@ -25,37 +25,37 @@
           <tr>
             <th>
               <button class="th-button" @click="cycleSort('time')">
-                时间 <span>{{ sortGlyph("time") }}</span>
+                {{ tt("time") }} <span>{{ sortGlyph("time") }}</span>
               </button>
             </th>
             <th>
               <button class="th-button" @click="cycleSort('category')">
-                类别 <span>{{ sortGlyph("category") }}</span>
+                {{ tt("category") }} <span>{{ sortGlyph("category") }}</span>
               </button>
             </th>
             <th>
               <button class="th-button" @click="cycleSort('drone')">
-                无人机 <span>{{ sortGlyph("drone") }}</span>
+                {{ tt("drones") }} <span>{{ sortGlyph("drone") }}</span>
               </button>
             </th>
             <th>
               <button class="th-button" @click="cycleSort('message')">
-                消息 <span>{{ sortGlyph("message") }}</span>
+                {{ tt("message") }} <span>{{ sortGlyph("message") }}</span>
               </button>
             </th>
           </tr>
           <tr class="filter-row">
             <th>
               <select v-model="timeWindow">
-                <option value="all">全部时间</option>
-                <option value="current">当前附近</option>
+                <option value="all">{{ tt("allTime") }}</option>
+                <option value="current">{{ tt("nearCurrent") }}</option>
               </select>
             </th>
             <th>
               <select v-model="categoryFilter">
-                <option value="all">全部类别</option>
+                <option value="all">{{ tt("allClasses") }}</option>
                 <option v-for="category in categories" :key="category.value" :value="category.value">
-                  {{ category.label }}
+                  {{ categoryLabel(category.value) }}
                 </option>
               </select>
             </th>
@@ -67,12 +67,12 @@
                     <input v-model="selectedDroneIds" type="checkbox" :value="droneId" />
                     D{{ droneId }}
                   </label>
-                  <span v-if="availableDrones.length === 0" class="empty-option">暂无无人机</span>
+                  <span v-if="availableDrones.length === 0" class="empty-option">{{ tt("noDrones") }}</span>
                 </div>
               </details>
             </th>
             <th>
-              <input v-model.trim="query" type="search" placeholder="筛选消息" />
+              <input v-model.trim="query" type="search" :placeholder="tt('filterMessage')" />
             </th>
           </tr>
         </thead>
@@ -84,12 +84,12 @@
             @click="jumpToEvent(event)"
           >
             <td>{{ formatTime(event.time_ms) }}</td>
-            <td :class="categoryClass(event.category)">{{ event.category_label }}</td>
+            <td :class="categoryClass(event.category)">{{ categoryLabel(event.category) }}</td>
             <td>{{ droneLabel(event) }}</td>
             <td>{{ event.message }}</td>
           </tr>
           <tr v-if="visibleEvents.length === 0">
-            <td colspan="4" class="empty">{{ safety.events.length === 0 ? "暂无安全日志" : "没有匹配的安全日志" }}</td>
+            <td colspan="4" class="empty">{{ safety.events.length === 0 ? tt("noSafetyLog") : tt("noMatchedSafetyLog") }}</td>
           </tr>
         </tbody>
       </table>
@@ -100,18 +100,19 @@
 <script setup lang="ts">
 import { computed, ref } from "vue";
 
+import { safetyCategoryLabel, text, type MessageKey } from "../i18n";
 import type { SafetyCategory, SafetyEvent } from "../renderer/types";
 import { usePlayerStore } from "../stores/player";
 import { useSafetyStore } from "../stores/safety";
+import { useUiStore } from "../stores/ui";
 
 interface CategoryOption {
   value: SafetyCategory;
-  label: string;
-  shortLabel: string;
 }
 
 const safety = useSafetyStore();
 const player = usePlayerStore();
+const ui = useUiStore();
 const categoryFilter = ref<"all" | SafetyCategory>("all");
 const selectedDroneIds = ref<number[]>([]);
 const query = ref("");
@@ -120,11 +121,19 @@ const sortColumn = ref<"time" | "category" | "drone" | "message">("time");
 const sortDirection = ref<"asc" | "desc">("desc");
 
 const categories: CategoryOption[] = [
-  { value: "distance_17", label: "碰撞警告", shortLabel: "碰撞警告" },
-  { value: "distance_34", label: "碰撞风险", shortLabel: "碰撞风险" },
-  { value: "distance_51", label: "距离过近", shortLabel: "距离过近" },
-  { value: "action_incomplete", label: "动作未完成", shortLabel: "未完成" },
+  { value: "distance_17" },
+  { value: "distance_34" },
+  { value: "distance_51" },
+  { value: "action_incomplete" },
 ];
+
+function tt(key: MessageKey): string {
+  return text(ui.locale, key);
+}
+
+function categoryLabel(category: SafetyCategory, short = false): string {
+  return safetyCategoryLabel(ui.locale, category, short);
+}
 
 const availableDrones = computed(() => {
   const ids = new Set<number>();
@@ -137,7 +146,7 @@ const availableDrones = computed(() => {
 
 const droneFilterLabel = computed(() => {
   if (selectedDroneIds.value.length === 0) {
-    return "全部无人机";
+    return tt("allDrones");
   }
   return selectedDroneIds.value
     .slice()
@@ -169,7 +178,7 @@ const visibleEvents = computed(() => {
     ) {
       return false;
     }
-    if (textQuery && !`${event.category_label} ${event.message}`.toLowerCase().includes(textQuery)) return false;
+    if (textQuery && !`${categoryLabel(event.category)} ${event.category_label} ${event.message}`.toLowerCase().includes(textQuery)) return false;
     return true;
   });
 
@@ -208,7 +217,7 @@ function clearFilters(): void {
 }
 
 function formatTime(ms: number): string {
-  return `${(ms / 1000).toFixed(2)} 秒`;
+  return `${(ms / 1000).toFixed(2)} ${tt("secondUnit")}`;
 }
 
 function droneLabel(event: SafetyEvent): string {

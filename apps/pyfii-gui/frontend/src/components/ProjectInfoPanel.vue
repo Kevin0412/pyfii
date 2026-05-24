@@ -1,60 +1,60 @@
 <template>
   <section class="project-info">
-    <h2>项目</h2>
+    <h2>{{ tt("project") }}</h2>
 
     <div v-if="project.meta" class="info-list">
       <div>
-        <span>名称</span>
+        <span>{{ tt("name") }}</span>
         <strong>{{ project.meta.name }}</strong>
       </div>
       <div>
-        <span>项目 ID</span>
+        <span>{{ tt("projectId") }}</span>
         <code>{{ project.meta.project_id }}</code>
       </div>
       <div>
-        <span>场地</span>
-        <strong>{{ project.meta.field ?? "?" }} 米</strong>
+        <span>{{ tt("field") }}</span>
+        <strong>{{ project.meta.field ?? "?" }} {{ tt("meterUnit") }}</strong>
       </div>
       <div>
-        <span>机型</span>
-        <strong>{{ project.meta.device ?? "未知" }}</strong>
+        <span>{{ tt("device") }}</span>
+        <strong>{{ project.meta.device ?? tt("unknown") }}</strong>
       </div>
       <div>
-        <span>无人机</span>
+        <span>{{ tt("drones") }}</span>
         <strong>{{ project.meta.drone_count }}</strong>
       </div>
       <div>
-        <span>时长</span>
+        <span>{{ tt("duration") }}</span>
         <strong>{{ formatTime(project.meta.duration_ms) }}</strong>
       </div>
       <div>
-        <span>帧数</span>
+        <span>{{ tt("frames") }}</span>
         <strong>{{ project.meta.frame_count }}</strong>
       </div>
       <div>
-        <span>安全</span>
+        <span>{{ tt("safety") }}</span>
         <strong :class="categoryClass(project.meta.safety_summary.max_category)">
           {{ summaryLabel(project.meta.safety_summary.max_category) }}
         </strong>
       </div>
       <div>
-        <span>最小距离</span>
+        <span>{{ tt("minDistance") }}</span>
         <strong>
-          {{ project.meta.safety_summary.min_distance_cm === null ? "-" : `${project.meta.safety_summary.min_distance_cm.toFixed(1)}cm` }}
+          {{ project.meta.safety_summary.min_distance_cm === null ? "-" : `${project.meta.safety_summary.min_distance_cm.toFixed(1)} ${tt("centimeterUnit")}` }}
         </strong>
       </div>
       <div>
-        <span>音乐</span>
-        <strong>{{ project.meta.music.available ? project.meta.music.files.join(", ") : "无" }}</strong>
+        <span>{{ tt("music") }}</span>
+        <strong>{{ project.meta.music.available ? project.meta.music.files.join(", ") : tt("none") }}</strong>
       </div>
       <div v-if="project.uploadWarnings.length">
-        <span>核心警告</span>
+        <span>{{ tt("coreWarnings") }}</span>
         <strong class="level-warning">{{ project.uploadWarnings.length }}</strong>
       </div>
     </div>
 
     <div v-else class="empty">
-      选择一个 Fii 项目 zip 后，这里会显示 field、device、无人机数量和安全概要。
+      {{ tt("projectEmpty") }}
     </div>
   </section>
 </template>
@@ -62,19 +62,22 @@
 <script setup lang="ts">
 import { useProjectStore } from "../stores/project";
 import type { SafetyCategory } from "../renderer/types";
+import { safetyCategoryLabel, text, type MessageKey } from "../i18n";
+import { useUiStore } from "../stores/ui";
 
 const project = useProjectStore();
+const ui = useUiStore();
+
+function tt(key: MessageKey): string {
+  return text(ui.locale, key);
+}
 
 function formatTime(ms: number): string {
-  return `${(ms / 1000).toFixed(2)} 秒`;
+  return `${(ms / 1000).toFixed(2)} ${tt("secondUnit")}`;
 }
 
 function summaryLabel(category: SafetyCategory | null): string {
-  if (category === "distance_17") return "碰撞警告";
-  if (category === "distance_34") return "碰撞风险";
-  if (category === "distance_51") return "距离过近";
-  if (category === "action_incomplete") return "动作未完成";
-  return "正常";
+  return category ? safetyCategoryLabel(ui.locale, category) : tt("ok");
 }
 
 function categoryClass(category: SafetyCategory | null): string {

@@ -3,7 +3,7 @@
     <header class="topbar">
       <div class="brand">
         <span class="brand-title">Pyfii GUI</span>
-        <span class="brand-subtitle">仿真器</span>
+        <span class="brand-subtitle">{{ tt("brandSubtitle") }}</span>
       </div>
       <button
         class="theme-toggle"
@@ -11,56 +11,63 @@
         :aria-pressed="ui.theme === 'light'"
         @click="ui.toggleTheme()"
       >
-        {{ ui.theme === "dark" ? "浅色" : "深色" }}
+        {{ ui.theme === "dark" ? tt("themeLight") : tt("themeDark") }}
+      </button>
+      <button
+        class="theme-toggle"
+        type="button"
+        @click="ui.toggleLocale()"
+      >
+        {{ tt("languageSwitch") }}
       </button>
       <label class="scale-select">
-        缩放
+        {{ tt("scale") }}
         <select v-model.number="player.renderScale">
-          <option :value="0.5">0.5 倍</option>
-          <option :value="1">1 倍</option>
-          <option :value="2">2 倍</option>
-          <option :value="4">4 倍</option>
+          <option :value="0.5">0.5x</option>
+          <option :value="1">1x</option>
+          <option :value="2">2x</option>
+          <option :value="4">4x</option>
         </select>
       </label>
       <label class="scale-select">
-        视图
+        {{ tt("render") }}
         <select v-model="player.renderMode">
-          <option value="classic2d">经典 2D</option>
-          <option value="three3d">三维 3D</option>
+          <option value="classic2d">{{ tt("classic2d") }}</option>
+          <option value="three3d">{{ tt("three3d") }}</option>
         </select>
       </label>
       <template v-if="player.renderMode === 'three3d'">
         <label class="scale-select">
-          相机
+          {{ tt("camera") }}
           <select v-model="player.threeProjection">
-            <option value="orthographic">正交</option>
-            <option value="perspective">透视</option>
+            <option value="orthographic">{{ tt("orthographic") }}</option>
+            <option value="perspective">{{ tt("perspective") }}</option>
           </select>
         </label>
         <label class="compact-input">
-          水平
+          {{ tt("viewAngleA") }}
           <input v-model.number="player.viewAngleA" type="number" min="-180" max="180" step="5" />
         </label>
         <label class="compact-input">
-          俯仰
+          {{ tt("viewAngleB") }}
           <input v-model.number="player.viewAngleB" type="number" min="-90" max="90" step="5" />
         </label>
         <label class="compact-input">
-          观察距
+          {{ tt("observerDistance") }}
           <input v-model.number="player.observerDistance" type="number" min="50" step="50" />
         </label>
         <label class="compact-input">
-          投影距
+          {{ tt("projectionDistance") }}
           <input v-model.number="player.projectionDistance" type="number" min="50" step="50" />
         </label>
-        <button class="view-reset" type="button" @click="player.resetThreeView()">重置视角</button>
+        <button class="view-reset" type="button" @click="player.resetThreeView()">{{ tt("resetView") }}</button>
       </template>
       <ProjectUpload />
       <button
         class="export-btn"
         :disabled="!project.hasProject"
         @click="simCanvasRef?.exportVideo()"
-      >导出 WebM</button>
+      >{{ tt("exportWebm") }}</button>
     </header>
 
     <main class="workspace">
@@ -84,6 +91,7 @@ import SafetyLogPanel from "../components/SafetyLogPanel.vue";
 import SimulationCanvas from "../components/SimulationCanvas.vue";
 import TimelineControl from "../components/TimelineControl.vue";
 import { onMounted, onUnmounted, ref, watch } from "vue";
+import { text, type MessageKey } from "../i18n";
 import { usePlayerStore } from "../stores/player";
 import { useProjectStore } from "../stores/project";
 import { useUiStore } from "../stores/ui";
@@ -93,6 +101,10 @@ const simColumnRef = ref<HTMLElement | null>(null);
 const player = usePlayerStore();
 const project = useProjectStore();
 const ui = useUiStore();
+
+function tt(key: MessageKey): string {
+  return text(ui.locale, key);
+}
 
 function onFullscreenChange(): void {
   if (!document.fullscreenElement) {
