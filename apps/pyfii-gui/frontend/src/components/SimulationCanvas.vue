@@ -155,6 +155,7 @@ function syncRendererSize(): void {
 function threeSettings(): ThreeRenderSettings {
   return {
     projection: player.threeProjection,
+    renderScale: player.renderScale,
     viewAngleA: player.viewAngleA,
     viewAngleB: player.viewAngleB,
     observerDistance: player.observerDistance,

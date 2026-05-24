@@ -5,11 +5,12 @@ import type { DroneFrame, RenderInput, SafetyEvent, ThreeRenderSettings } from "
 
 type DroneRenderParts = {
   device: string;
+  renderScale: number;
   group: THREE.Group;
   body: THREE.Mesh;
   led: THREE.Mesh;
   marker: THREE.Mesh;
-  projectionLine: THREE.Line;
+  projectionLine: THREE.Mesh;
   shadow: THREE.Mesh;
 };
 
@@ -106,6 +107,7 @@ export class PyfiiThreeRenderer {
   private readonly fieldGroup = new THREE.Group();
   private readonly droneParts = new Map<number, DroneRenderParts>();
   private activeField: number | null = null;
+  private activeRenderScale = 1;
   private width = BASE_WIDTH;
   private height = BASE_HEIGHT;
 
@@ -145,7 +147,10 @@ export class PyfiiThreeRenderer {
 
   draw(input: RenderInput, settings: ThreeRenderSettings): void {
     const field = input.meta?.field ?? 6;
-    if (this.activeField !== field) {
+    const renderScale = THREE.MathUtils.clamp(settings.renderScale || 1, 0.5, 4);
+    const scaleChanged = Math.abs(this.activeRenderScale - renderScale) > 0.001;
+    if (this.activeField !== field || scaleChanged) {
+      this.activeRenderScale = renderScale;
       this.rebuildField(field);
       this.activeField = field;
     }
@@ -230,8 +235,43 @@ export class PyfiiThreeRenderer {
     this.fieldGroup.add(title);
   }
 
-  private line(points: THREE.Vector3[], material: THREE.LineBasicMaterial): THREE.Line {
-    return new THREE.Line(new THREE.BufferGeometry().setFromPoints(points), material);
+  private line(points: THREE.Vector3[], material: THREE.LineBasicMaterial): THREE.Mesh {
+    return this.cylinderBetween(points[0], points[1], material.color, this.strokeRadius(0.35));
+  }
+
+  private strokeRadius(base: number): number {
+    return Math.max(0.25, base * this.activeRenderScale);
+  }
+
+  private cylinderBetween(
+    start: THREE.Vector3,
+    end: THREE.Vector3,
+    color: THREE.Color,
+    radius: number,
+    opacity = 1,
+  ): THREE.Mesh {
+    const material = new THREE.MeshBasicMaterial({
+      color,
+      transparent: opacity < 1,
+      opacity,
+    });
+    const mesh = new THREE.Mesh(new THREE.CylinderGeometry(radius, radius, 1, 8), material);
+    this.updateCylinder(mesh, start, end, radius);
+    return mesh;
+  }
+
+  private updateCylinder(mesh: THREE.Mesh, start: THREE.Vector3, end: THREE.Vector3, radius: number): void {
+    const direction = end.clone().sub(start);
+    const rawLength = direction.length();
+    const length = Math.max(0.001, rawLength);
+    const axis = rawLength > 0.001 ? direction.normalize() : new THREE.Vector3(0, 1, 0);
+    mesh.geometry.dispose();
+    mesh.geometry = new THREE.CylinderGeometry(radius, radius, length, 8);
+    mesh.position.copy(start).add(end).multiplyScalar(0.5);
+    mesh.quaternion.setFromUnitVectors(
+      new THREE.Vector3(0, 1, 0),
+      axis,
+    );
   }
 
   private updateDrones(
@@ -275,8 +315,7 @@ export class PyfiiThreeRenderer {
   private updateProjection(parts: DroneRenderParts, drone: DroneFrame, color: THREE.Color): void {
     const start = pyfiiPoint(drone.xCm, drone.yCm, 0);
     const end = pyfiiPoint(drone.xCm, drone.yCm, drone.zCm);
-    parts.projectionLine.geometry.dispose();
-    parts.projectionLine.geometry = new THREE.BufferGeometry().setFromPoints([start, end]);
+    this.updateCylinder(parts.projectionLine, start, end, this.strokeRadius(0.32));
     materialColor(parts.projectionLine.material, color);
     parts.shadow.position.copy(start);
     materialColor(parts.shadow.material, color);
@@ -296,7 +335,11 @@ export class PyfiiThreeRenderer {
 
   private ensureDrone(id: number, device: string): DroneRenderParts {
     const existing = this.droneParts.get(id);
-    if (existing && existing.device === device) {
+    if (
+      existing
+      && existing.device === device
+      && Math.abs(existing.renderScale - this.activeRenderScale) <= 0.001
+    ) {
       return existing;
     }
     if (existing) {
@@ -307,25 +350,34 @@ export class PyfiiThreeRenderer {
     const spec = droneSpec(device);
     const group = new THREE.Group();
     const droneColor = colorFromRgb(droneRgb(id));
+    const strokeScale = this.activeRenderScale;
     const body = new THREE.Mesh(
-      new THREE.SphereGeometry(1, 12, 8),
+      new THREE.SphereGeometry(Math.max(1, strokeScale), 12, 8),
       new THREE.MeshBasicMaterial({ color: droneColor }),
     );
     const led = new THREE.Mesh(
-      new THREE.SphereGeometry(spec.bodyRadius, 18, 12),
+      new THREE.SphereGeometry(spec.bodyRadius * strokeScale, 18, 12),
       new THREE.MeshBasicMaterial({ color: droneColor }),
     );
     led.visible = false;
 
-    const armGeometry = new THREE.BufferGeometry().setFromPoints([
-      new THREE.Vector3(spec.motorOffset, 0, spec.motorOffset),
-      new THREE.Vector3(-spec.motorOffset, 0, -spec.motorOffset),
-      new THREE.Vector3(-spec.motorOffset, 0, spec.motorOffset),
-      new THREE.Vector3(spec.motorOffset, 0, -spec.motorOffset),
-    ]);
-    const arms = new THREE.LineSegments(armGeometry, new THREE.LineBasicMaterial({ color: droneColor }));
+    const arms = [
+      this.cylinderBetween(
+        new THREE.Vector3(spec.motorOffset, 0, spec.motorOffset),
+        new THREE.Vector3(-spec.motorOffset, 0, -spec.motorOffset),
+        droneColor,
+        this.strokeRadius(0.45),
+      ),
+      this.cylinderBetween(
+        new THREE.Vector3(-spec.motorOffset, 0, spec.motorOffset),
+        new THREE.Vector3(spec.motorOffset, 0, -spec.motorOffset),
+        droneColor,
+        this.strokeRadius(0.45),
+      ),
+    ];
 
-    const rotorGeometry = new THREE.TorusGeometry(spec.rotorRadius, Math.max(0.6, spec.rotorRadius * 0.12), 8, 28);
+    const rotorTube = Math.max(0.6, spec.rotorRadius * 0.12) * strokeScale;
+    const rotorGeometry = new THREE.TorusGeometry(spec.rotorRadius, rotorTube, 8, 28);
     rotorGeometry.rotateX(Math.PI / 2);
     for (const [x, z] of [
       [spec.motorOffset, spec.motorOffset],
@@ -341,17 +393,20 @@ export class PyfiiThreeRenderer {
       group.add(rotor);
     }
 
-    const markerGeometry = new THREE.TorusGeometry(spec.motorOffset + spec.rotorRadius + 5, 1.5, 8, 48);
+    const markerGeometry = new THREE.TorusGeometry(spec.motorOffset + spec.rotorRadius + 5, 1.5 * strokeScale, 8, 48);
     markerGeometry.rotateX(Math.PI / 2);
     const marker = new THREE.Mesh(markerGeometry, new THREE.MeshBasicMaterial({ color: 0xff3333 }));
     marker.position.y = 2;
     marker.visible = false;
 
-    const projectionLine = new THREE.Line(
-      new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3()]),
-      new THREE.LineBasicMaterial({ color: droneColor, transparent: true, opacity: 0.48 }),
+    const projectionLine = this.cylinderBetween(
+      new THREE.Vector3(),
+      new THREE.Vector3(0, 0.001, 0),
+      droneColor,
+      this.strokeRadius(0.32),
+      0.48,
     );
-    const shadowGeometry = new THREE.TorusGeometry(spec.motorOffset + spec.rotorRadius, 0.9, 8, 42);
+    const shadowGeometry = new THREE.TorusGeometry(spec.motorOffset + spec.rotorRadius, 0.9 * strokeScale, 8, 42);
     shadowGeometry.rotateX(Math.PI / 2);
     const shadow = new THREE.Mesh(
       shadowGeometry,
@@ -359,10 +414,10 @@ export class PyfiiThreeRenderer {
     );
     shadow.position.y = 0.6;
 
-    group.add(arms, body, led, marker);
+    group.add(...arms, body, led, marker);
     this.world.add(group, projectionLine, shadow);
 
-    const parts = { device, group, body, led, marker, projectionLine, shadow };
+    const parts = { device, renderScale: this.activeRenderScale, group, body, led, marker, projectionLine, shadow };
     this.droneParts.set(id, parts);
     return parts;
   }

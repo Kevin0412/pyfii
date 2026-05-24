@@ -90,6 +90,7 @@ export interface RenderOptions {
 
 export interface ThreeRenderSettings {
   projection: "orthographic" | "perspective";
+  renderScale: number;
   viewAngleA: number;
   viewAngleB: number;
   observerDistance: number;
