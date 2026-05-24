@@ -24,6 +24,7 @@ gui.png
 build
 *.csv
 .deepseek/
+tools/choreo_agent/agent_projects/
 apps/pyfii-gui/backend/.runtime/
 apps/pyfii-gui/frontend/dist/
 apps/pyfii-gui/frontend/node_modules/
