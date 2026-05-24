@@ -101,7 +101,7 @@ https://gui.example.com/api/  -> FastAPI backend
 ## 当前 MVP 支持
 
 - 上传 Fii 项目 zip。
-- 默认英文界面，支持中文/英文切换。
+- 默认中文界面，支持中文/英文切换。
 - 安全解压并调用 `read_fii()` 解析轨迹。
 - 调用 `show(show=False)` 走 pyfii core 的无渲染距离检查。
 - 返回项目元信息、轨迹数据和由 core warnings 结构化得到的安全日志。

@@ -4,7 +4,7 @@ export type ThemeMode = "dark" | "light";
 export type LocaleMode = "en" | "zh";
 
 const THEME_STORAGE_KEY = "pyfii-gui-theme";
-const LOCALE_STORAGE_KEY = "pyfii-gui-locale";
+const LOCALE_STORAGE_KEY = "pyfii-gui-locale-v2";
 
 function savedTheme(): ThemeMode {
   if (typeof window === "undefined") {
@@ -16,10 +16,10 @@ function savedTheme(): ThemeMode {
 
 function savedLocale(): LocaleMode {
   if (typeof window === "undefined") {
-    return "en";
+    return "zh";
   }
 
-  return window.localStorage.getItem(LOCALE_STORAGE_KEY) === "zh" ? "zh" : "en";
+  return window.localStorage.getItem(LOCALE_STORAGE_KEY) === "en" ? "en" : "zh";
 }
 
 export const useUiStore = defineStore("ui", {

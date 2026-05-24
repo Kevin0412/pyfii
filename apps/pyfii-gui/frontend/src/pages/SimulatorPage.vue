@@ -196,14 +196,17 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   align-content: center;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   gap: 8px 10px;
   padding: 8px 12px;
   border-bottom: 1px solid var(--border-strong);
   background: var(--panel-bg-alt);
+  overflow-x: auto;
+  overflow-y: hidden;
 }
 
 .brand {
+  flex: 0 0 auto;
   min-width: 132px;
   display: grid;
   gap: 2px;
@@ -254,6 +257,7 @@ onUnmounted(() => {
 }
 
 .export-btn {
+  flex: 0 0 auto;
   margin-left: auto;
 }
 
@@ -261,6 +265,10 @@ onUnmounted(() => {
 .locale-zh .scale-select,
 .locale-zh .compact-input {
   font-size: 11px;
+}
+
+.topbar :deep(.upload-bar) {
+  flex: 0 0 auto;
 }
 
 .workspace {
@@ -295,6 +303,7 @@ onUnmounted(() => {
   .topbar {
     align-items: flex-start;
     flex-wrap: wrap;
+    overflow-x: visible;
   }
 
   .workspace {

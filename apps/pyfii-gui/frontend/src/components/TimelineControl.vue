@@ -154,6 +154,11 @@ function togglePlayback(): void {
     return;
   }
 
+  if (project.durationMs > 0 && player.currentTimeMs >= project.durationMs - 1) {
+    player.setCurrentTime(0);
+    safety.setActiveEvent(null);
+    syncAudioTime(true);
+  }
   player.play();
   void playAudio();
 }
@@ -171,13 +176,23 @@ function endSeek(): void {
 }
 
 function onAudioPlay(): void {
+  if (player.seeking) {
+    return;
+  }
   if (!player.playing) {
+    if (project.durationMs > 0 && player.currentTimeMs >= project.durationMs - 1) {
+      player.setCurrentTime(0);
+      safety.setActiveEvent(null);
+    }
     player.play();
   }
   syncAudioTime();
 }
 
 function onAudioPause(): void {
+  if (player.seeking) {
+    return;
+  }
   if (player.playing && !audioRef.value?.ended) {
     player.pause();
   }
@@ -185,7 +200,7 @@ function onAudioPause(): void {
 
 function onAudioSeek(): void {
   const audio = audioRef.value;
-  if (!audio) {
+  if (!audio || player.seeking) {
     return;
   }
   player.setCurrentTime(audio.currentTime * 1000);
