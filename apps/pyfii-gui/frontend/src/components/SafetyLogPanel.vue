@@ -276,8 +276,8 @@ function jumpToEvent(event: SafetyEvent): void {
 header {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 10px 14px;
+  gap: 10px;
+  padding: 8px 12px;
   border-bottom: 1px solid var(--border-soft);
 }
 
@@ -291,14 +291,15 @@ h2 {
   grid-template-columns: auto 1fr;
   gap: 8px;
   align-items: center;
-  padding: 8px 14px;
+  padding: 7px 12px;
   border-bottom: 1px solid var(--border-soft);
   background: var(--panel-bg);
 }
 
 .summary-bar button {
   justify-self: end;
-  padding: 5px 10px;
+  min-height: 28px;
+  padding: 4px 8px;
 }
 
 .count {
@@ -314,12 +315,12 @@ h2 {
 table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 12px;
+  font-size: 11.5px;
 }
 
 th,
 td {
-  padding: 7px 10px;
+  padding: 5px 8px;
   border-bottom: 1px solid var(--border-soft);
   text-align: left;
   vertical-align: top;
@@ -334,7 +335,7 @@ th {
 }
 
 .filter-row th {
-  top: 31px;
+  top: 27px;
   background: var(--panel-bg);
 }
 
@@ -346,7 +347,8 @@ th {
   border: 1px solid var(--border-control);
   background: var(--control-bg);
   color: var(--text);
-  padding: 5px 7px;
+  padding: 4px 6px;
+  min-height: 28px;
 }
 
 .multi-select {

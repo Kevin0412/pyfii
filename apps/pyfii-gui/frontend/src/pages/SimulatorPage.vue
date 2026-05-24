@@ -1,5 +1,5 @@
 <template>
-  <div class="sim-page" :class="`theme-${ui.theme}`">
+  <div class="sim-page" :class="[`theme-${ui.theme}`, `locale-${ui.locale}`]">
     <header class="topbar">
       <div class="brand">
         <span class="brand-title">Pyfii GUI</span>
@@ -192,17 +192,19 @@ onUnmounted(() => {
 }
 
 .topbar {
-  min-height: 56px;
+  min-height: 48px;
   display: flex;
   align-items: center;
-  gap: 16px;
-  padding: 10px 14px;
+  align-content: center;
+  flex-wrap: wrap;
+  gap: 8px 10px;
+  padding: 8px 12px;
   border-bottom: 1px solid var(--border-strong);
   background: var(--panel-bg-alt);
 }
 
 .brand {
-  min-width: 170px;
+  min-width: 132px;
   display: grid;
   gap: 2px;
 }
@@ -218,32 +220,47 @@ onUnmounted(() => {
 }
 
 .theme-toggle {
-  min-width: 64px;
+  min-width: 56px;
 }
 
 .scale-select,
 .compact-input {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 5px;
   color: var(--text);
-  font-size: 12px;
+  font-size: 11.5px;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.scale-select select {
+  max-width: 118px;
 }
 
 .compact-input input {
-  width: 72px;
+  width: 64px;
   border: 1px solid var(--border-control);
   background: var(--control-bg);
   color: var(--text);
-  padding: 6px 7px;
+  padding: 4px 6px;
 }
 
-.view-reset {
-  padding: 6px 10px;
+.topbar button,
+.topbar select {
+  min-height: 28px;
+  padding: 4px 8px;
+  white-space: nowrap;
 }
 
 .export-btn {
   margin-left: auto;
+}
+
+.locale-zh .topbar,
+.locale-zh .scale-select,
+.locale-zh .compact-input {
+  font-size: 11px;
 }
 
 .workspace {

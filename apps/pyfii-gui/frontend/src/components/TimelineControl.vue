@@ -246,18 +246,18 @@ watch(
 <style scoped>
 .timeline {
   display: grid;
-  grid-template-columns: auto auto minmax(180px, 1fr) auto auto minmax(180px, 260px);
+  grid-template-columns: auto auto minmax(160px, 1fr) auto auto minmax(160px, 240px);
   align-items: center;
-  gap: 12px;
-  padding: 10px 14px;
+  gap: 8px;
+  padding: 7px 12px;
   border-top: 1px solid var(--border-control);
   background: var(--panel-bg);
 }
 
 .time-readout {
-  min-width: 150px;
+  min-width: 132px;
   color: var(--text);
-  font-size: 12px;
+  font-size: 11.5px;
 }
 
 .range-wrap {
@@ -312,9 +312,16 @@ watch(
 label {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 5px;
   color: var(--text);
-  font-size: 12px;
+  font-size: 11.5px;
+  white-space: nowrap;
+}
+
+.timeline button,
+.timeline select {
+  min-height: 28px;
+  padding: 4px 8px;
 }
 
 .toggle input {
@@ -329,7 +336,7 @@ label {
 
 .music-empty {
   color: var(--text-muted);
-  font-size: 12px;
+  font-size: 11.5px;
 }
 
 @media (max-width: 760px) {

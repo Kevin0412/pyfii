@@ -100,20 +100,30 @@ async function submit(): Promise<void> {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 10px;
+  gap: 8px;
   min-width: 0;
+  flex: 1 1 480px;
 }
 
 .upload-bar label {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 5px;
   color: var(--text);
-  font-size: 12px;
+  font-size: 11.5px;
+  white-space: nowrap;
+}
+
+.upload-bar button,
+.upload-bar select {
+  min-height: 28px;
+  padding: 4px 8px;
 }
 
 .file-control input {
-  max-width: 220px;
+  width: 178px;
+  max-width: 178px;
+  font-size: 11px;
 }
 
 .inline-check input {
@@ -122,17 +132,19 @@ async function submit(): Promise<void> {
 
 .selected-file {
   color: var(--text-muted);
-  max-width: 280px;
+  max-width: 180px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  font-size: 11px;
 }
 
 .upload-error {
   color: var(--danger);
-  max-width: 360px;
+  max-width: 240px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  font-size: 11px;
 }
 </style>
