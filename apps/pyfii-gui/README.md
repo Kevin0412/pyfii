@@ -105,7 +105,7 @@ https://gui.example.com/api/  -> FastAPI backend
 - Canvas 2D 三视图预览：top / front / right。
 - Three.js 3D 预览模式，支持正交/透视相机切换。
 - 3D 模式保留旧 `show(ThreeD=True)` 的 A/B 视角角、观察者距离和投影距离语义。
-- 3D 模式默认评委视角 `imshow=[90,3]`、`d=(600,450)`，支持鼠标拖动转动视角和滚轮缩放。
+- 3D 模式默认评委视角 `imshow=[90,3]`、`d=(600,450)`，支持鼠标拖动转动视角和滚轮调整投影距离。
 - 3D 模式显示高度标尺、地面投影、左上角时间/FPS/坐标 HUD，以及按 9 机编队设计的稳定机体颜色。
 - 右下角 2 行 5 列无人机信息栏：D1..D9 + STATUS。
 - 安全日志以 pyfii core warning 为准，GUI 后端只做结构化整理。

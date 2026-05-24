@@ -27,8 +27,9 @@
       <div v-if="player.renderMode === 'three3d'" class="three-hud">
         <span>T+{{ (player.currentTimeMs / 1000).toFixed(2) }}s</span>
         <span>{{ project.trackFps }}fps</span>
-        <span>A {{ player.viewAngleA.toFixed(0) }} / B {{ player.viewAngleB.toFixed(0) }}</span>
-        <span>d({{ player.observerDistance.toFixed(0) }}, {{ player.projectionDistance.toFixed(0) }})</span>
+        <span>水平 {{ player.viewAngleA.toFixed(0) }}° / 俯仰 {{ player.viewAngleB.toFixed(0) }}°</span>
+        <span>观察距 {{ player.observerDistance.toFixed(0) }}cm</span>
+        <span>投影距 {{ player.projectionDistance.toFixed(0) }}cm</span>
         <span>{{ hudDroneText }}</span>
       </div>
       <button
@@ -179,7 +180,7 @@ function onThreePointerMove(event: PointerEvent): void {
   const dx = event.clientX - dragState.x;
   const dy = event.clientY - dragState.y;
   dragState = { pointerId: event.pointerId, x: event.clientX, y: event.clientY };
-  player.setViewAngleA(player.viewAngleA + dx * 0.35);
+  player.setViewAngleA(player.viewAngleA - dx * 0.35);
   player.setViewAngleB(player.viewAngleB - dy * 0.25);
 }
 
@@ -192,8 +193,8 @@ function onThreePointerUp(event: PointerEvent): void {
 
 function onThreeWheel(event: WheelEvent): void {
   if (player.renderMode !== "three3d") return;
-  const factor = event.deltaY > 0 ? 1.08 : 0.92;
-  player.setObserverDistance(player.observerDistance * factor);
+  const factor = event.deltaY > 0 ? 0.92 : 1.08;
+  player.setProjectionDistance(player.projectionDistance * factor);
 }
 
 function waitMs(ms: number): Promise<void> {

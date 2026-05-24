@@ -99,7 +99,7 @@ export const usePlayerStore = defineStore("player", {
     setProjectionDistance(value: number) {
       this.projectionDistance = Math.max(50, value);
     },
-    resetJudgeView() {
+    resetThreeView() {
       this.threeProjection = "perspective";
       this.viewAngleA = 90;
       this.viewAngleB = 3;

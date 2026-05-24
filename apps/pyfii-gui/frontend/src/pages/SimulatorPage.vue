@@ -31,29 +31,29 @@
       </label>
       <template v-if="player.renderMode === 'three3d'">
         <label class="scale-select">
-          Camera
+          相机
           <select v-model="player.threeProjection">
-            <option value="orthographic">orthographic</option>
-            <option value="perspective">perspective</option>
+            <option value="orthographic">正交</option>
+            <option value="perspective">透视</option>
           </select>
         </label>
         <label class="compact-input">
-          A
+          水平
           <input v-model.number="player.viewAngleA" type="number" min="-180" max="180" step="5" />
         </label>
         <label class="compact-input">
-          B
+          俯仰
           <input v-model.number="player.viewAngleB" type="number" min="-90" max="90" step="5" />
         </label>
         <label class="compact-input">
-          Obs
+          观察距
           <input v-model.number="player.observerDistance" type="number" min="50" step="50" />
         </label>
         <label class="compact-input">
-          Proj
+          投影距
           <input v-model.number="player.projectionDistance" type="number" min="50" step="50" />
         </label>
-        <button class="view-reset" @click="player.resetJudgeView()">Judge</button>
+        <button class="view-reset" type="button" @click="player.resetThreeView()">重置视角</button>
       </template>
       <ProjectUpload />
       <button
@@ -219,7 +219,7 @@ onUnmounted(() => {
 }
 
 .compact-input input {
-  width: 64px;
+  width: 72px;
   border: 1px solid var(--border-control);
   background: var(--control-bg);
   color: var(--text);
