@@ -25,12 +25,18 @@
         @contextmenu.prevent
       />
       <div v-if="player.renderMode === 'three3d'" class="three-hud">
-        <span>{{ tt("hudTime") }} +{{ (player.currentTimeMs / 1000).toFixed(2) }} {{ tt("secondUnit") }}</span>
-        <span>{{ tt("hudFps") }} {{ project.trackFps }} FPS</span>
-        <span>{{ tt("viewAngleA") }} {{ player.viewAngleA.toFixed(0) }}° / {{ tt("viewAngleB") }} {{ player.viewAngleB.toFixed(0) }}°</span>
-        <span>{{ tt("hudObserver") }} {{ player.observerDistance.toFixed(0) }} {{ tt("centimeterUnit") }}</span>
-        <span>{{ tt("hudProjection") }} {{ player.projectionDistance.toFixed(0) }} {{ tt("centimeterUnit") }}</span>
-        <span>{{ hudDroneText }}</span>
+        <span>A:{{ player.viewAngleA.toFixed(0) }}</span>
+        <span>B:{{ player.viewAngleB.toFixed(0) }}</span>
+        <span>T+{{ (player.currentTimeMs / 1000).toFixed(3) }}</span>
+        <span>FPS:{{ renderFpsText }}</span>
+        <span
+          v-for="drone in hudDrones"
+          :key="drone.id"
+          class="hud-drone"
+          :style="{ color: droneColorCss(drone.id) }"
+        >
+          D{{ drone.id }}({{ drone.xCm.toFixed(0) }},{{ drone.yCm.toFixed(0) }},{{ drone.zCm.toFixed(0) }})
+        </span>
       </div>
       <button
         class="fullscreen-btn"
@@ -56,6 +62,7 @@ import { text, type MessageKey } from "../i18n";
 import { getFrameAtTime } from "../renderer/frame";
 import { PyfiiCanvasRenderer } from "../renderer/canvas2d/PyfiiCanvasRenderer";
 import { PyfiiThreeRenderer } from "../renderer/three/PyfiiThreeRenderer";
+import { droneColor } from "../renderer/palette";
 import { usePlayerStore } from "../stores/player";
 import { useProjectStore } from "../stores/project";
 import { useSafetyStore } from "../stores/safety";
@@ -69,6 +76,7 @@ const fw = ref(0);
 const fh = ref(0);
 const exporting = ref(false);
 const exportProgress = ref(0);
+const renderFps = ref(0);
 const project = useProjectStore();
 const player = usePlayerStore();
 const safety = useSafetyStore();
@@ -82,22 +90,21 @@ const canvasWidth = computed(() => Math.max(1, Math.round(1200 * player.renderSc
 const canvasHeight = computed(() => Math.max(1, Math.round(600 * player.renderScale)));
 const canvasImageRendering = computed(() => player.renderScale >= 1 ? "auto" : "pixelated");
 const hudFrame = computed(() => getFrameAtTime(project.tracks, player.currentTimeMs));
-const hudDroneText = computed(() => {
-  const drone = hudFrame.value.drones.find((item) => item.id === player.selectedDroneId) ?? hudFrame.value.drones[0];
-  if (!drone) {
-    return tt("hudNoDrone");
-  }
-  return ui.locale === "zh"
-    ? `D${drone.id} 坐标 (${drone.xCm.toFixed(0)}, ${drone.yCm.toFixed(0)}, ${drone.zCm.toFixed(0)})`
-    : `D${drone.id} position (${drone.xCm.toFixed(0)}, ${drone.yCm.toFixed(0)}, ${drone.zCm.toFixed(0)})`;
-});
+const hudDrones = computed(() => [...hudFrame.value.drones].sort((a, b) => a.id - b.id));
+const renderFpsText = computed(() => renderFps.value > 0 ? renderFps.value.toFixed(1) : project.trackFps.toFixed(1));
 
 let canvasRenderer: PyfiiCanvasRenderer | null = null;
 let threeRenderer: PyfiiThreeRenderer | null = null;
 let frameRequest = 0;
 let lastTimestamp = 0;
+let fpsWindowStart = 0;
+let fpsFrames = 0;
 let ro: ResizeObserver | null = null;
 let dragState: { pointerId: number; x: number; y: number } | null = null;
+
+function droneColorCss(id: number): string {
+  return droneColor(id, 0);
+}
 
 function sizeFrame(): void {
   const el = shellRef.value;
@@ -112,8 +119,15 @@ function sizeFrame(): void {
 
 function render(timestamp: number): void {
   if (!lastTimestamp) lastTimestamp = timestamp;
+  if (!fpsWindowStart) fpsWindowStart = timestamp;
   const delta = timestamp - lastTimestamp;
   lastTimestamp = timestamp;
+  fpsFrames += 1;
+  if (timestamp - fpsWindowStart >= 500) {
+    renderFps.value = (fpsFrames * 1000) / (timestamp - fpsWindowStart);
+    fpsFrames = 0;
+    fpsWindowStart = timestamp;
+  }
 
   if (player.playing && !player.seeking && project.durationMs > 0) {
     const nextTime = player.currentTimeMs + delta * player.speed;
@@ -455,17 +469,17 @@ onUnmounted(() => {
 
 .three-hud {
   position: absolute;
-  top: 10px;
-  left: 10px;
+  top: 0;
+  left: 0;
   z-index: 8;
   display: grid;
-  gap: 3px;
-  padding: 7px 9px;
-  border: 1px solid rgba(255, 255, 255, 0.55);
-  background: rgba(0, 0, 0, 0.62);
-  color: #f1f1f1;
-  font-size: 12px;
-  line-height: 1.25;
+  row-gap: 10px;
+  padding: 0;
+  color: #ffffff;
+  font-family: "JetBrains Mono", "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 20px;
   pointer-events: none;
 }
 

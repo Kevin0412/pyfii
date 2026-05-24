@@ -42,6 +42,11 @@ function ledOrDroneColor(drone: DroneFrame): THREE.Color {
   return colorFromRgb(droneRgb(drone.id));
 }
 
+function ledIsOn(drone: DroneFrame): boolean {
+  const [r, g, b] = drone.ledRgb;
+  return r >= 0 && g >= 0 && b >= 0;
+}
+
 function cameraDirection(aDeg: number, bDeg: number): THREE.Vector3 {
   const a = THREE.MathUtils.degToRad(aDeg);
   const b = THREE.MathUtils.degToRad(bDeg);
@@ -249,6 +254,8 @@ export class PyfiiThreeRenderer {
       parts.shadow.visible = true;
       parts.group.position.copy(pyfiiPoint(drone.xCm, drone.yCm, drone.zCm));
       parts.group.rotation.y = -THREE.MathUtils.degToRad(drone.yawDeg);
+      parts.body.visible = !ledIsOn(drone);
+      parts.led.visible = ledIsOn(drone);
       materialColor(parts.body.material, baseColor);
       materialColor(parts.led.material, ledColor);
       parts.marker.visible = activeSafety.has(drone.id) || selectedDroneId === drone.id;
@@ -301,14 +308,14 @@ export class PyfiiThreeRenderer {
     const group = new THREE.Group();
     const droneColor = colorFromRgb(droneRgb(id));
     const body = new THREE.Mesh(
-      new THREE.SphereGeometry(spec.bodyRadius, 18, 12),
-      new THREE.MeshStandardMaterial({ color: droneColor, roughness: 0.5 }),
+      new THREE.SphereGeometry(1, 12, 8),
+      new THREE.MeshBasicMaterial({ color: droneColor }),
     );
     const led = new THREE.Mesh(
-      new THREE.SphereGeometry(spec.bodyRadius * 0.85, 16, 10),
-      new THREE.MeshStandardMaterial({ color: droneColor, emissive: droneColor, emissiveIntensity: 0.5 }),
+      new THREE.SphereGeometry(spec.bodyRadius, 18, 12),
+      new THREE.MeshBasicMaterial({ color: droneColor }),
     );
-    led.position.y = spec.bodyRadius * 0.7;
+    led.visible = false;
 
     const armGeometry = new THREE.BufferGeometry().setFromPoints([
       new THREE.Vector3(spec.motorOffset, 0, spec.motorOffset),
@@ -316,7 +323,7 @@ export class PyfiiThreeRenderer {
       new THREE.Vector3(-spec.motorOffset, 0, spec.motorOffset),
       new THREE.Vector3(spec.motorOffset, 0, -spec.motorOffset),
     ]);
-    const arms = new THREE.LineSegments(armGeometry, new THREE.LineBasicMaterial({ color: 0xd8d8d8 }));
+    const arms = new THREE.LineSegments(armGeometry, new THREE.LineBasicMaterial({ color: droneColor }));
 
     const rotorGeometry = new THREE.TorusGeometry(spec.rotorRadius, Math.max(0.6, spec.rotorRadius * 0.12), 8, 28);
     rotorGeometry.rotateX(Math.PI / 2);
