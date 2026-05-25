@@ -132,7 +132,11 @@ class Session:
     def validate(self) -> ValidationResult:
         script_path = self.project_root / "scripts" / "design.py"
         output_dir = self.project_root / "output"
-        return validate(script_path, output_dir)
+        seg = self.state.current_segment
+        quality_window = None
+        if seg is not None and not seg.locked and _requires_continuity_gate(seg):
+            quality_window = (seg.start_time, seg.end_time)
+        return validate(script_path, output_dir, quality_window=quality_window)
 
     # ---- 锁定 ----
 
@@ -236,8 +240,15 @@ class Session:
             "dense_min_distance_cm": result.dense_min_distance_cm,
             "collision_intervals": result.collision_intervals,
             "xy_span": result.xy_span,
+            "continuity_required": result.continuity_required,
+            "hover_check_ok": result.hover_check_ok,
             "hover_segments": result.hover_segments,
+            "motion_start_s": result.motion_start_s,
+            "motion_end_s": result.motion_end_s,
+            "motion_envelope_ok": result.motion_envelope_ok,
+            "motion_envelope_errors": result.motion_envelope_errors,
             "error_message": result.error_message[-500:],
+            "continuity_error": result.continuity_error[-500:],
         }
         self.state.save(self.project_root)
 
@@ -270,4 +281,11 @@ def _conservative_safety_feedback(index: int, result: ValidationResult) -> str:
 - 采用扇区保持：每架无人机尽量留在上一段出口所在区域，只做同侧扩展、轻微弧形或排队式移动。
 - 每个目标几何点之间至少留 90cm，中心点最多给一架无人机，其余无人机不得穿过中心附近。
 - 每次换形前先安排足够时间预算；如果不确定，减少几何数量而不是压缩时间。
-- 目标是先通过硬门：distance warnings=0, action warnings=0, dense minD > 51cm。视觉丰富度让位于安全。"""
+- 不允许用连续 delay/light 填空；当前段不能出现超过 1 秒的整体悬停，动作必须连贯。
+- 目标是先通过硬门：distance warnings=0, action warnings=0, dense minD > 51cm，且无长悬停。视觉丰富度让位于安全。"""
+
+
+def _requires_continuity_gate(seg: SegmentState) -> bool:
+    text = f"{seg.id} {seg.intent}".lower()
+    excluded = ("takeoff", "landing", "land", "起飞", "降落")
+    return not any(word in text for word in excluded)

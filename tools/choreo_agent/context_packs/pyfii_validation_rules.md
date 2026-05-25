@@ -41,6 +41,28 @@ for t in range(0, min(len(d) for d in data), 60):
 # 期望 > 51cm
 ```
 
+## 连贯性硬门
+
+正式编舞段中，全队整体悬停超过 1 秒视为验证失败，不能进入下一步。起飞和降落段不计入这个审美硬门，但仍要通过安全和执行验证。灯光可以按 beat 闪烁，但不能替代运动连续性。
+
+```text
+global_hover_segments must be empty
+max_global_hover <= 1.0s
+```
+
+修复原则：
+
+- 删除连续 `delay()` / 纯灯光空转。
+- 让至少一组无人机在任意 1 秒窗口内有可见 `move2()` 或 Z 变化。
+- 如果音乐需要呼吸停顿，把全体静止压到 0.8 秒以内，并用分组错峰承接。
+
+当前段还有运动包络约束：如果段落规划为 `5-13s`，明显运动必须在 `6.0s` 前开始，并在 `12.0s` 后、`13.0s` 前完成收束。通用形式是：
+
+```text
+motion_start < segment_start + 1.0s
+motion_end   > segment_end - 1.0s
+```
+
 ## 验证报告格式
 
 ```markdown
@@ -55,6 +77,8 @@ action warnings: 0
 minD: 57cm
 XY span: 490 x 502
 Z range: 80-220
+global hover: none
+motion envelope: OK
 
 退化检测:
 - lane: no

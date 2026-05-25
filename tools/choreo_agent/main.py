@@ -50,10 +50,16 @@ def main():
             print(f"compile={result.compile_ok} run={result.run_ok}")
             print(f"dist={result.distance_warnings} act={result.action_warnings}")
             print(f"minD={result.min_distance_cm}cm dense={result.dense_min_distance_cm}cm XY={result.xy_span}")
+            print(f"continuity_required={result.continuity_required} hover_ok={result.hover_check_ok} hover={result.hover_segments[:3]}")
+            print(f"motion={result.motion_start_s}-{result.motion_end_s}s envelope_ok={result.motion_envelope_ok}")
+            if result.motion_envelope_errors:
+                print(f"motion_errors={result.motion_envelope_errors[:3]}")
             if result.collision_intervals:
                 print(f"collisions={result.collision_intervals[:3]}")
             if result.error_message:
                 print(f"error: {result.error_message[-200:]}")
+            if result.continuity_error:
+                print(f"continuity_error: {result.continuity_error[-200:]}")
 
         elif cmd == "a":
             if session.approve_and_lock():
@@ -89,10 +95,16 @@ def main():
                     print(f"  compile={validation.compile_ok} run={validation.run_ok} read={validation.read_fii_ok}")
                     print(f"  dist={validation.distance_warnings} act={validation.action_warnings} passed={validation.passed}")
                     print(f"  minD={validation.min_distance_cm}cm dense={validation.dense_min_distance_cm}cm XY={validation.xy_span}")
+                    print(f"  continuity_required={validation.continuity_required} hover_ok={validation.hover_check_ok} hover={validation.hover_segments[:3]}")
+                    print(f"  motion={validation.motion_start_s}-{validation.motion_end_s}s envelope_ok={validation.motion_envelope_ok}")
+                    if validation.motion_envelope_errors:
+                        print(f"  motion_errors={validation.motion_envelope_errors[:3]}")
                     if validation.collision_intervals:
                         print(f"  collisions={validation.collision_intervals[:3]}")
                     if validation.error_message:
                         print(f"  error: {validation.error_message[-200:]}")
+                    if validation.continuity_error:
+                        print(f"  continuity_error: {validation.continuity_error[-200:]}")
 
             if rounds[-1].validation and rounds[-1].validation.passed:
                 print("Safe gate passed. You can approve and lock this segment.")

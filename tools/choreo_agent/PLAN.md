@@ -50,7 +50,7 @@ agent_projects/
 
 ## 3.1 初始化: 创建项目 → 复制模板 → 导入音乐 → 初始化state
 ## 3.2 音乐分析: AI分析 → 输出music_analysis.json → TUI展示 → 人类确认
-## 3.3 当前段生成+自动修复: 构造prompt → 调用LLM → 提取代码 → 写入marker → compile → run → read_fii → 密采样碰撞检测 → 悬停检测 → 失败则格式化repair_feedback回灌LLM (最多5轮) → 通过或放弃
+## 3.3 当前段生成+自动修复: 构造prompt → 调用LLM → 提取代码 → 写入marker → compile → run → read_fii → 密采样碰撞检测 → 当前段运动包络+整体悬停硬检测 → 失败则格式化repair_feedback回灌LLM (最多5轮) → 通过或放弃
 ## 3.4 人类反馈: 只能改当前段，不能改locked段；可在 g 命令后追加自定义反馈
 ## 3.5 锁定: locked=true → 写segment_card → 更新memory → checkpoint → 下一段
 ## 3.6 状态同步: `sync` 命令从 design.py marker 恢复 locked/current 状态
@@ -85,7 +85,8 @@ marker机制: # === PYFII_AGENT_SEGMENT_START id=S01 locked=false ===
 
 四层: 语法(compile) → 执行(run) → 读回(read_fii) → 验收(show)
 + 密采样碰撞检测 (60fps逐帧, 输出collision_intervals)
-+ 悬停检测 (threshold=0.2cm, 持续>2s)
++ 当前正式编舞段运动包络检测 (start+1s 前开始, end-1s 后收束; 起飞/降落不计入)
++ 当前正式编舞段整体悬停硬检测 (threshold=0.2cm/frame, 持续>=1s; 起飞/降落不计入)
 + repair_feedback(): 验证失败自动格式化为LLM修复提示
 + compute_assign_feedback(): 离线计算best_assign排列建议
 + 输出目录新鲜度检查 (_output_updated)

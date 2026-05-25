@@ -1,4 +1,4 @@
-"""Validator — 四层验证 + 悬停检测"""
+"""Validator — 四层验证 + 连贯性检测"""
 import math
 import os
 import subprocess
@@ -19,6 +19,10 @@ PYTHON = os.environ.get(
     str(DEFAULT_PYTHON if DEFAULT_PYTHON.exists() else Path(sys.executable)),
 )
 
+HOVER_MOVE_THRESHOLD_CM_PER_FRAME = 0.2
+MAX_GLOBAL_HOVER_S = 1.0
+SEGMENT_EDGE_BUFFER_S = 1.0
+
 
 @dataclass
 class ValidationResult:
@@ -31,9 +35,16 @@ class ValidationResult:
     dense_min_distance_cm: float | None = None
     collision_intervals: list[dict] = field(default_factory=list)
     xy_span: tuple[float, float] | None = None
+    continuity_required: bool = False
+    hover_check_ok: bool = False
     hover_segments: list[tuple[float, float]] = field(default_factory=list)
+    motion_start_s: float | None = None
+    motion_end_s: float | None = None
+    motion_envelope_ok: bool = True
+    motion_envelope_errors: list[str] = field(default_factory=list)
     error_message: str = ""
     hover_error: str = ""
+    continuity_error: str = ""
 
     @property
     def passed(self) -> bool:
@@ -46,20 +57,38 @@ class ValidationResult:
             and self.dense_min_distance_cm is not None
             and self.dense_min_distance_cm > 51
             and not self.collision_intervals
+            and (
+                not self.continuity_required
+                or (
+                    self.hover_check_ok
+                    and not self.hover_segments
+                    and self.motion_envelope_ok
+                )
+            )
         )
 
     @property
     def hover_feedback(self) -> str:
-        if not self.hover_segments:
+        if not self.continuity_required or not self.hover_segments:
             return ""
-        parts = [f"{s:.0f}-{e:.0f}s" for s, e in self.hover_segments]
-        return f"动作不丰富，存在整体悬停: {', '.join(parts)}。请增加 move2 或减少 delay/light 空闲时间。"
+        parts = [f"{s:.2f}-{e:.2f}s({e - s:.2f}s)" for s, e in self.hover_segments]
+        return (
+            f"硬门失败：检测到超过 {MAX_GLOBAL_HOVER_S:.1f}s 的整体悬停: {', '.join(parts)}。"
+            "动作必须连贯，不能用连续 delay/light 填空；请让至少一组无人机在任意 1s 窗口内保持可见 move2/Z 变化。"
+            "如果确实需要呼吸停顿，把全体静止压到 0.8s 内，并用错峰动作承接。"
+        )
 
     def repair_feedback(self) -> str:
         """把验证失败转成可直接喂给 LLM 的修复反馈。"""
+        hard_gate = (
+            "硬门要求：compile=True, run=True, read_fii=True, distance warnings=0, "
+            "action warnings=0, minD > 51cm"
+        )
+        if self.continuity_required:
+            hard_gate += f", 无超过 {MAX_GLOBAL_HOVER_S:.1f}s 的整体悬停"
         lines = [
             "自动验证未通过，禁止进入下一步。请只重写当前未锁定段，不要修改 locked 段，不要输出 marker。",
-            "硬门要求：compile=True, run=True, read_fii=True, distance warnings=0, action warnings=0, minD > 51cm。",
+            hard_gate + "。",
         ]
         if not self.compile_ok:
             lines.append(f"语法失败：{self.error_message[-500:]}")
@@ -92,7 +121,14 @@ class ValidationResult:
         if hover:
             lines.append(hover)
         if self.hover_error:
-            lines.append(f"悬停检测失败，仅作诊断：{self.hover_error[-300:]}")
+            lines.append(f"悬停检测失败，因此禁止通过：{self.hover_error[-300:]}")
+        if self.motion_start_s is not None or self.motion_end_s is not None:
+            lines.append(f"motion window: start={self.motion_start_s}s end={self.motion_end_s}s")
+        if self.motion_envelope_errors:
+            lines.append("运动包络失败：")
+            lines.extend(f"- {item}" for item in self.motion_envelope_errors)
+        if self.continuity_error:
+            lines.append(f"连贯性检测失败，因此禁止通过：{self.continuity_error[-300:]}")
         return "\n".join(lines)
 
     def compute_assign_feedback(self, starts_xy, targets_xy):
@@ -102,8 +138,13 @@ class ValidationResult:
         return f"使用排列 perm={perm} (min_d={min_d:.1f}cm) 替换当前恒等映射。"
 
 
-def validate(script_path: Path, output_dir: Path) -> ValidationResult:
+def validate(
+    script_path: Path,
+    output_dir: Path,
+    quality_window: tuple[float, float] | None = None,
+) -> ValidationResult:
     result = ValidationResult()
+    result.continuity_required = quality_window is not None
 
     # 1. 语法层
     try:
@@ -155,11 +196,28 @@ def validate(script_path: Path, output_dir: Path) -> ValidationResult:
             result.read_fii_ok = True
             _add_dense_distance_report(result, output_dir)
 
-        # 悬停检测是质量反馈，不应掩盖主验证结果。
-        try:
-            result.hover_segments = _detect_hover(output_dir)
-        except Exception as e:
-            result.hover_error = str(e)
+        if result.continuity_required:
+            try:
+                result.hover_segments = _detect_hover(output_dir, window=quality_window)
+                result.hover_check_ok = True
+            except Exception as e:
+                result.hover_error = str(e)
+            try:
+                result.motion_start_s, result.motion_end_s = _measure_motion_envelope(
+                    output_dir,
+                    window=quality_window,
+                )
+                result.motion_envelope_errors = _check_motion_envelope(
+                    quality_window,
+                    result.motion_start_s,
+                    result.motion_end_s,
+                )
+                result.motion_envelope_ok = not result.motion_envelope_errors
+            except Exception as e:
+                result.motion_envelope_ok = False
+                result.continuity_error = str(e)
+        else:
+            result.hover_check_ok = True
 
     except subprocess.TimeoutExpired:
         result.error_message = "Script timed out"
@@ -169,36 +227,43 @@ def validate(script_path: Path, output_dir: Path) -> ValidationResult:
     return result
 
 
-def _detect_hover(output_dir: Path, threshold_cm: float = 0.2, min_duration_s: float = 2.0) -> list[tuple[float, float]]:
-    """检测整体悬停：所有机位移 < threshold 持续 > min_duration_s"""
-    import numpy as np
+def _detect_hover(
+    output_dir: Path,
+    threshold_cm: float = HOVER_MOVE_THRESHOLD_CM_PER_FRAME,
+    min_duration_s: float = MAX_GLOBAL_HOVER_S,
+    window: tuple[float, float] | None = None,
+) -> list[tuple[float, float]]:
+    """检测整体悬停：所有机 3D 位移都低于 threshold 且持续超过 min_duration_s。"""
     import pyfii as pf
 
     fii_dir = _find_fii_dir(output_dir)
 
-    try:
-        data, t0, *_ = pf.read_fii(str(fii_dir), fps=60, ignore_acc=True)
-    except Exception:
-        return []
+    data, _t0, *_ = pf.read_fii(str(fii_dir), fps=60, ignore_acc=True)
 
     N = len(data)
     fps = 60
     min_frames = int(min_duration_s * fps)
     min_len = min(len(d) for d in data)
+    start_frame = 1
+    end_frame = min_len
+    if window is not None:
+        start_s, end_s = window
+        start_frame = max(1, int(start_s * fps))
+        end_frame = min(min_len, int(end_s * fps) + 1)
+        if end_frame <= start_frame:
+            return []
 
     hover_segments = []
     hover_start = None
 
-    for frame in range(1, min_len):
+    for frame in range(start_frame, end_frame):
         max_move = 0.0
         for i in range(N):
             if frame < len(data[i]):
                 dx = abs(data[i][frame][1] - data[i][frame - 1][1])
                 dy = abs(data[i][frame][2] - data[i][frame - 1][2])
-                if dx > max_move:
-                    max_move = dx
-                if dy > max_move:
-                    max_move = dy
+                dz = abs(data[i][frame][3] - data[i][frame - 1][3])
+                max_move = max(max_move, math.sqrt(dx * dx + dy * dy + dz * dz))
 
         if max_move < threshold_cm:
             if hover_start is None:
@@ -208,10 +273,77 @@ def _detect_hover(output_dir: Path, threshold_cm: float = 0.2, min_duration_s: f
                 hover_segments.append((hover_start / fps, frame / fps))
             hover_start = None
 
-    if hover_start is not None and (min_len - hover_start) >= min_frames:
-        hover_segments.append((hover_start / fps, min_len / fps))
+    if hover_start is not None and (end_frame - hover_start) >= min_frames:
+        hover_segments.append((hover_start / fps, end_frame / fps))
 
     return hover_segments
+
+
+def _measure_motion_envelope(
+    output_dir: Path,
+    window: tuple[float, float],
+    threshold_cm: float = HOVER_MOVE_THRESHOLD_CM_PER_FRAME,
+) -> tuple[float | None, float | None]:
+    """返回当前时间窗内第一次/最后一次明显运动的时间。"""
+    import pyfii as pf
+
+    fii_dir = _find_fii_dir(output_dir)
+    data, _t0, *_ = pf.read_fii(str(fii_dir), fps=60, ignore_acc=True)
+
+    fps = 60
+    min_len = min(len(d) for d in data)
+    start_s, end_s = window
+    start_frame = max(1, int(start_s * fps))
+    end_frame = min(min_len, int(end_s * fps) + 1)
+    first_motion = None
+    last_motion = None
+
+    for frame in range(start_frame, end_frame):
+        if _frame_has_global_motion(data, frame, threshold_cm):
+            time_s = frame / fps
+            if first_motion is None:
+                first_motion = time_s
+            last_motion = time_s
+
+    return (
+        round(first_motion, 3) if first_motion is not None else None,
+        round(last_motion, 3) if last_motion is not None else None,
+    )
+
+
+def _frame_has_global_motion(data, frame: int, threshold_cm: float) -> bool:
+    for drone in data:
+        if frame >= len(drone):
+            continue
+        dx = abs(drone[frame][1] - drone[frame - 1][1])
+        dy = abs(drone[frame][2] - drone[frame - 1][2])
+        dz = abs(drone[frame][3] - drone[frame - 1][3])
+        if math.sqrt(dx * dx + dy * dy + dz * dz) >= threshold_cm:
+            return True
+    return False
+
+
+def _check_motion_envelope(
+    window: tuple[float, float],
+    motion_start_s: float | None,
+    motion_end_s: float | None,
+) -> list[str]:
+    start_s, end_s = window
+    errors = []
+    start_deadline = start_s + SEGMENT_EDGE_BUFFER_S
+    end_floor = end_s - SEGMENT_EDGE_BUFFER_S
+
+    if motion_start_s is None or motion_end_s is None:
+        return [f"当前段 {start_s:.2f}-{end_s:.2f}s 内没有检测到明显运动。"]
+    if motion_start_s >= start_deadline:
+        errors.append(
+            f"动作启动过晚：{motion_start_s:.2f}s；应在 {start_deadline:.2f}s 前开始运动。"
+        )
+    if motion_end_s <= end_floor:
+        errors.append(
+            f"动作收束过早：{motion_end_s:.2f}s；应在 {end_floor:.2f}s 后、{end_s:.2f}s 前完成收束。"
+        )
+    return errors
 
 
 def _add_dense_distance_report(result: ValidationResult, output_dir: Path) -> None:
