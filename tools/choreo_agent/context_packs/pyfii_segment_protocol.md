@@ -73,7 +73,9 @@ def apply_light(drone, color, ticks):
         drone.delay(100)
 ```
 
-推荐 10-20 ticks (1-2s)。每段不同颜色。**每个 move2 之后必须调用 。**
+`apply_light()` 每 tick 会 `delay(100)`，因此它本质上也是等待。正式编舞段默认只用 3-6 ticks 的短灯光脉冲；除非同一时间还有其它分组在飞行，否则不要在全体 move2 后使用 `ticks > 8`。
+
+每段可使用不同颜色。每个 move2 后可以接短灯光脉冲，但不能用纯灯光/纯 delay 填满 1 秒以上；如需长呼吸，必须让另一组错峰运动或做轻微 Z/XY 变化承接。
 
 ## 排队错峰
 
@@ -82,6 +84,8 @@ for i,d in enumerate(ds): d.delay(i*offset_ms)  # offset=100-600ms
 ```
 
 排在 inittime 之后、第一个 move2 之前。
+
+注意：错峰只改变起步时间，不自动保证连贯性。正式段里每个 1 秒窗口都应至少有一组无人机在 `move2` 或轻微 Z/XY 变化中，不能出现全体一起等灯光/等 delay 的空窗。
 
 
 ## dntg 技巧：相对移动 + 条件分支

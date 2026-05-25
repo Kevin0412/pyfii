@@ -74,8 +74,10 @@ class ValidationResult:
         parts = [f"{s:.2f}-{e:.2f}s({e - s:.2f}s)" for s, e in self.hover_segments]
         return (
             f"硬门失败：检测到超过 {MAX_GLOBAL_HOVER_S:.1f}s 的整体悬停: {', '.join(parts)}。"
-            "动作必须连贯，不能用连续 delay/light 填空；请让至少一组无人机在任意 1s 窗口内保持可见 move2/Z 变化。"
-            "如果确实需要呼吸停顿，把全体静止压到 0.8s 内，并用错峰动作承接。"
+            "这通常是代码结构问题：全体 move2 结束后接了过长 apply_light/delay。"
+            "修复时不要只改颜色；请缩短 apply_light 到 ticks<=6，或把大几何拆成 A/B/C 分组并重叠 inittime，"
+            "或在上述区间内插入小幅 move2/Z 变化，确保任意 1s 窗口至少一组无人机在运动。"
+            "如果确实需要呼吸停顿，把全体静止压到 0.8s 内。"
         )
 
     def repair_feedback(self) -> str:

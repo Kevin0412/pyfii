@@ -81,6 +81,9 @@ prev = {prev_state}
         user += f"""- 运动包络：本段 {start_time:.2f}-{end_time:.2f}s，明显运动必须在 {start_time + 1:.2f}s 前开始，并在 {end_time - 1:.2f}s 后、{end_time:.2f}s 前完成收束
 - 动作必须连贯：当前段任意整体悬停不得超过 1 秒；不能用连续 delay/light 空转填满段落
 - 如果需要停顿呼吸，压到 0.8 秒以内，并让分组错峰或高度轻微变化承接下一动作
+- 禁止结构：全体同一 inittime -> 全体 move2 -> apply_light(ticks>=10)/长 delay -> 下一几何
+- 推荐结构：把 A/B/C 分组动作重叠排布；灯光脉冲默认 ticks<=6；纯 light/delay 块超过 600ms 时，必须安排另一组正在 move2 或做小幅 Z/XY 呼吸
+- 对任何可能形成等待的区间，在 1 秒到达前插入至少一组可见运动；只改颜色不算运动
 """
     else:
         user += "- 起飞和降落段不计入编舞连贯性硬门；仍必须安全、平滑、执行完成\n"
