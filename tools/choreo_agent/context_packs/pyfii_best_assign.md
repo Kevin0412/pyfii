@@ -33,6 +33,6 @@ for i, drone in enumerate(drones):
 ## 测试
 
 ```
-starts: 7机散布  →  targets: 7点环 r=140
-perm=(4, 5, 6, 0, 1, 2, 3)  min_d=85.9cm  max_move=144cm
+starts: 7机当前出口  →  targets: 7个安全目标点
+perm=(...)  min_d=85.9cm  max_move=144cm
 ```

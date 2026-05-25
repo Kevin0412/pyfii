@@ -1,11 +1,25 @@
 {
-  "project": "",
-  "music": "",
-  "duration": 0,
-  "segments": [],
-  "current_segment": null,
-  "locked_segments": [],
+  "name": "",
+  "music_path": "../../cannon_in_D.mp3",
+  "music_duration": 68.0,
+  "music_confirmed": true,
   "mode": "safe",
-  "created": "",
-  "updated": ""
+  "provider": "deepseek",
+  "segments": [
+    {
+      "id": "S01",
+      "start_time": 4.0,
+      "end_time": 24.0,
+      "locked": false,
+      "music_cue": {
+        "energy": 0.35,
+        "emotion": "gradual opening"
+      },
+      "intent": "从起飞后的散布状态开始，生成连续正式编舞；动作必须在段首 1 秒内开始，在段尾最后 1 秒内完成收束，中间不能有超过 1 秒整体悬停；要求安全、连贯、几何丰富，避免套用环/双排/四角模板。",
+      "attempts": [],
+      "exit_state": null
+    }
+  ],
+  "current_segment_index": 0,
+  "locked_segment_ids": []
 }

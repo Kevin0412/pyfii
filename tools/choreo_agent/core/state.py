@@ -25,6 +25,7 @@ class ProjectState:
     music_duration: float = 0.0
     music_confirmed: bool = False
     mode: str = "safe"  # safe | fast
+    provider: str = "deepseek"
     segments: list[SegmentState] = field(default_factory=list)
     current_segment_index: int = 0
     locked_segment_ids: list[str] = field(default_factory=list)
@@ -42,6 +43,7 @@ class ProjectState:
             "music_duration": self.music_duration,
             "music_confirmed": self.music_confirmed,
             "mode": self.mode,
+            "provider": self.provider,
             "segments": [
                 {
                     "id": s.id,
@@ -88,6 +90,7 @@ class ProjectState:
             music_duration=data.get("music_duration", 0.0),
             music_confirmed=data.get("music_confirmed", False),
             mode=data.get("mode", "safe"),
+            provider=data.get("provider", "deepseek"),
             segments=segments,
             current_segment_index=data.get("current_segment_index", 0),
             locked_segment_ids=data.get("locked_segment_ids", []),

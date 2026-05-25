@@ -17,6 +17,13 @@ class GenerationRound:
     validation: ValidationResult | None
 
 
+@dataclass
+class ApprovalResult:
+    locked: bool
+    validation: ValidationResult | None
+    human_override: bool = False
+
+
 class Session:
     def __init__(self, project_root: Path):
         self.project_root = Path(project_root).resolve()
@@ -140,25 +147,31 @@ class Session:
 
     # ---- 锁定 ----
 
-    def approve_and_lock(self) -> bool:
-        """验证通过后锁定当前段"""
+    def approve_and_lock(self, allow_human_override: bool = True) -> ApprovalResult:
+        """人工确认后锁定当前段。验证结果会记录，但人类确认优先。"""
         seg = self.state.current_segment
         if seg is None or seg.locked:
-            return False
+            return ApprovalResult(False, None)
 
         result = self.validate()
-        if not result.passed:
-            return False
+        if not result.passed and not allow_human_override:
+            return ApprovalResult(False, result)
 
         script_path = self.project_root / "scripts" / "design.py"
         if lock_segment(script_path, seg.id):
+            human_override = not result.passed
+            seg.attempts.append({
+                "human_approval": True,
+                "human_override": human_override,
+                "validation": _validation_snapshot(result),
+            })
             seg.locked = True
             self.state.locked_segment_ids.append(seg.id)
             self.state.current_segment_index += 1
             self.state.save(self.project_root)
             self._pending_code = None
-            return True
-        return False
+            return ApprovalResult(True, result, human_override=human_override)
+        return ApprovalResult(False, result)
 
     # ---- 下一段 ----
 
@@ -173,11 +186,20 @@ class Session:
         if not script_path.exists():
             return
 
+        previously_locked = {s.id for s in self.state.segments if s.locked}
+        previously_locked.update(self.state.locked_segment_ids)
         markers = {m["id"]: m for m in parse_markers(script_path)}
         for seg in self.state.segments:
             marker = markers.get(seg.id)
             if marker is not None:
-                seg.locked = bool(marker["locked"])
+                marker_locked = bool(marker["locked"])
+                seg.locked = (
+                    marker_locked
+                    and (
+                        seg.id in previously_locked
+                        or _has_lock_approval(seg)
+                    )
+                )
 
         self.state.locked_segment_ids = [s.id for s in self.state.segments if s.locked]
         self.state.current_segment_index = len(self.state.segments)
@@ -208,8 +230,8 @@ class Session:
         ]
         if seg and not seg.locked:
             lines.append(f"  1. Review segment {seg.id}")
-            lines.append(f"  2. Generate / revise until validation zero")
-            lines.append(f"  3. Approve and lock")
+            lines.append(f"  2. Generate / revise with validation feedback")
+            lines.append(f"  3. Human approve and lock; manual approval has final priority")
         elif seg and seg.locked:
             lines.append(f"  Already locked. Run next segment generation.")
         else:
@@ -229,27 +251,7 @@ class Session:
         seg = self.state.current_segment
         if seg is None or not seg.attempts:
             return
-        seg.attempts[-1]["validation"] = {
-            "compile_ok": result.compile_ok,
-            "run_ok": result.run_ok,
-            "read_fii_ok": result.read_fii_ok,
-            "passed": result.passed,
-            "distance_warnings": result.distance_warnings,
-            "action_warnings": result.action_warnings,
-            "min_distance_cm": result.min_distance_cm,
-            "dense_min_distance_cm": result.dense_min_distance_cm,
-            "collision_intervals": result.collision_intervals,
-            "xy_span": result.xy_span,
-            "continuity_required": result.continuity_required,
-            "hover_check_ok": result.hover_check_ok,
-            "hover_segments": result.hover_segments,
-            "motion_start_s": result.motion_start_s,
-            "motion_end_s": result.motion_end_s,
-            "motion_envelope_ok": result.motion_envelope_ok,
-            "motion_envelope_errors": result.motion_envelope_errors,
-            "error_message": result.error_message[-500:],
-            "continuity_error": result.continuity_error[-500:],
-        }
+        seg.attempts[-1]["validation"] = _validation_snapshot(result)
         self.state.save(self.project_root)
 
 
@@ -286,6 +288,45 @@ def _conservative_safety_feedback(index: int, result: ValidationResult) -> str:
 
 
 def _requires_continuity_gate(seg: SegmentState) -> bool:
-    text = f"{seg.id} {seg.intent}".lower()
-    excluded = ("takeoff", "landing", "land", "起飞", "降落")
-    return not any(word in text for word in excluded)
+    segment_id = seg.id.lower()
+    intent = seg.intent.strip().lower()
+    if segment_id in {"takeoff", "landing", "land"}:
+        return False
+    lifecycle_prefixes = ("起飞段", "降落段", "takeoff segment", "landing segment")
+    if intent.startswith(lifecycle_prefixes):
+        return False
+    return True
+
+
+def _validation_snapshot(result: ValidationResult) -> dict:
+    return {
+        "compile_ok": result.compile_ok,
+        "run_ok": result.run_ok,
+        "read_fii_ok": result.read_fii_ok,
+        "passed": result.passed,
+        "distance_warnings": result.distance_warnings,
+        "action_warnings": result.action_warnings,
+        "min_distance_cm": result.min_distance_cm,
+        "dense_min_distance_cm": result.dense_min_distance_cm,
+        "collision_intervals": result.collision_intervals,
+        "xy_span": result.xy_span,
+        "continuity_required": result.continuity_required,
+        "hover_check_ok": result.hover_check_ok,
+        "hover_segments": result.hover_segments,
+        "motion_start_s": result.motion_start_s,
+        "motion_end_s": result.motion_end_s,
+        "motion_envelope_ok": result.motion_envelope_ok,
+        "motion_envelope_errors": result.motion_envelope_errors,
+        "error_message": result.error_message[-500:],
+        "continuity_error": result.continuity_error[-500:],
+    }
+
+
+def _has_lock_approval(seg: SegmentState) -> bool:
+    for attempt in seg.attempts:
+        if attempt.get("human_approval") is True:
+            return True
+        validation = attempt.get("validation", {})
+        if validation.get("passed") is True:
+            return True
+    return False

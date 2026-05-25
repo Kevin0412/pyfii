@@ -1,4 +1,6 @@
 """Pyfii Choreo Agent — CLI 原型"""
+import json
+import shutil
 import sys
 from pathlib import Path
 
@@ -10,22 +12,33 @@ from core import Session
 
 def main():
     if len(sys.argv) < 2:
-        print("Usage: python tools/choreo_agent/main.py agent_projects/<name>")
+        print("Usage:")
+        print("  python tools/choreo_agent/main.py init agent_projects/<name> [provider]")
+        print("  python tools/choreo_agent/main.py agent_projects/<name>")
         return
 
-    proj = Path(sys.argv[1])
-    if not proj.is_absolute():
-        proj = REPO_ROOT / proj
-    proj = proj.resolve()
+    if sys.argv[1] == "init":
+        if len(sys.argv) < 3:
+            print("Usage: python tools/choreo_agent/main.py init agent_projects/<name> [provider]")
+            return
+        provider = sys.argv[3] if len(sys.argv) > 3 else None
+        proj = _resolve_project_path(sys.argv[2])
+        _init_project_from_template(proj, provider=provider)
+        print(f"Initialized {proj}")
+        return
+
+    proj = _resolve_project_path(sys.argv[1])
 
     if not (proj / "state.json").exists():
         print(f"No state.json in {proj}. Run init first.")
         return
 
     session = Session(proj)
+    provider = session.state.provider
     print(f"Project: {session.state.name}")
     print(f"Music: {session.state.music_path} ({session.state.music_duration}s)")
     print(f"Mode: {session.state.mode}")
+    print(f"Provider: {provider}")
     print(f"Locked: {session.state.locked_segment_ids}")
 
     while True:
@@ -62,16 +75,19 @@ def main():
                 print(f"continuity_error: {result.continuity_error[-200:]}")
 
         elif cmd == "a":
-            if session.approve_and_lock():
+            approval = session.approve_and_lock(allow_human_override=True)
+            if approval.locked:
                 print(f"Locked {session.state.locked_segment_ids[-1]}")
+                if approval.human_override:
+                    print("Human override: validation did not pass, but manual approval locked the segment.")
             else:
-                print("Approve failed — validate first?")
+                print("Approve failed — segment missing or marker lock failed.")
 
         elif cmd.startswith("g"):
             feedback = raw_cmd[1:].strip()
             try:
                 rounds = session.generate_until_safe_with_llm(
-                    provider="deepseek",
+                    provider=provider,
                     feedback=feedback,
                     max_attempts=5,
                 )
@@ -124,6 +140,34 @@ def main():
 
         else:
             print("Commands: g [feedback]=generate+repair v=validate a=approve h=handoff sync s=save q=quit")
+
+
+def _resolve_project_path(value: str) -> Path:
+    proj = Path(value)
+    if not proj.is_absolute():
+        proj = REPO_ROOT / proj
+    return proj.resolve()
+
+
+def _init_project_from_template(project_root: Path, provider: str | None = None) -> None:
+    template_root = REPO_ROOT / "tools" / "choreo_agent" / "project_template"
+    if not template_root.exists():
+        raise FileNotFoundError(f"missing project template: {template_root}")
+    project_root.mkdir(parents=True, exist_ok=True)
+    for child in template_root.iterdir():
+        target = project_root / child.name
+        if child.is_dir():
+            shutil.copytree(child, target, dirs_exist_ok=True)
+        else:
+            shutil.copy2(child, target)
+
+    state_path = project_root / "state.json"
+    state = json.loads(state_path.read_text(encoding="utf-8"))
+    if not state.get("name"):
+        state["name"] = project_root.name
+    if provider:
+        state["provider"] = provider
+    state_path.write_text(json.dumps(state, indent=2, ensure_ascii=False), encoding="utf-8")
 
 
 if __name__ == "__main__":

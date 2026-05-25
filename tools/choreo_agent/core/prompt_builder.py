@@ -24,9 +24,14 @@ def build_system_prompt() -> str:
 
 
 def _requires_continuity_gate(segment_id: str, intent: str) -> bool:
-    text = f"{segment_id} {intent}".lower()
-    excluded = ("takeoff", "landing", "land", "起飞", "降落")
-    return not any(word in text for word in excluded)
+    seg_id = segment_id.lower()
+    text = intent.strip().lower()
+    if seg_id in {"takeoff", "landing", "land"}:
+        return False
+    lifecycle_prefixes = ("起飞段", "降落段", "takeoff segment", "landing segment")
+    if text.startswith(lifecycle_prefixes):
+        return False
+    return True
 
 
 def build_segment_prompt(
