@@ -166,9 +166,7 @@ class ValidationResult:
             lines.append("距离风险：当前路径存在过近或对穿。请增大几何点间距、减少交叉换位、使用更保守的扇区保持或排队错峰。")
         if self.action_warnings != 0:
             lines.append(
-                "动作未完成风险：请计算每个 move2 的 3D 飞行时间，确认该 move2 后的 light+delay "
-                "覆盖执行时间；必要时降低单次位移、提高合法速度/加速度，或延长这次移动后的执行预算。"
-                "注意 apply_light 已经推进命令游标，但 delay 仍应留出 flight_ms - light_ticks*100 + 100~200ms 的余量。"
+                "动作未完成风险：action_warnings>0 表示 move2 后留给动作执行的时间不够。"
             )
         hover = self.hover_feedback
         if hover:
