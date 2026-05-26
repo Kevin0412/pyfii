@@ -2,6 +2,7 @@
 import ast
 import math
 import os
+import re
 import subprocess
 import sys
 import time
@@ -30,6 +31,7 @@ SEGMENT_EDGE_BUFFER_S = 1.0
 MIN_MEANINGFUL_EXCURSION_CM = 30.0
 MIN_MOVING_DRONE_FRACTION = 0.7
 AGENT_SIDE_HELPERS = {
+    "best_assign",
     "dist3",
     "flight_time_s",
     "flight_time_ms",
@@ -49,6 +51,7 @@ class ValidationResult:
     dense_min_distance_cm: float | None = None
     collision_intervals: list[dict] = field(default_factory=list)
     xy_span: tuple[float, float] | None = None
+    quality_window: tuple[float, float] | None = None
     continuity_required: bool = False
     hover_check_ok: bool = False
     hover_segments: list[tuple[float, float]] = field(default_factory=list)
@@ -160,6 +163,7 @@ class ValidationResult:
             lines.append(
                 "动作未完成风险：请计算每个 move2 的 3D 飞行时间，确认该 move2 后的 light+delay "
                 "覆盖执行时间；必要时降低单次位移、提高合法速度/加速度，或延长这次移动后的执行预算。"
+                "注意 apply_light 已经推进命令游标，但 delay 仍应留出 flight_ms - light_ticks*100 + 100~200ms 的余量。"
             )
         hover = self.hover_feedback
         if hover:
@@ -171,6 +175,9 @@ class ValidationResult:
         if self.motion_envelope_errors:
             lines.append("运动包络失败：")
             lines.extend(f"- {item}" for item in self.motion_envelope_errors)
+            timing = _repair_timing_plan(self.quality_window, self.motion_start_s, self.motion_end_s)
+            if timing:
+                lines.append(timing)
             lines.append(
                 "时间线修复：PyFii 不是全局 Python 时间轴；请检查每架无人机自己的命令链。"
                 "move2 不推进时间，后续 light/delay 应作为这次移动的执行预算。"
@@ -226,6 +233,7 @@ def validate(
     quality_window: tuple[float, float] | None = None,
 ) -> ValidationResult:
     result = ValidationResult()
+    result.quality_window = quality_window
     result.continuity_required = quality_window is not None
 
     # 1. 语法层
@@ -237,7 +245,8 @@ def validate(
         result.error_message = f"Syntax error: {e}"
         return result
 
-    result.code_quality_errors = _check_static_code_quality(code)
+    active_code = _extract_first_unlocked_segment_code(code) or code
+    result.code_quality_errors = _check_static_code_quality(active_code)
     result.code_quality_ok = not result.code_quality_errors
 
     # 2-4. 执行+读回+验收
@@ -355,6 +364,7 @@ def validate(
 def _check_static_code_quality(code: str) -> list[str]:
     tree = ast.parse(code)
     return [
+        *_check_segment_imports(tree),
         *_check_agent_helper_leak_from_tree(tree),
         *_check_inittime_arguments(tree),
         *_check_velocity_pairing(tree),
@@ -380,8 +390,51 @@ def _check_agent_helper_leak_from_tree(tree: ast.AST) -> list[str]:
     ]
 
 
+def _check_segment_imports(tree: ast.AST) -> list[str]:
+    errors = []
+    for node in ast.walk(tree):
+        if isinstance(node, (ast.Import, ast.ImportFrom)):
+            errors.append(
+                f"line {node.lineno}: 当前 segment 不要新增 import。"
+                "design.py 模板已提供 math/numpy/pyfii 等基础依赖；排列和运动预算应在 agent 侧完成。"
+            )
+    return errors
+
+
+def _repair_timing_plan(
+    quality_window: tuple[float, float] | None,
+    motion_start_s: float | None,
+    motion_end_s: float | None,
+) -> str:
+    if quality_window is None:
+        return ""
+    start_s, end_s = quality_window
+    finish_floor = end_s - SEGMENT_EDGE_BUFFER_S
+    lines = []
+    if motion_start_s is not None and motion_start_s >= start_s + SEGMENT_EDGE_BUFFER_S:
+        lines.append(
+            f"- 启动晚了 {motion_start_s - (start_s + SEGMENT_EDGE_BUFFER_S):.2f}s："
+            f"首个正式 move2 应在 {start_s:.2f}s 后尽快发起，通常使用 inittime({int(start_s)})。"
+        )
+    if motion_end_s is not None and motion_end_s <= finish_floor:
+        missing_s = finish_floor - motion_end_s
+        lines.append(
+            f"- 收束早了约 {missing_s:.2f}s：不要补纯 delay；"
+            "请把这段时间分配给真实移动，做法是降低 speed/accel、加入第 4/5 个有构图意义的 keyframe，"
+            "或拉长弧线路径/高度层变化。"
+        )
+    if not lines:
+        return ""
+    lines.append(
+        f"- 重新规划时，所有无人机的 move/light/delay 累计预算应让有效群体运动结束在 "
+        f"{finish_floor:.2f}-{end_s:.2f}s。"
+    )
+    return "段落时间预算修复建议：\n" + "\n".join(lines)
+
+
 def _check_inittime_arguments(tree: ast.AST) -> list[str]:
     errors = []
+    constants = _constant_assignments(tree)
     for node in ast.walk(tree):
         if not _is_method_call(node, "inittime") or not node.args:
             continue
@@ -391,7 +444,23 @@ def _check_inittime_arguments(tree: ast.AST) -> list[str]:
                 f"line {node.lineno}: inittime() 必须使用整数秒，不要写 {arg.value!r}。"
                 "例如写 drone.inittime(4)，不要写 drone.inittime(4.0) 或 6.2。"
             )
+        if isinstance(arg, ast.Name) and isinstance(constants.get(arg.id), float):
+            errors.append(
+                f"line {node.lineno}: inittime({arg.id}) 使用了浮点变量 {arg.id}={constants[arg.id]!r}。"
+                f"请把 {arg.id} 定义为整数秒，例如 {arg.id} = {int(constants[arg.id])}。"
+            )
     return errors
+
+
+def _constant_assignments(tree: ast.AST) -> dict[str, object]:
+    values = {}
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Assign) or not isinstance(node.value, ast.Constant):
+            continue
+        for target in node.targets:
+            if isinstance(target, ast.Name):
+                values[target.id] = node.value.value
+    return values
 
 
 def _check_velocity_pairing(tree: ast.AST) -> list[str]:
@@ -451,6 +520,17 @@ def _node_display(node: ast.AST) -> str:
         return ast.unparse(node)
     except Exception:
         return _node_key(node)
+
+
+def _extract_first_unlocked_segment_code(code: str) -> str:
+    match = re.search(
+        r"^# === PYFII_AGENT_SEGMENT_START[^\n]*locked=false[^\n]* ===\n"
+        r"(?P<body>.*?)"
+        r"^# === PYFII_AGENT_SEGMENT_END[^\n]* ===",
+        code,
+        flags=re.MULTILINE | re.DOTALL,
+    )
+    return match.group("body") if match else ""
 
 
 def _detect_hover(

@@ -8,6 +8,7 @@ from validator import (
     _check_static_code_quality,
     _check_motion_envelope,
     _check_motion_quality,
+    _repair_timing_plan,
 )
 
 
@@ -155,10 +156,29 @@ def flight_time_ms(distance_cm, v, a):
     assert "agent 侧运动学工具" in errors[0]
 
 
+def test_code_quality_blocks_segment_imports_and_best_assign_definition():
+    errors = _check_static_code_quality(
+        """
+import itertools
+
+def best_assign(starts, targets):
+    return (), 0
+"""
+    )
+    assert any("不要新增 import" in item for item in errors)
+    assert any("best_assign" in item for item in errors)
+
+
 def test_code_quality_blocks_decimal_inittime():
     errors = _check_static_code_quality("drone.inittime(4.0)\n")
     assert errors
     assert "inittime" in errors[0]
+
+
+def test_code_quality_blocks_float_variable_inittime():
+    errors = _check_static_code_quality("start_s = 13.0\ndrone.inittime(start_s)\n")
+    assert errors
+    assert "浮点变量" in errors[0]
 
 
 def test_code_quality_requires_velocity_pairing():
@@ -184,6 +204,12 @@ drone.move2(100, 100, 120)
     ) == []
 
 
+def test_repair_timing_plan_reports_missing_tail_motion():
+    text = _repair_timing_plan((4, 13), 4.1, 10.2)
+    assert "收束早了" in text
+    assert "12.00-13.00s" in text
+
+
 if __name__ == "__main__":
     test_hover_blocks_formal_segment()
     test_takeoff_landing_exempt_from_continuity_gate()
@@ -192,7 +218,10 @@ if __name__ == "__main__":
     test_motion_quality_blocks_small_jitter()
     test_degradation_blocks_obvious_lanes_and_rigid_circle()
     test_agent_motion_helpers_do_not_belong_in_design_py()
+    test_code_quality_blocks_segment_imports_and_best_assign_definition()
     test_code_quality_blocks_decimal_inittime()
+    test_code_quality_blocks_float_variable_inittime()
     test_code_quality_requires_velocity_pairing()
     test_code_quality_accepts_paired_integer_timing()
+    test_repair_timing_plan_reports_missing_tail_motion()
     print("OK")

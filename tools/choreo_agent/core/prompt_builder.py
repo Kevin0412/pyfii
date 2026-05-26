@@ -46,6 +46,32 @@ def _requires_takeoff_setup(segment_id: str, prev_state: list) -> bool:
     return segment_id.strip().lower() in {"s01", "seg01", "segment01", "1"} and not prev_state
 
 
+def _timing_budget_hint(start_time: float, end_time: float) -> str:
+    move_start = start_time + 0.15
+    finish_target = end_time - 0.35
+    active_s = max(1.0, finish_target - move_start)
+    weights = [0.22, 0.24, 0.26, 0.28]
+    cue = move_start
+    lines = [
+        "## 本段时间预算参考",
+        f"- 正式动作建议从 {move_start:.2f}s 左右开始，不要晚于 {start_time + 1:.2f}s。",
+        f"- 主体移动链必须持续到 {end_time - 1:.2f}s 之后，建议在 {finish_target:.2f}s 左右完成最终收束。",
+        "- 建议至少 4 个有意义 keyframe，不要用 3 个短 move 很快跑完再等。",
+        "- 每个 keyframe 的 interval 是当前 cue 到下一 cue 的差值，不是从 segment_start 累计到目标 cue；不要用 `t_target - start_s` 给后续 keyframe 反复算预算。",
+        "- 合法速度范围是 20-200cm/s，加速度范围是 50-400cm/s^2；边界值可以按需要使用，但必须和飞行时间预算匹配。",
+        "- 每架机的命令游标应大致经过这些 cue；若估算飞行时间总和更短，就降低速度、增加弧线路径或加入有构图意义的中间 keyframe：",
+    ]
+    for index, weight in enumerate(weights, start=1):
+        duration = active_s * weight
+        cue += duration
+        lines.append(f"  - keyframe {index}: interval ~= {duration:.2f}s, finish ~= {cue:.2f}s")
+    lines.append(
+        "- 任何方案生成前先检查：所有 move2 后的 light+delay 累计执行预算，"
+        f"必须让有效群体运动结束时间落在 {end_time - 1:.2f}-{end_time:.2f}s。"
+    )
+    return "\n".join(lines)
+
+
 def build_segment_prompt(
     segment_id: str,
     start_time: float,
@@ -97,6 +123,7 @@ prev = {prev_state}
 """
 
     if _requires_continuity_gate(segment_id, intent):
+        user += _timing_budget_hint(start_time, end_time) + "\n\n"
         user += f"""- 运动包络：本段 {start_time:.2f}-{end_time:.2f}s，明显运动必须在 {start_time + 1:.2f}s 前开始，并在 {end_time - 1:.2f}s 后、{end_time:.2f}s 前完成收束
 - 动作必须连贯：当前段任意整体悬停不得超过 1 秒；不能用连续 delay/light 空转填满段落
 - 连贯必须是有效群体运动：任意 1 秒内不能只剩一两架慢挪、微小 Z 波动或错峰 delay；至少一组无人机要共同产生可见位移
@@ -104,6 +131,7 @@ prev = {prev_state}
 - 时间线必须覆盖全段：PyFii 是每架机各自累计时间，不是 Python 循环全局时间；段内通常用一次 inittime(start)，然后按 move2 -> 短灯光/执行等待 -> move2 链式推进
 - 每个 move2 后都要按 3D 距离和 VelXY/VelZ 计算飞行时间；后续 light+delay 是这次移动的执行预算，不是段尾填空
 - 运动学计算属于 agent 侧小工具：不要在本段代码里定义 dist3/flight_time_ms/speed_for_interval/move_interval；应先估算，再写入具体 speed/accel/delay 数值
+- 不要在段代码里 import、定义 best_assign 或做 itertools/permutation 搜索；排列必须在生成前完成并硬编码为 perm/target_idx
 - 段尾收束必须是实际移动在最后 1 秒内仍在执行并完成，不能只用纯灯光/静止等待填满
 - 段尾最后 1 秒必须是有效群体收束动作，不允许主体提前结束后用单机慢挪、小幅 Z/XY 抖动把 motion_end 拖到段尾
 - 禁止结构：全体同一 inittime -> 多个短 move2 很快完成 -> apply_light(ticks>=10)/长 delay 填尾

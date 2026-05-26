@@ -113,6 +113,7 @@ def main():
                     max_attempts=5,
                     on_delta=stream.delta,
                     on_heartbeat=stream.heartbeat,
+                    on_round_start=stream.begin_round,
                 )
                 stream.finish()
             except Exception as e:
@@ -270,12 +271,23 @@ class _StreamPrinter:
     def __init__(self):
         self.started = False
         self.heartbeat_count = 0
+        self.round_index = None
+
+    def begin_round(self, index: int) -> None:
+        if self.started:
+            print("\n--- end stream ---")
+        elif self.heartbeat_count:
+            print()
+        self.started = False
+        self.heartbeat_count = 0
+        self.round_index = index
 
     def delta(self, text: str) -> None:
         if not self.started:
             if self.heartbeat_count:
                 print()
-            print("--- LLM stream ---")
+            suffix = f" round {self.round_index}" if self.round_index else ""
+            print(f"--- LLM stream{suffix} ---")
             self.started = True
         print(text, end="", flush=True)
 

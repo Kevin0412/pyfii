@@ -162,7 +162,7 @@ def prompt_budget_table() -> str:
             "",
             "- 距离用 3D distance；短距离是三角速度曲线，长距离才有匀速段。",
             "- acceleration 是独立编舞参数；`a = 2v` 只能当经验候选，不能当硬规则。",
-            "- 如果想更柔，降低 acceleration；如果想更利落，提高 acceleration；最终仍必须在 50-400 cm/s^2 内。",
+            "- 如果想更柔，降低 acceleration；如果想更利落，提高 acceleration；合法范围是 speed 20-200 cm/s、accel 50-400 cm/s^2，边界值可以按需要使用。",
             "- 段代码里不要定义 `dist3` / `flight_time_ms` / `speed_for_interval` / `move_interval`。它们属于 agent 侧估算工具。",
             "",
             "| distance | interval | feel | speed | accel | flight_ms | delay_ms after 3 light ticks |",

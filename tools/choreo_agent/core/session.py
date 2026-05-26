@@ -121,12 +121,15 @@ class Session:
         max_attempts: int = 3,
         on_delta: Callable[[str], None] | None = None,
         on_heartbeat: Callable[[], None] | None = None,
+        on_round_start: Callable[[int], None] | None = None,
     ) -> list[GenerationRound]:
         """生成当前段并自动验证；失败则把危险反馈回灌给 LLM。"""
         rounds: list[GenerationRound] = []
         repair_feedback = feedback
 
         for index in range(1, max_attempts + 1):
+            if on_round_start:
+                on_round_start(index)
             response = self.generate_current_segment_with_llm(
                 provider=provider,
                 feedback=repair_feedback,
@@ -364,8 +367,22 @@ def _extract_python_code(text: str) -> str:
     """从 LLM 输出中提取 Python 代码，兼容 fenced markdown。"""
     fenced = re.findall(r"```(?:python|py)?\s*(.*?)```", text, flags=re.IGNORECASE | re.DOTALL)
     if fenced:
-        return fenced[0].strip() + "\n"
-    return text.strip() + "\n"
+        return _strip_segment_markers(fenced[0])
+    raw = text.strip()
+    if raw.startswith("```"):
+        raw = re.sub(r"^```(?:python|py)?\s*", "", raw, flags=re.IGNORECASE)
+        raw = re.sub(r"\s*```$", "", raw)
+    return _strip_segment_markers(raw)
+
+
+def _strip_segment_markers(code: str) -> str:
+    lines = [
+        line
+        for line in code.strip().splitlines()
+        if "PYFII_AGENT_SEGMENT_START" not in line
+        and "PYFII_AGENT_SEGMENT_END" not in line
+    ]
+    return "\n".join(lines).strip() + "\n"
 
 
 def _review_system_prompt() -> str:
@@ -486,6 +503,7 @@ def _validation_snapshot(result: ValidationResult) -> dict:
         "dense_min_distance_cm": result.dense_min_distance_cm,
         "collision_intervals": result.collision_intervals,
         "xy_span": result.xy_span,
+        "quality_window": result.quality_window,
         "continuity_required": result.continuity_required,
         "hover_check_ok": result.hover_check_ok,
         "hover_segments": result.hover_segments,
