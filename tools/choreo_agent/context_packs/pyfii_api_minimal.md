@@ -29,8 +29,19 @@ drone.end()
 ## Time
 
 ```python
-drone.inittime(24)   # 秒，整数。不可倒退。
-drone.delay(100)   # 毫秒。delay(42) 是 42ms，不是 42s。
+drone.inittime(24)  # 秒，整数。把本机命令游标切到绝对时间，不可倒退。
+drone.delay(100)    # 毫秒。推进本机命令游标；delay(42) 是 42ms，不是 42s。
+```
+
+`inittime()` 不是每个移动前都要调用。段内常用结构是：
+
+```python
+drone.inittime(segment_start)
+drone.VelXY(v, a)
+drone.VelZ(v, a)
+drone.move2(x1, y1, z1)  # 在当前游标发起移动；move2 本身不推进游标
+drone.delay(t_ms)        # 给这次移动留执行时间，期间无人机正在飞
+drone.move2(x2, y2, z2)  # 下一次移动在新的游标时间开始
 ```
 
 ## Move
@@ -70,7 +81,7 @@ drone.VelZ(120, 240)    # 纵向速度
 
 speed range = (20, 200) cm/s。acceleration 默认 ~200 cm/s²，范围 (50, 400)。
 
-速度 200 + 加速度 400 都拉满还飞不完，才需要延长 delay。
+速度 200 + 加速度 400 都拉满还飞不完，才需要延长这次移动后的执行预算；不要在段尾补无运动覆盖的长 delay。
 
 ## Light
 

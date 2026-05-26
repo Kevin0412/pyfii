@@ -48,6 +48,32 @@ for i, drone in enumerate(drones):
 
 起飞和起飞后的准备等待不计入正式编舞质量门；正式段窗口内仍必须满足安全、运动包络、连续性和有效动作质量。
 
+## 时间线规划
+
+PyFii 时间不是 Python `for` 循环的全局时间；每架无人机都有自己的命令游标。`inittime()` 把本机游标切到绝对秒数，`delay()` / `apply_light()` 推进本机游标，`move2()` 只在当前游标发起移动但不推进游标。
+
+段内不要每次移动都 `inittime()`。推荐结构是：
+
+```python
+drone.inittime(segment_start)
+drone.move2(x1, y1, z1)
+apply_light(drone, color, 3)
+drone.delay(rest_ms_for_this_move)
+drone.move2(x2, y2, z2)
+apply_light(drone, color2, 3)
+drone.delay(rest_ms_for_this_move)
+```
+
+这里的 `delay()` 不是用来“悬停填时间”，而是给刚发起的移动留出执行时间。灯光可以插在移动执行窗口里，但灯光/等待总时长必须和本次移动飞行时间对应。
+
+正式段必须先做时间预算：
+
+- 把音乐段拆成 2-5 个 keyframe interval，例如开场、汇聚、展开、收束。
+- 对每个 interval，估算每架机的 3D 距离，用飞行时间公式选择速度/加速度，让真实移动覆盖 interval 的主体。
+- 不要把多个短几何快速串完后用静止等待填尾；如果 interval 太长，降低速度、增加路径弧度或增加中间 keyframe。
+- 至少安排一个真实 `move2()` / Z/XY 变化在 `segment_end - 1s` 后仍在执行，并在 `segment_end` 前完成。
+- 如果段落是 4-24s，动作不能在 10s 左右结束；每架机的主体动作链应覆盖到 23s 后。
+
 ## 几何定义格式
 
 ```python
@@ -98,9 +124,9 @@ def apply_light(drone, color, ticks):
         drone.delay(100)
 ```
 
-`apply_light()` 每 tick 会 `delay(100)`，因此它本质上也是等待。正式编舞段默认只用 3-6 ticks 的短灯光脉冲；除非同一时间还有其它分组在飞行，否则不要在全体 move2 后使用 `ticks > 8`。
+`apply_light()` 每 tick 会 `delay(100)`，因此它也会推进本机命令游标。正式编舞段默认只用 3-6 ticks 的短灯光脉冲；除非这段时间被正在执行的移动覆盖，否则不要在全体 move2 后使用 `ticks > 8`。
 
-每段可使用不同颜色。每个 move2 后可以接短灯光脉冲，但不能用纯灯光/纯 delay 填满 1 秒以上；如需长呼吸，必须让另一组错峰运动或做轻微 Z/XY 变化承接。
+每段可使用不同颜色。每个 move2 后可以接短灯光脉冲和执行等待，但不能用无运动覆盖的纯灯光/纯 delay 填满 1 秒以上；如需长呼吸，必须让另一组错峰运动，或把呼吸设计成仍在执行的弧线/高度 keyframe。
 
 ## 排队错峰
 

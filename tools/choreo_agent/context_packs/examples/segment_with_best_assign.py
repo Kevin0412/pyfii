@@ -10,27 +10,33 @@ geo = [
 ]
 
 colors = ["#2255aa", "#3388cc", "#44aadd"]
+intervals_s = [3.2, 3.4, 3.1]
+prev = [(drone.x, drone.y, 110) for drone in drones]
+assigned_layers = []
+for gi, layer in enumerate(geo):
+    prev_xy = [(p[0], p[1]) for p in prev]
+    target_xy = [(t[0], t[1]) for t in layer]
+    perm, _ = best_assign(prev_xy, target_xy)
+    assigned = [layer[perm[i]] for i in range(N)]
+    assigned_layers.append(assigned)
+    prev = assigned
+
 for i, drone in enumerate(drones):
     drone.inittime(4)
-    drone.VelXY(200, 400)
-    drone.VelZ(200, 400)
-
-prev = [(drone.x, drone.y, 110) for drone in drones]
-for gi in range(len(geo)):
-    # AI 离线调用 best_assign，硬编码结果
-    prev_xy = [(p[0], p[1]) for p in prev]
-    target_xy = [(t[0], t[1]) for t in geo[gi]]
-    perm, _ = best_assign(prev_xy, target_xy)
-
-    for i, drone in enumerate(drones):
-        tx, ty, tz = geo[gi][perm[i]]
-        dist_cm = math.dist((prev[i][0], prev[i][1]), (tx, ty))
-        speed = min(200, max(150, int(dist_cm / 2.0)))
+    current = (drone.x, drone.y, 110)
+    for gi, targets in enumerate(assigned_layers):
+        tx, ty, tz = targets[i]
+        target = (clamp_xy(tx), clamp_xy(ty), clamp_z(tz + 20 * math.sin(i)))
+        dist_cm = math.dist(current, target)
+        interval_s = intervals_s[gi]
+        speed = min(200, max(80, int(dist_cm / max(0.5, interval_s - 0.5))))
         drone.VelXY(speed, speed * 2)
         drone.VelZ(speed, speed * 2)
-        drone.move2(clamp_xy(tx), clamp_xy(ty), clamp_z(tz + 20 * math.sin(i)))
-        apply_light(drone, colors[gi], 15)
-        drone.delay(1500)
-    prev = [(geo[gi][perm[i]][0], geo[gi][perm[i]][1], geo[gi][perm[i]][2]) for i in range(N)]
+        drone.move2(*target)
+        apply_light(drone, colors[gi], 3)
+        drone.delay(max(120, int(interval_s * 1000) - 300))
+        current = target
+
+prev = assigned_layers[-1]
 
 # === PYFII_AGENT_SEGMENT_END S01 ===

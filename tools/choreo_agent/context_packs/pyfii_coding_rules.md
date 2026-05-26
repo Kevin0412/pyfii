@@ -11,7 +11,7 @@
 7. **所有坐标必须 `int(round())`。** `math.cos/sin` 返回值是浮点数。
 8. **每段结束必须更新 `prev = targets`。**
 9. **所有机始终有动作**，不悬停。长时间小范围运动效果等同悬停。
-- **下一个  必须 >= 前一个  + 所有  的总和**，否则时间冲突。
+- **同一架机的下一个 `move2()` 必须在上一个移动有足够执行时间后再开始**，否则会出现 action warning 或中途截断。
 - **段间留 >0.5s 余量**，确保上一段最晚动作完成后再开始下一段。
 
 
@@ -27,43 +27,66 @@ geo = [...]              # 几何定义
 
 for i,d in enumerate(ds):
     d.inittime(start)
-    d.VelXY(v, v*2)
-    d.VelZ(v, v*2)
-
-for gi in range(len(geo)):
-    targets = best_assign(prev, geo[gi])
-    for i,d in enumerate(ds):
+    current = prev[i]
+    for gi in range(len(geo)):
+        target = assigned_targets[gi][i]
+        interval_s = intervals_s[gi]
+        distance = dist3(current, target)
+        speed = min(200, max(60, int(distance / max(0.5, interval_s - 0.5))))
+        d.VelXY(speed, speed * 2)
+        d.VelZ(speed, speed * 2)
         d.move2(...)
-        light(d, color, ticks)
-        d.delay(delay_ms)
-    prev = targets
+        light_ticks = 3
+        apply_light(d, color, light_ticks)
+        d.delay(max(0, flight_time_ms(distance, speed, speed * 2) - light_ticks * 100 + 120))
+        current = target
+
+prev = assigned_targets[-1]
 
 # === AGENT_SEGMENT_END S03 ===
 ```
 
-## 速度设置
+## 时间线和速度设置
 
 - **VelXY 和 VelZ 必须使用相同的速度和加速度值**
 
-- 优先 VelXY(200, 400)，VelZ(200, 400)
-- 如果动作未完成(action warning)，先检查是否已到200上限
-- 200+400都拉满还飞不完，才需要延长 light ticks 或 delay
+`move2()` 发起移动但不推进命令时间；`delay()` 和 `apply_light()` 才推进本机命令时间。因此正确链路是 `move2() -> 短灯光/执行等待 -> move2()`。不要每个 move 前都 `inittime()`；只在段首或明确绝对 cue 处使用。
+
+- 先按音乐把段落拆成 keyframe interval，再为每个移动选择距离、速度和加速度。
+- 如果移动太早结束，优先降低速度、增加路径弧度/中间 keyframe、或让分组错峰；不要在段尾补无运动长 delay。
+- `delay()` 只有在紧跟一个正在执行的 `move2()`、用于给飞行留时间时才是合理的。
+- 如果动作未完成(action warning)，先检查本次 `move2()` 后的 light+delay 是否覆盖飞行时间；必要时缩短距离、提速或增加该移动后的执行时间预算。
 
 ## 飞行时间公式
 
 ```python
-def flight_time(d, v, a=200):
-    """d: cm, v: cm/s, a: cm/s²"""
-    if d <= 0: return 0
-    accel_dist = v*v / (2*a)
-    if d >= 2 * accel_dist:  # 有匀速阶段
-        return 2*v/a + (d - 2*accel_dist)/v
+def dist3(p0, p1):
+    return math.sqrt(
+        (p1[0] - p0[0]) ** 2 +
+        (p1[1] - p0[1]) ** 2 +
+        (p1[2] - p0[2]) ** 2
+    )
+
+def flight_time_s(distance_cm, v, a):
+    """PyFii readback uses a trapezoid/triangle speed curve on 3D distance."""
+    if distance_cm <= 0:
+        return 0.0
+    accel_dist = v * v / (2 * a)
+    if distance_cm >= 2 * accel_dist:  # 有匀速阶段
+        return 2 * v / a + (distance_cm - 2 * accel_dist) / v
     else:                     # 仅加速-减速
-        return 2 * math.sqrt(d/a)
+        return 2 * math.sqrt(distance_cm / a)
+
+def flight_time_ms(distance_cm, v, a):
+    return int(math.ceil(flight_time_s(distance_cm, v, a) * 1000))
 ```
 
-确保 
-- **生成段代码前必须先算每个几何的最远飞行距离和对应时间，确认 time budget 足够。**`light_ticks * 100ms + delay_ms > flight_time(d, v) * 1000`
+短距离会走三角速度曲线；长距离才有匀速阶段。使用 `VelXY(v, 2*v)` 时，多数长移动约为 `distance / v + 0.5s`。
+
+确保：
+- 生成段代码前必须先算每个 keyframe interval 的距离和飞行时间。
+- 对每个移动，`light_ticks * 100ms + delay_ms >= flight_time_ms(distance, v, a) + 100`。
+- 如果音乐 interval 比飞行时间长很多，应调整路线和速度，让真实移动占据 interval 的主体，而不是补长 delay。
 
 ## 错误处理
 
@@ -71,6 +94,6 @@ def flight_time(d, v, a=200):
 |------|------|------|
 | `Out of range` | XY超出[0,560]或Z超出[80,250] | clamp坐标 |
 | `Time arrangement error` | inittime倒退或段间冲突 | 推后inittime |
-| `action isn't completed` | 飞行时间不够 | 提速或加delay |
+| `action isn't completed` | 下一条移动开始太早或飞行时间预算不够 | 计算本次 move2 的飞行时间，提速/缩短距离/增加该移动后的执行时间 |
 | `distance between` | 两机<51cm | 增间距或提搜索权重 |
 | `ValueError: invalid literal` | 坐标含浮点数 | int(round(x)) |

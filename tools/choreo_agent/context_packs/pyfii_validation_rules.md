@@ -63,6 +63,14 @@ motion_start < segment_start + 1.0s
 motion_end   > segment_end - 1.0s
 ```
 
+如果 motion_end 明显早于 `segment_end - 1s`，通常不是视觉问题，而是时间线写法问题：
+
+- Python 循环不是全局时间轴；每架机的命令链可能已经在前半段执行完。
+- `move2()` 不推进时间；必须用后续短灯光/`delay()` 给这次移动留执行时间，再进入下一个 `move2()`。
+- 合理的 `delay()` 是某次移动的执行预算；不合理的是没有运动覆盖的长时间填尾。
+- 修复时应重排每架机的 keyframe interval，按距离选择速度/加速度，让真实 `move2()` / Z/XY 变化持续覆盖到段尾。
+- 最后一段收束移动必须在 `segment_end - 1s` 后仍在执行，并在 `segment_end` 前完成。
+
 ## 有效动作质量门
 
 连续性不是小范围抖动。validator 会在正式段内统计每架机路径长度、最大离入口位移、有效运动无人机数量：
@@ -114,4 +122,4 @@ motion quality: OK
 | Time arrangement error | inittime | 推后 inittime，确保段间 >0.5s |
 | ValueError: invalid literal | read_fii | 坐标 int(round(x)) |
 | distance between | show | 增间距或提搜索权重 |
-| action isn't completed | show | 提速或加delay |
+| action isn't completed | show | 计算 move2 飞行时间，提速/缩短距离/增加该移动后的执行预算 |

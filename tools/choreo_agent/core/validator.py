@@ -81,9 +81,9 @@ class ValidationResult:
         parts = [f"{s:.2f}-{e:.2f}s({e - s:.2f}s)" for s, e in self.hover_segments]
         return (
             f"硬门失败：检测到超过 {MAX_GLOBAL_HOVER_S:.1f}s 的整体悬停: {', '.join(parts)}。"
-            "这通常是代码结构问题：全体 move2 结束后接了过长 apply_light/delay。"
-            "修复时不要只改颜色；请缩短 apply_light 到 ticks<=6，或把大几何拆成 A/B/C 分组并重叠 inittime，"
-            "或在上述区间内插入小幅 move2/Z 变化，确保任意 1s 窗口至少一组无人机在运动。"
+            "这通常是时间线建模问题：真实移动已经结束，后面只剩无运动覆盖的 apply_light/delay。"
+            "修复时不要只改颜色；请把段落重排成 move2 -> 短灯光/执行等待 -> move2 的 per-drone 链，"
+            "按 3D 距离和速度/加速度计算每个移动的执行时间，并用分组错峰或真实 keyframe 移动覆盖该区间。"
             "如果确实需要呼吸停顿，把全体静止压到 0.8s 内。"
         )
 
@@ -125,7 +125,10 @@ class ValidationResult:
         if self.distance_warnings != 0:
             lines.append("距离风险：当前路径存在过近或对穿。请增大几何点间距、减少交叉换位、使用更保守的扇区保持或排队错峰。")
         if self.action_warnings != 0:
-            lines.append("动作未完成风险：请延长时间预算、提前/推后 inittime、降低单次位移或提高合法速度/加速度。")
+            lines.append(
+                "动作未完成风险：请计算每个 move2 的 3D 飞行时间，确认该 move2 后的 light+delay "
+                "覆盖执行时间；必要时降低单次位移、提高合法速度/加速度，或延长这次移动后的执行预算。"
+            )
         hover = self.hover_feedback
         if hover:
             lines.append(hover)
@@ -136,6 +139,13 @@ class ValidationResult:
         if self.motion_envelope_errors:
             lines.append("运动包络失败：")
             lines.extend(f"- {item}" for item in self.motion_envelope_errors)
+            lines.append(
+                "时间线修复：PyFii 不是全局 Python 时间轴；请检查每架无人机自己的命令链。"
+                "move2 不推进时间，后续 light/delay 应作为这次移动的执行预算。"
+                "你当前的真实运动结束太早，不能靠无运动覆盖的 delay/light 填尾。"
+                "重写时把主体几何按 keyframe interval 展开到整段，计算 3D 距离并选择速度/加速度，"
+                "让段尾最后 1 秒仍有实际 move2/Z/XY 收束动作在执行。"
+            )
         if self.motion_quality:
             lines.append(
                 "motion quality: "
