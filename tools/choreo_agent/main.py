@@ -70,12 +70,15 @@ def main():
             print(f"minD={result.min_distance_cm}cm dense={result.dense_min_distance_cm}cm XY={result.xy_span}")
             print(f"continuity_required={result.continuity_required} hover_ok={result.hover_check_ok} hover={result.hover_segments[:3]}")
             print(f"motion={result.motion_start_s}-{result.motion_end_s}s envelope_ok={result.motion_envelope_ok}")
+            print(f"effective_motion={result.effective_motion_start_s}-{result.effective_motion_end_s}s ok={result.effective_motion_ok} low_activity={result.low_activity_segments[:3]}")
             print(f"motion_quality_ok={result.motion_quality_ok} quality={_compact_quality(result.motion_quality)}")
             print(f"degradation_ok={result.degradation_ok} degradation={_compact_degradation(result.degradation)}")
             if result.exit_state:
                 print(f"exit_state={result.exit_state}")
             if result.motion_envelope_errors:
                 print(f"motion_errors={result.motion_envelope_errors[:3]}")
+            if result.effective_motion_errors:
+                print(f"effective_motion_errors={result.effective_motion_errors[:3]}")
             if result.motion_quality_errors:
                 print(f"quality_errors={result.motion_quality_errors[:3]}")
             if result.degradation_errors:
@@ -132,12 +135,15 @@ def main():
                     print(f"  minD={validation.min_distance_cm}cm dense={validation.dense_min_distance_cm}cm XY={validation.xy_span}")
                     print(f"  continuity_required={validation.continuity_required} hover_ok={validation.hover_check_ok} hover={validation.hover_segments[:3]}")
                     print(f"  motion={validation.motion_start_s}-{validation.motion_end_s}s envelope_ok={validation.motion_envelope_ok}")
+                    print(f"  effective_motion={validation.effective_motion_start_s}-{validation.effective_motion_end_s}s ok={validation.effective_motion_ok} low_activity={validation.low_activity_segments[:3]}")
                     print(f"  motion_quality_ok={validation.motion_quality_ok} quality={_compact_quality(validation.motion_quality)}")
                     print(f"  degradation_ok={validation.degradation_ok} degradation={_compact_degradation(validation.degradation)}")
                     if validation.exit_state:
                         print(f"  exit_state={validation.exit_state}")
                     if validation.motion_envelope_errors:
                         print(f"  motion_errors={validation.motion_envelope_errors[:3]}")
+                    if validation.effective_motion_errors:
+                        print(f"  effective_motion_errors={validation.effective_motion_errors[:3]}")
                     if validation.motion_quality_errors:
                         print(f"  quality_errors={validation.motion_quality_errors[:3]}")
                     if validation.degradation_errors:
@@ -242,8 +248,11 @@ def _compact_quality(quality: dict) -> dict:
 def _compact_degradation(degradation: dict) -> dict:
     keys = (
         "window_xy_span",
+        "window_z_range_cm",
         "lane_x_locked_drones",
         "lane_y_locked_drones",
+        "fixed_height_drones",
+        "flat_height_fraction",
         "circle_like_fraction",
         "order_stable_fraction",
         "radius_range_cm",

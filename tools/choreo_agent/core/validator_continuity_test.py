@@ -2,6 +2,7 @@
 """Continuity gate regression tests."""
 from validator import (
     ValidationResult,
+    _check_effective_motion,
     _check_degradation,
     _check_motion_envelope,
     _check_motion_quality,
@@ -50,6 +51,12 @@ def test_motion_envelope_for_5_to_13_segment():
     assert _check_motion_envelope((5, 13), 5.8, 12.0)
 
 
+def test_effective_motion_blocks_tail_filler_and_low_activity():
+    assert _check_effective_motion((13, 23), 13.4, 22.3, []) == []
+    assert _check_effective_motion((13, 23), 13.4, 20.9, [])
+    assert _check_effective_motion((13, 23), 13.4, 22.3, [(20.2, 22.0)])
+
+
 def test_motion_quality_blocks_small_jitter():
     assert _check_motion_quality(
         (4, 24),
@@ -83,6 +90,9 @@ def test_degradation_blocks_obvious_lanes_and_rigid_circle():
             "circle_like_fraction": 0.0,
             "order_stable_fraction": 0.0,
             "radius_range_cm": 120.0,
+            "fixed_height_drones": 0,
+            "window_z_range_cm": 80.0,
+            "flat_height_fraction": 0.2,
         },
     )
     assert _check_degradation(
@@ -94,6 +104,23 @@ def test_degradation_blocks_obvious_lanes_and_rigid_circle():
             "circle_like_fraction": 0.9,
             "order_stable_fraction": 0.95,
             "radius_range_cm": 20.0,
+            "fixed_height_drones": 0,
+            "window_z_range_cm": 80.0,
+            "flat_height_fraction": 0.2,
+        },
+    )
+    assert _check_degradation(
+        (4, 14),
+        {
+            "drone_count": 7,
+            "lane_x_locked_drones": 0,
+            "lane_y_locked_drones": 0,
+            "circle_like_fraction": 0.2,
+            "order_stable_fraction": 0.2,
+            "radius_range_cm": 100.0,
+            "fixed_height_drones": 6,
+            "window_z_range_cm": 12.0,
+            "flat_height_fraction": 0.9,
         },
     )
     assert _check_degradation(
@@ -105,6 +132,9 @@ def test_degradation_blocks_obvious_lanes_and_rigid_circle():
             "circle_like_fraction": 0.4,
             "order_stable_fraction": 0.5,
             "radius_range_cm": 100.0,
+            "fixed_height_drones": 1,
+            "window_z_range_cm": 80.0,
+            "flat_height_fraction": 0.3,
         },
     ) == []
 
@@ -113,6 +143,7 @@ if __name__ == "__main__":
     test_hover_blocks_formal_segment()
     test_takeoff_landing_exempt_from_continuity_gate()
     test_motion_envelope_for_5_to_13_segment()
+    test_effective_motion_blocks_tail_filler_and_low_activity()
     test_motion_quality_blocks_small_jitter()
     test_degradation_blocks_obvious_lanes_and_rigid_circle()
     print("OK")

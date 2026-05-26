@@ -7,7 +7,7 @@
 
 | Phase | 内容 | 状态 |
 |-------|------|------|
-| 0 | context_packs (8个) | ✅ |
+| 0 | context_packs (含蒸馏编舞样例) | ✅ |
 | 1 | core state system | ✅ |
 | 2 | script_editor | ✅ |
 | 3 | validator (四层+hover+dense_collision+motion/degradation+repair_feedback) | ✅ |
@@ -66,9 +66,9 @@ agent_projects/
 - Fast: 验证硬门通过后进入 AI 自审流程，由 AI 判断是否 lock 并进入下一段；验证不跳过，AI 自审不通过则停在当前段
 - 永远不能自动: 改locked段、改结束位置、删checkpoint
 
-# 6. Context Packs (8个, 已就绪)
+# 6. Context Packs (已就绪)
 
-pyfii_api_minimal / coding_rules / segment_protocol / anti_patterns / best_assign / light_patterns / validation_rules / agent_coding_style
+pyfii_api_minimal / coding_rules / segment_protocol / anti_patterns / best_assign / light_patterns / validation_rules / design_patterns / agent_coding_style
 
 # 7. Prompt Builder (已实现)
 

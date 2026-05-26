@@ -21,6 +21,9 @@ PYTHON = os.environ.get(
 )
 
 HOVER_MOVE_THRESHOLD_CM_PER_FRAME = 0.2
+EFFECTIVE_MOVE_THRESHOLD_CM_PER_FRAME = 0.35
+MIN_EFFECTIVE_TOTAL_MOVE_CM_PER_FRAME = 1.0
+MIN_EFFECTIVE_ACTIVE_DRONES = 2
 MAX_GLOBAL_HOVER_S = 1.0
 SEGMENT_EDGE_BUFFER_S = 1.0
 MIN_MEANINGFUL_EXCURSION_CM = 30.0
@@ -45,6 +48,11 @@ class ValidationResult:
     motion_end_s: float | None = None
     motion_envelope_ok: bool = True
     motion_envelope_errors: list[str] = field(default_factory=list)
+    effective_motion_start_s: float | None = None
+    effective_motion_end_s: float | None = None
+    effective_motion_ok: bool = True
+    effective_motion_errors: list[str] = field(default_factory=list)
+    low_activity_segments: list[tuple[float, float]] = field(default_factory=list)
     motion_quality_ok: bool = True
     motion_quality: dict = field(default_factory=dict)
     motion_quality_errors: list[str] = field(default_factory=list)
@@ -73,6 +81,8 @@ class ValidationResult:
                     self.hover_check_ok
                     and not self.hover_segments
                     and self.motion_envelope_ok
+                    and self.effective_motion_ok
+                    and not self.low_activity_segments
                     and self.motion_quality_ok
                     and self.degradation_ok
                 )
@@ -99,7 +109,10 @@ class ValidationResult:
             "action warnings=0, minD > 51cm"
         )
         if self.continuity_required:
-            hard_gate += f", 无超过 {MAX_GLOBAL_HOVER_S:.1f}s 的整体悬停"
+            hard_gate += (
+                f", 无超过 {MAX_GLOBAL_HOVER_S:.1f}s 的整体悬停"
+                f", 无超过 {MAX_GLOBAL_HOVER_S:.1f}s 的低活动区间"
+            )
         lines = [
             "自动验证未通过，禁止进入下一步。请只重写当前未锁定段，不要修改 locked 段，不要输出 marker。",
             hard_gate + "。",
@@ -150,6 +163,21 @@ class ValidationResult:
                 "你当前的真实运动结束太早，不能靠无运动覆盖的 delay/light 填尾。"
                 "重写时把主体几何按 keyframe interval 展开到整段，计算 3D 距离并选择速度/加速度，"
                 "让段尾最后 1 秒仍有实际 move2/Z/XY 收束动作在执行。"
+            )
+        if self.effective_motion_start_s is not None or self.effective_motion_end_s is not None:
+            lines.append(
+                f"effective motion window: start={self.effective_motion_start_s}s "
+                f"end={self.effective_motion_end_s}s"
+            )
+        if self.effective_motion_errors:
+            lines.append("有效群体运动失败：")
+            lines.extend(f"- {item}" for item in self.effective_motion_errors)
+        if self.low_activity_segments:
+            parts = [f"{s:.2f}-{e:.2f}s({e - s:.2f}s)" for s, e in self.low_activity_segments[:8]]
+            lines.append(
+                "低活动区间失败："
+                + ", ".join(parts)
+                + "。这些区间不是完全静止，但不足以算编舞运动；不能用单机慢挪、小幅 Z 波动或错峰 delay 凑时长。"
             )
         if self.motion_quality:
             lines.append(
@@ -257,6 +285,21 @@ def validate(
                     result.motion_end_s,
                 )
                 result.motion_envelope_ok = not result.motion_envelope_errors
+                (
+                    result.effective_motion_start_s,
+                    result.effective_motion_end_s,
+                    result.low_activity_segments,
+                ) = _measure_effective_motion(
+                    output_dir,
+                    window=quality_window,
+                )
+                result.effective_motion_errors = _check_effective_motion(
+                    quality_window,
+                    result.effective_motion_start_s,
+                    result.effective_motion_end_s,
+                    result.low_activity_segments,
+                )
+                result.effective_motion_ok = not result.effective_motion_errors
                 result.motion_quality = _measure_motion_quality(
                     output_dir,
                     window=quality_window,
@@ -277,6 +320,7 @@ def validate(
                 result.degradation_ok = not result.degradation_errors
             except Exception as e:
                 result.motion_envelope_ok = False
+                result.effective_motion_ok = False
                 result.motion_quality_ok = False
                 result.degradation_ok = False
                 result.continuity_error = str(e)
@@ -410,6 +454,102 @@ def _check_motion_envelope(
     return errors
 
 
+def _measure_effective_motion(
+    output_dir: Path,
+    window: tuple[float, float],
+) -> tuple[float | None, float | None, list[tuple[float, float]]]:
+    """检测有效群体运动：过滤单机慢挪、小幅抖动和尾部凑时长。"""
+    import pyfii as pf
+
+    fii_dir = _find_fii_dir(output_dir)
+    data, _t0, *_ = pf.read_fii(str(fii_dir), fps=60, ignore_acc=True)
+
+    fps = 60
+    min_len = min(len(d) for d in data)
+    start_s, end_s = window
+    start_frame = max(1, int(start_s * fps))
+    end_frame = min(min_len, int(end_s * fps) + 1)
+    if end_frame <= start_frame:
+        return None, None, []
+
+    min_frames = int(MAX_GLOBAL_HOVER_S * fps)
+    first_effective = None
+    last_effective = None
+    low_segments = []
+    low_start = None
+
+    for frame in range(start_frame, end_frame):
+        active_drones = 0
+        total_move = 0.0
+        for drone in data:
+            if frame >= len(drone):
+                continue
+            move = _frame_move_cm(drone, frame)
+            total_move += move
+            if move >= EFFECTIVE_MOVE_THRESHOLD_CM_PER_FRAME:
+                active_drones += 1
+
+        effective = (
+            active_drones >= MIN_EFFECTIVE_ACTIVE_DRONES
+            and total_move >= MIN_EFFECTIVE_TOTAL_MOVE_CM_PER_FRAME
+        )
+        if effective:
+            time_s = frame / fps
+            if first_effective is None:
+                first_effective = time_s
+            last_effective = time_s
+            if low_start is not None and (frame - low_start) >= min_frames:
+                low_segments.append((low_start / fps, frame / fps))
+            low_start = None
+        elif low_start is None:
+            low_start = frame
+
+    if low_start is not None and (end_frame - low_start) >= min_frames:
+        low_segments.append((low_start / fps, end_frame / fps))
+
+    return (
+        round(first_effective, 3) if first_effective is not None else None,
+        round(last_effective, 3) if last_effective is not None else None,
+        low_segments,
+    )
+
+
+def _frame_move_cm(drone, frame: int) -> float:
+    dx = abs(drone[frame][1] - drone[frame - 1][1])
+    dy = abs(drone[frame][2] - drone[frame - 1][2])
+    dz = abs(drone[frame][3] - drone[frame - 1][3])
+    return math.sqrt(dx * dx + dy * dy + dz * dz)
+
+
+def _check_effective_motion(
+    window: tuple[float, float],
+    effective_start_s: float | None,
+    effective_end_s: float | None,
+    low_activity_segments: list[tuple[float, float]],
+) -> list[str]:
+    start_s, end_s = window
+    errors = []
+    start_deadline = start_s + SEGMENT_EDGE_BUFFER_S
+    end_floor = end_s - SEGMENT_EDGE_BUFFER_S
+
+    if effective_start_s is None or effective_end_s is None:
+        return [f"当前段 {start_s:.2f}-{end_s:.2f}s 内没有检测到有效群体运动。"]
+    if effective_start_s >= start_deadline:
+        errors.append(
+            f"有效群体运动启动过晚：{effective_start_s:.2f}s；应在 {start_deadline:.2f}s 前开始。"
+        )
+    if effective_end_s <= end_floor:
+        errors.append(
+            f"有效群体运动收束过早：{effective_end_s:.2f}s；应在 {end_floor:.2f}s 后、{end_s:.2f}s 前完成。"
+        )
+    if low_activity_segments:
+        errors.append(
+            f"检测到 {len(low_activity_segments)} 个超过 {MAX_GLOBAL_HOVER_S:.1f}s 的低活动区间；"
+            "这些区间虽然可能有少量位移，但不足以算整体编舞运动。"
+        )
+    return errors
+
+
 def _measure_motion_quality(
     output_dir: Path,
     window: tuple[float, float],
@@ -530,20 +670,26 @@ def _measure_degradation(
     drone_count = len(data)
     x_spans = []
     y_spans = []
+    z_spans = []
     all_x = []
     all_y = []
+    all_z = []
     for drone in data:
         xs = [float(drone[frame][1]) for frame in range(start_frame, end_frame)]
         ys = [float(drone[frame][2]) for frame in range(start_frame, end_frame)]
+        zs = [float(drone[frame][3]) for frame in range(start_frame, end_frame)]
         x_spans.append(max(xs) - min(xs))
         y_spans.append(max(ys) - min(ys))
+        z_spans.append(max(zs) - min(zs))
         all_x.extend(xs)
         all_y.extend(ys)
+        all_z.extend(zs)
 
     sample_step = max(1, int(fps / 2))
     sample_frames = list(range(start_frame, end_frame, sample_step))
     circle_like = 0
     order_stable = 0
+    flat_height = 0
     order_ref = None
     radius_medians = []
     centers = []
@@ -553,6 +699,9 @@ def _measure_degradation(
             (float(drone[frame][1]), float(drone[frame][2]))
             for drone in data
         ]
+        z_values = [float(drone[frame][3]) for drone in data]
+        if max(z_values) - min(z_values) < 20:
+            flat_height += 1
         center = (
             sum(p[0] for p in positions) / drone_count,
             sum(p[1] for p in positions) / drone_count,
@@ -595,10 +744,14 @@ def _measure_degradation(
             round(max(all_x) - min(all_x), 1),
             round(max(all_y) - min(all_y), 1),
         ),
+        "window_z_range_cm": round(max(all_z) - min(all_z), 1),
         "lane_x_locked_drones": sum(1 for span in x_spans if span < 35),
         "lane_y_locked_drones": sum(1 for span in y_spans if span < 35),
+        "fixed_height_drones": sum(1 for span in z_spans if span < 18),
         "median_x_span_cm": round(median(x_spans), 1),
         "median_y_span_cm": round(median(y_spans), 1),
+        "median_z_span_cm": round(median(z_spans), 1),
+        "flat_height_fraction": round(flat_height / sample_count, 3),
         "circle_like_fraction": round(circle_like / sample_count, 3),
         "order_stable_fraction": round(order_stable / sample_count, 3),
         "median_radius_cm": round(median(radius_medians), 1) if radius_medians else 0.0,
@@ -620,9 +773,11 @@ def _check_degradation(
     lane_limit = max(1, math.ceil(drone_count * 0.7))
     lane_x = int(degradation.get("lane_x_locked_drones", 0))
     lane_y = int(degradation.get("lane_y_locked_drones", 0))
+    fixed_height = int(degradation.get("fixed_height_drones", 0))
+    flat_height = float(degradation.get("flat_height_fraction", 0.0))
+    z_range = float(degradation.get("window_z_range_cm", 0.0))
     circle_like = float(degradation.get("circle_like_fraction", 0.0))
     order_stable = float(degradation.get("order_stable_fraction", 0.0))
-    radius_range = float(degradation.get("radius_range_cm", 0.0))
 
     errors = []
     if duration >= 6.0 and lane_x >= lane_limit:
@@ -637,10 +792,18 @@ def _check_degradation(
         duration >= 8.0
         and circle_like >= 0.75
         and order_stable >= 0.85
-        and radius_range <= 50.0
     ):
         errors.append(
-            "刚性圆退化：大部分时间保持同一圆形排序且半径变化很小；需要引入非圆几何、分组交换或明显叙事变化。"
+            "刚性圆退化：大部分时间保持同一圆形排序；需要引入非圆几何、分组交换或明显叙事变化。"
+        )
+    if duration >= 5.0 and fixed_height >= lane_limit:
+        errors.append(
+            f"固定高度退化：{fixed_height}/{drone_count} 架无人机本段 Z 变化小于 18cm；需要真实 low/mid/high 高度层。"
+        )
+    if duration >= 5.0 and (z_range < 35.0 or flat_height >= 0.75):
+        errors.append(
+            f"高度层不足：全段 Z range={z_range:.1f}cm, flat_height_fraction={flat_height:.2f}；"
+            "不能把编舞压在单一高度平面。"
         )
     return errors
 

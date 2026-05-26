@@ -1,59 +1,181 @@
-# Pyfii 设计模式 (DNTG + Cannon 经验)
+# Pyfii Distilled Choreography Patterns
 
-> 来源: `doc/human_choreography_distillation.md` + `doc/cannon_design_lessons.md`
+本文件是人类编舞经验蒸馏，优先级高于“凑过验证”。你不是在排列 7 个点，而是在为音乐设计 3D 舞台运动。
 
-## 高度层次
+## 设计前先写段落草图
 
-别只在固定高度飞。每个几何用不同高度，高低交替产生层次：
+生成代码前，在心里完成这四项，再落成 Python：
 
+1. `beats`: 把段落切成 2-5 个 keyframe interval。
+2. `story`: 每个 interval 的动机，例如散开、汇聚、推进、抬升、回卷、收束。
+3. `layers`: low/mid/high 高度层，哪些机升、哪些机降、哪些保持前景。
+4. `speed`: 每个 interval 期望持续多久，按 3D 距离选速度/加速度。
+
+坏：先写一串 target，然后用 delay 修到段尾。
+好：先定“这个 2.2 秒是斜向推进同时抬升”，再设计 target 和速度。
+
+## 样例 A：晨光开场
+
+意图：分散低密度开场，逐步汇聚成有方向的推进，再舒展到开阔姿态。
+
+结构：
+
+```text
+4.0-5.4  起飞后低层散布，A 组先动，B 组后动，形成晨光开始流动
+5.4-7.6  扇形向前推进，中间 1 架抬到 high，左右翼保持 mid
+7.6-10.2 双弧线打开，前景低、后景高，避免同心圆
+10.2-12.7 斜向收束到开阔终止姿态，至少 3 架仍在移动到 12s 后
 ```
-起飞110 → 环165→190→165 → 斜对称248→88→168
+
+要点：
+
+- 不要从标准圆开始；起飞点可以是非对称散布或浅 V。
+- 高度随叙事推进：low -> mixed -> high/mid -> resolved。
+- 末尾收束不是小波动，而是进入一个新构图。
+
+坏味道：
+
+```text
+ring r=130 z=150 -> ring r=180 z=150 -> ring r=220 z=150
 ```
 
-Z 范围 80-250，起伏节奏感。
+## 样例 B：Canon 推进
 
-## 相对移动
+意图：同一个主题分组错峰进入，但不是每架机排队孤立动。
 
-用 `drone.x/y/z` 做偏移，不写死绝对坐标：
+结构：
+
+```text
+13.0-14.0  A 组 3 架斜向推进并升高
+13.5-15.0  B 组 2 架从另一侧切入，形成交错但不同高度避让
+14.2-16.2  C 组 2 架补齐前景，A 组继续进入下一 keyframe
+16.2-20.0  三组重叠流动，不能出现只有一架在慢挪
+20.0-22.6  全队回卷到非圆终止姿态
+```
+
+代码倾向：
 
 ```python
-drone.move(drone.x - 160, drone.y, drone.z)        # 左移
-drone.move(drone.x, drone.y + 80, drone.z - 40)     # 下移+降低
+groups = {
+    "A": [0, 2, 4],
+    "B": [1, 5],
+    "C": [3, 6],
+}
+group_offsets_ms = {"A": 0, "B": 450, "C": 850}
 ```
 
-## 条件分支
+错峰是为了形成重叠运动，不是让大家依次孤零零地走完。
 
-不同机走不同路径：
+## 样例 C：非圆几何替代
+
+当你想写“开阔、庄严、对称”时，不要默认圆。可选：
+
+- 浅 V：中轴高，两翼中低，适合推进。
+- 双弧：左右两组是不同半径/不同高度，不共享同一个中心。
+- 星芒：中心只允许 0-1 架，其它点在射线上分层，避免穿心。
+- 斜框线：四角不是静态方框，而是沿对角线滚动。
+- 波浪：X/Y 与 Z 都有相位差，不能只是同一平面蛇形。
+
+坏：
 
 ```python
-for i, drone in enumerate(drones):
-    drone.inittime(10)
-    if i < 4:
-        drone.move2(drone.x + 80, drone.y, drone.z)
-    else:
-        drone.move2(drone.x - 80, drone.y, drone.z + 30)
+[(280+r*cos(2*pi*i/N+phase), 280+r*sin(...), 160) for i in range(N)]
 ```
 
-## 变速
-
-dntg 中 move2 用不同时间（1000/1500/1600/2000ms），不是统一值。Cannon 经验：用 best_assign 确保 perms 正确后，可因距离不同用不同速度。
-
-## 速度计算器
+好：
 
 ```python
-def flight_time_ms(distance_cm, speed_cms, acc_cms2):
-    """给定距离、速度、加速度，返回飞行时间(ms)"""
-    if distance_cm <= 0: return 0
-    accel_dist = speed_cms * speed_cms / (2 * acc_cms2)
-    if distance_cm >= 2 * accel_dist:
-        t_s = 2 * speed_cms / acc_cms2 + (distance_cm - 2 * accel_dist) / speed_cms
-    else:
-        t_s = 2 * math.sqrt(distance_cm / acc_cms2)
-    return int(math.ceil(t_s * 1000))
+targets = [
+    left_low, left_mid, center_high, right_mid, right_low, back_high, front_low
+]
 ```
 
-延迟必须 >= 飞行时间：`drone.delay(flight_time_ms(d, v, a) + margin)`
+## 样例 D：高度层写法
 
-## 圆形可以好
+固定高度会让画面像 2D 队形图。每段至少设计 2-3 个高度层。
 
-dntg 利萨如段是圆形但配合高度变化不单调。圆形本身不坏，坏的是纯同心圆无变化。
+```python
+height_layers = {
+    "low": 115,
+    "mid": 155,
+    "high": 205,
+}
+
+if i in front_group:
+    z = height_layers["low"]
+elif i == focus_drone:
+    z = height_layers["high"]
+else:
+    z = height_layers["mid"] + 15 * math.sin(i)
+```
+
+经验：
+
+- 前景低、后景高，画面更有深度。
+- 汇聚时可以整体升高，收束时可以局部压低。
+- Z 变化要和 XY 运动同时发生，不要最后追加几下上下抖动。
+
+## 样例 E：速度/加速度节奏
+
+不要整段一个速度。速度表达音乐：
+
+```python
+def speed_for_interval(distance_cm, desired_s):
+    usable_s = max(0.6, desired_s - 0.5)
+    return min(200, max(45, int(distance_cm / usable_s)))
+
+intervals = [
+    {"seconds": 1.6, "feel": "quick ignition"},
+    {"seconds": 2.4, "feel": "broad expansion"},
+    {"seconds": 2.0, "feel": "gathering"},
+    {"seconds": 2.6, "feel": "resolved finish"},
+]
+```
+
+经验：
+
+- 远距离大展开可用 140-200，短距离过渡可用 60-110。
+- `a = speed * 2` 是常用稳定选择。
+- 如果动作太早结束，先降速或拉长路线，不要补 delay。
+- 如果 action warning，提速、缩短距离，或增加这次 move 后的执行预算。
+
+## 样例 F：段尾收束
+
+段尾最后 1 秒必须是有意义的群体收束。
+
+坏：
+
+```text
+主体 8s 完成 -> 最后 3s 单机小 Z 波动 / 纯灯光 / 每架依次 delay
+```
+
+好：
+
+```text
+最后 1.8s 全队从双弧收成斜向 V；前景 3 架降低，后景 4 架升高，12.0s 后仍有至少一组共同运动
+```
+
+收束姿态应成为下一段入口，而不是临时补丁。
+
+## 样例 G：安全但不保守
+
+安全不等于缩小动作。避免中心对穿的办法：
+
+- 扇区保持：每架机保持大致区域，但区域内部做弧线和高度变化。
+- 分层避让：交错时用不同 Z，但不要靠 Z 单独躲；XY 路径仍要错开。
+- 交换分组：不是全队同时换位，而是 2-3 组重叠切换。
+- 外圈绕行：需要换到对侧时沿外弧走，不穿中心。
+
+坏：所有机缩到中心 250-330 的小范围。
+好：全场 XY span 400+，但路径不互相切穿。
+
+## 生成前自检
+
+输出代码前自查：
+
+- 是否有 2-5 个有动机的 keyframe interval？
+- 是否至少两种非同构几何或路线趋势？
+- 是否有 low/mid/high 高度层，而不是固定 z？
+- 是否每个 keyframe 都按 3D 距离调速？
+- 是否最后 1 秒仍有有效群体运动？
+- 是否没有用圆形参数变体、单机小波动、长 delay 凑时长？

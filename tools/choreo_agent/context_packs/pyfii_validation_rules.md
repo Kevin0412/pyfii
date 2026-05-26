@@ -48,12 +48,14 @@ for t in range(0, min(len(d) for d in data), 60):
 ```text
 global_hover_segments must be empty
 max_global_hover <= 1.0s
+low_activity_segments must be empty
+effective_motion_end > segment_end - 1.0s
 ```
 
 修复原则：
 
 - 删除连续 `delay()` / 纯灯光空转。
-- 让至少一组无人机在任意 1 秒窗口内有可见 `move2()` 或 Z 变化。
+- 让至少一组无人机在任意 1 秒窗口内有可见 `move2()` 或 Z 变化；单机慢挪、小幅 Z 抖动不算有效群体运动。
 - 如果音乐需要呼吸停顿，把全体静止压到 0.8 秒以内，并用分组错峰承接。
 
 当前段还有运动包络约束：如果段落规划为 `5-13s`，明显运动必须在 `6.0s` 前开始，并在 `12.0s` 后、`13.0s` 前完成收束。通用形式是：
@@ -61,6 +63,8 @@ max_global_hover <= 1.0s
 ```text
 motion_start < segment_start + 1.0s
 motion_end   > segment_end - 1.0s
+effective_motion_start < segment_start + 1.0s
+effective_motion_end   > segment_end - 1.0s
 ```
 
 如果 motion_end 明显早于 `segment_end - 1s`，通常不是视觉问题，而是时间线写法问题：
@@ -70,6 +74,7 @@ motion_end   > segment_end - 1.0s
 - 合理的 `delay()` 是某次移动的执行预算；不合理的是没有运动覆盖的长时间填尾。
 - 修复时应重排每架机的 keyframe interval，按距离选择速度/加速度，让真实 `move2()` / Z/XY 变化持续覆盖到段尾。
 - 最后一段收束移动必须在 `segment_end - 1s` 后仍在执行，并在 `segment_end` 前完成。
+- 段尾动作必须是有效群体运动：至少一组无人机共同参与，有足够位移；不能靠一两架慢挪、10-20cm 小波动或错峰 delay 把 `motion_end` 拖到段尾。
 
 ## 有效动作质量门
 
@@ -90,12 +95,14 @@ max_excursion_cm: 全队最大离入口位移
 
 ## 结构性退化门
 
-validator 会额外检测明显车道退化和刚性圆退化：
+validator 会额外检测明显车道退化、刚性圆退化和固定高度退化：
 
 ```text
 degradation_ok: true
 lane_x_locked_drones / lane_y_locked_drones 不应接近全队
 circle_like_fraction + order_stable_fraction 不能长期接近 1 且半径变化很小
+fixed_height_drones 不应接近全队
+window_z_range 应体现 low/mid/high 层次
 ```
 
 修复原则：
@@ -103,6 +110,8 @@ circle_like_fraction + order_stable_fraction 不能长期接近 1 且半径变�
 - 不要让多数无人机长期固定 X 或固定 Y 只在一条车道里滑动。
 - 不要整段保持同一圆形排序，只靠半径/高度小变化撑时间。
 - 如果需要环形意象，必须穿插非圆几何、分组交换、波浪错层或明显的方向性推进。
+- 不要全段固定高度；至少一半无人机应有明显 Z 变化，且高度变化要和横向路线合成真实 3D 构图。
+- 不要用最后几下小幅 Z 波动凑时长；应重做 keyframe interval 和速度/加速度预算。
 
 ## 验证报告格式
 
