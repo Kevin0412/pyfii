@@ -52,6 +52,7 @@ class ValidationResult:
     read_fii_ok: bool = False
     distance_warnings: int = -1
     action_warnings: int = -1
+    action_details: list[str] = field(default_factory=list)
     min_distance_cm: float | None = None
     dense_min_distance_cm: float | None = None
     collision_intervals: list[dict] = field(default_factory=list)
@@ -165,63 +166,17 @@ class ValidationResult:
         if self.distance_warnings != 0:
             lines.append("距离风险：当前路径存在过近或对穿。请增大几何点间距、减少交叉换位、使用更保守的扇区保持或排队错峰。")
         if self.action_warnings != 0:
+            details = ", ".join(self.action_details[:10]) if self.action_details else "unknown"
             lines.append(
-                "动作未完成风险：action_warnings>0 表示 move2 后留给动作执行的时间不够。"
+                f"动作未完成风险：{self.action_warnings} 个警告。受影响: {details}。"
+                "每个 move2 后 delay 必须基于距离计算：\n"
+                "  d = sqrt((tx-prev_x)^2+(ty-prev_y)^2+(tz-prev_z)^2)\n"
+                "  drone.move2(tx, ty, tz)\n"
+                "  apply_light(drone, color, ticks)\n"
+                "  drone.delay(flight_time_ms(d, v, a) - ticks*100 + 200)\n"
+                "不要用固定 delay 混过去。"
             )
-        hover = self.hover_feedback
-        if hover:
-            lines.append(hover)
-        if self.hover_error:
-            lines.append(f"悬停检测失败，因此禁止通过：{self.hover_error[-300:]}")
-        if self.motion_start_s is not None or self.motion_end_s is not None:
-            lines.append(f"motion window: start={self.motion_start_s}s end={self.motion_end_s}s")
-        if self.motion_envelope_errors:
-            lines.append("运动包络失败：")
-            lines.extend(f"- {item}" for item in self.motion_envelope_errors)
-            timing = _repair_timing_plan(self.quality_window, self.motion_start_s, self.motion_end_s)
-            if timing:
-                lines.append(timing)
-            lines.append(
-                "时间线修复：PyFii 不是全局 Python 时间轴；请检查每架无人机自己的命令链。"
-                "move2 不推进时间，后续 light/delay 应作为这次移动的执行预算。"
-                "你当前的真实运动结束太早，不能靠无运动覆盖的 delay/light 填尾。"
-                "重写时把主体几何按 keyframe interval 展开到整段，计算 3D 距离并选择速度/加速度，"
-                "让段尾最后 1 秒仍有实际 move2/Z/XY 收束动作在执行。"
-            )
-        if self.effective_motion_start_s is not None or self.effective_motion_end_s is not None:
-            lines.append(
-                f"effective motion window: start={self.effective_motion_start_s}s "
-                f"end={self.effective_motion_end_s}s"
-            )
-        if self.effective_motion_errors:
-            lines.append("有效群体运动失败：")
-            lines.extend(f"- {item}" for item in self.effective_motion_errors)
-        if self.low_activity_segments:
-            parts = [f"{s:.2f}-{e:.2f}s({e - s:.2f}s)" for s, e in self.low_activity_segments[:8]]
-            lines.append(
-                "低活动区间失败："
-                + ", ".join(parts)
-                + "。这些区间不是完全静止，但不足以算编舞运动；不能用单机慢挪、小幅 Z 波动或错峰 delay 凑时长。"
-            )
-        if self.motion_quality:
-            lines.append(
-                "motion quality: "
-                f"median_path={self.motion_quality.get('median_path_cm')}cm, "
-                f"median_excursion={self.motion_quality.get('median_excursion_cm')}cm, "
-                f"max_excursion={self.motion_quality.get('max_excursion_cm')}cm, "
-                f"moving_drones={self.motion_quality.get('moving_drones')}/{self.motion_quality.get('drone_count')}"
-            )
-        if self.motion_quality_errors:
-            lines.append("有效动作质量失败：")
-            lines.extend(f"- {item}" for item in self.motion_quality_errors)
-        if self.degradation:
-            lines.append(f"degradation: {self.degradation}")
-        if self.degradation_errors:
-            lines.append("结构性退化失败：")
-            lines.extend(f"- {item}" for item in self.degradation_errors)
-        if self.continuity_error:
-            lines.append(f"连贯性检测失败，因此禁止通过：{self.continuity_error[-300:]}")
-        return "\n".join(lines)
+        
 
     def compute_assign_feedback(self, starts_xy, targets_xy):
         """计算 best_assign 并返回修复建议"""
@@ -268,6 +223,8 @@ def validate(
         result.run_ok = True
 
         output = proc.stdout + proc.stderr
+        # 解析动作详情
+        result.action_details = _parse_action_warnings(output)
         for line in output.splitlines():
             if "dist:" in line and "act:" in line:
                 for p in line.split():
@@ -1156,3 +1113,16 @@ def _output_updated(output_dir: Path, started_at: float) -> bool:
         if path.is_file():
             latest = max(latest, path.stat().st_mtime)
     return latest >= started_at - 1.0
+
+
+def _parse_action_warnings(output: str) -> list[str]:
+    """解析 pyfii 动作未完成警告，提取简洁摘要"""
+    import re
+    details = []
+    # 格式: In Xs,action isn't completed.在Xs秒动作未完成。
+    pattern = re.compile(r'[Dd](\d+).*?[Ii]n\s*(\d+)s,action isn')
+    for line in output.split('\n'):
+        m = pattern.search(line)
+        if m:
+            details.append(f"d{m.group(1)} at {m.group(2)}s")
+    return details
