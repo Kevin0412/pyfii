@@ -11,6 +11,7 @@ ALL_PACKS = [
     "pyfii_best_assign.md",
     "pyfii_light_patterns.md",
     "pyfii_validation_rules.md",
+    "pyfii_design_patterns.md",
     "agent_coding_style.md",
 ]
 
