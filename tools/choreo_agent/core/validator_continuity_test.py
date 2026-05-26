@@ -5,6 +5,7 @@ from validator import (
     _check_effective_motion,
     _check_degradation,
     _check_agent_helper_leak,
+    _check_static_code_quality,
     _check_motion_envelope,
     _check_motion_quality,
 )
@@ -154,6 +155,35 @@ def flight_time_ms(distance_cm, v, a):
     assert "agent 侧运动学工具" in errors[0]
 
 
+def test_code_quality_blocks_decimal_inittime():
+    errors = _check_static_code_quality("drone.inittime(4.0)\n")
+    assert errors
+    assert "inittime" in errors[0]
+
+
+def test_code_quality_requires_velocity_pairing():
+    errors = _check_static_code_quality(
+        """
+drone.inittime(4)
+drone.VelXY(120, 180)
+drone.move2(100, 100, 120)
+"""
+    )
+    assert errors
+    assert "VelZ" in errors[0]
+
+
+def test_code_quality_accepts_paired_integer_timing():
+    assert _check_static_code_quality(
+        """
+drone.inittime(4)
+drone.VelXY(speed, accel)
+drone.VelZ(speed, accel)
+drone.move2(100, 100, 120)
+"""
+    ) == []
+
+
 if __name__ == "__main__":
     test_hover_blocks_formal_segment()
     test_takeoff_landing_exempt_from_continuity_gate()
@@ -162,4 +192,7 @@ if __name__ == "__main__":
     test_motion_quality_blocks_small_jitter()
     test_degradation_blocks_obvious_lanes_and_rigid_circle()
     test_agent_motion_helpers_do_not_belong_in_design_py()
+    test_code_quality_blocks_decimal_inittime()
+    test_code_quality_requires_velocity_pairing()
+    test_code_quality_accepts_paired_integer_timing()
     print("OK")

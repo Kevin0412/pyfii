@@ -441,21 +441,26 @@ def _join_feedback(initial: str, repair: str) -> str:
 
 def _conservative_safety_feedback(index: int, result: ValidationResult) -> str:
     severe_distance = (
-        result.dense_min_distance_cm is not None
-        and result.dense_min_distance_cm < 51
+        result.distance_warnings > 0
+        or bool(result.collision_intervals)
+        or (
+            result.dense_min_distance_cm is not None
+            and result.dense_min_distance_cm < 51
+        )
     )
-    severe_runtime = result.compile_ok and not result.run_ok
-    if index < 1 and not severe_distance and not severe_runtime:
+    if not severe_distance and index < 3:
+        return ""
+    if result.compile_ok and not result.run_ok:
         return ""
 
-    return """强制安全模式：
+    return """碰撞/距离风险修复模式：
 - 放弃复杂交叉换位、中心穿越、同心环快速重排和多机同时穿过中心。
-- 采用扇区保持：每架无人机尽量留在上一段出口所在区域，只做同侧扩展、轻微弧形或排队式移动。
+- 采用扇区保持：每架无人机尽量留在上一段出口所在区域，但仍要设计跨区域展开、三维高度层和明确位移；安全不等于小范围抖动。
 - 每个目标几何点之间至少留 90cm，中心点最多给一架无人机，其余无人机不得穿过中心附近。
 - 每次换形前先安排足够时间预算；如果不确定，减少几何数量而不是压缩时间。
 - 不允许用连续 delay/light 填空；当前段不能出现超过 1 秒的整体悬停，动作必须连贯。
 - 不能用小范围抖动冒充连续动作；至少多数无人机要有明确离位和跨区域移动。
-- 目标是先通过硬门：distance warnings=0, action warnings=0, dense minD > 51cm，无长悬停，且有效动作幅度达标。视觉丰富度让位于安全。"""
+- 目标是先通过硬门：distance warnings=0, action warnings=0, dense minD > 51cm，无长悬停，且有效动作幅度达标。"""
 
 
 def _requires_continuity_gate(seg: SegmentState) -> bool:

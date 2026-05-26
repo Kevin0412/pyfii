@@ -40,9 +40,9 @@ for i, drone in enumerate(drones):
     drone.Y = drone.y = clamp_xy(start_positions[i][1])
     drone.takeoff(1, 110)
 
-# 正式编舞从 4.0s 后开始调度
+# 正式编舞从 4s 后开始调度；inittime 必须用整数秒
 for i, drone in enumerate(drones):
-    drone.inittime(4.0)
+    drone.inittime(4)
     ...
 ```
 

@@ -131,6 +131,9 @@ class ValidationResult:
         if not self.compile_ok:
             lines.append(f"语法失败：{self.error_message[-500:]}")
             return "\n".join(lines)
+        if self.code_quality_errors:
+            lines.append("代码结构失败：")
+            lines.extend(f"- {item}" for item in self.code_quality_errors)
         if not self.run_ok:
             lines.append(f"脚本执行失败：{self.error_message[-500:]}")
             return "\n".join(lines)
@@ -158,9 +161,6 @@ class ValidationResult:
                 "动作未完成风险：请计算每个 move2 的 3D 飞行时间，确认该 move2 后的 light+delay "
                 "覆盖执行时间；必要时降低单次位移、提高合法速度/加速度，或延长这次移动后的执行预算。"
             )
-        if self.code_quality_errors:
-            lines.append("代码结构失败：")
-            lines.extend(f"- {item}" for item in self.code_quality_errors)
         hover = self.hover_feedback
         if hover:
             lines.append(hover)
@@ -237,7 +237,7 @@ def validate(
         result.error_message = f"Syntax error: {e}"
         return result
 
-    result.code_quality_errors = _check_agent_helper_leak(code)
+    result.code_quality_errors = _check_static_code_quality(code)
     result.code_quality_ok = not result.code_quality_errors
 
     # 2-4. 执行+读回+验收
@@ -352,8 +352,20 @@ def validate(
     return result
 
 
-def _check_agent_helper_leak(code: str) -> list[str]:
+def _check_static_code_quality(code: str) -> list[str]:
     tree = ast.parse(code)
+    return [
+        *_check_agent_helper_leak_from_tree(tree),
+        *_check_inittime_arguments(tree),
+        *_check_velocity_pairing(tree),
+    ]
+
+
+def _check_agent_helper_leak(code: str) -> list[str]:
+    return _check_agent_helper_leak_from_tree(ast.parse(code))
+
+
+def _check_agent_helper_leak_from_tree(tree: ast.AST) -> list[str]:
     leaked = sorted(
         node.name
         for node in ast.walk(tree)
@@ -366,6 +378,79 @@ def _check_agent_helper_leak(code: str) -> list[str]:
         f"不要在 design.py/segment 中定义 agent 侧运动学工具函数：{names}。"
         "请先在 agent 侧估算 3D distance/flight time，再把具体 speed/accel/delay 写入段代码。"
     ]
+
+
+def _check_inittime_arguments(tree: ast.AST) -> list[str]:
+    errors = []
+    for node in ast.walk(tree):
+        if not _is_method_call(node, "inittime") or not node.args:
+            continue
+        arg = node.args[0]
+        if isinstance(arg, ast.Constant) and isinstance(arg.value, float):
+            errors.append(
+                f"line {node.lineno}: inittime() 必须使用整数秒，不要写 {arg.value!r}。"
+                "例如写 drone.inittime(4)，不要写 drone.inittime(4.0) 或 6.2。"
+            )
+    return errors
+
+
+def _check_velocity_pairing(tree: ast.AST) -> list[str]:
+    calls = [
+        {
+            "line": node.lineno,
+            "method": node.func.attr,
+            "receiver": _node_key(node.func.value),
+            "display": _node_display(node.func.value),
+            "args": [_node_key(arg) for arg in node.args[:2]],
+        }
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Attribute)
+        and node.func.attr in {"VelXY", "VelZ"}
+    ]
+    errors = []
+    for call in calls:
+        if call["method"] != "VelXY":
+            continue
+        paired = [
+            other
+            for other in calls
+            if other["method"] == "VelZ"
+            and other["receiver"] == call["receiver"]
+            and 0 <= other["line"] - call["line"] <= 3
+        ]
+        if not paired:
+            errors.append(
+                f"line {call['line']}: {call['display']}.VelXY(...) 后应在附近成对设置 "
+                "VelZ(...), 并使用同一组 speed/accel，以兼容原始 XML/回放速度语义。"
+            )
+            continue
+        nearest = min(paired, key=lambda item: item["line"] - call["line"])
+        if len(call["args"]) == 2 and len(nearest["args"]) == 2 and call["args"] != nearest["args"]:
+            errors.append(
+                f"line {call['line']}: VelXY 与 line {nearest['line']} 的 VelZ 参数不同；"
+                "同一 keyframe 最好使用同一组 speed/accel。"
+            )
+    return errors
+
+
+def _is_method_call(node: ast.AST, name: str) -> bool:
+    return (
+        isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Attribute)
+        and node.func.attr == name
+    )
+
+
+def _node_key(node: ast.AST) -> str:
+    return ast.dump(node, annotate_fields=False, include_attributes=False)
+
+
+def _node_display(node: ast.AST) -> str:
+    try:
+        return ast.unparse(node)
+    except Exception:
+        return _node_key(node)
 
 
 def _detect_hover(
