@@ -101,6 +101,37 @@ drone.delay(rest_ms_for_this_move)
 - 如果移动明显早于 interval 结束，优先降低速度或改路线；如果会动作未完成，提速、缩短距离或延长该移动执行预算。
 - 禁止整段只在开头设置一次速度后所有 move 共用；每个 keyframe 至少重新评估一次速度/加速度。
 
+## Agent 侧规划层
+
+生成代码前必须先完成规划层，而不是边写 `move2()` 边凑时间。规划层可以使用 `tools/choreo_agent/core/planning_tools.py`，也可以临时写自定义 helper 来解析动作意图、生成几何候选、筛掉车道/圆形/固定高度退化。
+
+推荐流程：
+
+```python
+# 草图/规划阶段，不要复制进 final design.py
+cues = timeline_cues(segment_start, segment_end, count=4)
+layers = [layer_open, layer_push, layer_fold, layer_resolve]
+plans = budget_layers(prev_positions, layers, cues, feels=["soft", "crisp", "balanced", "soft"])
+```
+
+规划层产物必须转成 final segment 里的硬编码表：
+
+```python
+perms = [...]
+assigned_layers = [...]
+speeds = [...]
+accels = [...]
+light_ticks = [...]
+delays_ms = [...]
+```
+
+final `design.py` 中不要出现：
+
+- `import tools.choreo_agent...`
+- `best_assign()` / `itertools.permutations`
+- `dist3()` / `flight_time_ms()` / `speed_for_interval()` / `move_interval()`
+- `timeline_cues()` / `assign_targets()` / `budget_layer()` / `budget_layers()`
+
 ## 几何定义格式
 
 ```python
@@ -115,27 +146,19 @@ geo = [
 
 ## 排列搜索
 
-必须使用 `best_assign()`：
+几何切换必须在 agent 规划层使用 `best_assign()` 或 `assign_targets()` 做路径分配，但 final segment 只能写硬编码结果。
 
 ```python
-def best_assign(starts, targets):
-    """全排列搜索路径最短距离最大的分配。用作离线工具，结果硬编码。"""
-    N = len(starts)
-    best_md, best_perm = -1, None
-    for perm in itertools.permutations(range(N)):
-        tt = [targets[i] for i in perm]
-        md = 1e9
-        for i in range(N):
-            for j in range(i+1, N):
-                d = _segment_distance(starts[i], targets[perm[i]], starts[j], targets[perm[j]])
-                if d < md: md = d
-        if md > best_md:
-            best_md = md
-            best_perm = perm
-    return best_perm, best_md
+# 规划阶段得到:
+# perm = (2, 0, 5, 1, 6, 3, 4)
+# min_distance_cm = 78.4
 
-线段距离用计算几何精确解（叉积+投影），不采样。
-权重 `md*2000` 强烈倾向最安全分配。`max_d*0.01` 几乎不影响。
+# final design.py 里只留下:
+perm = (2, 0, 5, 1, 6, 3, 4)
+targets = [geo_layer[perm[i]] for i in range(7)]
+```
+
+排列搜索使用计算几何精确线段距离（叉积+投影），不采样。安全目标优先：宁可路线稍长，也不要让两条移动线段接近 51cm 阈值。
 
 ## 灯光
 

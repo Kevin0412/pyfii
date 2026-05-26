@@ -107,4 +107,4 @@ XY span 太低 = 浪费 560×560 场地。
 手工指定 drone→target 映射 → 必出碰撞。
 crosscut_v9 用排列搜索才安全。
 
-**修复**: 几何切换必须用 `best_assign()`。
+**修复**: 几何切换必须在 agent 规划层用 `best_assign()` / `assign_targets()`，然后把 `perm` 和目标表硬编码进 final segment。不要把搜索函数或 import 写进 `design.py`。

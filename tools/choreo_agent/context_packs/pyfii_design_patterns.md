@@ -14,6 +14,14 @@
 坏：先写一串 target，然后用 delay 修到段尾。
 好：先定“这个 2.2 秒是斜向推进同时抬升”，再设计 target 和速度。
 
+agent 可以在草图阶段使用 planning tools 或临时 helper，把自然语言意图转成：
+
+```text
+keyframe cue -> geometry layer -> safe assignment -> per-drone speed/accel/delay table
+```
+
+final `design.py` 只保留这些具体表和 PyFii 命令，不保留规划工具函数。
+
 ## 样例 A：晨光开场
 
 意图：分散低密度开场，逐步汇聚成有方向的推进，再舒展到开阔姿态。

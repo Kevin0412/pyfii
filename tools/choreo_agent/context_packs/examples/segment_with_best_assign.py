@@ -2,41 +2,78 @@
 # intent: 初始展开，安全几何引导
 # start_time: 4.0
 # end_time: 14.0
+#
+# Agent planning notes, not runtime code:
+# - keyframe intervals, safe assignments, and motion budgets were computed before writing this segment.
+# - perms / speeds / accels / delays below are hard-coded planning results.
 
-geo = [
-    [(S[i][0]+20*math.sin(i), S[i][1]+20*math.cos(i), 120) for i in range(N)],
-    [(280+140*math.cos(2*math.pi*i/N), 280+140*math.sin(2*math.pi*i/N), 135) for i in range(N)],
-    [(80+i*120, 180, 150) if i<4 else (90+(i-3)*120, 390, 160) for i in range(N)],
+geo_layers = [
+    [
+        (90, 145, 115),
+        (175, 110, 135),
+        (270, 150, 170),
+        (365, 115, 135),
+        (455, 155, 115),
+        (235, 280, 195),
+        (345, 320, 155),
+    ],
+    [
+        (70, 230, 130),
+        (160, 315, 165),
+        (250, 405, 205),
+        (335, 380, 165),
+        (450, 300, 135),
+        (225, 145, 115),
+        (375, 175, 185),
+    ],
+    [
+        (85, 430, 140),
+        (165, 330, 180),
+        (260, 245, 210),
+        (350, 245, 155),
+        (455, 335, 125),
+        (225, 465, 165),
+        (365, 455, 195),
+    ],
 ]
 
-colors = ["#2255aa", "#3388cc", "#44aadd"]
-intervals_s = [3.2, 3.4, 3.1]
-prev = [(drone.x, drone.y, 110) for drone in drones]
-assigned_layers = []
-for gi, layer in enumerate(geo):
-    prev_xy = [(p[0], p[1]) for p in prev]
-    target_xy = [(t[0], t[1]) for t in layer]
-    perm, _ = best_assign(prev_xy, target_xy)
-    assigned = [layer[perm[i]] for i in range(N)]
-    assigned_layers.append(assigned)
-    prev = assigned
+perms = [
+    (0, 1, 2, 3, 4, 5, 6),
+    (5, 0, 1, 2, 3, 6, 4),
+    (0, 1, 2, 3, 4, 5, 6),
+]
+assigned_layers = [
+    [geo_layers[gi][perms[gi][i]] for i in range(7)]
+    for gi in range(3)
+]
+
+speeds = [
+    [75, 85, 92, 88, 78, 100, 96],
+    [130, 145, 150, 138, 120, 132, 148],
+    [95, 105, 112, 108, 90, 118, 122],
+]
+accels = [
+    [95, 110, 120, 115, 100, 130, 125],
+    [230, 260, 280, 250, 220, 240, 270],
+    [135, 150, 165, 155, 130, 170, 180],
+]
+light_ticks = [4, 5, 4]
+delays_ms = [
+    [2250, 2150, 2100, 2150, 2200, 2050, 2100],
+    [2500, 2400, 2350, 2450, 2550, 2450, 2350],
+    [2650, 2550, 2500, 2550, 2650, 2450, 2400],
+]
+colors = ["#2255aa", "#33aadd", "#ffcc66"]
 
 for i, drone in enumerate(drones):
     drone.inittime(4)
-    current = (drone.x, drone.y, 110)
     for gi, targets in enumerate(assigned_layers):
         tx, ty, tz = targets[i]
-        target = (clamp_xy(tx), clamp_xy(ty), clamp_z(tz + 20 * math.sin(i)))
-        dist_cm = math.dist(current, target)
-        interval_s = intervals_s[gi]
-        speed = min(200, max(80, int(dist_cm / max(0.5, interval_s - 0.5))))
-        accel = [130, 220, 170][gi]
-        drone.VelXY(speed, accel)
-        drone.VelZ(speed, accel)
-        drone.move2(*target)
-        apply_light(drone, colors[gi], 3)
-        drone.delay(max(120, int(interval_s * 1000) - 300))
-        current = target
+        drone.VelXY(speeds[gi][i], accels[gi][i])
+        drone.VelZ(speeds[gi][i], accels[gi][i])
+        drone.move2(clamp_xy(tx), clamp_xy(ty), clamp_z(tz))
+        apply_light(drone, colors[gi], light_ticks[gi])
+        drone.delay(delays_ms[gi][i])
 
 prev = assigned_layers[-1]
 
