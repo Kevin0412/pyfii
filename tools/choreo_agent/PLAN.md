@@ -10,20 +10,20 @@
 | 0 | context_packs (8个) | ✅ |
 | 1 | core state system | ✅ |
 | 2 | script_editor | ✅ |
-| 3 | validator (四层+hover+dense_collision+repair_feedback) | ✅ |
+| 3 | validator (四层+hover+dense_collision+motion/degradation+repair_feedback) | ✅ |
 | 4 | TUI | CLI REPL 可用，Textual 待做 |
 | 5 | LLM 接入 (DeepSeek / custom_gpt) | ✅ |
 | 6 | 自动修复闭环 | ✅ generate_until_safe_with_llm |
-| 7 | 试跑 cannon_in_d | S01 locked, S02 验证中 |
+| 7 | 试跑 cannon_in_d | 待用最新时间线 prompt 重新实测 |
 
 ## 待做
 - Textual TUI
 - 音乐分析自动化 (BPM/能量/段落检测)
-- Safe/Fast 模式切换
+- Safe/Fast 模式切换 ✅ 已有 manual/fast CLI；仍需更好 UI
 - best_assign 结果自动注入到 prompt feedback
-- S02-S08 全部通过
-- Context 文件自动更新 (design_memory.md, handoff.md)
-- 退化检测集成到验证流水线
+- S02-LAND 全部通过
+- Context 文件自动更新 (design_memory.md, handoff.md, segment_cards)
+- 退化检测集成到验证流水线 ✅ 已有基础车道/刚性圆检测；仍需跨段重复检测
 
 ---
 

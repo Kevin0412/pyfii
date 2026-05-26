@@ -1,6 +1,11 @@
 #!/usr/bin/env python3
 """Continuity gate regression tests."""
-from validator import ValidationResult, _check_motion_envelope, _check_motion_quality
+from validator import (
+    ValidationResult,
+    _check_degradation,
+    _check_motion_envelope,
+    _check_motion_quality,
+)
 
 
 def test_hover_blocks_formal_segment():
@@ -68,9 +73,46 @@ def test_motion_quality_blocks_small_jitter():
     ) == []
 
 
+def test_degradation_blocks_obvious_lanes_and_rigid_circle():
+    assert _check_degradation(
+        (4, 14),
+        {
+            "drone_count": 7,
+            "lane_x_locked_drones": 6,
+            "lane_y_locked_drones": 0,
+            "circle_like_fraction": 0.0,
+            "order_stable_fraction": 0.0,
+            "radius_range_cm": 120.0,
+        },
+    )
+    assert _check_degradation(
+        (4, 14),
+        {
+            "drone_count": 7,
+            "lane_x_locked_drones": 0,
+            "lane_y_locked_drones": 0,
+            "circle_like_fraction": 0.9,
+            "order_stable_fraction": 0.95,
+            "radius_range_cm": 20.0,
+        },
+    )
+    assert _check_degradation(
+        (4, 14),
+        {
+            "drone_count": 7,
+            "lane_x_locked_drones": 1,
+            "lane_y_locked_drones": 1,
+            "circle_like_fraction": 0.4,
+            "order_stable_fraction": 0.5,
+            "radius_range_cm": 100.0,
+        },
+    ) == []
+
+
 if __name__ == "__main__":
     test_hover_blocks_formal_segment()
     test_takeoff_landing_exempt_from_continuity_gate()
     test_motion_envelope_for_5_to_13_segment()
     test_motion_quality_blocks_small_jitter()
+    test_degradation_blocks_obvious_lanes_and_rigid_circle()
     print("OK")

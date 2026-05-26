@@ -48,6 +48,10 @@ class ValidationResult:
     motion_quality_ok: bool = True
     motion_quality: dict = field(default_factory=dict)
     motion_quality_errors: list[str] = field(default_factory=list)
+    degradation_ok: bool = True
+    degradation: dict = field(default_factory=dict)
+    degradation_errors: list[str] = field(default_factory=list)
+    exit_state: list[list[int]] | None = None
     error_message: str = ""
     hover_error: str = ""
     continuity_error: str = ""
@@ -70,6 +74,7 @@ class ValidationResult:
                     and not self.hover_segments
                     and self.motion_envelope_ok
                     and self.motion_quality_ok
+                    and self.degradation_ok
                 )
             )
         )
@@ -157,6 +162,11 @@ class ValidationResult:
         if self.motion_quality_errors:
             lines.append("有效动作质量失败：")
             lines.extend(f"- {item}" for item in self.motion_quality_errors)
+        if self.degradation:
+            lines.append(f"degradation: {self.degradation}")
+        if self.degradation_errors:
+            lines.append("结构性退化失败：")
+            lines.extend(f"- {item}" for item in self.degradation_errors)
         if self.continuity_error:
             lines.append(f"连贯性检测失败，因此禁止通过：{self.continuity_error[-300:]}")
         return "\n".join(lines)
@@ -225,6 +235,10 @@ def validate(
         if result.distance_warnings >= 0:
             result.read_fii_ok = True
             _add_dense_distance_report(result, output_dir)
+            result.exit_state = _sample_exit_state(
+                output_dir,
+                time_s=quality_window[1] if quality_window is not None else None,
+            )
 
         if result.continuity_required:
             try:
@@ -252,9 +266,19 @@ def validate(
                     result.motion_quality,
                 )
                 result.motion_quality_ok = not result.motion_quality_errors
+                result.degradation = _measure_degradation(
+                    output_dir,
+                    window=quality_window,
+                )
+                result.degradation_errors = _check_degradation(
+                    quality_window,
+                    result.degradation,
+                )
+                result.degradation_ok = not result.degradation_errors
             except Exception as e:
                 result.motion_envelope_ok = False
                 result.motion_quality_ok = False
+                result.degradation_ok = False
                 result.continuity_error = str(e)
         else:
             result.hover_check_ok = True
@@ -483,6 +507,151 @@ def _check_motion_quality(
     return errors
 
 
+def _measure_degradation(
+    output_dir: Path,
+    window: tuple[float, float],
+) -> dict:
+    """检测车道/刚性圆等结构性退化。"""
+    import pyfii as pf
+
+    fii_dir = _find_fii_dir(output_dir)
+    data, _t0, *_ = pf.read_fii(str(fii_dir), fps=60, ignore_acc=True)
+    if not data:
+        return {}
+
+    fps = 60
+    min_len = min(len(d) for d in data)
+    start_s, end_s = window
+    start_frame = max(1, int(start_s * fps))
+    end_frame = min(min_len, int(end_s * fps) + 1)
+    if end_frame <= start_frame:
+        return {}
+
+    drone_count = len(data)
+    x_spans = []
+    y_spans = []
+    all_x = []
+    all_y = []
+    for drone in data:
+        xs = [float(drone[frame][1]) for frame in range(start_frame, end_frame)]
+        ys = [float(drone[frame][2]) for frame in range(start_frame, end_frame)]
+        x_spans.append(max(xs) - min(xs))
+        y_spans.append(max(ys) - min(ys))
+        all_x.extend(xs)
+        all_y.extend(ys)
+
+    sample_step = max(1, int(fps / 2))
+    sample_frames = list(range(start_frame, end_frame, sample_step))
+    circle_like = 0
+    order_stable = 0
+    order_ref = None
+    radius_medians = []
+    centers = []
+
+    for frame in sample_frames:
+        positions = [
+            (float(drone[frame][1]), float(drone[frame][2]))
+            for drone in data
+        ]
+        center = (
+            sum(p[0] for p in positions) / drone_count,
+            sum(p[1] for p in positions) / drone_count,
+        )
+        centers.append(center)
+        radii = [math.hypot(p[0] - center[0], p[1] - center[1]) for p in positions]
+        mean_radius = sum(radii) / max(1, drone_count)
+        radius_medians.append(median(radii))
+        if mean_radius > 1:
+            variance = sum((r - mean_radius) ** 2 for r in radii) / max(1, drone_count)
+            radial_cv = math.sqrt(variance) / mean_radius
+        else:
+            radial_cv = 999.0
+        if mean_radius >= 70 and radial_cv <= 0.22:
+            circle_like += 1
+
+        order = tuple(
+            index for index, _angle in sorted(
+                (
+                    (i, math.atan2(p[1] - center[1], p[0] - center[0]))
+                    for i, p in enumerate(positions)
+                ),
+                key=lambda item: item[1],
+            )
+        )
+        if order_ref is None:
+            order_ref = order
+            order_stable += 1
+        elif _same_circular_order(order_ref, order):
+            order_stable += 1
+
+    center_path = 0.0
+    for prev, current in zip(centers, centers[1:]):
+        center_path += math.hypot(current[0] - prev[0], current[1] - prev[1])
+
+    sample_count = max(1, len(sample_frames))
+    return {
+        "drone_count": drone_count,
+        "window_xy_span": (
+            round(max(all_x) - min(all_x), 1),
+            round(max(all_y) - min(all_y), 1),
+        ),
+        "lane_x_locked_drones": sum(1 for span in x_spans if span < 35),
+        "lane_y_locked_drones": sum(1 for span in y_spans if span < 35),
+        "median_x_span_cm": round(median(x_spans), 1),
+        "median_y_span_cm": round(median(y_spans), 1),
+        "circle_like_fraction": round(circle_like / sample_count, 3),
+        "order_stable_fraction": round(order_stable / sample_count, 3),
+        "median_radius_cm": round(median(radius_medians), 1) if radius_medians else 0.0,
+        "radius_range_cm": round(max(radius_medians) - min(radius_medians), 1) if radius_medians else 0.0,
+        "center_path_cm": round(center_path, 1),
+    }
+
+
+def _check_degradation(
+    window: tuple[float, float],
+    degradation: dict,
+) -> list[str]:
+    if not degradation:
+        return ["无法计算结构性退化。"]
+
+    start_s, end_s = window
+    duration = max(0.1, end_s - start_s)
+    drone_count = int(degradation.get("drone_count", 0))
+    lane_limit = max(1, math.ceil(drone_count * 0.7))
+    lane_x = int(degradation.get("lane_x_locked_drones", 0))
+    lane_y = int(degradation.get("lane_y_locked_drones", 0))
+    circle_like = float(degradation.get("circle_like_fraction", 0.0))
+    order_stable = float(degradation.get("order_stable_fraction", 0.0))
+    radius_range = float(degradation.get("radius_range_cm", 0.0))
+
+    errors = []
+    if duration >= 6.0 and lane_x >= lane_limit:
+        errors.append(
+            f"车道退化：{lane_x}/{drone_count} 架无人机 X 方向变化小于 35cm，不能把安全退化成固定竖向车道。"
+        )
+    if duration >= 6.0 and lane_y >= lane_limit:
+        errors.append(
+            f"车道退化：{lane_y}/{drone_count} 架无人机 Y 方向变化小于 35cm，不能把安全退化成固定横向车道。"
+        )
+    if (
+        duration >= 8.0
+        and circle_like >= 0.75
+        and order_stable >= 0.85
+        and radius_range <= 50.0
+    ):
+        errors.append(
+            "刚性圆退化：大部分时间保持同一圆形排序且半径变化很小；需要引入非圆几何、分组交换或明显叙事变化。"
+        )
+    return errors
+
+
+def _same_circular_order(reference: tuple[int, ...], current: tuple[int, ...]) -> bool:
+    if len(reference) != len(current):
+        return False
+    doubled = reference + reference
+    return any(tuple(doubled[i:i + len(current)]) == current for i in range(len(reference)))
+
+
 def _add_dense_distance_report(result: ValidationResult, output_dir: Path) -> None:
     """密采样距离报告，用于给 agent 直接反馈危险时间段。"""
     import pyfii as pf
@@ -534,6 +703,40 @@ def _add_dense_distance_report(result: ValidationResult, output_dir: Path) -> No
         result.dense_min_distance_cm = round(dense_min, 1)
         result.min_distance_cm = result.dense_min_distance_cm
     result.collision_intervals = _compress_collision_rows(rows)
+
+
+def _sample_exit_state(output_dir: Path, time_s: float | None = None) -> list[list[int]] | None:
+    """从读回轨迹采样段尾位置，作为下一段 prev_state。"""
+    import pyfii as pf
+
+    try:
+        fii_dir = _find_fii_dir(output_dir)
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            data, *_ = pf.read_fii(str(fii_dir), fps=60, ignore_acc=True)
+    except Exception:
+        return None
+
+    if not data:
+        return None
+
+    fps = 60
+    sampled = []
+    for drone in data:
+        if not drone:
+            continue
+        if time_s is None:
+            frame = len(drone) - 1
+        else:
+            frame = max(0, min(len(drone) - 1, int(round(time_s * fps))))
+        row = drone[frame]
+        sampled.append([
+            int(round(float(row[1]))),
+            int(round(float(row[2]))),
+            int(round(float(row[3]))),
+        ])
+
+    return sampled or None
 
 
 def _compress_collision_rows(rows: list[tuple[float, float, tuple[int, int] | None]]) -> list[dict]:

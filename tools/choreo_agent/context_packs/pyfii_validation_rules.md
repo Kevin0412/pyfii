@@ -88,6 +88,22 @@ max_excursion_cm: 全队最大离入口位移
 - 主体动作必须包含跨区域展开、收缩、交换或分组推进。
 - 如果为了安全减少交叉，也要用同侧大弧线、扇区展开、前后景深变化扩大有效位移。
 
+## 结构性退化门
+
+validator 会额外检测明显车道退化和刚性圆退化：
+
+```text
+degradation_ok: true
+lane_x_locked_drones / lane_y_locked_drones 不应接近全队
+circle_like_fraction + order_stable_fraction 不能长期接近 1 且半径变化很小
+```
+
+修复原则：
+
+- 不要让多数无人机长期固定 X 或固定 Y 只在一条车道里滑动。
+- 不要整段保持同一圆形排序，只靠半径/高度小变化撑时间。
+- 如果需要环形意象，必须穿插非圆几何、分组交换、波浪错层或明显的方向性推进。
+
 ## 验证报告格式
 
 ```markdown
@@ -105,6 +121,7 @@ Z range: 80-220
 global hover: none
 motion envelope: OK
 motion quality: OK
+degradation: OK
 
 退化检测:
 - lane: no

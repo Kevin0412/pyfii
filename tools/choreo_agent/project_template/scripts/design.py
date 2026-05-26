@@ -11,6 +11,9 @@ def find_repo_root(path):
     for parent in path.parents:
         if (parent / "src" / "pyfii").exists():
             return parent
+    cwd = Path.cwd().resolve()
+    if (cwd / "src" / "pyfii").exists():
+        return cwd
     raise RuntimeError("Cannot find repo root from design.py")
 
 
@@ -50,8 +53,38 @@ def apply_light(drone, color, ticks):
 # Agent-generated S01 owns takeoff setup and formal choreography:
 # 1. Design safe start_positions for all 7 drones.
 # 2. Set drone.X/Y and call drone.takeoff(...) before formal inittime.
-# 3. Schedule formal S01 movement in the 4.0-24.0s quality window.
+# 3. Schedule formal S01 movement in the 4.0-13.0s quality window.
 # === PYFII_AGENT_SEGMENT_END S01 ===
+
+
+# === PYFII_AGENT_SEGMENT_START id=S02 locked=false ===
+# Agent-generated S02 continues from S01 exit_state in the 13.0-23.0s quality window.
+# === PYFII_AGENT_SEGMENT_END S02 ===
+
+
+# === PYFII_AGENT_SEGMENT_START id=S03 locked=false ===
+# Agent-generated S03 continues from S02 exit_state in the 23.0-31.0s quality window.
+# === PYFII_AGENT_SEGMENT_END S03 ===
+
+
+# === PYFII_AGENT_SEGMENT_START id=S04 locked=false ===
+# Agent-generated S04 continues from S03 exit_state in the 31.0-47.0s quality window.
+# === PYFII_AGENT_SEGMENT_END S04 ===
+
+
+# === PYFII_AGENT_SEGMENT_START id=S05 locked=false ===
+# Agent-generated S05 continues from S04 exit_state in the 47.0-58.0s quality window.
+# === PYFII_AGENT_SEGMENT_END S05 ===
+
+
+# === PYFII_AGENT_SEGMENT_START id=S06 locked=false ===
+# Agent-generated S06 continues from S05 exit_state in the 58.0-63.0s quality window.
+# === PYFII_AGENT_SEGMENT_END S06 ===
+
+
+# === PYFII_AGENT_SEGMENT_START id=LAND locked=false ===
+# Agent-generated LAND handles safe landing in the 63.0-68.0s lifecycle window.
+# === PYFII_AGENT_SEGMENT_END LAND ===
 
 
 for drone in drones:

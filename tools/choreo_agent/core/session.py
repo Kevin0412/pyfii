@@ -181,10 +181,13 @@ class Session:
         script_path = self.project_root / "scripts" / "design.py"
         if lock_segment(script_path, seg.id):
             human_override = not result.passed
+            if result.exit_state:
+                seg.exit_state = result.exit_state
             seg.attempts.append({
                 "human_approval": True,
                 "human_override": human_override,
                 "validation": _validation_snapshot(result),
+                "exit_state": seg.exit_state,
             })
             seg.locked = True
             self.state.locked_segment_ids.append(seg.id)
@@ -253,11 +256,14 @@ class Session:
 
         script_path = self.project_root / "scripts" / "design.py"
         if lock_segment(script_path, seg.id):
+            if validation.exit_state:
+                seg.exit_state = validation.exit_state
             seg.attempts.append({
                 "ai_approval": True,
                 "human_override": False,
                 "reason": reason,
                 "validation": _validation_snapshot(validation),
+                "exit_state": seg.exit_state,
             })
             seg.locked = True
             if seg.id not in self.state.locked_segment_ids:
@@ -485,6 +491,10 @@ def _validation_snapshot(result: ValidationResult) -> dict:
         "motion_quality_ok": result.motion_quality_ok,
         "motion_quality": result.motion_quality,
         "motion_quality_errors": result.motion_quality_errors,
+        "degradation_ok": result.degradation_ok,
+        "degradation": result.degradation,
+        "degradation_errors": result.degradation_errors,
+        "exit_state": result.exit_state,
         "error_message": result.error_message[-500:],
         "continuity_error": result.continuity_error[-500:],
     }
