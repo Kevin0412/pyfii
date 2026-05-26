@@ -105,3 +105,17 @@ acceleration 是独立参数：`a = 2v` 只是某些 dntg/经验写法里的稳�
 - **agent 可在 `function.py` 中自定义辅助函数**（纯Python标准库+math，不导入pyfii）
 - **每个几何使用不同 Z 高度**，产生三维层次感，不要所有几何在同一平面
 - **相邻段不能使用相同退化类型**（如S01车道退化→S02必须跳出），最佳是零退化
+
+## function.py 可用函数（不要自己编函数名）
+
+`from function import *` 后可用：
+- `clamp_xy(v)`, `clamp_z(v)` — 坐标裁剪
+- `distance_3d(p1, p2)` — 3D距离
+- `flight_time_ms(d, v, a)` — 飞行时间(ms)
+- `flight_time_s(d, v, a)` — 飞行时间(s)
+- `vel_for_distance_time(d, t)` — 反算速度
+- `radial_point(cx, cy, r, angle_deg, z)` — 极坐标点
+- `apply_light(drone, color, ticks, interval_ms=100)` — 正弦渐变灯光
+- `COLORS_WARM`, `COLORS_COOL`, `COLORS_BRIGHT` — 颜色预设列表
+
+**禁止使用未列出的函数名**（如 `light_sine`, `led_glow`, `breathe` 等不存在）。

@@ -139,3 +139,6 @@ pf.show(data, t0, [str(MUSIC_PATH)], field=field, device=dev,
 | minD warning | < 51cm |
 | max speed | 200 cm/s |
 | acc range | 50-400 cm/s² |
+
+## function.py
+设计代码中通过 `from function import *` 导入辅助函数。可用函数见 coding_rules。
