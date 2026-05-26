@@ -5,6 +5,7 @@ import subprocess
 import sys
 import time
 import warnings
+from statistics import median
 from pathlib import Path
 from dataclasses import dataclass, field
 
@@ -22,6 +23,8 @@ PYTHON = os.environ.get(
 HOVER_MOVE_THRESHOLD_CM_PER_FRAME = 0.2
 MAX_GLOBAL_HOVER_S = 1.0
 SEGMENT_EDGE_BUFFER_S = 1.0
+MIN_MEANINGFUL_EXCURSION_CM = 30.0
+MIN_MOVING_DRONE_FRACTION = 0.7
 
 
 @dataclass
@@ -42,6 +45,9 @@ class ValidationResult:
     motion_end_s: float | None = None
     motion_envelope_ok: bool = True
     motion_envelope_errors: list[str] = field(default_factory=list)
+    motion_quality_ok: bool = True
+    motion_quality: dict = field(default_factory=dict)
+    motion_quality_errors: list[str] = field(default_factory=list)
     error_message: str = ""
     hover_error: str = ""
     continuity_error: str = ""
@@ -63,6 +69,7 @@ class ValidationResult:
                     self.hover_check_ok
                     and not self.hover_segments
                     and self.motion_envelope_ok
+                    and self.motion_quality_ok
                 )
             )
         )
@@ -129,6 +136,17 @@ class ValidationResult:
         if self.motion_envelope_errors:
             lines.append("运动包络失败：")
             lines.extend(f"- {item}" for item in self.motion_envelope_errors)
+        if self.motion_quality:
+            lines.append(
+                "motion quality: "
+                f"median_path={self.motion_quality.get('median_path_cm')}cm, "
+                f"median_excursion={self.motion_quality.get('median_excursion_cm')}cm, "
+                f"max_excursion={self.motion_quality.get('max_excursion_cm')}cm, "
+                f"moving_drones={self.motion_quality.get('moving_drones')}/{self.motion_quality.get('drone_count')}"
+            )
+        if self.motion_quality_errors:
+            lines.append("有效动作质量失败：")
+            lines.extend(f"- {item}" for item in self.motion_quality_errors)
         if self.continuity_error:
             lines.append(f"连贯性检测失败，因此禁止通过：{self.continuity_error[-300:]}")
         return "\n".join(lines)
@@ -215,8 +233,18 @@ def validate(
                     result.motion_end_s,
                 )
                 result.motion_envelope_ok = not result.motion_envelope_errors
+                result.motion_quality = _measure_motion_quality(
+                    output_dir,
+                    window=quality_window,
+                )
+                result.motion_quality_errors = _check_motion_quality(
+                    quality_window,
+                    result.motion_quality,
+                )
+                result.motion_quality_ok = not result.motion_quality_errors
             except Exception as e:
                 result.motion_envelope_ok = False
+                result.motion_quality_ok = False
                 result.continuity_error = str(e)
         else:
             result.hover_check_ok = True
@@ -344,6 +372,103 @@ def _check_motion_envelope(
     if motion_end_s <= end_floor:
         errors.append(
             f"动作收束过早：{motion_end_s:.2f}s；应在 {end_floor:.2f}s 后、{end_s:.2f}s 前完成收束。"
+        )
+    return errors
+
+
+def _measure_motion_quality(
+    output_dir: Path,
+    window: tuple[float, float],
+) -> dict:
+    """衡量有效动作幅度，防止用小范围抖动通过连续性门。"""
+    import pyfii as pf
+
+    fii_dir = _find_fii_dir(output_dir)
+    data, _t0, *_ = pf.read_fii(str(fii_dir), fps=60, ignore_acc=True)
+
+    fps = 60
+    min_len = min(len(d) for d in data)
+    start_s, end_s = window
+    start_frame = max(1, int(start_s * fps))
+    end_frame = min(min_len, int(end_s * fps) + 1)
+    if end_frame <= start_frame:
+        return {}
+
+    paths = []
+    excursions = []
+    xy_excursions = []
+    for drone in data:
+        start = _point3(drone[start_frame])
+        last = start
+        path_len = 0.0
+        max_excursion = 0.0
+        max_xy_excursion = 0.0
+        for frame in range(start_frame + 1, end_frame):
+            current = _point3(drone[frame])
+            path_len += math.dist(last, current)
+            max_excursion = max(max_excursion, math.dist(start, current))
+            max_xy_excursion = max(
+                max_xy_excursion,
+                math.hypot(current[0] - start[0], current[1] - start[1]),
+            )
+            last = current
+        paths.append(path_len)
+        excursions.append(max_excursion)
+        xy_excursions.append(max_xy_excursion)
+
+    moving_drones = sum(1 for value in excursions if value >= MIN_MEANINGFUL_EXCURSION_CM)
+    return {
+        "drone_count": len(data),
+        "moving_drones": moving_drones,
+        "median_path_cm": round(median(paths), 1) if paths else 0.0,
+        "median_excursion_cm": round(median(excursions), 1) if excursions else 0.0,
+        "max_excursion_cm": round(max(excursions), 1) if excursions else 0.0,
+        "median_xy_excursion_cm": round(median(xy_excursions), 1) if xy_excursions else 0.0,
+        "path_lengths_cm": [round(value, 1) for value in paths],
+        "excursions_cm": [round(value, 1) for value in excursions],
+    }
+
+
+def _point3(row) -> tuple[float, float, float]:
+    return (float(row[1]), float(row[2]), float(row[3]))
+
+
+def _check_motion_quality(
+    window: tuple[float, float],
+    quality: dict,
+) -> list[str]:
+    if not quality:
+        return ["无法计算有效动作质量。"]
+
+    start_s, end_s = window
+    duration = max(0.1, end_s - start_s)
+    drone_count = int(quality.get("drone_count", 0))
+    min_moving = max(1, math.ceil(drone_count * MIN_MOVING_DRONE_FRACTION))
+    min_median_path = max(80.0, min(180.0, duration * 8.0))
+    min_median_excursion = max(45.0, min(90.0, duration * 4.0))
+    min_max_excursion = max(90.0, min(180.0, duration * 8.0))
+
+    errors = []
+    moving_drones = int(quality.get("moving_drones", 0))
+    median_path = float(quality.get("median_path_cm", 0.0))
+    median_excursion = float(quality.get("median_excursion_cm", 0.0))
+    max_excursion = float(quality.get("max_excursion_cm", 0.0))
+
+    if moving_drones < min_moving:
+        errors.append(
+            f"有效运动无人机过少：{moving_drones}/{drone_count}；至少 {min_moving} 架需要离入口位置超过 {MIN_MEANINGFUL_EXCURSION_CM:.0f}cm。"
+        )
+    if median_path < min_median_path:
+        errors.append(
+            f"中位路径长度过短：{median_path:.1f}cm；当前 {duration:.1f}s 段至少需要 {min_median_path:.1f}cm，避免小范围抖动。"
+        )
+    if median_excursion < min_median_excursion:
+        errors.append(
+            f"中位最大位移过小：{median_excursion:.1f}cm；至少需要 {min_median_excursion:.1f}cm 的离位动作。"
+        )
+    if max_excursion < min_max_excursion:
+        errors.append(
+            f"全队最大位移过小：{max_excursion:.1f}cm；至少需要一组展开到 {min_max_excursion:.1f}cm 以上。"
         )
     return errors
 

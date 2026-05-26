@@ -1,5 +1,6 @@
 """LLM Client — 统一调用接口"""
 import json
+import signal
 import httpx
 from pathlib import Path
 from dataclasses import dataclass
@@ -14,6 +15,10 @@ class LlmResponse:
     model: str
     input_tokens: int | None = None
     output_tokens: int | None = None
+
+
+class LlmTimeoutError(TimeoutError):
+    pass
 
 
 def load_config(provider_name: str = "deepseek") -> dict:
@@ -51,12 +56,34 @@ def chat(
         "Content-Type": "application/json",
     }
 
-    resp = httpx.post(
-        f"{cfg['base_url'].rstrip('/')}/chat/completions",
-        json=payload,
-        headers=headers,
-        timeout=300,
+    wall_timeout_s = float(cfg.get("timeout_s", 180))
+    read_timeout_s = float(cfg.get("read_timeout_s", min(60, wall_timeout_s)))
+    timeout = httpx.Timeout(
+        connect=float(cfg.get("connect_timeout_s", 30)),
+        read=read_timeout_s,
+        write=float(cfg.get("write_timeout_s", 30)),
+        pool=float(cfg.get("pool_timeout_s", 30)),
     )
+
+    def on_timeout(_signum, _frame):
+        raise LlmTimeoutError(
+            f"LLM request timed out after {wall_timeout_s:.0f}s: "
+            f"provider={provider} model={cfg['model']}"
+        )
+
+    previous_handler = signal.getsignal(signal.SIGALRM)
+    signal.signal(signal.SIGALRM, on_timeout)
+    signal.setitimer(signal.ITIMER_REAL, wall_timeout_s)
+    try:
+        resp = httpx.post(
+            f"{cfg['base_url'].rstrip('/')}/chat/completions",
+            json=payload,
+            headers=headers,
+            timeout=timeout,
+        )
+    finally:
+        signal.setitimer(signal.ITIMER_REAL, 0)
+        signal.signal(signal.SIGALRM, previous_handler)
     resp.raise_for_status()
     data = resp.json()
 

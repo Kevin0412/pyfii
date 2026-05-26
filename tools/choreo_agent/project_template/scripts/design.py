@@ -4,7 +4,17 @@ import os
 import sys
 from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parents[5]
+HERE = Path(__file__).resolve()
+
+
+def find_repo_root(path):
+    for parent in path.parents:
+        if (parent / "src" / "pyfii").exists():
+            return parent
+    raise RuntimeError("Cannot find repo root from design.py")
+
+
+REPO_ROOT = find_repo_root(HERE)
 sys.path.insert(0, str(REPO_ROOT / "src"))
 
 import numpy as np
@@ -36,23 +46,11 @@ def apply_light(drone, color, ticks):
         drone.delay(100)
 
 
-start_positions = [
-    (60, 120),
-    (180, 60),
-    (350, 60),
-    (500, 160),
-    (500, 380),
-    (350, 480),
-    (160, 480),
-]
-
-for i, drone in enumerate(drones):
-    drone.X = drone.x = start_positions[i][0]
-    drone.Y = drone.y = start_positions[i][1]
-    drone.takeoff(1, 110)
-
-
 # === PYFII_AGENT_SEGMENT_START id=S01 locked=false ===
+# Agent-generated S01 owns takeoff setup and formal choreography:
+# 1. Design safe start_positions for all 7 drones.
+# 2. Set drone.X/Y and call drone.takeoff(...) before formal inittime.
+# 3. Schedule formal S01 movement in the 4.0-24.0s quality window.
 # === PYFII_AGENT_SEGMENT_END S01 ===
 
 
@@ -74,7 +72,8 @@ for t in range(0, mf, 60):
             dd = np.sqrt((data[i][t][1] - data[j][t][1]) ** 2 + (data[i][t][2] - data[j][t][2]) ** 2)
             if 0 < dd < md:
                 md = dd
-print(f"{N}d F400 {t0/60:.1f}s XY({max(all_x)-min(all_x):.0f},{max(all_y)-min(all_y):.0f}) minD={md:.1f}cm")
+xy_span = (max(all_x) - min(all_x), max(all_y) - min(all_y)) if all_x and all_y else (0, 0)
+print(f"{N}d F400 {t0/60:.1f}s XY({xy_span[0]:.0f},{xy_span[1]:.0f}) minD={md:.1f}cm")
 
 with warnings.catch_warnings(record=True) as caught:
     warnings.simplefilter("always")

@@ -63,6 +63,23 @@ motion_start < segment_start + 1.0s
 motion_end   > segment_end - 1.0s
 ```
 
+## 有效动作质量门
+
+连续性不是小范围抖动。validator 会在正式段内统计每架机路径长度、最大离入口位移、有效运动无人机数量：
+
+```text
+moving_drones: 离入口位置超过 30cm 的无人机数量
+median_path_cm: 各机路径长度中位数
+median_excursion_cm: 各机最大离入口位移中位数
+max_excursion_cm: 全队最大离入口位移
+```
+
+修复原则：
+
+- 小 Z/XY 呼吸只能用于衔接，不可作为主体动作。
+- 主体动作必须包含跨区域展开、收缩、交换或分组推进。
+- 如果为了安全减少交叉，也要用同侧大弧线、扇区展开、前后景深变化扩大有效位移。
+
 ## 验证报告格式
 
 ```markdown
@@ -79,6 +96,7 @@ XY span: 490 x 502
 Z range: 80-220
 global hover: none
 motion envelope: OK
+motion quality: OK
 
 退化检测:
 - lane: no

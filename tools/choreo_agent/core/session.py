@@ -73,12 +73,21 @@ class Session:
             design_py=script_path.read_text(encoding="utf-8"),
             feedback=feedback,
         )
-        response = chat(
-            system=system,
-            user=user,
-            provider=provider,
-            temperature=temperature,
-        )
+        try:
+            response = chat(
+                system=system,
+                user=user,
+                provider=provider,
+                temperature=temperature,
+            )
+        except Exception as exc:
+            seg.attempts.append({
+                "provider": provider,
+                "feedback": feedback[:500],
+                "generation_error": str(exc)[-500:],
+            })
+            self.state.save(self.project_root)
+            raise
         code = _extract_python_code(response.text)
         if not code.strip():
             return None
@@ -284,7 +293,8 @@ def _conservative_safety_feedback(index: int, result: ValidationResult) -> str:
 - 每个目标几何点之间至少留 90cm，中心点最多给一架无人机，其余无人机不得穿过中心附近。
 - 每次换形前先安排足够时间预算；如果不确定，减少几何数量而不是压缩时间。
 - 不允许用连续 delay/light 填空；当前段不能出现超过 1 秒的整体悬停，动作必须连贯。
-- 目标是先通过硬门：distance warnings=0, action warnings=0, dense minD > 51cm，且无长悬停。视觉丰富度让位于安全。"""
+- 不能用小范围抖动冒充连续动作；至少多数无人机要有明确离位和跨区域移动。
+- 目标是先通过硬门：distance warnings=0, action warnings=0, dense minD > 51cm，无长悬停，且有效动作幅度达标。视觉丰富度让位于安全。"""
 
 
 def _requires_continuity_gate(seg: SegmentState) -> bool:
@@ -317,6 +327,9 @@ def _validation_snapshot(result: ValidationResult) -> dict:
         "motion_end_s": result.motion_end_s,
         "motion_envelope_ok": result.motion_envelope_ok,
         "motion_envelope_errors": result.motion_envelope_errors,
+        "motion_quality_ok": result.motion_quality_ok,
+        "motion_quality": result.motion_quality,
+        "motion_quality_errors": result.motion_quality_errors,
         "error_message": result.error_message[-500:],
         "continuity_error": result.continuity_error[-500:],
     }

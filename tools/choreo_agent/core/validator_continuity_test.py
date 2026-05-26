@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Continuity gate regression tests."""
-from validator import ValidationResult, _check_motion_envelope
+from validator import ValidationResult, _check_motion_envelope, _check_motion_quality
 
 
 def test_hover_blocks_formal_segment():
@@ -15,6 +15,7 @@ def test_hover_blocks_formal_segment():
         hover_check_ok=True,
         hover_segments=[(28.2, 31.0)],
         motion_envelope_ok=True,
+        motion_quality_ok=True,
     )
     assert not result.passed
     assert "整体悬停" in result.repair_feedback()
@@ -32,6 +33,7 @@ def test_takeoff_landing_exempt_from_continuity_gate():
         hover_check_ok=True,
         hover_segments=[(1.0, 3.0)],
         motion_envelope_ok=True,
+        motion_quality_ok=False,
     )
     assert result.passed
     assert "整体悬停" not in result.repair_feedback()
@@ -43,8 +45,32 @@ def test_motion_envelope_for_5_to_13_segment():
     assert _check_motion_envelope((5, 13), 5.8, 12.0)
 
 
+def test_motion_quality_blocks_small_jitter():
+    assert _check_motion_quality(
+        (4, 24),
+        {
+            "drone_count": 7,
+            "moving_drones": 0,
+            "median_path_cm": 24.0,
+            "median_excursion_cm": 8.0,
+            "max_excursion_cm": 12.0,
+        },
+    )
+    assert _check_motion_quality(
+        (4, 24),
+        {
+            "drone_count": 7,
+            "moving_drones": 7,
+            "median_path_cm": 190.0,
+            "median_excursion_cm": 95.0,
+            "max_excursion_cm": 190.0,
+        },
+    ) == []
+
+
 if __name__ == "__main__":
     test_hover_blocks_formal_segment()
     test_takeoff_landing_exempt_from_continuity_gate()
     test_motion_envelope_for_5_to_13_segment()
+    test_motion_quality_blocks_small_jitter()
     print("OK")

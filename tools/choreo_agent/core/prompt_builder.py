@@ -34,6 +34,10 @@ def _requires_continuity_gate(segment_id: str, intent: str) -> bool:
     return True
 
 
+def _requires_takeoff_setup(segment_id: str, prev_state: list) -> bool:
+    return segment_id.strip().lower() in {"s01", "seg01", "segment01", "1"} and not prev_state
+
+
 def build_segment_prompt(
     segment_id: str,
     start_time: float,
@@ -56,7 +60,7 @@ def build_segment_prompt(
 ## 设计意图
 {intent}
 
-## 上一段出口
+## 当前段入口 / 上一段出口
 ```python
 prev = {prev_state}
 ```
@@ -77,6 +81,13 @@ prev = {prev_state}
 - 段代码必须在 marker 之间（见 segment_protocol）
 """
 
+    if _requires_takeoff_setup(segment_id, prev_state):
+        user += f"""- 当前是首段：你必须在本段代码开头自己设计 7 架无人机的起飞布局 `start_positions`，设置 `drone.X/drone.x/drone.Y/drone.y`，并调用 `drone.takeoff(...)`
+- 起飞布局和 S01 正式动作必须一起设计；不要假设 template 或 state.json 已经给定起飞点
+- 起飞/起飞后等待不计入正式质量门，但正式编舞动作仍必须在 {start_time:.1f}s 后的质量窗口内满足本段运动包络、连续性和有效动作质量
+- 起飞点必须安全分散、点间距充足，并服务于后续 S01 的大动作路线；不要把所有机堆在中心或窄车道
+"""
+
     if _requires_continuity_gate(segment_id, intent):
         user += f"""- 运动包络：本段 {start_time:.2f}-{end_time:.2f}s，明显运动必须在 {start_time + 1:.2f}s 前开始，并在 {end_time - 1:.2f}s 后、{end_time:.2f}s 前完成收束
 - 动作必须连贯：当前段任意整体悬停不得超过 1 秒；不能用连续 delay/light 空转填满段落
@@ -84,6 +95,7 @@ prev = {prev_state}
 - 禁止结构：全体同一 inittime -> 全体 move2 -> apply_light(ticks>=10)/长 delay -> 下一几何
 - 推荐结构：把 A/B/C 分组动作重叠排布；灯光脉冲默认 ticks<=6；纯 light/delay 块超过 600ms 时，必须安排另一组正在 move2 或做小幅 Z/XY 呼吸
 - 对任何可能形成等待的区间，在 1 秒到达前插入至少一组可见运动；只改颜色不算运动
+- 连贯不等于小抖动：多数无人机必须离开入口位置形成有效位移，正式段要有跨区域展开/收缩/交换；小幅 Z/XY 呼吸只能用作衔接，不能作为主体动作
 """
     else:
         user += "- 起飞和降落段不计入编舞连贯性硬门；仍必须安全、平滑、执行完成\n"

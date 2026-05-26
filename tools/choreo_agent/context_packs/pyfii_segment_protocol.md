@@ -23,6 +23,31 @@
 - 覆盖整个 design.py
 - 生成不存在的 Pyfii API
 
+## 首段起飞布局
+
+首段 `S01` 的代码拥有起飞布局和正式编舞两部分。agent 必须自己设计起飞位置，不要依赖 template 或 `state.json` 预设点位。
+
+推荐结构：
+
+```python
+start_positions = [
+    (x0, y0),
+    ...
+]
+
+for i, drone in enumerate(drones):
+    drone.X = drone.x = clamp_xy(start_positions[i][0])
+    drone.Y = drone.y = clamp_xy(start_positions[i][1])
+    drone.takeoff(1, 110)
+
+# 正式编舞从 4.0s 后开始调度
+for i, drone in enumerate(drones):
+    drone.inittime(4.0)
+    ...
+```
+
+起飞和起飞后的准备等待不计入正式编舞质量门；正式段窗口内仍必须满足安全、运动包络、连续性和有效动作质量。
+
 ## 几何定义格式
 
 ```python
