@@ -3,7 +3,7 @@
   "music_path": "../../cannon_in_D.mp3",
   "music_duration": 68.0,
   "music_confirmed": true,
-  "mode": "safe",
+  "mode": "manual",
   "provider": "deepseek",
   "segments": [
     {

@@ -60,10 +60,10 @@ agent_projects/
 主界面包含: 项目信息、当前段面板、验证面板、操作按钮(G/V/E/A/R/D/M/S/Q)
 内存上下文: ActiveSegmentContext 保存当前段所有状态
 
-# 5. Safe / Fast 模式
+# 5. Manual / Fast 模式
 
-- Safe: 音乐分析+意图+视频+锁定 全部人类确认
-- Fast: AI自动推进，但验证不跳过，修改locked段必须问人
+- Manual: 音乐分析+意图+视频+锁定 全部人类确认；人工 `a` 最高优先级，并记录 override
+- Fast: 验证硬门通过后进入 AI 自审流程，由 AI 判断是否 lock 并进入下一段；验证不跳过，AI 自审不通过则停在当前段
 - 永远不能自动: 改locked段、改结束位置、删checkpoint
 
 # 6. Context Packs (8个, 已就绪)

@@ -1,4 +1,5 @@
 """Session — 核心控制器"""
+import json
 import re
 from dataclasses import dataclass
 from pathlib import Path
@@ -22,6 +23,8 @@ class ApprovalResult:
     locked: bool
     validation: ValidationResult | None
     human_override: bool = False
+    ai_approval: bool = False
+    reason: str = ""
 
 
 class Session:
@@ -182,6 +185,81 @@ class Session:
             return ApprovalResult(True, result, human_override=human_override)
         return ApprovalResult(False, result)
 
+    def review_and_lock_with_llm(
+        self,
+        provider: str,
+        validation: ValidationResult,
+        temperature: float = 0.1,
+    ) -> ApprovalResult:
+        """快速模式：硬门通过后由 AI 自审决定是否锁定。"""
+        seg = self.state.current_segment
+        if seg is None or seg.locked:
+            return ApprovalResult(False, validation)
+        if not validation.passed:
+            return ApprovalResult(
+                False,
+                validation,
+                reason="validation did not pass; AI review is not allowed to lock",
+            )
+
+        try:
+            response = chat(
+                system=_review_system_prompt(),
+                user=_review_user_prompt(
+                    segment_id=seg.id,
+                    intent=seg.intent,
+                    design_py=(self.project_root / "scripts" / "design.py").read_text(encoding="utf-8"),
+                    validation=validation,
+                ),
+                provider=provider,
+                temperature=temperature,
+            )
+        except Exception as exc:
+            reason = f"AI review failed: {str(exc)[-300:]}"
+            _append_attempt_event(seg, {
+                "ai_review": {
+                    "approved": False,
+                    "error": reason,
+                    "validation": _validation_snapshot(validation),
+                }
+            })
+            self.state.save(self.project_root)
+            return ApprovalResult(False, validation, reason=reason)
+
+        approved, reason = _parse_review_decision(response.text)
+        _append_attempt_event(seg, {
+            "ai_review": {
+                "approved": approved,
+                "reason": reason,
+                "model": response.model,
+                "input_tokens": response.input_tokens,
+                "output_tokens": response.output_tokens,
+                "validation": _validation_snapshot(validation),
+            }
+        })
+
+        if not approved:
+            self.state.save(self.project_root)
+            return ApprovalResult(False, validation, reason=reason)
+
+        script_path = self.project_root / "scripts" / "design.py"
+        if lock_segment(script_path, seg.id):
+            seg.attempts.append({
+                "ai_approval": True,
+                "human_override": False,
+                "reason": reason,
+                "validation": _validation_snapshot(validation),
+            })
+            seg.locked = True
+            if seg.id not in self.state.locked_segment_ids:
+                self.state.locked_segment_ids.append(seg.id)
+            self.state.current_segment_index += 1
+            self.state.save(self.project_root)
+            self._pending_code = None
+            return ApprovalResult(True, validation, ai_approval=True, reason=reason)
+        self.state.save(self.project_root)
+        return ApprovalResult(False, validation, reason="marker lock failed")
+
     # ---- 下一段 ----
 
     def next_segment(self) -> SegmentState | None:
@@ -240,7 +318,10 @@ class Session:
         if seg and not seg.locked:
             lines.append(f"  1. Review segment {seg.id}")
             lines.append(f"  2. Generate / revise with validation feedback")
-            lines.append(f"  3. Human approve and lock; manual approval has final priority")
+            if self.state.mode == "fast":
+                lines.append(f"  3. Fast mode asks AI to review and decide whether to lock")
+            else:
+                lines.append(f"  3. Human approve and lock; manual approval has final priority")
         elif seg and seg.locked:
             lines.append(f"  Already locked. Run next segment generation.")
         else:
@@ -270,6 +351,71 @@ def _extract_python_code(text: str) -> str:
     if fenced:
         return fenced[0].strip() + "\n"
     return text.strip() + "\n"
+
+
+def _review_system_prompt() -> str:
+    return """你是 PyFii 编舞 agent 的快速模式自审器。
+你的任务不是重新写代码，而是审核当前未锁定段是否可以进入下一段。
+硬性安全验证已经由程序完成；如果发现明显视觉退化、意图不符、首段缺少起飞布局、用小抖动冒充动作、或流程不完整，应要求 revise。
+只输出一个 JSON 对象：{"decision":"lock"|"revise","reason":"一句中文理由"}。"""
+
+
+def _review_user_prompt(
+    segment_id: str,
+    intent: str,
+    design_py: str,
+    validation: ValidationResult,
+) -> str:
+    validation_data = json.dumps(_validation_snapshot(validation), ensure_ascii=False, indent=2)
+    return f"""请审核当前段 {segment_id} 是否可以锁定并进入下一段。
+
+## 设计意图
+{intent}
+
+## 自动验证结果
+```json
+{validation_data}
+```
+
+## 当前 design.py
+```python
+{design_py}
+```
+
+审核准则：
+- validation.passed 必须为 true，否则不能 lock。
+- 首段 S01 必须自己包含起飞布局和 takeoff，不能依赖模板预设起飞点。
+- 动作应有明确离位、跨区域展开/收缩/交换或分组推进，不能靠小范围抖动过关。
+- 不应锁定明显车道退化、队形重复、视觉目标明显不符的段。
+
+只输出 JSON，不要解释额外文字。"""
+
+
+def _parse_review_decision(text: str) -> tuple[bool, str]:
+    raw = text.strip()
+    match = re.search(r"\{.*\}", raw, flags=re.DOTALL)
+    if match:
+        try:
+            data = json.loads(match.group(0))
+            decision = str(data.get("decision", "")).strip().lower()
+            reason = str(data.get("reason", "")).strip()
+            return decision in {"lock", "approve", "approved", "锁定", "通过"}, reason or raw[:300]
+        except json.JSONDecodeError:
+            pass
+
+    lowered = raw.lower()
+    if "revise" in lowered or "修改" in raw or "不锁" in raw:
+        return False, raw[:300]
+    if "lock" in lowered or "approve" in lowered or "锁定" in raw:
+        return True, raw[:300]
+    return False, f"AI review response was not a clear lock decision: {raw[:260]}"
+
+
+def _append_attempt_event(seg: SegmentState, event: dict) -> None:
+    if seg.attempts:
+        seg.attempts[-1].update(event)
+    else:
+        seg.attempts.append(event)
 
 
 def _join_feedback(initial: str, repair: str) -> str:
@@ -339,7 +485,6 @@ def _has_lock_approval(seg: SegmentState) -> bool:
     for attempt in seg.attempts:
         if attempt.get("human_approval") is True:
             return True
-        validation = attempt.get("validation", {})
-        if validation.get("passed") is True:
+        if attempt.get("ai_approval") is True:
             return True
     return False

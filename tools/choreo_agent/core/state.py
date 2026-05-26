@@ -24,7 +24,7 @@ class ProjectState:
     music_path: str = ""
     music_duration: float = 0.0
     music_confirmed: bool = False
-    mode: str = "safe"  # safe | fast
+    mode: str = "manual"  # manual | fast
     provider: str = "deepseek"
     segments: list[SegmentState] = field(default_factory=list)
     current_segment_index: int = 0
@@ -89,9 +89,16 @@ class ProjectState:
             music_path=data.get("music_path", ""),
             music_duration=data.get("music_duration", 0.0),
             music_confirmed=data.get("music_confirmed", False),
-            mode=data.get("mode", "safe"),
+            mode=_normalize_mode(data.get("mode", "manual")),
             provider=data.get("provider", "deepseek"),
             segments=segments,
             current_segment_index=data.get("current_segment_index", 0),
             locked_segment_ids=data.get("locked_segment_ids", []),
         )
+
+
+def _normalize_mode(mode: str) -> str:
+    value = str(mode).strip().lower()
+    if value in {"fast", "quick", "auto", "快速", "快速模式"}:
+        return "fast"
+    return "manual"

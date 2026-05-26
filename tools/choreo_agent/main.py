@@ -13,17 +13,18 @@ from core import Session
 def main():
     if len(sys.argv) < 2:
         print("Usage:")
-        print("  python tools/choreo_agent/main.py init agent_projects/<name> [provider]")
+        print("  python tools/choreo_agent/main.py init agent_projects/<name> [provider] [manual|fast]")
         print("  python tools/choreo_agent/main.py agent_projects/<name>")
         return
 
     if sys.argv[1] == "init":
         if len(sys.argv) < 3:
-            print("Usage: python tools/choreo_agent/main.py init agent_projects/<name> [provider]")
+            print("Usage: python tools/choreo_agent/main.py init agent_projects/<name> [provider] [manual|fast]")
             return
         provider = sys.argv[3] if len(sys.argv) > 3 else None
+        mode = sys.argv[4] if len(sys.argv) > 4 else None
         proj = _resolve_project_path(sys.argv[2])
-        _init_project_from_template(proj, provider=provider)
+        _init_project_from_template(proj, provider=provider, mode=mode)
         print(f"Initialized {proj}")
         return
 
@@ -130,7 +131,18 @@ def main():
                         print(f"  continuity_error: {validation.continuity_error[-200:]}")
 
             if rounds[-1].validation and rounds[-1].validation.passed:
-                print("Safe gate passed. You can approve and lock this segment.")
+                if session.state.mode == "fast":
+                    print("Safe gate passed. Fast mode: asking AI reviewer whether to lock.")
+                    approval = session.review_and_lock_with_llm(
+                        provider=provider,
+                        validation=rounds[-1].validation,
+                    )
+                    if approval.locked:
+                        print(f"AI review approved and locked {session.state.locked_segment_ids[-1]}.")
+                    else:
+                        print(f"AI review did not lock the segment: {approval.reason}")
+                else:
+                    print("Safe gate passed. Manual mode: human approval is required; use a to lock.")
             else:
                 print("Safe gate failed. Segment remains unlocked; do not advance.")
 
@@ -145,8 +157,19 @@ def main():
             session.sync_state_with_markers(save=True)
             print("Synced state from design.py markers.")
 
+        elif cmd.startswith("mode"):
+            parts = cmd.split()
+            if len(parts) == 1:
+                print(f"Mode: {session.state.mode}")
+            elif len(parts) == 2:
+                session.state.mode = _normalize_mode(parts[1])
+                session.save()
+                print(f"Mode set to {session.state.mode}.")
+            else:
+                print("Usage: mode [manual|fast]")
+
         else:
-            print("Commands: g [feedback]=generate+repair v=validate a=approve h=handoff sync s=save q=quit")
+            print("Commands: g [feedback]=generate+repair v=validate a=approve h=handoff mode [manual|fast] sync s=save q=quit")
 
 
 def _resolve_project_path(value: str) -> Path:
@@ -156,7 +179,7 @@ def _resolve_project_path(value: str) -> Path:
     return proj.resolve()
 
 
-def _init_project_from_template(project_root: Path, provider: str | None = None) -> None:
+def _init_project_from_template(project_root: Path, provider: str | None = None, mode: str | None = None) -> None:
     template_root = REPO_ROOT / "tools" / "choreo_agent" / "project_template"
     if not template_root.exists():
         raise FileNotFoundError(f"missing project template: {template_root}")
@@ -174,7 +197,16 @@ def _init_project_from_template(project_root: Path, provider: str | None = None)
         state["name"] = project_root.name
     if provider:
         state["provider"] = provider
+    if mode:
+        state["mode"] = _normalize_mode(mode)
     state_path.write_text(json.dumps(state, indent=2, ensure_ascii=False), encoding="utf-8")
+
+
+def _normalize_mode(mode: str) -> str:
+    value = str(mode).strip().lower()
+    if value in {"fast", "quick", "auto", "快速", "快速模式"}:
+        return "fast"
+    return "manual"
 
 
 def _compact_quality(quality: dict) -> dict:
