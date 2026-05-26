@@ -230,7 +230,7 @@ class LlmResponse:
 不推荐 DeepSeek 式：
 ```python
 def cl(x):return max(10,min(550,int(round(x))))
-for i,d in enumerate(ds): d.inittime(24); d.VelXY(180,360)
+for i,d in enumerate(ds): d.inittime(24); d.VelXY(180,260); d.VelZ(180,260)
 ```
 
 推荐：
@@ -240,7 +240,8 @@ def clamp_xy(value: float) -> int:
 
 for i, drone in enumerate(drones):
     drone.inittime(24)
-    drone.VelXY(180, 360)
+    drone.VelXY(180, 260)
+    drone.VelZ(180, 260)
 ```
 
 ### marker 必须存在

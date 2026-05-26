@@ -80,7 +80,7 @@ drone.delay(rest_ms_for_this_move)
 
 - 使用 2-3 个高度层，例如 low/mid/high；不要全段所有目标都写同一个 `z`。
 - 至少一半无人机在本段内有明显 Z 变化（约 25cm 以上），高度变化应服务于叙事：升起、压低、波峰、前景/背景错层。
-- 几何点要同时考虑 XY 和 Z，`dist3()` 必须用于时间预算；不能只按 XY 估算飞行时间。
+- 几何点要同时考虑 XY 和 Z，agent 侧运动学工具必须按 3D distance 做时间预算；不能只按 XY 估算飞行时间。
 - 小幅 Z 抖动不能当主体动作；高度变化要和横向路线一起形成三维构图。
 
 ## 几何与叙事
@@ -96,7 +96,7 @@ drone.delay(rest_ms_for_this_move)
 
 速度是编舞节奏的一部分，不是固定常量：
 
-- 每个 interval 根据 `distance` 和 `desired_s` 计算 `speed`，常用 `a = speed * 2`。
+- 每个 interval 根据 `distance`、`desired_s` 和动作质感计算 `speed` 与 `acceleration`；`a = 2v` 只是经验候选，不是硬规则。
 - 远距离和短距离不能都用同一个 `VelXY(200, 400)`；不同分组可用不同速度制造 canon、渐强或回收感。
 - 如果移动明显早于 interval 结束，优先降低速度或改路线；如果会动作未完成，提速、缩短距离或延长该移动执行预算。
 - 禁止整段只在开头设置一次速度后所有 move 共用；每个 keyframe 至少重新评估一次速度/加速度。

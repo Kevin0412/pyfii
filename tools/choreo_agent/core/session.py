@@ -499,6 +499,8 @@ def _validation_snapshot(result: ValidationResult) -> dict:
         "degradation_ok": result.degradation_ok,
         "degradation": result.degradation,
         "degradation_errors": result.degradation_errors,
+        "code_quality_ok": result.code_quality_ok,
+        "code_quality_errors": result.code_quality_errors,
         "exit_state": result.exit_state,
         "error_message": result.error_message[-500:],
         "continuity_error": result.continuity_error[-500:],

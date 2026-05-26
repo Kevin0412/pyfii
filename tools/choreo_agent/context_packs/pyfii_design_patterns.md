@@ -120,10 +120,6 @@ else:
 不要整段一个速度。速度表达音乐：
 
 ```python
-def speed_for_interval(distance_cm, desired_s):
-    usable_s = max(0.6, desired_s - 0.5)
-    return min(200, max(45, int(distance_cm / usable_s)))
-
 intervals = [
     {"seconds": 1.6, "feel": "quick ignition"},
     {"seconds": 2.4, "feel": "broad expansion"},
@@ -135,7 +131,7 @@ intervals = [
 经验：
 
 - 远距离大展开可用 140-200，短距离过渡可用 60-110。
-- `a = speed * 2` 是常用稳定选择。
+- acceleration 是独立节奏参数；`a = 2v` 只是常用稳定候选，不要写死。
 - 如果动作太早结束，先降速或拉长路线，不要补 delay。
 - 如果 action warning，提速、缩短距离，或增加这次 move 后的执行预算。
 

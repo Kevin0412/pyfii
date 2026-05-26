@@ -1,4 +1,5 @@
 """Validator — 四层验证 + 连贯性检测"""
+import ast
 import math
 import os
 import subprocess
@@ -28,6 +29,13 @@ MAX_GLOBAL_HOVER_S = 1.0
 SEGMENT_EDGE_BUFFER_S = 1.0
 MIN_MEANINGFUL_EXCURSION_CM = 30.0
 MIN_MOVING_DRONE_FRACTION = 0.7
+AGENT_SIDE_HELPERS = {
+    "dist3",
+    "flight_time_s",
+    "flight_time_ms",
+    "speed_for_interval",
+    "move_interval",
+}
 
 
 @dataclass
@@ -59,6 +67,8 @@ class ValidationResult:
     degradation_ok: bool = True
     degradation: dict = field(default_factory=dict)
     degradation_errors: list[str] = field(default_factory=list)
+    code_quality_ok: bool = True
+    code_quality_errors: list[str] = field(default_factory=list)
     exit_state: list[list[int]] | None = None
     error_message: str = ""
     hover_error: str = ""
@@ -75,6 +85,7 @@ class ValidationResult:
             and self.dense_min_distance_cm is not None
             and self.dense_min_distance_cm > 51
             and not self.collision_intervals
+            and self.code_quality_ok
             and (
                 not self.continuity_required
                 or (
@@ -147,6 +158,9 @@ class ValidationResult:
                 "动作未完成风险：请计算每个 move2 的 3D 飞行时间，确认该 move2 后的 light+delay "
                 "覆盖执行时间；必要时降低单次位移、提高合法速度/加速度，或延长这次移动后的执行预算。"
             )
+        if self.code_quality_errors:
+            lines.append("代码结构失败：")
+            lines.extend(f"- {item}" for item in self.code_quality_errors)
         hover = self.hover_feedback
         if hover:
             lines.append(hover)
@@ -222,6 +236,9 @@ def validate(
     except SyntaxError as e:
         result.error_message = f"Syntax error: {e}"
         return result
+
+    result.code_quality_errors = _check_agent_helper_leak(code)
+    result.code_quality_ok = not result.code_quality_errors
 
     # 2-4. 执行+读回+验收
     try:
@@ -333,6 +350,22 @@ def validate(
         result.error_message = str(e)
 
     return result
+
+
+def _check_agent_helper_leak(code: str) -> list[str]:
+    tree = ast.parse(code)
+    leaked = sorted(
+        node.name
+        for node in ast.walk(tree)
+        if isinstance(node, ast.FunctionDef) and node.name in AGENT_SIDE_HELPERS
+    )
+    if not leaked:
+        return []
+    names = ", ".join(leaked)
+    return [
+        f"不要在 design.py/segment 中定义 agent 侧运动学工具函数：{names}。"
+        "请先在 agent 侧估算 3D distance/flight time，再把具体 speed/accel/delay 写入段代码。"
+    ]
 
 
 def _detect_hover(

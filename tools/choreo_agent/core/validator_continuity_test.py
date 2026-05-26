@@ -4,6 +4,7 @@ from validator import (
     ValidationResult,
     _check_effective_motion,
     _check_degradation,
+    _check_agent_helper_leak,
     _check_motion_envelope,
     _check_motion_quality,
 )
@@ -139,6 +140,20 @@ def test_degradation_blocks_obvious_lanes_and_rigid_circle():
     ) == []
 
 
+def test_agent_motion_helpers_do_not_belong_in_design_py():
+    errors = _check_agent_helper_leak(
+        """
+def dist3(a, b):
+    return 0
+
+def flight_time_ms(distance_cm, v, a):
+    return 0
+"""
+    )
+    assert errors
+    assert "agent 侧运动学工具" in errors[0]
+
+
 if __name__ == "__main__":
     test_hover_blocks_formal_segment()
     test_takeoff_landing_exempt_from_continuity_gate()
@@ -146,4 +161,5 @@ if __name__ == "__main__":
     test_effective_motion_blocks_tail_filler_and_low_activity()
     test_motion_quality_blocks_small_jitter()
     test_degradation_blocks_obvious_lanes_and_rigid_circle()
+    test_agent_motion_helpers_do_not_belong_in_design_py()
     print("OK")

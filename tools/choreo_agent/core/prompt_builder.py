@@ -1,6 +1,11 @@
 """Prompt Builder — 组装 LLM prompt"""
 from pathlib import Path
 
+try:
+    from .motion_math import prompt_budget_table
+except ImportError:  # allow running this module from tools/choreo_agent/core
+    from motion_math import prompt_budget_table
+
 CONTEXT_DIR = Path(__file__).resolve().parent.parent / "context_packs"
 
 ALL_PACKS = [
@@ -21,7 +26,9 @@ def load_context_pack(name: str) -> str:
 
 
 def build_system_prompt() -> str:
-    return "\n\n".join(load_context_pack(p) for p in ALL_PACKS)
+    packs = [load_context_pack(p) for p in ALL_PACKS]
+    packs.append(prompt_budget_table())
+    return "\n\n".join(packs)
 
 
 def _requires_continuity_gate(segment_id: str, intent: str) -> bool:
@@ -96,6 +103,7 @@ prev = {prev_state}
 - 如果需要停顿呼吸，压到 0.8 秒以内，并让分组错峰或仍在执行的高度/弧线 keyframe 承接下一动作
 - 时间线必须覆盖全段：PyFii 是每架机各自累计时间，不是 Python 循环全局时间；段内通常用一次 inittime(start)，然后按 move2 -> 短灯光/执行等待 -> move2 链式推进
 - 每个 move2 后都要按 3D 距离和 VelXY/VelZ 计算飞行时间；后续 light+delay 是这次移动的执行预算，不是段尾填空
+- 运动学计算属于 agent 侧小工具：不要在本段代码里定义 dist3/flight_time_ms/speed_for_interval/move_interval；应先估算，再写入具体 speed/accel/delay 数值
 - 段尾收束必须是实际移动在最后 1 秒内仍在执行并完成，不能只用纯灯光/静止等待填满
 - 段尾最后 1 秒必须是有效群体收束动作，不允许主体提前结束后用单机慢挪、小幅 Z/XY 抖动把 motion_end 拖到段尾
 - 禁止结构：全体同一 inittime -> 多个短 move2 很快完成 -> apply_light(ticks>=10)/长 delay 填尾
@@ -114,8 +122,9 @@ prev = {prev_state}
 - 安全优先于视觉复杂度；如果复杂换位有碰撞风险，使用扇区保持、排队错峰和更少几何
 - best_assign 结果硬编码为 perm = (...)
 - 生成前先算每个 move2 的飞行时间，确保该移动后的 light + delay 执行预算够
+- acceleration 是独立节奏参数；a=2v 只能作为经验候选，不能写成固定规律
 - 不要只做一个 move2 —— 可以多几何、条件分支、相对移动、排队错峰
-- VelXY 和 VelZ 值必须一致
+- VelXY 和 VelZ 最好成对设置，并使用同一组 speed/accel；这是为了兼容原始 XML/回放语义，不是 PyFii API 本身的物理限制
 - 目标几何必须体现高度层，不能所有 target 共用同一个 z
 - 速度/加速度必须按每段 keyframe 动态计算，不能整段复用同一个 VelXY/VelZ
 """

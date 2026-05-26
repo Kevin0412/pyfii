@@ -80,6 +80,14 @@ drone.VelZ(120, 240)    # 纵向速度
 ```
 
 speed range = (20, 200) cm/s。acceleration 默认 ~200 cm/s²，范围 (50, 400)。
+示例里的 `120, 240` 只是 API 格式示范，不表示 acceleration 必须等于 2 * speed；acceleration 可以根据柔和/利落/急促等动作质感独立选择。
+
+`VelXY` 和 `VelZ` 最好成对设置，并使用同一组 speed/acceleration。这不是 PyFii Python API 本身的物理限制，而是为了匹配原始 XML/回放里的速度字段语义，避免水平与垂直运动被不同规则解释。每次 keyframe 重新选择速度时，同时写：
+
+```python
+drone.VelXY(speed, accel)
+drone.VelZ(speed, accel)
+```
 
 速度 200 + 加速度 400 都拉满还飞不完，才需要延长这次移动后的执行预算；不要在段尾补无运动覆盖的长 delay。
 

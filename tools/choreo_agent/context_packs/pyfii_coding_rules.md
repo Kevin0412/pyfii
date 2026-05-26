@@ -31,14 +31,17 @@ for i,d in enumerate(ds):
     for gi in range(len(geo)):
         target = assigned_targets[gi][i]
         interval_s = intervals_s[gi]
-        distance = dist3(current, target)
-        speed = speed_for_interval(distance, interval_s)
-        d.VelXY(speed, speed * 2)
-        d.VelZ(speed, speed * 2)
+        # Agent motion tool should have estimated this before writing code:
+        # 3D distance, desired interval -> concrete speed/accel/delay.
+        speed = speeds[gi][i]
+        accel = accels[gi][i]
+        delay_ms = delays[gi][i]
+        d.VelXY(speed, accel)
+        d.VelZ(speed, accel)
         d.move2(...)
         light_ticks = 3
         apply_light(d, color, light_ticks)
-        d.delay(max(0, flight_time_ms(distance, speed, speed * 2) - light_ticks * 100 + 120))
+        d.delay(delay_ms)
         current = target
 
 prev = assigned_targets[-1]
@@ -48,7 +51,7 @@ prev = assigned_targets[-1]
 
 ## 时间线和速度设置
 
-- **VelXY 和 VelZ 必须使用相同的速度和加速度值**
+- **VelXY 和 VelZ 最好成对设置，并使用相同 speed/accel**。这不是 PyFii API 本身的限制，而是为了兼容原始 XML/回放语义，避免水平与垂直运动按不同速度字段解释。
 - **每个 keyframe 都要重新计算速度/加速度**；不要整段固定 `VelXY(200, 400)` 或只设置一次速度。
 
 `move2()` 发起移动但不推进命令时间；`delay()` 和 `apply_light()` 才推进本机命令时间。因此正确链路是 `move2() -> 短灯光/执行等待 -> move2()`。不要每个 move 前都 `inittime()`；只在段首或明确绝对 cue 处使用。
@@ -60,47 +63,27 @@ prev = assigned_targets[-1]
 
 ## 飞行时间公式
 
-```python
-def dist3(p0, p1):
-    return math.sqrt(
-        (p1[0] - p0[0]) ** 2 +
-        (p1[1] - p0[1]) ** 2 +
-        (p1[2] - p0[2]) ** 2
-    )
+飞行时间估算属于 agent 侧运动学小工具，不要把 `dist3()` / `flight_time_ms()` / `speed_for_interval()` / `move_interval()` 定义进 segment 代码里。生成段代码前先用 3D distance 和梯形/三角速度曲线估算，再写入具体的 `speed`、`accel`、`delay_ms`。
 
-def flight_time_s(distance_cm, v, a):
-    """PyFii readback uses a trapezoid/triangle speed curve on 3D distance."""
-    if distance_cm <= 0:
-        return 0.0
-    accel_dist = v * v / (2 * a)
-    if distance_cm >= 2 * accel_dist:  # 有匀速阶段
-        return 2 * v / a + (distance_cm - 2 * accel_dist) / v
-    else:                     # 仅加速-减速
-        return 2 * math.sqrt(distance_cm / a)
+核心模型：
 
-def flight_time_ms(distance_cm, v, a):
-    return int(math.ceil(flight_time_s(distance_cm, v, a) * 1000))
+- 3D distance = sqrt(dx² + dy² + dz²)。
+- 加速距离 = v² / (2a)。
+- 如果 distance >= 2 * 加速距离：有匀速段，time = 2v/a + (distance - 2 * 加速距离) / v。
+- 如果 distance < 2 * 加速距离：只有加速/减速三角曲线，time = 2 * sqrt(distance / a)。
 
-def speed_for_interval(distance_cm, desired_s):
-    """用 VelXY(v, 2v) 时，长移动约 distance/v + 0.5s。"""
-    if distance_cm <= 1:
-        return 60
-    usable_s = max(0.6, desired_s - 0.5)
-    return min(200, max(45, int(distance_cm / usable_s)))
-```
-
-短距离会走三角速度曲线；长距离才有匀速阶段。使用 `VelXY(v, 2*v)` 时，多数长移动约为 `distance / v + 0.5s`。
+acceleration 是独立参数：`a = 2v` 只是某些 dntg/经验写法里的稳定候选，不能当硬规则。柔和动作可用较低 acceleration，利落动作可用较高 acceleration，但必须保持在合法范围内。
 
 确保：
 - 生成段代码前必须先算每个 keyframe interval 的距离和飞行时间。
-- 对每个移动，`light_ticks * 100ms + delay_ms >= flight_time_ms(distance, v, a) + 100`。
+- 对每个移动，`light_ticks * 100ms + delay_ms >= estimated_flight_ms(distance, v, a) + 100`。
 - 如果音乐 interval 比飞行时间长很多，应调整路线和速度，让真实移动占据 interval 的主体，而不是补长 delay。
 
 ## 高度层
 
 - 正式段不能全程固定高度；目标几何必须包含 low/mid/high 的高度层。
 - 至少一半无人机在本段内有明显 Z 变化，通常 >=25cm。
-- 速度预算用 3D 距离：`dist3((x,y,z), (tx,ty,tz))`，不要只用 XY。
+- 速度预算用 3D 距离 `sqrt(dx² + dy² + dz²)`，不要只用 XY；这是 agent 侧估算，不要在段代码里新增 helper。
 
 ## 错误处理
 

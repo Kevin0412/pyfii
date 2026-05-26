@@ -30,8 +30,9 @@ for i, drone in enumerate(drones):
         dist_cm = math.dist(current, target)
         interval_s = intervals_s[gi]
         speed = min(200, max(80, int(dist_cm / max(0.5, interval_s - 0.5))))
-        drone.VelXY(speed, speed * 2)
-        drone.VelZ(speed, speed * 2)
+        accel = [130, 220, 170][gi]
+        drone.VelXY(speed, accel)
+        drone.VelZ(speed, accel)
         drone.move2(*target)
         apply_light(drone, colors[gi], 3)
         drone.delay(max(120, int(interval_s * 1000) - 300))
