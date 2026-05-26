@@ -183,3 +183,30 @@ intervals = [
 - 是否每个 keyframe 都按 3D 距离调速？
 - 是否最后 1 秒仍有有效群体运动？
 - 是否没有用圆形参数变体、单机小波动、长 delay 凑时长？
+
+## 计算沙箱
+
+生成代码前，先用沙箱计算最佳排列和飞行时间。在生成的代码中加入沙箱计算块：
+
+```python
+# === SANDBOX_CALC ===
+prev_xy = [(x1,y1), ...]
+geo_xy = [(x1,y1), ...]
+
+# 计算最佳排列
+result = best_assign(prev_xy, geo_xy)
+# result = {"perm": [0,1,2,...], "min_d_cm": 89.0}
+
+# 计算飞行时间
+v, a = 200, 400
+for i in range(7):
+    d = distance_3d(prev[i], geo[i])
+    ft = flight_time_ms(d, v, a)
+    # d7: dist=Xcm, flight=Yms
+
+# === SANDBOX_END ===
+```
+
+然后将计算结果硬编码到代码中：
+- perm = (0, 1, 2, 3, 4, 5, 6)  # from sandbox
+- drone.delay(Y)  # flight_time_ms result + margin
