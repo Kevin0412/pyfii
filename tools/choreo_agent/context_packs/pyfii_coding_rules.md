@@ -94,3 +94,7 @@ acceleration 是独立参数：`a = 2v` 只是某些 dntg/经验写法里的稳�
 | `action isn't completed` | 下一条移动开始太早或飞行时间预算不够 | 计算本次 move2 的飞行时间，提速/缩短距离/增加该移动后的执行时间 |
 | `distance between` | 两机<51cm | 增间距或提搜索权重 |
 | `ValueError: invalid literal` | 坐标含浮点数 | int(round(x)) |
+
+- **不要复制 best_assign、motion_math、planning_tools 的定义到 design.py**，这些是离线工具，只需使用计算结果。
+- **每个 move2 必须给足够时间完成动作**：delay >= flight_time_ms + margin。动作未完成是硬错误。
+- **S01 可接受车道退化，但 S02 必须跳出**：换几何语言、换空间组织方式、换高度层次。

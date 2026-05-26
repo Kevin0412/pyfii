@@ -57,8 +57,11 @@ def replace_active_segment(
 
     locked_hashes = _hash_locked(lines, locked_segment_ids)
 
-    # 过滤 agent 代码中可能含有的 marker 行
+    # 过滤 agent 代码中可能含有的 marker 行和 markdown 代码块标记
     clean_code = [l for l in new_code.splitlines()
+                  if not l.strip().startswith(MARKER_START)
+                  and not l.strip().startswith(MARKER_END)
+                  and l.strip() not in ('```python', '```')]
                   if not l.strip().startswith(MARKER_START)
                   and not l.strip().startswith(MARKER_END)]
 

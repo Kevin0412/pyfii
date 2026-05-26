@@ -171,7 +171,8 @@ class Session:
 
     # ---- 锁定 ----
 
-    def approve_and_lock(self, allow_human_override: bool = True) -> ApprovalResult:
+    def approve_and_lock(self, allow_human_override: bool = False) -> ApprovalResult:
+        """人工确认后锁定当前段。验证不通过默认拒绝，需显式 override。"""
         """人工确认后锁定当前段。验证结果会记录，但人类确认优先。"""
         seg = self.state.current_segment
         if seg is None or seg.locked:
