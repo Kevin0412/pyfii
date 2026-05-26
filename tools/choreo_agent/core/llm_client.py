@@ -4,9 +4,12 @@ import signal
 import httpx
 from pathlib import Path
 from dataclasses import dataclass
+from typing import Callable
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 CONFIG_PATH = REPO_ROOT / "ai_providers.local.json"
+DEFAULT_WALL_TIMEOUT_S = 900
+DEFAULT_READ_TIMEOUT_S = 300
 
 
 @dataclass
@@ -36,6 +39,8 @@ def chat(
     user: str,
     provider: str = "deepseek",
     temperature: float = 0.2,
+    on_delta: Callable[[str], None] | None = None,
+    on_heartbeat: Callable[[], None] | None = None,
 ) -> LlmResponse:
     """发送 chat completion 请求"""
     cfg = load_config(provider)
@@ -50,14 +55,19 @@ def chat(
         "max_tokens": cfg.get("max_output_tokens", 16384),
     }
     payload.update(cfg.get("extra_body", {}))
+    use_stream = bool(cfg.get("stream", True))
+    if use_stream:
+        payload["stream"] = True
+        if "stream_options" in cfg:
+            payload["stream_options"] = cfg["stream_options"]
 
     headers = {
         "Authorization": f"Bearer {cfg['api_key']}",
         "Content-Type": "application/json",
     }
 
-    wall_timeout_s = float(cfg.get("timeout_s", 180))
-    read_timeout_s = float(cfg.get("read_timeout_s", min(60, wall_timeout_s)))
+    wall_timeout_s = float(cfg.get("timeout_s", DEFAULT_WALL_TIMEOUT_S))
+    read_timeout_s = float(cfg.get("read_timeout_s", min(DEFAULT_READ_TIMEOUT_S, wall_timeout_s)))
     timeout = httpx.Timeout(
         connect=float(cfg.get("connect_timeout_s", 30)),
         read=read_timeout_s,
@@ -75,15 +85,40 @@ def chat(
     signal.signal(signal.SIGALRM, on_timeout)
     signal.setitimer(signal.ITIMER_REAL, wall_timeout_s)
     try:
-        resp = httpx.post(
-            f"{cfg['base_url'].rstrip('/')}/chat/completions",
-            json=payload,
+        url = f"{cfg['base_url'].rstrip('/')}/chat/completions"
+        if use_stream:
+            return _chat_stream(
+                url=url,
+                payload=payload,
+                headers=headers,
+                timeout=timeout,
+                fallback_model=cfg["model"],
+                on_delta=on_delta,
+                on_heartbeat=on_heartbeat,
+            )
+        return _chat_once(
+            url=url,
+            payload=payload,
             headers=headers,
             timeout=timeout,
         )
     finally:
         signal.setitimer(signal.ITIMER_REAL, 0)
         signal.signal(signal.SIGALRM, previous_handler)
+
+
+def _chat_once(
+    url: str,
+    payload: dict,
+    headers: dict,
+    timeout: httpx.Timeout,
+) -> LlmResponse:
+    resp = httpx.post(
+        url,
+        json=payload,
+        headers=headers,
+        timeout=timeout,
+    )
     resp.raise_for_status()
     data = resp.json()
 
@@ -93,6 +128,71 @@ def chat(
     return LlmResponse(
         text=choice["message"]["content"],
         model=data.get("model", ""),
+        input_tokens=usage.get("prompt_tokens"),
+        output_tokens=usage.get("completion_tokens"),
+    )
+
+
+def _chat_stream(
+    url: str,
+    payload: dict,
+    headers: dict,
+    timeout: httpx.Timeout,
+    fallback_model: str,
+    on_delta: Callable[[str], None] | None,
+    on_heartbeat: Callable[[], None] | None,
+) -> LlmResponse:
+    chunks: list[str] = []
+    model = fallback_model
+    usage = {}
+
+    with httpx.stream(
+        "POST",
+        url,
+        json=payload,
+        headers=headers,
+        timeout=timeout,
+    ) as resp:
+        resp.raise_for_status()
+        for line in resp.iter_lines():
+            if not line:
+                continue
+            if line.startswith("data:"):
+                line = line[5:].strip()
+            if not line:
+                continue
+            if line == "[DONE]":
+                break
+
+            try:
+                event = json.loads(line)
+            except json.JSONDecodeError:
+                if on_heartbeat:
+                    on_heartbeat()
+                continue
+
+            model = event.get("model") or model
+            if event.get("usage"):
+                usage = event["usage"]
+
+            choices = event.get("choices") or []
+            if not choices:
+                if on_heartbeat:
+                    on_heartbeat()
+                continue
+
+            delta = choices[0].get("delta") or {}
+            content = delta.get("content") or ""
+            if content:
+                chunks.append(content)
+                if on_delta:
+                    on_delta(content)
+            elif on_heartbeat:
+                on_heartbeat()
+
+    return LlmResponse(
+        text="".join(chunks),
+        model=model,
         input_tokens=usage.get("prompt_tokens"),
         output_tokens=usage.get("completion_tokens"),
     )

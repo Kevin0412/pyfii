@@ -89,14 +89,19 @@ def main():
 
         elif cmd.startswith("g"):
             feedback = raw_cmd[1:].strip()
-            print(f"Generating with {provider}; max_attempts=5. Each LLM call has a wall-clock timeout.")
+            print(f"Generating with {provider}; max_attempts=5. Streaming is enabled; reasoning is not printed.")
+            stream = _StreamPrinter()
             try:
                 rounds = session.generate_until_safe_with_llm(
                     provider=provider,
                     feedback=feedback,
                     max_attempts=5,
+                    on_delta=stream.delta,
+                    on_heartbeat=stream.heartbeat,
                 )
+                stream.finish()
             except Exception as e:
+                stream.finish()
                 print(f"Generate failed: {e}")
                 continue
             if not rounds or rounds[-1].response is None:
@@ -218,6 +223,33 @@ def _compact_quality(quality: dict) -> dict:
         "drone_count",
     )
     return {key: quality.get(key) for key in keys if key in quality}
+
+
+class _StreamPrinter:
+    def __init__(self):
+        self.started = False
+        self.heartbeat_count = 0
+
+    def delta(self, text: str) -> None:
+        if not self.started:
+            if self.heartbeat_count:
+                print()
+            print("--- LLM stream ---")
+            self.started = True
+        print(text, end="", flush=True)
+
+    def heartbeat(self) -> None:
+        if self.started:
+            return
+        self.heartbeat_count += 1
+        if self.heartbeat_count % 20 == 0:
+            print(".", end="", flush=True)
+
+    def finish(self) -> None:
+        if self.started:
+            print("\n--- end stream ---")
+        elif self.heartbeat_count:
+            print()
 
 
 if __name__ == "__main__":

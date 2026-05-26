@@ -3,6 +3,7 @@ import json
 import re
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Callable
 from .state import ProjectState, SegmentState
 from .script_editor import replace_active_segment, lock_segment, parse_markers
 from .checkpoint import save as checkpoint_save
@@ -59,6 +60,8 @@ class Session:
         provider: str = "deepseek",
         feedback: str = "",
         temperature: float = 0.2,
+        on_delta: Callable[[str], None] | None = None,
+        on_heartbeat: Callable[[], None] | None = None,
     ) -> LlmResponse | None:
         """调用 LLM 生成当前段，并写入 design.py。"""
         seg = self.state.current_segment
@@ -82,6 +85,8 @@ class Session:
                 user=user,
                 provider=provider,
                 temperature=temperature,
+                on_delta=on_delta,
+                on_heartbeat=on_heartbeat,
             )
         except Exception as exc:
             seg.attempts.append({
@@ -114,6 +119,8 @@ class Session:
         feedback: str = "",
         temperature: float = 0.2,
         max_attempts: int = 3,
+        on_delta: Callable[[str], None] | None = None,
+        on_heartbeat: Callable[[], None] | None = None,
     ) -> list[GenerationRound]:
         """生成当前段并自动验证；失败则把危险反馈回灌给 LLM。"""
         rounds: list[GenerationRound] = []
@@ -124,6 +131,8 @@ class Session:
                 provider=provider,
                 feedback=repair_feedback,
                 temperature=temperature,
+                on_delta=on_delta,
+                on_heartbeat=on_heartbeat,
             )
             if response is None:
                 rounds.append(GenerationRound(index=index, response=None, validation=None))
