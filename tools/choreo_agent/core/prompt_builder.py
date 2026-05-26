@@ -3,8 +3,10 @@ from pathlib import Path
 
 try:
     from .motion_math import prompt_budget_table
+    from .planning_tools import prompt_planning_tool_reference
 except ImportError:  # allow running this module from tools/choreo_agent/core
     from motion_math import prompt_budget_table
+    from planning_tools import prompt_planning_tool_reference
 
 CONTEXT_DIR = Path(__file__).resolve().parent.parent / "context_packs"
 
@@ -28,6 +30,7 @@ def load_context_pack(name: str) -> str:
 def build_system_prompt() -> str:
     packs = [load_context_pack(p) for p in ALL_PACKS]
     packs.append(prompt_budget_table())
+    packs.append(prompt_planning_tool_reference())
     return "\n\n".join(packs)
 
 

@@ -31,11 +31,16 @@ SEGMENT_EDGE_BUFFER_S = 1.0
 MIN_MEANINGFUL_EXCURSION_CM = 30.0
 MIN_MOVING_DRONE_FRACTION = 0.7
 AGENT_SIDE_HELPERS = {
+    "assign_targets",
     "best_assign",
+    "budget_layer",
+    "budget_layers",
     "dist3",
     "flight_time_s",
     "flight_time_ms",
     "speed_for_interval",
+    "timeline_cues",
+    "to_xyz",
     "move_interval",
 }
 
