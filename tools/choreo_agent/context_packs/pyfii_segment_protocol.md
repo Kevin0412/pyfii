@@ -209,3 +209,5 @@ for i, drone in enumerate(drones):
 ## 示例完整段
 
 见 `context_packs/examples/segment_with_best_assign.py`
+
+- **相邻段不能使用相同退化类型**，最佳是零退化

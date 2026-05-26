@@ -98,3 +98,10 @@ acceleration 是独立参数：`a = 2v` 只是某些 dntg/经验写法里的稳�
 - **不要复制 best_assign、motion_math、planning_tools 的定义到 design.py**，这些是离线工具，只需使用计算结果。
 - **每个 move2 必须给足够时间完成动作**：delay >= flight_time_ms + margin。动作未完成是硬错误。
 - **S01 可接受车道退化，但 S02 必须跳出**：换几何语言、换空间组织方式、换高度层次。
+
+- **起飞**: `drone.X=drone.x=x; drone.Y=drone.y=y; drone.takeoff(1, z)`
+- **降落**: `drone.land()` 或 `drone.end()`，LAND段内agent自主安排时间
+- **VelXY 和 VelZ 在同一 move 中值必须一致，但每次 move2 前可修改**
+- **agent 可在 `function.py` 中自定义辅助函数**（纯Python标准库+math，不导入pyfii）
+- **每个几何使用不同 Z 高度**，产生三维层次感，不要所有几何在同一平面
+- **相邻段不能使用相同退化类型**（如S01车道退化→S02必须跳出），最佳是零退化

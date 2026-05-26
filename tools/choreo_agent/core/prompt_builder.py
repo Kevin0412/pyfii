@@ -112,7 +112,17 @@ prev = {prev_state}
 
 """
 
-    user += """## 要求
+    user += """
+## 计算沙箱
+在生成代码前，先用以下函数验证你的设计，结果硬编码到最终代码：
+- `best_assign(starts, targets)` → 返回 `{"perm": (0,1,2,...), "min_d_cm": 89.0}`
+- `flight_time_ms(distance_cm, speed, acc)` → 返回 ms 整数
+- `distance_3d(p1, p2)` → 返回 cm 浮点数
+- `vel_for_distance_time(distance_cm, time_s)` → 返回最小速度
+
+**每个 move2 后 delay 必须 >= flight_time_ms(d, v, a) - light_ticks*100 + margin(100-200ms)**
+**不要用固定 delay 混过去，必须根据实际距离计算。**
+## 要求
 - 不要输出 marker 行（START/END），只输出段内部的 Python 代码
 - 如果使用 Markdown，只能放一个 python 代码块；不要解释设计过程
 - 段代码必须在 marker 之间（见 segment_protocol）

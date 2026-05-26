@@ -210,3 +210,13 @@ for i in range(7):
 然后将计算结果硬编码到代码中：
 - perm = (0, 1, 2, 3, 4, 5, 6)  # from sandbox
 - drone.delay(Y)  # flight_time_ms result + margin
+
+## DNTG 反算速度
+
+```python
+def vel_for_distance_time(distance_cm, time_s):
+    for v in range(50, 201):
+        if time_s > flight_time_s(distance_cm, v, v*2):
+            return v
+    return 200
+```

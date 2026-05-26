@@ -108,3 +108,6 @@ XY span 太低 = 浪费 560×560 场地。
 crosscut_v9 用排列搜索才安全。
 
 **修复**: 几何切换必须在 agent 规划层用 `best_assign()` / `assign_targets()`，然后把 `perm` 和目标表硬编码进 final segment。不要把搜索函数或 import 写进 `design.py`。
+
+## 全平面编舞
+所有几何在同一高度平面，没有Z轴层次。应该每个几何给定不同Z。
