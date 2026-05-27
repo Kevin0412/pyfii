@@ -37,6 +37,29 @@ apply_light(d, "#RRGGBB", ticks)
 ```
 
 ## 完整段模板
+## 代码模板（严格复制此模式，只替换坐标）
+
+```python
+geo = [(x1,y1,z1), ..., (x7,y7,z7)]
+geo2 = [(x1,y1,z1), ..., (x7,y7,z7)]
+
+for i, drone in enumerate(drones):
+    drone.inittime(13)
+    drone.delay(i * 80)
+
+for gi in range(2):
+    geos = [geo, geo2]
+    targets = best_assign(prev, geos[gi]) if gi > 0 else geos[gi]
+    for i, drone in enumerate(drones):
+        tx, ty, tz = targets[i]
+        move2(drone, (tx, ty, tz), 3500)
+        apply_light(drone, "#2255aa", 5)
+        drone.x, drone.y, drone.z = tx, ty, tz
+    prev = [(drone.x, drone.y, drone.z) for drone in drones]
+```
+
+注意：move2(drone, ..., 3500) 内部已完成 delay(3500)，**不要**再写 drone.delay(...)。
+
 
 ```python
 geo = [(x1,y1,z1), (x2,y2,z2), ...]   # 非对称几何，间距≥200cm
@@ -46,8 +69,8 @@ for i, d in enumerate(drones):
     d.inittime(START_SEC)
     d.delay(i * 80)
 
-for gi in range(1):  # 仅 1 个 keyframe
-    geos = [geo]
+for gi in range(2):
+    geos = [geo, geo2]
     targets = best_assign(prev, geos[gi]) if gi > 0 else geos[gi]
     for i, d in enumerate(drones):
         move2(d, (clamp_xy(targets[i][0]), clamp_xy(targets[i][1]), clamp_z(targets[i][2])), 1200)
