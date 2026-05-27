@@ -220,3 +220,7 @@ def vel_for_distance_time(distance_cm, time_s):
             return v
     return 200
 ```
+
+## 时间预算速查
+每个 move2 需要的 delay = flight_time_ms(d, v, a) - light_ticks*100 + 100。
+全段总 delay 累加必须小于 (end_time - inittime)*1000 - 1000ms 余量。

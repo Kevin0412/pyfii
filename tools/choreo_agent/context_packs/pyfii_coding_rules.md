@@ -119,3 +119,21 @@ acceleration 是独立参数：`a = 2v` 只是某些 dntg/经验写法里的稳�
 - `COLORS_WARM`, `COLORS_COOL`, `COLORS_BRIGHT` — 颜色预设列表
 
 **禁止使用未列出的函数名**（如 `light_sine`, `led_glow`, `breathe` 等不存在）。
+
+## 时间预算硬约束
+
+**生成前必须计算总时间预算**：
+```python
+total_ms = 0
+for each move:
+    d = distance_3d(prev[i], target[i])
+    ft = flight_time_ms(d, v, a)
+    total_ms += ft + light_ticks*100 + margin  # margin=100-200ms
+total_s = total_ms / 1000
+```
+- `inittime + total_s` 必须 < `end_time` - 1.0（留1秒余量）
+- 如果超过，减少move数量或提高速度
+
+**上一段结束时间约束**：
+- 当前段 `inittime` >= 前一段 `inittime` + 前一段所有delay总和
+- **每个段内不能出现 "Time arrangement error"**
