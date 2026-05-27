@@ -109,6 +109,7 @@ class Session:
             code = response.text.strip()
         else:
             code = _extract_python_code(response.text)
+        code = _strip_imports(code)
         if not code.strip():
             return None
 
@@ -398,6 +399,14 @@ def _strip_segment_markers(code: str) -> str:
         and "PYFII_AGENT_SEGMENT_END" not in line
     ]
     return "\n".join(lines).strip() + "\n"
+
+def _strip_imports(code: str) -> str:
+    """移除 agent 可能添加的 import 行"""
+    return "\n".join(
+        line for line in code.splitlines()
+        if not line.strip().startswith(("import ", "from "))
+    ).strip() + "\n"
+
 
 
 def _review_system_prompt() -> str:
