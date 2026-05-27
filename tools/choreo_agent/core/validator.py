@@ -231,7 +231,7 @@ def validate(
                     if p.startswith("dist:"):
                         result.distance_warnings = int(p.split(":")[1])
                     if p.startswith("act:"):
-                        result.action_warnings = int(p.split(":")[1])
+                        result.action_warnings = max(int(p.split(":")[1]), len(result.action_details))
             if "minD=" in line:
                 for p in line.split():
                     if p.startswith("minD="):
