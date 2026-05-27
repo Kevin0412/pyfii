@@ -45,3 +45,29 @@ targets = best_assign(prev, geo[gi])
 - `drone.VelXY_speed` / `drone.speed` / `drone.vel`
 - `pyfii.movej()` / `pyfii.set_time()` / `pyfii.best_assign()`
 - `drone.fly_to()` / `drone.go()`
+
+## 参考示例
+
+以下是一段正确 pyfii 代码的结构（模仿此模式，换你自己的坐标）：
+
+```python
+geo = [(80+80*i, 80+80*i, 140) for i in range(7)]
+geo2 = [(80,80,160),(480,80,160),(80,480,160),(480,480,160),(280,280,170),(200,200,160),(360,360,160)]
+geo3 = [(100+60*i, 200+120*math.sin(i), 180) for i in range(7)]
+
+for i, d in enumerate(drones):
+    d.inittime(23)
+    d.VelXY(120, 240); d.VelZ(120, 240)
+    d.delay(i * 100)
+
+for gi in range(3):
+    geos = [geo, geo2, geo3]
+    targets = geos[gi] if gi == 0 else best_assign(prev, geos[gi])
+    for i, d in enumerate(drones):
+        dd = math.hypot(prev[i][0]-targets[i][0], prev[i][1]-targets[i][1])
+        spd = min(200, max(120, int(dd/2.0)))
+        d.VelXY(spd, spd*2); d.VelZ(spd, spd*2)
+        d.move2(clamp_xy(targets[i][0]), clamp_xy(targets[i][1]), clamp_z(targets[i][2]))
+        apply_light(d, "#2255aa", 12); d.delay(1200)
+    prev = targets
+```
