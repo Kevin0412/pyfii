@@ -196,3 +196,61 @@ def _chat_stream(
         input_tokens=usage.get("prompt_tokens"),
         output_tokens=usage.get("completion_tokens"),
     )
+
+
+def chat_prefix(
+    system: str,
+    user: str,
+    provider: str = "deepseek",
+    temperature: float = 0.2,
+    timeout: float = 300,
+) -> LlmResponse:
+    """对话前缀续写：强制模型续写 Python 代码，不输出解释。
+    使用 /beta endpoint，assistant 消息 prefix=True。
+    """
+    import json, httpx, time
+    from pathlib import Path
+    config_path = Path(__file__).resolve().parents[3] / "ai_providers.local.json"
+    cfg = json.loads(config_path.read_text())["providers"].get(provider)
+    if not cfg:
+        raise KeyError(f"Unknown provider: {provider}")
+
+    messages = [
+        {"role": "system", "content": system},
+        {"role": "user", "content": user},
+        {"role": "assistant", "content": "```python\n", "prefix": True},
+    ]
+
+    payload = {
+        "model": cfg["model"],
+        "messages": messages,
+        "temperature": temperature,
+        "max_tokens": cfg.get("max_output_tokens", 16384),
+        "stop": ["```"],
+    }
+    payload.update(cfg.get("extra_body", {}))
+
+    url = f"{cfg['base_url'].rstrip('/')}/beta/chat/completions"
+    headers = {
+        "Authorization": f"Bearer {cfg['api_key']}",
+        "Content-Type": "application/json",
+    }
+
+    t0 = time.time()
+    resp = httpx.post(url, json=payload, headers=headers, timeout=timeout)
+    resp.raise_for_status()
+    body = resp.json()
+
+    content = body["choices"][0]["message"]["content"]
+    # 去掉可能残留的 ``` 和 # === marker
+    content = content.strip()
+    if content.endswith("```"):
+        content = content[:-3].strip()
+
+    usage = body.get("usage", {})
+    return LlmResponse(
+        text=content,
+        model=body.get("model", cfg["model"]),
+        input_tokens=usage.get("prompt_tokens"),
+        output_tokens=usage.get("completion_tokens"),
+    )

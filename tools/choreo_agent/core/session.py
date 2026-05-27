@@ -9,7 +9,7 @@ from .script_editor import replace_active_segment, lock_segment, parse_markers
 from .checkpoint import save as checkpoint_save
 from .validator import validate, ValidationResult
 from .prompt_builder import build_segment_prompt
-from .llm_client import chat, LlmResponse
+from .llm_client import chat, chat_prefix, LlmResponse
 
 
 @dataclass
@@ -80,14 +80,22 @@ class Session:
             feedback=feedback,
         )
         try:
-            response = chat(
-                system=system,
-                user=user,
-                provider=provider,
-                temperature=temperature,
-                on_delta=on_delta,
-                on_heartbeat=on_heartbeat,
-            )
+            try:
+                response = chat_prefix(
+                    system=system,
+                    user=user,
+                    provider=provider,
+                    temperature=temperature,
+                )
+            except Exception:
+                response = chat(
+                    system=system,
+                    user=user,
+                    provider=provider,
+                    temperature=temperature,
+                    on_delta=on_delta,
+                    on_heartbeat=on_heartbeat,
+                )
         except Exception as exc:
             seg.attempts.append({
                 "provider": provider,
