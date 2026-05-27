@@ -62,6 +62,16 @@ for gi in range(2):
 错误: d.move2(x, y, z)           -- 不要用底层 Drone 方法
 错误: d.move2(x, y, z, t_ms)     -- 不存在四参数
 
+## 段代码是片断，不是完整脚本
+
+只写段内动作逻辑。**不要写**：
+- PYFII_AGENT_SEGMENT_START/END 标记
+- drones = [...] 或 Drone(...) 创建
+- prev = [...] 硬编码
+- import 语句
+
+段代码嵌入到已有 design.py 的 marker 之间执行，drones 和 prev 已存在。
+
 ## 禁止
 - 不添加任何 import
 - 不调用 d.VelXY/VelZ/delay/move2 底层 API — 只用 move2(d, p, t)
