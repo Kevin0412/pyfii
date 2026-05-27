@@ -56,6 +56,12 @@ for gi in range(2):
     prev = [(d.x, d.y, d.z) for d in drones]
 ```
 
+## 关键：move2 调用方式
+
+正确: move2(d, (x, y, z), t_ms)  -- function.py 封装
+错误: d.move2(x, y, z)           -- 不要用底层 Drone 方法
+错误: d.move2(x, y, z, t_ms)     -- 不存在四参数
+
 ## 禁止
 - 不添加任何 import
 - 不调用 d.VelXY/VelZ/delay/move2 底层 API — 只用 move2(d, p, t)
