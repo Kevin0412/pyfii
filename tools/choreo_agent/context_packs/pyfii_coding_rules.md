@@ -109,3 +109,5 @@ drone.takeoff(1, 110)        # 飞到高度110cm
 | `perm = (0,1,...,6)` 恒等 | 碰撞 (minD < 51cm) | 用 best_assign |
 | VelXY ≠ VelZ | 动作不一致 | 每次move前同时设置 |
 | 未计算总时间 | inittime + delay 超边界 | 生成前先算预算 |
+
+- **agent 可以在 `function.py` 中添加自定义函数**（如 best_assign 排列实现），不需要外部注入
