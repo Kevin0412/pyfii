@@ -36,24 +36,36 @@ delay_ms = max(0, ft - 15*100 + 150)  # +150ms 余量
 drone.delay(delay_ms)
 ```
 
-## 排列（best_assign）
+## 排列设计
 
-每段设计多个几何。几何间的过渡排列用 `best_assign` 计算：
+几何间的无人机-目标点映射（排列）影响安全性。两种方式：
+
+### 方式A：手动设计（推荐）
+
+根据空间关系手动分配——让靠近左边起点的机继续走左边，避免交叉：
 
 ```python
-# 几何定义
-geo1 = [(x1,y1,z1), (x2,y2,z2), ...]
-
-# 前段出口位置
-prev_xy = [(px, py) for px, py, pz in prev]
-
-# 计算最优排列
-perm, min_d = best_assign(prev_xy, [(x,y) for x,y,z in geo1])
-# 结果: perm = (3, 0, 5, 1, 4, 6, 2)  ← 硬编码到代码中
-#       min_d = 89.3cm  ← 确保 > 51cm
+# 条件分支：不同机走不同方向
+for i, drone in enumerate(drones):
+    if i < 3:     # 左组 → 左弧
+        tx, ty = left_arc[i]
+    else:         # 右组 → 右弧
+        tx, ty = right_arc[i-3]
+    drone.move2(tx, ty, tz)
 ```
 
-**不要用恒等映射 `perm = (0,1,2,3,4,5,6)`**。每次都用 best_assign。
+条件分支 + 相对移动 + 高度错层 = dntg 的安全策略。
+
+### 方式B：best_assign（工具辅助）
+
+当手动设计困难时，用 `best_assign(prev_xy, geo_xy)` 计算机械最优排列：
+
+```python
+perm, min_d = best_assign(prev_xy, [(x,y) for x,y,z in geo])
+# 硬编码结果: perm = (3, 0, 5, 1, 4, 6, 2)
+```
+
+**best_assign 是工具不是唯一解**。能手动设计就不要机械调用。
 
 ## 时间预算
 
