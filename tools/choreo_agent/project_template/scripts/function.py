@@ -58,16 +58,3 @@ COLORS_BRIGHT = ["#FF1493","#FFFF00","#00FFFF","#FF4500","#ADFF2F"]
 COLORS_AMBER = ["#2255aa","#3388cc","#44aadd"]
 
 # ---------- 排列 (如果core.best_assign可用则导入，否则本地实现) ----------
-def best_assign(starts, targets):
-    """本地排列实现：遍历所有排列找最小距离最大的"""
-    import itertools, math
-    n = len(starts)
-    best_perm, best_min = None, -1
-    for perm in itertools.permutations(range(n)):
-        min_d = min(
-            math.sqrt((starts[i][0]-targets[perm[i]][0])**2 + (starts[i][1]-targets[perm[i]][1])**2)
-            for i in range(n)
-        )
-        if min_d > best_min:
-            best_min, best_perm = min_d, perm
-    return list(best_perm), round(best_min, 1)
