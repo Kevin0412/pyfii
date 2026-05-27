@@ -71,3 +71,42 @@ for gi in range(3):
         apply_light(d, "#2255aa", 12); d.delay(1200)
     prev = targets
 ```
+
+## 排列策略（参考 crosscut）
+
+crosscut 不用 best_assign，而是用 `choose_targets` 自己的排列算法。核心思路：
+
+```python
+def choose_targets(start_points, raw_targets):
+    """对每个起点，找距离最近且未被占用的目标点"""
+    used = [False] * len(raw_targets)
+    result = [None] * len(start_points)
+    for i, sp in enumerate(start_points):
+        best_j, best_d = -1, float('inf')
+        for j, tp in enumerate(raw_targets):
+            if used[j]: continue
+            d = math.hypot(sp[0]-tp[0], sp[1]-tp[1])
+            if d < best_d: best_d = d; best_j = j
+        used[best_j] = True
+        result[i] = raw_targets[best_j]
+    return result
+```
+
+也可以每段预定义坐标列表（PHRASE_STATES 模式）——人类设计关键状态，agent 只处理过渡。
+
+## 速度计算
+
+```python
+def travel_time(distance_cm, speed, acc):
+    accel_dist = speed*speed/(2*acc)
+    if distance >= 2*accel_dist:
+        return 2*speed/acc + (distance-2*accel_dist)/speed
+    return 2*math.sqrt(distance/acc)
+
+def speed_for_segment(distance_cm, duration_sec):
+    """给定距离和时间，反算速度"""
+    for v in range(50, 201):
+        if travel_time(distance_cm, v, v*2) < duration_sec:
+            return v
+    return 200
+```
