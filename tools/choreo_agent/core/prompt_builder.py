@@ -141,8 +141,7 @@ prev = {prev_state}
         import re
         segments = re.findall(r"# === PYFII_AGENT_SEGMENT_START.*?# === PYFII_AGENT_SEGMENT_END \w+ ===", design_py, re.DOTALL)
         recent = segments[-1:] if segments else []  # 最近1段全量
-        snippet = "
-".join(recent)[-5000:]  # 最多5000字符
+        snippet = chr(10).join(recent)[-5000:]  # 最多5000字符
         user += f"""## design.py 最近 locked 段（参考模式，不可修改）
 ```python
 {snippet}
