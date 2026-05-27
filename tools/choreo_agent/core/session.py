@@ -104,7 +104,11 @@ class Session:
             })
             self.state.save(self.project_root)
             raise
-        code = _extract_python_code(response.text)
+        # prefix 模式输出已经是纯代码，不需要提取
+        if response.text.strip().startswith(('#', 'import', 'from', 'def', 'class', 'try', 'for', 'if', 'while')):
+            code = response.text.strip()
+        else:
+            code = _extract_python_code(response.text)
         if not code.strip():
             return None
 
