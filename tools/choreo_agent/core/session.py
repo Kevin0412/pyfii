@@ -9,7 +9,7 @@ from .script_editor import replace_active_segment, lock_segment, parse_markers
 from .checkpoint import save as checkpoint_save
 from .validator import validate, ValidationResult
 from .prompt_builder import build_segment_prompt
-from .llm_client import chat, chat_prefix, chat_with_tools, LlmResponse
+from .llm_client import chat, chat_prefix, LlmResponse
 
 
 @dataclass
@@ -81,7 +81,7 @@ class Session:
         )
         try:
             try:
-                response = chat_with_tools(
+                response = chat_prefix(
                     system=system,
                     user=user,
                     provider=provider,
