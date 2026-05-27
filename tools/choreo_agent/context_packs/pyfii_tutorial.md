@@ -55,6 +55,13 @@ prev = [(d.x, d.y, 110) for d in drones]
 - 不在注释中算 best_assign — 必须出现在代码中
 ```
 
+## best_assign 不解决几何问题
+
+排列选择不能替代几何设计：
+- 如果几何点间距<51cm，best_assign 也救不了
+- 如果几何让所有路径穿中心，排列无法改变路径形状
+- **好的几何设计 > 好的排列**
+
 ## 严格禁止
 - 不用 `d.VelXY_speed`、`d.VelX`、`drone.speed` 等不存在属性
 - 不自己计算飞行时间——用 `flight_time_ms(d,v,a)`
