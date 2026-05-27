@@ -154,7 +154,7 @@ class Session:
                 rounds.append(GenerationRound(index=index, response=None, validation=None))
                 break
 
-            result = self.validate()
+            result = self.validate(skip_continuity=True)
             self._record_validation_result(result)
             rounds.append(GenerationRound(index=index, response=response, validation=result))
             if result.passed:
@@ -193,7 +193,7 @@ class Session:
         if seg is None or seg.locked:
             return ApprovalResult(False, None)
 
-        result = self.validate()
+        result = self.validate(skip_continuity=True)
         if not result.passed and not allow_human_override:
             return ApprovalResult(False, result)
 

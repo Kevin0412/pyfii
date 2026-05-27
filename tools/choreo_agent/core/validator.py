@@ -97,7 +97,8 @@ class ValidationResult:
             and not self.collision_intervals
             and self.code_quality_ok
             and (
-                not self.continuity_required
+                skip_continuity
+                or not self.continuity_required
                 or (
                     self.hover_check_ok
                     and not self.hover_segments
