@@ -27,12 +27,55 @@ OUT = Path(__file__).resolve().parents[1] / "output"
 
 drones = [pf.Drone(0, 0, pf.drone_config_6m, f"192.168.51.{51+i}") for i in range(N)]
 
-# === PYFII_AGENT_SEGMENT_START id=S01 locked=false ===
+# === PYFII_AGENT_SEGMENT_START id=S01 locked=true ===
 # start_time: 4.0
-# end_time: 14.0
-# intent: placeholder
+# end_time: 13.0
+# intent: 从起飞后的散布状态开始，生成明亮、庄严、渐进的开场正式编舞；动作必须在段首 1 秒内开始，在段尾最后 1 秒内完成收束，中间不能有超过 1 秒整体悬停；要求安全、连贯、几何丰富，起飞布局与 S01 动作一起设计。
 
 # === PYFII_AGENT_SEGMENT_END S01 ===
+
+# === PYFII_AGENT_SEGMENT_START id=S02 locked=true ===
+# start_time: 13.0
+# end_time: 23.0
+# intent: 承接 S01 出口位置，形成更开阔的流动展开和方向性推进；几何语言可包含弧线、V 形、扇形和前后景深，不要重复上一段队形。
+
+# === PYFII_AGENT_SEGMENT_END S02 ===
+
+# === PYFII_AGENT_SEGMENT_START id=S03 locked=true ===
+# start_time: 23.0
+# end_time: 31.0
+# intent: 承接上一段出口位置，做排队错峰、交错穿梭或分组呼应的 canon 式推进；保持安全线距，避免中心对穿。
+
+# === PYFII_AGENT_SEGMENT_END S03 ===
+
+# === PYFII_AGENT_SEGMENT_START id=S04 locked=true ===
+# start_time: 31.0
+# end_time: 47.0
+# intent: 进入更舒展的中段，使用星芒、波浪、框线或非圆几何变化；动作要有层次和呼吸，但不能退化为刚性圆、双排或小范围抖动。
+
+# === PYFII_AGENT_SEGMENT_END S04 ===
+
+# === PYFII_AGENT_SEGMENT_START id=S05 locked=true ===
+# start_time: 47.0
+# end_time: 58.0
+# intent: 高潮段，做全场尺度的展开、爆发、回卷或分组交换；视觉要明亮有力，安全优先但不能缩成保守小动作。
+
+# === PYFII_AGENT_SEGMENT_END S05 ===
+
+# === PYFII_AGENT_SEGMENT_START id=S06 locked=true ===
+# start_time: 58.0
+# end_time: 63.0
+# intent: 尾声署名和收束段，承接高潮出口位置，形成清晰、优雅、可识别的结束姿态；仍需在短时间内保持连贯真实运动。
+
+# === PYFII_AGENT_SEGMENT_END S06 ===
+
+# === PYFII_AGENT_SEGMENT_START id=LAND locked=true ===
+# start_time: 63.0
+# end_time: 68.0
+# intent: 降落段：安全平滑降落。起飞和降落不计入正式编舞连续性硬门，但仍要通过执行和安全验证。
+
+# === PYFII_AGENT_SEGMENT_END LAND ===
+
 
 for drone in drones:
     drone.end()
