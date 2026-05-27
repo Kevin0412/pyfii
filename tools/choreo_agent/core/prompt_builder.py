@@ -109,6 +109,31 @@ for gi in range(len(geos)):
     prev = targets
 ```
 
+
+## 代码模板（复制此结构，只填坐标）
+
+```python
+geo = [(80+80*i, 80+80*i, FILL_Z) for i in range(7)]     # 对角线
+geo2 = [(FILL_X, FILL_Y, FILL_Z), ...] * 7                 # 四角/散射
+geo3 = [(100+60*i, 200+120*math.sin(i), FILL_Z) for i in range(7)]  # V波
+
+for i, d in enumerate(drones):
+    d.inittime(FILL_START)
+    d.VelXY(120, 240); d.VelZ(120, 240)
+    d.delay(i * 100)
+
+for gi in range(3):
+    geos = [geo, geo2, geo3]
+    targets = geos[gi] if gi == 0 else best_assign(prev, geos[gi])
+    for i, d in enumerate(drones):
+        dd = math.hypot(prev[i][0]-targets[i][0], prev[i][1]-targets[i][1])
+        spd = min(200, max(120, int(dd/2.0)))
+        d.VelXY(spd, spd*2); d.VelZ(spd, spd*2)
+        d.move2(clamp_xy(targets[i][0]), clamp_xy(targets[i][1]), clamp_z(targets[i][2]))
+        apply_light(d, "#2255aa", 12); d.delay(1200)
+    prev = targets
+```
+
 ## 要求
 - 不要输出 marker 行（START/END），只输出段内部的 Python 代码
 - 如果使用 Markdown，只能放一个 python 代码块；不要解释设计过程
