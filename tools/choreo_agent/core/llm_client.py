@@ -254,3 +254,158 @@ def chat_prefix(
         input_tokens=usage.get("prompt_tokens"),
         output_tokens=usage.get("completion_tokens"),
     )
+
+
+# ---- Tool Calls ----
+
+AGENT_TOOLS = [
+    {
+        "type": "function",
+        "function": {
+            "name": "best_assign",
+            "description": "给定起点列表和目标点列表，计算最优一对一排列，使最近距离最大化。返回排列和最小距离。",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "starts": {"type": "array", "items": {"type": "array", "items": {"type": "number"}}, "description": "起点列表 [(x1,y1), (x2,y2), ...]"},
+                    "targets": {"type": "array", "items": {"type": "array", "items": {"type": "number"}}, "description": "目标点列表 [(x1,y1,z1), ...]"}
+                },
+                "required": ["starts", "targets"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "flight_time_ms",
+            "description": "计算给定3D距离和速度、加速度下的飞行时间（毫秒）",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "distance_cm": {"type": "number", "description": "3D距离（厘米）"},
+                    "speed_cms": {"type": "number", "description": "速度（cm/s）"},
+                    "acc_cms2": {"type": "number", "description": "加速度（cm/s²）"}
+                },
+                "required": ["distance_cm", "speed_cms", "acc_cms2"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "distance_3d",
+            "description": "计算两点间的3D欧氏距离",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "p1": {"type": "array", "items": {"type": "number"}, "description": "点1 (x,y,z)"},
+                    "p2": {"type": "array", "items": {"type": "number"}, "description": "点2 (x,y,z)"}
+                },
+                "required": ["p1", "p2"]
+            }
+        }
+    }
+]
+
+
+def execute_tool(name: str, args: dict) -> str:
+    """执行 agent tool call，返回 JSON 字符串"""
+    import json, math
+    from core.best_assign import best_assign
+
+    if name == "best_assign":
+        starts = [(p[0], p[1]) for p in args["starts"]]
+        targets = [(p[0], p[1]) for p in args["targets"]]
+        perm, min_d = best_assign(starts, targets)
+        return json.dumps({"perm": list(perm), "min_d_cm": round(min_d, 1)})
+
+    if name == "flight_time_ms":
+        d, v, a = args["distance_cm"], args["speed_cms"], args["acc_cms2"]
+        if d <= 0: ms = 0
+        else:
+            accel_dist = v*v/(2*a)
+            t = 2*v/a + (d-2*accel_dist)/v if d >= 2*accel_dist else 2*math.sqrt(d/a)
+            ms = int(math.ceil(t*1000))
+        return json.dumps({"flight_ms": ms})
+
+    if name == "distance_3d":
+        p1, p2 = args["p1"], args["p2"]
+        d = math.sqrt((p2[0]-p1[0])**2 + (p2[1]-p1[1])**2 + (p2[2]-p1[2])**2)
+        return json.dumps({"distance_cm": round(d, 1)})
+
+    return json.dumps({"error": f"unknown tool: {name}"})
+
+
+def chat_with_tools(
+    system: str,
+    user: str,
+    provider: str = "deepseek",
+    temperature: float = 0.2,
+    timeout: float = 300,
+    max_tool_rounds: int = 5,
+):
+    """Tool Calls mode + stop marker. Agent can call tools, final output is code."""
+    import json as _json, httpx, time, re as _re
+    from pathlib import Path
+
+    config_path = Path(__file__).resolve().parents[3] / "ai_providers.local.json"
+    cfg = _json.loads(config_path.read_text())["providers"].get(provider)
+    if not cfg:
+        raise KeyError(f"Unknown provider: {provider}")
+
+    messages = [
+        {"role": "system", "content": system + "\n\nOutput ONLY Python code inside a ```python block. No explanations. Use tools for calculations."},
+        {"role": "user", "content": user},
+    ]
+
+    headers = {
+        "Authorization": f"Bearer {cfg['api_key']}",
+        "Content-Type": "application/json",
+    }
+    url = f"{cfg['base_url'].rstrip('/')}/beta/chat/completions"
+
+    for _round in range(max_tool_rounds):
+        payload = {
+            "model": cfg["model"],
+            "messages": messages,
+            "temperature": temperature,
+            "max_tokens": cfg.get("max_output_tokens", 16384),
+            "stop": ["```"],
+            "tools": AGENT_TOOLS,
+        }
+        payload.update(cfg.get("extra_body", {}))
+
+        resp = httpx.post(url, json=payload, headers=headers, timeout=timeout)
+        resp.raise_for_status()
+        body = resp.json()
+        choice = body["choices"][0]
+        msg = choice["message"]
+
+        if msg.get("tool_calls"):
+            messages.append(msg)
+            for tc in msg["tool_calls"]:
+                fn = tc["function"]
+                result = execute_tool(fn["name"], _json.loads(fn["arguments"]))
+                messages.append({
+                    "role": "tool",
+                    "tool_call_id": tc["id"],
+                    "content": result,
+                })
+            continue
+
+        content = msg.get("content", "")
+        m = _re.search(r"```(?:python)?\s*(.*?)\s*```", content, _re.DOTALL)
+        if m:
+            content = m.group(1).strip()
+        else:
+            content = content.strip()
+
+        usage = body.get("usage", {})
+        return LlmResponse(
+            text=content,
+            model=body.get("model", cfg["model"]),
+            input_tokens=usage.get("prompt_tokens"),
+            output_tokens=usage.get("completion_tokens"),
+        )
+
+    return LlmResponse(text="", model=cfg["model"])
