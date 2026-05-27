@@ -138,3 +138,24 @@ def _auto_fix_perms(code_lines, prev_lines):
             )
     
     return fixed
+
+def _inject_best_assign(lines):
+    """如果代码中没有 best_assign 调用，自动注入"""
+    code = "\n".join(lines)
+    if "best_assign(" not in code:
+        return lines
+    
+    # 找 for gi in range 循环，在 targets 赋值前插入 best_assign
+    import re
+    new = []
+    for line in lines:
+        # 替换 patterns: 硬编码 perm 或直接索引
+        if "perm" in line and ("(0," in line or "(0,1,2," in line):
+            new.append("    # AUTO-FIX: best_assign below")
+            new.append("    targets = best_assign(prev, geo[gi])")
+            continue
+        if "targets = geo[gi]" in line and "best_assign" not in line:
+            new.append("    targets = best_assign(prev, geo[gi])")
+            continue
+        new.append(line)
+    return new
