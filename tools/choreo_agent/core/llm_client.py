@@ -226,7 +226,7 @@ def chat_prefix(
         "messages": messages,
         "temperature": temperature,
         "max_tokens": cfg.get("max_output_tokens", 16384),
-        "stop": ["```"],
+        
     }
     payload.update(cfg.get("extra_body", {}))
 
@@ -354,7 +354,7 @@ def chat_with_tools(
         raise KeyError(f"Unknown provider: {provider}")
 
     messages = [
-        {"role": "system", "content": system + "\n\nOutput ONLY Python code inside a ```python block. No explanations. Use tools for calculations."},
+        {"role": "system", "content": system + " After getting tool results, output ONLY the final Python code in a ```python block. Never output explanations."},
         {"role": "user", "content": user},
     ]
 
@@ -370,7 +370,7 @@ def chat_with_tools(
             "messages": messages,
             "temperature": temperature,
             "max_tokens": cfg.get("max_output_tokens", 16384),
-            "stop": ["```"],
+            
             "tools": AGENT_TOOLS,
         }
         payload.update(cfg.get("extra_body", {}))
