@@ -111,3 +111,5 @@ drone.takeoff(1, 110)        # 飞到高度110cm
 | 未计算总时间 | inittime + delay 超边界 | 生成前先算预算 |
 
 - **agent 可以在 `function.py` 中添加自定义函数**（如 best_assign 排列实现），不需要外部注入
+
+- **每个 move2 后 delay 留 100-200ms 余量**，确保动作完整执行（dntg 经验）
