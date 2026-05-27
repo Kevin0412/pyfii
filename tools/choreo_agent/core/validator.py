@@ -80,6 +80,7 @@ class ValidationResult:
     code_quality_errors: list[str] = field(default_factory=list)
     exit_state: list[list[int]] | None = None
     error_message: str = ""
+    raw_stderr: str = ""
     hover_error: str = ""
     continuity_error: str = ""
 
@@ -221,6 +222,7 @@ def validate(
             result.error_message = proc.stderr[-500:]
             return result
         result.run_ok = True
+        result.raw_stderr = proc.stderr[-2000:]
 
         output = proc.stdout + proc.stderr
         # 解析动作详情

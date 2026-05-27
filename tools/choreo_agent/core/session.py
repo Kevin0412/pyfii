@@ -159,8 +159,10 @@ class Session:
             if result.passed:
                 break
 
+            raw_output = result.raw_stderr[:2000] if hasattr(result, 'raw_stderr') else ""
             repair_parts = [
                 f"上一轮自动验证反馈（第 {index} 轮）：\n{result.repair_feedback()}",
+                f"pyfii 原始输出：\n{raw_output}" if raw_output else "",
                 _conservative_safety_feedback(index, result),
             ]
             repair_feedback = _join_feedback(
