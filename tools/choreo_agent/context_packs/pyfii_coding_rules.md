@@ -38,34 +38,28 @@ drone.delay(delay_ms)
 
 ## 排列设计
 
-几何间的无人机-目标点映射（排列）影响安全性。两种方式：
+DNTG 的经验：不用 best_assign，靠条件分支 + 相对移动就能保证安全。
 
-### 方式A：手动设计（推荐）
-
-根据空间关系手动分配——让靠近左边起点的机继续走左边，避免交叉：
+每个几何的排列由空间逻辑决定——靠近某边的机继续走那边，不要交叉：
 
 ```python
-# 条件分支：不同机走不同方向
+# 条件分支决定排列（安全且自然）
 for i, drone in enumerate(drones):
-    if i < 3:     # 左组 → 左弧
-        tx, ty = left_arc[i]
-    else:         # 右组 → 右弧
-        tx, ty = right_arc[i-3]
-    drone.move2(tx, ty, tz)
+    drone.inittime(10)
+    if i < 3:           # 前3架走左边
+        drone.move2(drone.x - 80, drone.y + 40*i, drone.z + 30)
+    elif i < 5:         # 中间2架走中心
+        drone.move2(280, 280, drone.z + 50)
+    else:               # 后2架走右边
+        drone.move2(drone.x + 80, drone.y - 40*(i-5), drone.z - 20)
 ```
 
-条件分支 + 相对移动 + 高度错层 = dntg 的安全策略。
+核心原则：
+- **扇区保持**：每架机在上一段所在区域附近移动，不跨区穿越
+- **方向一致性**：左组向左、右组向右，避免对向飞行
+- **高度错层**：不同机用不同Z，3D空间分层安全
 
-### 方式B：best_assign（工具辅助）
-
-当手动设计困难时，用 `best_assign(prev_xy, geo_xy)` 计算机械最优排列：
-
-```python
-perm, min_d = best_assign(prev_xy, [(x,y) for x,y,z in geo])
-# 硬编码结果: perm = (3, 0, 5, 1, 4, 6, 2)
-```
-
-**best_assign 是工具不是唯一解**。能手动设计就不要机械调用。
+不需要遍历5040种排列。用条件分支+相对移动+高度错层就够了。
 
 ## 时间预算
 
