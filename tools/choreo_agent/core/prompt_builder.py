@@ -88,33 +88,18 @@ def build_segment_prompt(
     system = build_system_prompt()
 
     user = f"""生成 Pyfii 编舞段 
-## 代码格式（必须严格遵循 deepseek_cannon_choreo 模式）
+## 代码格式（必须包含以下两行代码，否则验证失败）
 
-每段的写法。**代码中必须包含 `targets = best_assign(prev, geo[gi])` 这一行**，不能只在注释中描述。以下模式是强制模板：
-
+每个几何过渡必须包含这一行：
 ```python
 targets = best_assign(prev, geo[gi])
-for i, d in enumerate(drones):
-    dd = math.hypot(prev[i][0]-targets[i][0], prev[i][1]-targets[i][1])
-    spd = min(200, max(120, int(dd/2.0)))
-    d.VelXY(spd, spd*2); d.VelZ(spd, spd*2)
-    d.move2(clamp_xy(targets[i][0]), clamp_xy(targets[i][1]), clamp_z(targets[i][2]))
-    apply_light(d, color, 12); d.delay(1200)
-prev = targets
 ```
+**best_assign 在 function.py 中已定义，不需要 import**。
 
+完整写法：
 ```python
-# 几何定义
-geo = [(x1,y1,z1), ...]
-geo2 = [(x1,y1,z1), ...]
-
-for i, d in enumerate(drones):
-    d.inittime(start_s)
-    d.VelXY(120, 240); d.VelZ(120, 240)
-    d.delay(i * 100)  # 错峰
-
 for gi in range(len(geos)):
-    targets = geo[gi] if gi==0 else best_assign(prev, geo[gi])
+    targets = geo[gi] if gi == 0 else best_assign(prev, geo[gi])
     for i, d in enumerate(drones):
         dd = math.hypot(prev[i][0]-targets[i][0], prev[i][1]-targets[i][1])
         spd = min(200, max(120, int(dd/2.0)))
@@ -124,109 +109,6 @@ for gi in range(len(geos)):
     prev = targets
 ```
 
-
-## 代码格式（必须严格遵循 deepseek_cannon_choreo 模式）
-
-每段的写法。**代码中必须包含 `targets = best_assign(prev, geo[gi])` 这一行**，不能只在注释中描述。以下模式是强制模板：
-
-```python
-targets = best_assign(prev, geo[gi])
-for i, d in enumerate(drones):
-    dd = math.hypot(prev[i][0]-targets[i][0], prev[i][1]-targets[i][1])
-    spd = min(200, max(120, int(dd/2.0)))
-    d.VelXY(spd, spd*2); d.VelZ(spd, spd*2)
-    d.move2(clamp_xy(targets[i][0]), clamp_xy(targets[i][1]), clamp_z(targets[i][2]))
-    apply_light(d, color, 12); d.delay(1200)
-prev = targets
-```
-
-```python
-# 几何定义
-geo = [(x1,y1,z1), ...]
-geo2 = [(x1,y1,z1), ...]
-
-for i, d in enumerate(drones):
-    d.inittime(start_s)
-    d.VelXY(120, 240); d.VelZ(120, 240)
-    d.delay(i * 100)  # 错峰
-
-for gi in range(len(geos)):
-    targets = geo[gi] if gi==0 else best_assign(prev, geo[gi])
-    for i, d in enumerate(drones):
-        dd = math.hypot(prev[i][0]-targets[i][0], prev[i][1]-targets[i][1])
-        spd = min(200, max(120, int(dd/2.0)))
-        d.VelXY(spd, spd*2); d.VelZ(spd, spd*2)
-        d.move2(clamp_xy(targets[i][0]), clamp_xy(targets[i][1]), clamp_z(targets[i][2]))
-        apply_light(d, color, 12); d.delay(1200)
-    prev = targets
-```
-
-每个 move2：
-v, a = 150, 300
-d = ((tx-prev_x)**2 + (ty-prev_y)**2 + (tz-prev_z)**2) ** 0.5
-ft = flight_time_ms(d, v, a)
-drone.move2(tx, ty, tz)
-apply_light(drone, "#FFD700", 8)
-drone.delay(max(0, ft - 800 + 200))
-
-排列用条件分支，禁止恒等映射 (0,1,2,3,4,5,6)：
-for i, drone in enumerate(drones):
-    if i < 3:   # 左组
-        tx, ty = left_targets[i]
-    else:       # 右组  
-        tx, ty = right_targets[i-3]
-    drone.move2(tx, ty, z)
-每个 move2：
-
-v, a = 150, 300
-d = ((tx-prev_x)**2 + (ty-prev_y)**2 + (tz-prev_z)**2) ** 0.5
-ft = flight_time_ms(d, v, a)
-drone.move2(tx, ty, tz)
-apply_light(drone, "#FFD700", 8)
-drone.delay(max(0, ft - 800 + 200))
-
-不允许 delay(1500) 或任何固定数字。
-不允许省略 flight_time_ms 计算。
-{segment_id}。
-
-## 音乐
-- 时间: {start_time}s - {end_time}s ({end_time - start_time:.0f}s)
-- 能量: {music_cue.get('energy', 'unknown')}
-- 情绪: {music_cue.get('emotion', 'unknown')}
-
-## 设计意图
-{intent}
-
-## 当前段入口 / 上一段出口
-```python
-prev = {prev_state}
-```
-
-"""
-
-    if design_py:
-        # 只保留最后 locked 段的代码模式（减少上下文膨胀）
-        import re
-        segments = re.findall(r"# === PYFII_AGENT_SEGMENT_START.*?# === PYFII_AGENT_SEGMENT_END \w+ ===", design_py, re.DOTALL)
-        recent = segments[-1:] if segments else []  # 最近1段全量
-        snippet = chr(10).join(recent)[-5000:]  # 最多5000字符
-        user += f"""## design.py 最近 locked 段（参考模式，不可修改）
-```python
-{snippet}
-```
-
-"""
-
-    user += """
-## 计算沙箱
-在生成代码前，先用以下函数验证你的设计，结果硬编码到最终代码：
-- `best_assign(starts, targets)` → 返回 `{"perm": (0,1,2,...), "min_d_cm": 89.0}`
-- `flight_time_ms(distance_cm, speed, acc)` → 返回 ms 整数
-- `distance_3d(p1, p2)` → 返回 cm 浮点数
-- `vel_for_distance_time(distance_cm, time_s)` → 返回最小速度
-
-**每个 move2 后 delay 必须 >= flight_time_ms(d, v, a) - light_ticks*100 + margin(100-200ms)**
-**不要用固定 delay 混过去，必须根据实际距离计算。**
 ## 要求
 - 不要输出 marker 行（START/END），只输出段内部的 Python 代码
 - 如果使用 Markdown，只能放一个 python 代码块；不要解释设计过程
