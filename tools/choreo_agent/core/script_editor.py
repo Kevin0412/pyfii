@@ -119,3 +119,22 @@ def _extract(line: str, key: str) -> str | None:
         if part.startswith(f"{key}="):
             return part.split("=", 1)[1]
     return None
+
+
+def _auto_fix_perms(code_lines, prev_lines):
+    """检测恒等映射 perm=(0,1,...,6)，尝试从 prev 和 geo 推断更好排列"""
+    import re
+    fixed = list(code_lines)
+    
+    # 找 perm = (0, 1, 2, 3, 4, 5, 6) 模式
+    ident_pattern = re.compile(r'perm\s*=\s*\(\s*0\s*,\s*1\s*,\s*2\s*,\s*3\s*,\s*4\s*,\s*5\s*,\s*6\s*\)')
+    
+    for i, line in enumerate(fixed):
+        if ident_pattern.search(line):
+            # 替换为 TODO 注释，让 agent 下次修复
+            fixed[i] = line.replace(
+                '(0, 1, 2, 3, 4, 5, 6)',
+                '(?, ?, ?, ?, ?, ?, ?)  # FIXME: 用条件分支或 best_assign 替换恒等映射'
+            )
+    
+    return fixed
