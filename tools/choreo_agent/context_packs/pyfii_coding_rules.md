@@ -1,139 +1,87 @@
-# Pyfii Coding Rules
+# Pyfii 飞行模型教程（Agent 必读）
 
-## 硬规则
+## 物理模型
 
-1. **只修改当前未锁定 segment。**
-2. **不允许修改 locked segment。**
-3. **不允许提前设计下一段。**
-4. **不要猜不存在的 Pyfii API。** 优先模仿已有代码。
-5. **`inittime()` 是秒级整数。**
-6. **`delay()` 是毫秒。**
-7. **所有坐标必须 `int(round())`。** `math.cos/sin` 返回值是浮点数。
-8. **每段结束必须更新 `prev = targets`。**
-9. **所有机始终有动作**，不悬停。长时间小范围运动效果等同悬停。
-- **同一架机的下一个 `move2()` 必须在上一个移动有足够执行时间后再开始**，否则会出现 action warning 或中途截断。
-- **段间留 >0.5s 余量**，确保上一段最晚动作完成后再开始下一段。
+无人机飞行的物理模型：move2(x,y,z) 让无人机从当前位置飞向目标，耗时由 VelXY 设定的速度和加速度决定。
 
-
-## 段内结构
-
-```python
-# === AGENT_SEGMENT_START S03 locked=false ===
-# intent: ...
-# start_time: 24.0
-# end_time: 34.0
-
-geo = [...]              # 几何定义
-
-for i,d in enumerate(ds):
-    d.inittime(start)
-    current = prev[i]
-    for gi in range(len(geo)):
-        target = assigned_targets[gi][i]
-        interval_s = intervals_s[gi]
-        # Agent motion tool should have estimated this before writing code:
-        # 3D distance, desired interval -> concrete speed/accel/delay.
-        speed = speeds[gi][i]
-        accel = accels[gi][i]
-        delay_ms = delays[gi][i]
-        d.VelXY(speed, accel)
-        d.VelZ(speed, accel)
-        d.move2(...)
-        light_ticks = 3
-        apply_light(d, color, light_ticks)
-        d.delay(delay_ms)
-        current = target
-
-prev = assigned_targets[-1]
-
-# === AGENT_SEGMENT_END S03 ===
+```
+飞行时间(秒) = 加速段 + 匀速段
+- 如果距离短(< v²/a)：纯加速，t = 2√(d/a)
+- 如果距离长(≥ v²/a)：t = 2v/a + (d-v²/a)/v
 ```
 
-## 时间线和速度设置
+`flight_time_ms(d, v, a)` 已封装在 `function.py` 中，直接调用。
 
-- **VelXY 和 VelZ 最好成对设置，并使用相同 speed/accel**。这不是 PyFii API 本身的限制，而是为了兼容原始 XML/回放语义，避免水平与垂直运动按不同速度字段解释。
-- **每个 keyframe 都要重新计算速度/加速度**；不要整段固定 `VelXY(200, 400)` 或只设置一次速度。
+## 核心工作流
 
-`move2()` 发起移动但不推进命令时间；`delay()` 和 `apply_light()` 才推进本机命令时间。因此正确链路是 `move2() -> 短灯光/执行等待 -> move2()`。不要每个 move 前都 `inittime()`；只在段首或明确绝对 cue 处使用。
+每个 move2 的正确写法：
 
-- 先按音乐把段落拆成 keyframe interval，再为每个移动选择距离、速度和加速度。
-- 如果移动太早结束，优先降低速度、增加路径弧度/中间 keyframe、改变高度层，或让分组错峰；不要在段尾补无运动长 delay。
-- `delay()` 只有在紧跟一个正在执行的 `move2()`、用于给飞行留时间时才是合理的。
-- 如果动作未完成(action warning)，先检查本次 `move2()` 后的 light+delay 是否覆盖飞行时间；必要时缩短距离、提速或增加该移动后的执行时间预算。
+```python
+# 1. 设置速度（同一move内VelXY=VelZ）
+drone.VelXY(150, 300)  # 速度150cm/s, 加速度300cm/s²
+drone.VelZ(150, 300)
 
-## 飞行时间公式
+# 2. 执行移动
+drone.move2(tx, ty, tz)
 
-飞行时间估算属于 agent 侧运动学小工具，不要把 `dist3()` / `flight_time_ms()` / `speed_for_interval()` / `move_interval()` 定义进 segment 代码里。生成段代码前先用 3D distance 和梯形/三角速度曲线估算，再写入具体的 `speed`、`accel`、`delay_ms`。
+# 3. 计算飞行时间
+d = distance_3d(prev[i], (tx, ty, tz))
+ft = flight_time_ms(d, 150, 300)
 
-核心模型：
+# 4. 灯光（在delay之前或之后）
+apply_light(drone, color, 15)  # 15 ticks × 100ms = 1500ms
 
-- 3D distance = sqrt(dx² + dy² + dz²)。
-- 加速距离 = v² / (2a)。
-- 如果 distance >= 2 * 加速距离：有匀速段，time = 2v/a + (distance - 2 * 加速距离) / v。
-- 如果 distance < 2 * 加速距离：只有加速/减速三角曲线，time = 2 * sqrt(distance / a)。
+# 5. 延迟 = 飞行时间 - 灯光占用 + 余量
+delay_ms = max(0, ft - 15*100 + 150)  # +150ms 余量
+drone.delay(delay_ms)
+```
 
-acceleration 是独立参数：`a = 2v` 只是某些 dntg/经验写法里的稳定候选，不能当硬规则。柔和动作可用较低 acceleration，利落动作可用较高 acceleration，但必须保持在合法范围内。
+## 排列（best_assign）
 
-确保：
-- 生成段代码前必须先算每个 keyframe interval 的距离和飞行时间。
-- 对每个移动，`light_ticks * 100ms + delay_ms >= estimated_flight_ms(distance, v, a) + 100`。
-- 如果音乐 interval 比飞行时间长很多，应调整路线和速度，让真实移动占据 interval 的主体，而不是补长 delay。
+每段设计多个几何。几何间的过渡排列用 `best_assign` 计算：
 
-## 高度层
+```python
+# 几何定义
+geo1 = [(x1,y1,z1), (x2,y2,z2), ...]
 
-- 正式段不能全程固定高度；目标几何必须包含 low/mid/high 的高度层。
-- 至少一半无人机在本段内有明显 Z 变化，通常 >=25cm。
-- 速度预算用 3D 距离 `sqrt(dx² + dy² + dz²)`，不要只用 XY；这是 agent 侧估算，不要在段代码里新增 helper。
+# 前段出口位置
+prev_xy = [(px, py) for px, py, pz in prev]
 
-## 错误处理
+# 计算最优排列
+perm, min_d = best_assign(prev_xy, [(x,y) for x,y,z in geo1])
+# 结果: perm = (3, 0, 5, 1, 4, 6, 2)  ← 硬编码到代码中
+#       min_d = 89.3cm  ← 确保 > 51cm
+```
 
-| 错误 | 原因 | 修复 |
-|------|------|------|
-| `Out of range` | XY超出[0,560]或Z超出[80,250] | clamp坐标 |
-| `Time arrangement error` | inittime倒退或段间冲突 | 推后inittime |
-| `action isn't completed` | 下一条移动开始太早或飞行时间预算不够 | 计算本次 move2 的飞行时间，提速/缩短距离/增加该移动后的执行时间 |
-| `distance between` | 两机<51cm | 增间距或提搜索权重 |
-| `ValueError: invalid literal` | 坐标含浮点数 | int(round(x)) |
+**不要用恒等映射 `perm = (0,1,2,3,4,5,6)`**。每次都用 best_assign。
 
-- **不要复制 best_assign、motion_math、planning_tools 的定义到 design.py**，这些是离线工具，只需使用计算结果。
-- **每个 move2 必须给足够时间完成动作**：delay >= flight_time_ms + margin。动作未完成是硬错误。
-- **S01 可接受车道退化，但 S02 必须跳出**：换几何语言、换空间组织方式、换高度层次。
+## 时间预算
 
-- **起飞**: `drone.X=drone.x=x; drone.Y=drone.y=y; drone.takeoff(1, z)`
-- **降落**: `drone.land()` 或 `drone.end()`，LAND段内agent自主安排时间
-- **VelXY 和 VelZ 在同一 move 中值必须一致，但每次 move2 前可修改**
-- **agent 可在 `function.py` 中自定义辅助函数**（纯Python标准库+math，不导入pyfii）
-- **每个几何使用不同 Z 高度**，产生三维层次感，不要所有几何在同一平面
-- **相邻段不能使用相同退化类型**（如S01车道退化→S02必须跳出），最佳是零退化
+生成前必须先计算总时间：
 
-## function.py 可用函数（不要自己编函数名）
-
-`from function import *` 后可用：
-- `clamp_xy(v)`, `clamp_z(v)` — 坐标裁剪
-- `distance_3d(p1, p2)` — 3D距离
-- `flight_time_ms(d, v, a)` — 飞行时间(ms)
-- `flight_time_s(d, v, a)` — 飞行时间(s)
-- `vel_for_distance_time(d, t)` — 反算速度
-- `radial_point(cx, cy, r, angle_deg, z)` — 极坐标点
-- `apply_light(drone, color, ticks, interval_ms=100)` — 正弦渐变灯光
-- `COLORS_WARM`, `COLORS_COOL`, `COLORS_BRIGHT` — 颜色预设列表
-
-**禁止使用未列出的函数名**（如 `light_sine`, `led_glow`, `breathe` 等不存在）。
-
-## 时间预算硬约束
-
-**生成前必须计算总时间预算**：
 ```python
 total_ms = 0
-for each move:
+for move in all_moves:
     d = distance_3d(prev[i], target[i])
-    ft = flight_time_ms(d, v, a)
-    total_ms += ft + light_ticks*100 + margin  # margin=100-200ms
-total_s = total_ms / 1000
-```
-- `inittime + total_s` 必须 < `end_time` - 1.0（留1秒余量）
-- 如果超过，减少move数量或提高速度
+    total_ms += flight_time_ms(d, v, a) + light_ticks*100 + 150
 
-**上一段结束时间约束**：
-- 当前段 `inittime` >= 前一段 `inittime` + 前一段所有delay总和
-- **每个段内不能出现 "Time arrangement error"**
+total_s = total_ms / 1000
+# 必须满足: total_s + 1.0 < end_time - start_time
+```
+
+## 起飞
+
+```python
+drone.X = drone.x = x_pos    # 物理起点
+drone.Y = drone.y = y_pos    # 逻辑起点（后续相对移动的参考）
+drone.takeoff(1, 110)        # 飞到高度110cm
+```
+
+## 常见错误
+
+| 错误 | 后果 | 正确做法 |
+|------|------|---------|
+| `delay = 1500` 固定 | 动作未完成或冗余悬停 | 用 flight_time_ms 计算 |
+| `perm = (0,1,...,6)` 恒等 | 碰撞 (minD < 51cm) | 用 best_assign |
+| VelXY ≠ VelZ | 动作不一致 | 每次move前同时设置 |
+| 未计算总时间 | inittime + delay 超边界 | 生成前先算预算 |
