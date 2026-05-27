@@ -90,7 +90,25 @@ def build_segment_prompt(
     user = f"""生成 Pyfii 编舞段 
 ## 代码格式要求（必须严格遵循）
 
-每个 move2 必须按以下模式编写：
+
+## 代码格式要求（必须严格遵循）
+
+每个 move2：
+v, a = 150, 300
+d = ((tx-prev_x)**2 + (ty-prev_y)**2 + (tz-prev_z)**2) ** 0.5
+ft = flight_time_ms(d, v, a)
+drone.move2(tx, ty, tz)
+apply_light(drone, "#FFD700", 8)
+drone.delay(max(0, ft - 800 + 200))
+
+排列用条件分支，禁止恒等映射 (0,1,2,3,4,5,6)：
+for i, drone in enumerate(drones):
+    if i < 3:   # 左组
+        tx, ty = left_targets[i]
+    else:       # 右组  
+        tx, ty = right_targets[i-3]
+    drone.move2(tx, ty, z)
+每个 move2：
 
 v, a = 150, 300
 d = ((tx-prev_x)**2 + (ty-prev_y)**2 + (tz-prev_z)**2) ** 0.5
