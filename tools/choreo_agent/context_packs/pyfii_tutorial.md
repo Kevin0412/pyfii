@@ -54,3 +54,9 @@ prev = [(d.x, d.y, 110) for d in drones]
 - 不自创函数名 — 只用上面列出的
 - 不在注释中算 best_assign — 必须出现在代码中
 ```
+
+## 严格禁止
+- 不用 `d.VelXY_speed`、`d.VelX`、`drone.speed` 等不存在属性
+- 不自己计算飞行时间——用 `flight_time_ms(d,v,a)`
+- 不用恒等排列——用 `best_assign(prev, geos[gi])`
+- 不在注释中写排列结果
