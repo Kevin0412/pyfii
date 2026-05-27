@@ -55,6 +55,8 @@ prev = [(t[0], t[1], t[2]) for t in targets]
 ```
 
 ## 禁止
+- **不要加任何 import** — design.py 头部已导入所有需要的模块
+- 不要写 
 
 - 不发明不存在属性（d.VelXY_speed、drone.speed 等）
 - 不写恒等排列 perm=(0,1,2,3,4,5,6) — 用 best_assign
