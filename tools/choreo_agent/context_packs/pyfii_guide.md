@@ -46,8 +46,8 @@ for i, d in enumerate(drones):
     d.inittime(START_SEC)
     d.delay(i * 80)
 
-for gi in range(2):
-    geos = [geo, geo2]
+for gi in range(1):  # 仅 1 个 keyframe
+    geos = [geo]
     targets = best_assign(prev, geos[gi]) if gi > 0 else geos[gi]
     for i, d in enumerate(drones):
         move2(d, (clamp_xy(targets[i][0]), clamp_xy(targets[i][1]), clamp_z(targets[i][2])), 1200)
