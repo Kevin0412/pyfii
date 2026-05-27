@@ -137,9 +137,14 @@ prev = {prev_state}
 """
 
     if design_py:
-        user += f"""## 当前 design.py（locked 段参考，不可修改）
+        # 只保留最后 locked 段的代码模式（减少上下文膨胀）
+        import re
+        segments = re.findall(r"# === PYFII_AGENT_SEGMENT_START.*?# === PYFII_AGENT_SEGMENT_END \w+ ===", design_py, re.DOTALL)
+        recent = segments[-2:] if len(segments) >= 2 else segments[-1:]  # 最近2段
+        snippet = "\n".join(recent[-2:])[-3000:]  # 最多3000字符
+        user += f"""## design.py 最近 locked 段（参考模式，不可修改）
 ```python
-{design_py}
+{snippet}
 ```
 
 """
