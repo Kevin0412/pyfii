@@ -87,7 +87,21 @@ def build_segment_prompt(
 ) -> tuple[str, str]:
     system = build_system_prompt()
 
-    user = f"""生成 Pyfii 编舞段 {segment_id}。
+    user = f"""生成 Pyfii 编舞段 
+## 代码格式要求（必须严格遵循）
+
+每个 move2 必须按以下模式编写：
+
+v, a = 150, 300
+d = ((tx-prev_x)**2 + (ty-prev_y)**2 + (tz-prev_z)**2) ** 0.5
+ft = flight_time_ms(d, v, a)
+drone.move2(tx, ty, tz)
+apply_light(drone, "#FFD700", 8)
+drone.delay(max(0, ft - 800 + 200))
+
+不允许 delay(1500) 或任何固定数字。
+不允许省略 flight_time_ms 计算。
+{segment_id}。
 
 ## 音乐
 - 时间: {start_time}s - {end_time}s ({end_time - start_time:.0f}s)
