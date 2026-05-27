@@ -90,7 +90,18 @@ def build_segment_prompt(
     user = f"""生成 Pyfii 编舞段 
 ## 代码格式（必须严格遵循 deepseek_cannon_choreo 模式）
 
-每段的写法（直接复制此模式）：
+每段的写法。**代码中必须包含 `targets = best_assign(prev, geo[gi])` 这一行**，不能只在注释中描述。以下模式是强制模板：
+
+```python
+targets = best_assign(prev, geo[gi])
+for i, d in enumerate(drones):
+    dd = math.hypot(prev[i][0]-targets[i][0], prev[i][1]-targets[i][1])
+    spd = min(200, max(120, int(dd/2.0)))
+    d.VelXY(spd, spd*2); d.VelZ(spd, spd*2)
+    d.move2(clamp_xy(targets[i][0]), clamp_xy(targets[i][1]), clamp_z(targets[i][2]))
+    apply_light(d, color, 12); d.delay(1200)
+prev = targets
+```
 
 ```python
 # 几何定义
@@ -116,7 +127,18 @@ for gi in range(len(geos)):
 
 ## 代码格式（必须严格遵循 deepseek_cannon_choreo 模式）
 
-每段的写法（直接复制此模式）：
+每段的写法。**代码中必须包含 `targets = best_assign(prev, geo[gi])` 这一行**，不能只在注释中描述。以下模式是强制模板：
+
+```python
+targets = best_assign(prev, geo[gi])
+for i, d in enumerate(drones):
+    dd = math.hypot(prev[i][0]-targets[i][0], prev[i][1]-targets[i][1])
+    spd = min(200, max(120, int(dd/2.0)))
+    d.VelXY(spd, spd*2); d.VelZ(spd, spd*2)
+    d.move2(clamp_xy(targets[i][0]), clamp_xy(targets[i][1]), clamp_z(targets[i][2]))
+    apply_light(d, color, 12); d.delay(1200)
+prev = targets
+```
 
 ```python
 # 几何定义
