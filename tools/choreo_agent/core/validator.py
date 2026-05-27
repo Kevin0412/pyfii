@@ -504,7 +504,7 @@ def _detect_hover(
 
     fii_dir = _find_fii_dir(output_dir)
 
-    data, _t0, *_ = pf.read_fii(str(fii_dir), fps=60, ignore_acc=True)
+    data, _t0, *_ = _cached_read_fii(str(fii_dir))
 
     N = len(data)
     fps = 60
@@ -554,7 +554,7 @@ def _measure_motion_envelope(
     import pyfii as pf
 
     fii_dir = _find_fii_dir(output_dir)
-    data, _t0, *_ = pf.read_fii(str(fii_dir), fps=60, ignore_acc=True)
+    data, _t0, *_ = _cached_read_fii(str(fii_dir))
 
     fps = 60
     min_len = min(len(d) for d in data)
@@ -620,7 +620,7 @@ def _measure_effective_motion(
     import pyfii as pf
 
     fii_dir = _find_fii_dir(output_dir)
-    data, _t0, *_ = pf.read_fii(str(fii_dir), fps=60, ignore_acc=True)
+    data, _t0, *_ = _cached_read_fii(str(fii_dir))
 
     fps = 60
     min_len = min(len(d) for d in data)
@@ -716,7 +716,7 @@ def _measure_motion_quality(
     import pyfii as pf
 
     fii_dir = _find_fii_dir(output_dir)
-    data, _t0, *_ = pf.read_fii(str(fii_dir), fps=60, ignore_acc=True)
+    data, _t0, *_ = _cached_read_fii(str(fii_dir))
 
     fps = 60
     min_len = min(len(d) for d in data)
@@ -813,7 +813,7 @@ def _measure_degradation(
     import pyfii as pf
 
     fii_dir = _find_fii_dir(output_dir)
-    data, _t0, *_ = pf.read_fii(str(fii_dir), fps=60, ignore_acc=True)
+    data, _t0, *_ = _cached_read_fii(str(fii_dir))
     if not data:
         return {}
 
@@ -1034,7 +1034,7 @@ def _sample_exit_state(output_dir: Path, time_s: float | None = None) -> list[li
         fii_dir = _find_fii_dir(output_dir)
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
-            data, *_ = pf.read_fii(str(fii_dir), fps=60, ignore_acc=True)
+            data, *_ = _cached_read_fii(str(fii_dir))
     except Exception:
         return None
 
@@ -1095,6 +1095,14 @@ def _collision_interval(start_s: float, end_s: float, min_row: tuple[float, floa
         "pair": min_row[2],
     }
 
+
+
+import functools
+
+@functools.lru_cache(maxsize=1)
+def _cached_read_fii(fii_dir_str: str):
+    import pyfii as pf
+    return pf.read_fii(fii_dir_str, fps=60, ignore_acc=True)
 
 def _find_fii_dir(output_dir: Path) -> Path:
     if (output_dir / "动作组").exists():
