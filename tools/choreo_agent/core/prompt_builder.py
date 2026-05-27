@@ -88,10 +88,56 @@ def build_segment_prompt(
     system = build_system_prompt()
 
     user = f"""生成 Pyfii 编舞段 
-## 代码格式要求（必须严格遵循）
+## 代码格式（必须严格遵循 deepseek_cannon_choreo 模式）
+
+每段的写法（直接复制此模式）：
+
+```python
+# 几何定义
+geo = [(x1,y1,z1), ...]
+geo2 = [(x1,y1,z1), ...]
+
+for i, d in enumerate(drones):
+    d.inittime(start_s)
+    d.VelXY(120, 240); d.VelZ(120, 240)
+    d.delay(i * 100)  # 错峰
+
+for gi in range(len(geos)):
+    targets = geo[gi] if gi==0 else best_assign(prev, geo[gi])
+    for i, d in enumerate(drones):
+        dd = math.hypot(prev[i][0]-targets[i][0], prev[i][1]-targets[i][1])
+        spd = min(200, max(120, int(dd/2.0)))
+        d.VelXY(spd, spd*2); d.VelZ(spd, spd*2)
+        d.move2(clamp_xy(targets[i][0]), clamp_xy(targets[i][1]), clamp_z(targets[i][2]))
+        apply_light(d, color, 12); d.delay(1200)
+    prev = targets
+```
 
 
-## 代码格式要求（必须严格遵循）
+## 代码格式（必须严格遵循 deepseek_cannon_choreo 模式）
+
+每段的写法（直接复制此模式）：
+
+```python
+# 几何定义
+geo = [(x1,y1,z1), ...]
+geo2 = [(x1,y1,z1), ...]
+
+for i, d in enumerate(drones):
+    d.inittime(start_s)
+    d.VelXY(120, 240); d.VelZ(120, 240)
+    d.delay(i * 100)  # 错峰
+
+for gi in range(len(geos)):
+    targets = geo[gi] if gi==0 else best_assign(prev, geo[gi])
+    for i, d in enumerate(drones):
+        dd = math.hypot(prev[i][0]-targets[i][0], prev[i][1]-targets[i][1])
+        spd = min(200, max(120, int(dd/2.0)))
+        d.VelXY(spd, spd*2); d.VelZ(spd, spd*2)
+        d.move2(clamp_xy(targets[i][0]), clamp_xy(targets[i][1]), clamp_z(targets[i][2]))
+        apply_light(d, color, 12); d.delay(1200)
+    prev = targets
+```
 
 每个 move2：
 v, a = 150, 300

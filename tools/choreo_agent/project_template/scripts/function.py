@@ -58,3 +58,27 @@ COLORS_BRIGHT = ["#FF1493","#FFFF00","#00FFFF","#FF4500","#ADFF2F"]
 COLORS_AMBER = ["#2255aa","#3388cc","#44aadd"]
 
 # ---------- 排列 (如果core.best_assign可用则导入，否则本地实现) ----------
+
+# ---------- 排列 ----------
+def best_assign(starts, targets):
+    """遍历全排列，找最小路径间距最大的分配"""
+    import itertools, math as _m
+    n = len(starts)
+    best_score, best = -1e9, None
+    for perm in itertools.permutations(range(n)):
+        tt = [targets[i] for i in perm]
+        md = 1e9
+        for ratio in [0.2, 0.4, 0.6, 0.8]:
+            for i in range(n):
+                for j in range(i+1, n):
+                    ai = (starts[i][0]*ratio + tt[i][0]*(1-ratio), starts[i][1]*ratio + tt[i][1]*(1-ratio))
+                    aj = (starts[j][0]*ratio + tt[j][0]*(1-ratio), starts[j][1]*ratio + tt[j][1]*(1-ratio))
+                    d = _m.hypot(ai[0]-aj[0], ai[1]-aj[1])
+                    if d < md: md = d
+        score = md*2000 - max(_m.dist(starts[i], tt[i]) for i in range(n))*0.01
+        if score > best_score: best_score = score; best = tt
+    return best
+
+def hd(a, b):
+    import math as _m
+    return _m.hypot(a[0]-b[0], a[1]-b[1])
