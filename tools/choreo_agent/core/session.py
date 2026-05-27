@@ -60,7 +60,7 @@ class Session:
         self,
         provider: str = "deepseek",
         feedback: str = "",
-        temperature: float = 0.2,
+        temperature: float = 0.05,
         on_delta: Callable[[str], None] | None = None,
         on_heartbeat: Callable[[], None] | None = None,
     ) -> LlmResponse | None:
@@ -112,7 +112,7 @@ class Session:
             code = _extract_python_code(response.text)
         code = _strip_imports(code)
         if not code.strip():
-            return None
+            return LlmResponse(text="# FAILED: 无有效代码", model="none", input_tokens=0, output_tokens=0)
 
         if not self.generate_segment(code):
             return None
@@ -131,7 +131,7 @@ class Session:
         self,
         provider: str = "deepseek",
         feedback: str = "",
-        temperature: float = 0.2,
+        temperature: float = 0.05,
         max_attempts: int = 3,
         on_delta: Callable[[str], None] | None = None,
         on_heartbeat: Callable[[], None] | None = None,
@@ -153,7 +153,8 @@ class Session:
             )
             if response is None:
                 rounds.append(GenerationRound(index=index, response=None, validation=None))
-                break
+                repair_feedback = "上一轮生成的代码无法插入（语法错误或违反段标记协议）。请检查代码格式。"
+                continue
 
             result = self.validate()
             self._record_validation_result(result)
