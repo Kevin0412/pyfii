@@ -33,6 +33,7 @@ class Session:
         self.project_root = Path(project_root).resolve()
         self.state = ProjectState.load(self.project_root)
         self._pending_code: str | None = None
+        self._skip_continuity: bool = True  # 单段生成不检查连续性
         self.sync_state_with_markers(save=False)
 
     # ---- 生成 ----
