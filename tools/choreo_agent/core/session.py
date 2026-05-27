@@ -60,7 +60,7 @@ class Session:
         self,
         provider: str = "deepseek",
         feedback: str = "",
-        temperature: float = 0.05,
+        temperature: float = 0.3,
         on_delta: Callable[[str], None] | None = None,
         on_heartbeat: Callable[[], None] | None = None,
     ) -> LlmResponse | None:
@@ -131,7 +131,7 @@ class Session:
         self,
         provider: str = "deepseek",
         feedback: str = "",
-        temperature: float = 0.05,
+        temperature: float = 0.3,
         max_attempts: int = 3,
         on_delta: Callable[[str], None] | None = None,
         on_heartbeat: Callable[[], None] | None = None,
@@ -144,10 +144,11 @@ class Session:
         for index in range(1, max_attempts + 1):
             if on_round_start:
                 on_round_start(index)
+            round_temp = temperature if index == 1 else max(0.05, temperature * 0.4)
             response = self.generate_current_segment_with_llm(
                 provider=provider,
                 feedback=repair_feedback,
-                temperature=temperature,
+                temperature=round_temp,
                 on_delta=on_delta,
                 on_heartbeat=on_heartbeat,
             )

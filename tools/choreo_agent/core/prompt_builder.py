@@ -13,7 +13,6 @@ CONTEXT_DIR = Path(__file__).resolve().parent.parent / "context_packs"
 ALL_PACKS = [
     "pyfii_guide.md",
     "pyfii_segment_protocol.md",
-    "pyfii_validation_rules.md",
 ]
 
 
@@ -83,7 +82,11 @@ def build_segment_prompt(
 
     user = f"""生成 {segment_id} ({start_time}-{end_time}s) Pyfii 编舞代码。
 
-要求：2个 keyframe，非对称几何，best_assign 排列，move2 后 flight_time_ms 算 delay。
+要求：
+- 2个 keyframe，非对称几何（间距≥200cm）
+- 只用 move2(d, (x,y,z), t) 移动
+- best_assign 排列
+- 更新 d.x, d.y, d.z 追踪
 """
 
     if feedback:
