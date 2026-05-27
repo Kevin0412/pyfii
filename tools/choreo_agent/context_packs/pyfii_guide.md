@@ -58,7 +58,8 @@ for gi in range(2):
 
 ## 关键：move2 调用方式
 
-正确: move2(d, (x, y, z), t_ms)  -- function.py 封装
+正确: move2(d, (x, y, z), t_ms)  -- function.py 封装，内部已完成 VelXY+move2+delay，不要额外加 delay
+错误: move2(d, p, t) 之后又写 d.delay(...) -- 会重复计时导致时间溢出
 错误: d.move2(x, y, z)           -- 不要用底层 Drone 方法
 错误: d.move2(x, y, z, t_ms)     -- 不存在四参数
 
