@@ -225,13 +225,15 @@ def validate(
         output = proc.stdout + proc.stderr
         # 解析动作详情
         result.action_details = _parse_action_warnings(output)
+        # 统计 stderr 中直接输出的动作未完成警告（pf.read_fii 内部）
+        raw_action_count = output.count("action isn't completed")
         for line in output.splitlines():
             if "dist:" in line and "act:" in line:
                 for p in line.split():
                     if p.startswith("dist:"):
                         result.distance_warnings = int(p.split(":")[1])
                     if p.startswith("act:"):
-                        result.action_warnings = int(p.split(":")[1])
+                        result.action_warnings = max(int(p.split(":")[1]), raw_action_count)
             if "minD=" in line:
                 for p in line.split():
                     if p.startswith("minD="):
