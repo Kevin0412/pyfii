@@ -142,7 +142,9 @@ def _auto_fix_perms(code_lines, prev_lines):
 def _inject_best_assign(lines):
     """如果代码中没有 best_assign 调用，自动注入"""
     code = "\n".join(lines)
-    if "best_assign(" not in code:
+    # 只在非注释行检查
+    has_best_assign = any("best_assign(" in l and not l.strip().startswith("#") for l in lines)
+    if has_best_assign:
         return lines
     
     # 找 for gi in range 循环，在 targets 赋值前插入 best_assign
