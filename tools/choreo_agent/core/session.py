@@ -194,6 +194,9 @@ class Session:
                 (self.project_root / "scripts" / "design.py").write_text(best_code)
 
             if best_resp is not None and best_val is not None:
+                # 回写最佳代码到 design.py
+                if best_code:
+                    (self.project_root / "scripts" / "design.py").write_text(best_code)
                 self._record_validation_result(best_val)
                 rounds.append(GenerationRound(index=index, response=best_resp, validation=best_val))
                 if best_val.passed:
