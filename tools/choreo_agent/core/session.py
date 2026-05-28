@@ -169,21 +169,29 @@ class Session:
                     return (resp, val)
                 except Exception:
                     return (None, None)
-                finally:
-                    design_path.write_text(backup)
 
             with _futures.ThreadPoolExecutor(max_workers=3) as _ex:
                 _futures_list = [_ex.submit(_try_temp, t) for t in temps]
                 for _f in _futures.as_completed(_futures_list):
                     candidates.append(_f.result())
 
-            # 选 minD 最高的
+            # 选 minD 最高的；将其代码写入 design.py
             best_resp, best_val = None, None
             best_minD = -1
+            best_code = None
             for resp, val in candidates:
                 if val and val.min_distance_cm and val.min_distance_cm > best_minD:
                     best_minD = val.min_distance_cm
                     best_resp, best_val = resp, val
+                    # 读取最佳候选写入的 design.py（如果有的话）
+                    try:
+                        best_code = (self.project_root / "scripts" / "design.py").read_text()
+                    except Exception:
+                        pass
+            
+            # 将最佳代码写回 design.py
+            if best_code:
+                (self.project_root / "scripts" / "design.py").write_text(best_code)
 
             if best_resp is not None and best_val is not None:
                 self._record_validation_result(best_val)
