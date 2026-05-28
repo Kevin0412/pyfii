@@ -149,7 +149,7 @@ class Session:
                 on_round_start(index)
 
             # 顺序 3 温度采样（无竞态，可靠）
-            temps = [0.5, 0.3, 0.1] if index == 1 else [0.3, 0.1, 0.05]
+            temps = [0.7, 0.3, 0.1] if index == 1 else [0.3, 0.1, 0.05]
             best_resp, best_val, best_code = None, None, None
             best_minD = -1
 
