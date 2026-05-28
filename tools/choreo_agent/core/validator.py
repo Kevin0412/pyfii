@@ -283,7 +283,7 @@ def validate(
                 (
                     result.effective_motion_start_s,
                     result.effective_motion_end_s,
-                    result.low_activity_segments,
+                    _eff_low,
                 ) = _measure_effective_motion(
                     output_dir,
                     window=quality_window,
@@ -292,7 +292,7 @@ def validate(
                     quality_window,
                     result.effective_motion_start_s,
                     result.effective_motion_end_s,
-                    result.low_activity_segments,
+                    _eff_low,
                 )
                 result.effective_motion_ok = not result.effective_motion_errors
                 result.motion_quality = _measure_motion_quality(
@@ -570,30 +570,33 @@ def _detect_hover(
 
 
 def _detect_low_activity(data, window, fps):
-    """检测所有无人机平均位移 < 5cm/s 且持续 > 2s 的区间"""
+    """检测悬停：1秒窗口累积位移 < 5cm 且持续 > 2s"""
     N = len(data)
     min_len = min(len(d) for d in data)
-    start_frame = max(1, int(window[0] * fps))
+    start_frame = max(fps, int(window[0] * fps))
     end_frame = min(min_len, int(window[1] * fps) + 1)
     
-    threshold_cm_per_frame = 5.0 / fps
+    window_frames = fps  # 1秒窗口
+    threshold_cm = 5.0   # 1秒内移动 < 5cm
     min_duration_frames = int(2.0 * fps)
     
     low_segments = []
     low_start = None
     
-    for frame in range(start_frame + 1, end_frame):
+    for frame in range(start_frame, end_frame):
+        # 1秒窗口累积位移
         total_move = 0.0
         for i in range(N):
-            if frame < len(data[i]) and data[i][frame][1] > 0:
-                dx = abs(data[i][frame][1] - data[i][frame-1][1])
-                dy = abs(data[i][frame][2] - data[i][frame-1][2])
-                total_move += (dx + dy)
+            if frame < len(data[i]) and data[i][frame][1] > 0 and data[i][frame-window_frames][1] > 0:
+                dx = abs(data[i][frame][1] - data[i][frame-window_frames][1])
+                dy = abs(data[i][frame][2] - data[i][frame-window_frames][2])
+                dz = abs(data[i][frame][3] - data[i][frame-window_frames][3])
+                total_move += (dx + dy + dz)
         avg_move = total_move / max(N, 1)
         
-        if avg_move < threshold_cm_per_frame:
+        if avg_move < threshold_cm:
             if low_start is None:
-                low_start = frame
+                low_start = frame - window_frames
         else:
             if low_start is not None and (frame - low_start) >= min_duration_frames:
                 low_segments.append((low_start / fps, frame / fps))
@@ -1084,8 +1087,16 @@ def _add_dense_distance_report(result: ValidationResult, output_dir: Path) -> No
         result.dense_min_distance_cm = round(dense_min, 1)
         result.min_distance_cm = result.dense_min_distance_cm
 
-    # 低活动检测
-    result.low_activity_segments = _detect_low_activity(data, window if window else (0, min_len/fps), fps)
+    # 低活动检测（从轨迹直接算悬停）
+    try:
+        import pyfii as _pf
+        _fii_dir = _find_fii_dir(output_dir)
+        _data, _t0, *_ = _pf.read_fii(str(_fii_dir), fps=60, ignore_acc=True)
+        _min_len = min(len(d) for d in _data)
+        _window = result.quality_window if result.quality_window else (0, _min_len/60)
+        result.low_activity_segments = _detect_low_activity(_data, _window, 60)
+    except Exception as e:
+        result.low_activity_segments = []
     result.collision_intervals = _compress_collision_rows(rows)
 
 
