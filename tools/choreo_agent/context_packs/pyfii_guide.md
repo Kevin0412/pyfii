@@ -71,6 +71,15 @@ targets = best_assign(prev, geo)
 apply_light(d, "#RRGGBB", ticks)
 ```
 
+
+## 强制规则（违反 = 验证失败）
+
+1. **geo1 必须从 prev 派生**：`geo1 = [(prev[i][0] + 35*math.sin(i*2.5), prev[i][1] + 35*math.cos(i*2.5), Z) for i in range(7)]`
+   - 不允许 geo1 写死坐标——这是"小呼吸"步骤，让 best_assign 正确排列
+2. **geo2 间距 ≥ 120cm**：任意两机坐标间距至少 120cm，避免路径交叉
+3. **prev 必须更新**：每段尾 `prev = [(d.x, d.y, d.z) for d in drones]`
+4. **不要 inittime**：段首用 `auto_init(drones)` 自动接续
+
 ## 人类设计模式（从 dntg20220730_v3 蒸馏）
 
 ### 模式 A：数学轨迹（推荐）
