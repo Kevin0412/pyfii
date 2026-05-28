@@ -117,6 +117,31 @@ for gi in range(2):
 ## 必须
 - 每段结束时必须：prev = [(drone.x, drone.y, drone.z) for drone in drones]
 
+
+## 已验证通过的具体代码示例
+
+### S02 (13-23s) 通过示例
+```python
+geo1 = [(prev[i][0] + 40*math.sin(i*2), prev[i][1] + 40*math.cos(i*2), 140) for i in range(7)]
+geo2 = [(100,120,170),(280,80,190),(460,140,170),(420,380,180),(200,420,160),(340,340,200),(160,260,180)]
+for i, drone in enumerate(drones):
+    drone.inittime(13); drone.VelXY(120, 240); drone.VelZ(120, 240); drone.delay(i * 80)
+for gi in range(2):
+    geos = [geo1, geo2]
+    targets = best_assign(prev, geos[gi]) if gi > 0 else geos[gi]
+    for i, drone in enumerate(drones):
+        tx, ty, tz = targets[i]
+        dd = math.hypot(prev[i][0]-tx, prev[i][1]-ty)
+        spd = min(200, max(100, int(dd/2.0)))
+        drone.VelXY(spd, spd*2); drone.VelZ(spd, spd*2)
+        drone.move2(clamp_xy(tx), clamp_xy(ty), clamp_z(tz))
+        apply_light(drone, '#44aadd', 6)
+        ft = flight_time_ms(((tx-prev[i][0])**2+(ty-prev[i][1])**2+(tz-prev[i][2])**2)**0.5, spd, spd*2)
+        drone.delay(max(800, int(ft*1.2)))
+    prev = [(targets[i][0], targets[i][1], targets[i][2]) for i in range(7)]
+```
+
+
 ## 禁止
 - 不添加任何 import
 - 不调用 d.VelXY/VelZ/delay/move2 底层 API — 只用 move2(d, p, t)
