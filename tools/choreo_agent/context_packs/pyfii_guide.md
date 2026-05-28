@@ -43,8 +43,8 @@ apply_light(d, "#RRGGBB", ticks)
 geo = [(x1,y1,z1), ..., (x7,y7,z7)]
 geo2 = [(x1,y1,z1), ..., (x7,y7,z7)]
 
+t0 = auto_init(drones, 13)  # 第一个段给起始秒，后续段不传参数
 for i, drone in enumerate(drones):
-    drone.inittime(13)
     drone.delay(i * 80)
 
 for gi in range(2):
@@ -125,7 +125,7 @@ for gi in range(2):
 geo1 = [(prev[i][0] + 40*math.sin(i*2), prev[i][1] + 40*math.cos(i*2), 140) for i in range(7)]
 geo2 = [(100,120,170),(280,80,190),(460,140,170),(420,380,180),(200,420,160),(340,340,200),(160,260,180)]
 for i, drone in enumerate(drones):
-    drone.inittime(13); drone.VelXY(120, 240); drone.VelZ(120, 240); drone.delay(i * 80)
+    # auto_init 已在 for 循环前调用; drone.VelXY(120, 240); drone.VelZ(120, 240); drone.delay(i * 80)
 for gi in range(2):
     geos = [geo1, geo2]
     targets = best_assign(prev, geos[gi]) if gi > 0 else geos[gi]

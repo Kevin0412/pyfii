@@ -74,6 +74,26 @@ def best_assign(starts, targets):
         if score > best_score: best_score = score; best = tt
     return best
 
+# ---------- 自动计时 ----------
+_GLOBAL_TIME = 0
+
+def auto_init(drones, start_sec=None):
+    """全机动作完成后下一秒开始。消除段间悬停。
+    用法：t0 = auto_init(drones)        # 自动取当前所有无人机最后时间戳的下一秒
+          t0 = auto_init(drones, 4)     # 开头显式指定
+    """
+    global _GLOBAL_TIME
+    if start_sec is not None:
+        _GLOBAL_TIME = start_sec
+    else:
+        # 读所有无人机的实际时间戳(ms)，取最大值转为秒
+        max_t = max(d.time for d in drones) / 1000
+        _GLOBAL_TIME = max(_GLOBAL_TIME, max_t + 0.1)
+        _GLOBAL_TIME = math.ceil(_GLOBAL_TIME)
+    for d in drones:
+        d.inittime(_GLOBAL_TIME)
+    return _GLOBAL_TIME
+
 # ---------- 兼容旧版 ----------
 def flight_time_ms(d, v, a):
     """飞行时间(ms) — 兼容旧代码"""
