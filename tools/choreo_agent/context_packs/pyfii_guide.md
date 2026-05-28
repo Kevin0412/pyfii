@@ -72,7 +72,67 @@ apply_light(d, "#RRGGBB", ticks)
 ```
 
 ## 完整段模板
-## 代码模板（严格复制此模式，只替换坐标）
+## 人类设计模式（从 dntg20220730_v3 蒸馏）
+
+### 模式 A：数学轨迹（推荐）
+不要逐点写坐标——用数学函数生成轨迹：
+```python
+import cmath, math
+E = math.e
+
+# 旋转几何
+center = complex(280, 280)
+R = 150
+for gi in range(4):
+    theta = 2*math.pi*gi/4 + math.pi/6
+    rotateV = E**(theta*1j)
+    geo = [(center.real + R*rotateV.real, center.imag + R*rotateV.imag, 150+30*gi) 
+           for _ in range(7)]
+    # ... best_assign + move2 ...
+```
+
+### 模式 B：角色映射与分组差异
+同一段内不同机走不同路径——避免"全体同步"退化：
+```python
+roles = {0: 'left_wing', 1: 'core', 2: 'core', 3: 'solo', 4: 'core', 5: 'core', 6: 'right_wing'}
+
+for i, drone in enumerate(drones):
+    role = roles.get(i, 'core')
+    if role == 'left_wing':
+        tx, ty, tz = clamp_xy(280-150), clamp_xy(280), clamp_z(200)
+    elif role == 'right_wing':
+        tx, ty, tz = clamp_xy(280+150), clamp_xy(280), clamp_z(200)
+    elif role == 'solo':
+        tx, ty, tz = clamp_xy(280), clamp_xy(280), clamp_z(250)
+    else:  # core group
+        tx, ty, tz = geo_core[i][0], geo_core[i][1], geo_core[i][2]
+    move2(drone, (tx, ty, tz), 3000)
+    apply_light(drone, '#ff6644', 4)
+    drone.delay(3000 + 400)
+prev = [(drone.x, drone.y, drone.z) for drone in drones]
+```
+
+### 模式 C：连续轨迹（高密度 + 数学函数）
+```python
+n_steps = 12  # 12个小步 ≈ 连续运动
+for step in range(n_steps):
+    phase = 2*math.pi*step/n_steps
+    r = 180 + 60*math.sin(phase)
+    geo = [(280+r*math.cos(2*math.pi*i/7+phase), 280+r*math.sin(2*math.pi*i/7+phase), 150+50*math.cos(phase)) 
+           for i in range(7)]
+    targets = best_assign(prev, geo) if step > 0 else geo
+    for i, drone in enumerate(drones):
+        move2(drone, (clamp_xy(targets[i][0]), clamp_xy(targets[i][1]), clamp_z(targets[i][2])), 1200)
+        apply_light(drone, '#44aadd', 2)
+        drone.delay(1200 + 200)
+    prev = [(targets[i][0], targets[i][1], targets[i][2]) for i in range(7)]
+```
+
+### 编码原则
+1. 数学函数表达轨迹，不硬编码坐标
+2. 每段可重新分配角色——同一机在不同段有不同职责
+3. 同段内分组差异——避免"全体同步 move2"退化
+4. 灯光用三角函数驱动连续变化，不用静态颜色序列
 
 ```python
 geo = [(x1,y1,z1), ..., (x7,y7,z7)]
