@@ -131,12 +131,30 @@ class ValidationResult:
         return self._failure_feedback()
 
     def _quality_feedback(self) -> str:
-        """安全通过时的质量反馈"""
+        """安全通过时的质量反馈（安全 + 设计质量）"""
         lines = []
         if self.low_activity_segments:
             lines.append(f"悬停段（需增加 keyframe 填充）：")
             for s, e in self.low_activity_segments[:5]:
                 lines.append(f"  {s:.1f}-{e:.1f}s ({e-s:.1f}s)")
+        
+        # 设计质量指标
+        if self.motion_quality:
+            mq = self.motion_quality
+            lines.append(f"\n设计质量：")
+            if 'speed_variance' in mq:
+                sv = mq['speed_variance']
+                if sv < 500:
+                    lines.append(f"  速度变化不足({sv:.0f})——尝试不同keyframe用不同move2时间（2000-5000ms）")
+            if 'density_range' in mq:
+                dr = mq['density_range']
+                if dr < 50:
+                    lines.append(f"  空间密度单调({dr:.0f}cm)——geo半径在150-300cm间变化，制造疏密感")
+            if 'z_progression' in mq:
+                zp = mq['z_progression']
+                if zp < 0.5:
+                    lines.append(f"  高度层次不足——geo的z从100递增到200cm")
+        
         if not lines:
             return ""
         return "\n".join(lines)
