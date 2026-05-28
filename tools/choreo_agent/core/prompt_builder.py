@@ -87,7 +87,7 @@ def build_segment_prompt(
 - 只用 move2(d, (x,y,z), t) 移动（内部已含 delay，不要额外 d.delay）
 - best_assign 排列
 - 段代码是片段，不写 marker/import/创建 drone/重定义 prev
-- 总 move2 时间不超过段长（{end_time - start_time}s）
+- 总 move2(d,p,t_ms) 的 t_ms 之和 ≤ (段长-1)×1000 ms（留1秒余量）（{end_time - start_time}s）
 """
 
     if feedback:
@@ -96,3 +96,20 @@ def build_segment_prompt(
 
 
     return system, user
+
+def _extract_last_locked_segment(design_py: str, locked_segment_ids=None) -> str:
+    """提取最后一个 locked=true 的段的代码"""
+    lines = design_py.splitlines()
+    seg_lines = []
+    in_target = False
+    for line in lines:
+        if "PYFII_AGENT_SEGMENT_START" in line and "locked=true" in line:
+            in_target = True
+            seg_lines = []
+            continue
+        if "PYFII_AGENT_SEGMENT_END" in line and in_target:
+            in_target = False
+            break
+        if in_target and line.strip() and not line.strip().startswith("#"):
+            seg_lines.append(line)
+    return "\n".join(seg_lines[-30:])  # 只取最后30行，避免过长
