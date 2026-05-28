@@ -114,6 +114,9 @@ for gi in range(2):
 
 关键：第一步小幅度移动让 best_assign 正确排列，第二步大跳时才不会交叉。
 
+## 必须
+- 每段结束时必须：prev = [(drone.x, drone.y, drone.z) for drone in drones]
+
 ## 禁止
 - 不添加任何 import
 - 不调用 d.VelXY/VelZ/delay/move2 底层 API — 只用 move2(d, p, t)
