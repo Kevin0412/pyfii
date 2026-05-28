@@ -157,6 +157,10 @@ class ValidationResult:
         lines.append(f"minD: {self.min_distance_cm}cm")
         lines.append(f"dense minD: {self.dense_min_distance_cm}cm")
         lines.append(f"XY span: {self.xy_span}")
+        if self.low_activity_segments:
+            lines.append(f"动作密度不足：{len(self.low_activity_segments)} 个低活动区间（无人机平均位移<5cm/s持续>2s）")
+            for start_s, end_s in self.low_activity_segments[:3]:
+                lines.append(f"  {start_s:.1f}-{end_s:.1f}s 几乎悬停")
         if self.collision_intervals:
             lines.append("密采样危险区间（必须优先修复）：")
             for item in self.collision_intervals[:8]:
@@ -546,6 +550,43 @@ def _detect_hover(
         hover_segments.append((hover_start / fps, end_frame / fps))
 
     return hover_segments
+
+
+
+def _detect_low_activity(data, window, fps):
+    """检测所有无人机平均位移 < 5cm/s 且持续 > 2s 的区间"""
+    N = len(data)
+    min_len = min(len(d) for d in data)
+    start_frame = max(1, int(window[0] * fps))
+    end_frame = min(min_len, int(window[1] * fps) + 1)
+    
+    threshold_cm_per_frame = 5.0 / fps
+    min_duration_frames = int(2.0 * fps)
+    
+    low_segments = []
+    low_start = None
+    
+    for frame in range(start_frame + 1, end_frame):
+        total_move = 0.0
+        for i in range(N):
+            if frame < len(data[i]) and data[i][frame][1] > 0:
+                dx = abs(data[i][frame][1] - data[i][frame-1][1])
+                dy = abs(data[i][frame][2] - data[i][frame-1][2])
+                total_move += (dx + dy)
+        avg_move = total_move / max(N, 1)
+        
+        if avg_move < threshold_cm_per_frame:
+            if low_start is None:
+                low_start = frame
+        else:
+            if low_start is not None and (frame - low_start) >= min_duration_frames:
+                low_segments.append((low_start / fps, frame / fps))
+            low_start = None
+    
+    if low_start is not None and (end_frame - low_start) >= min_duration_frames:
+        low_segments.append((low_start / fps, end_frame / fps))
+    
+    return low_segments
 
 
 def _measure_motion_envelope(
@@ -1026,6 +1067,9 @@ def _add_dense_distance_report(result: ValidationResult, output_dir: Path) -> No
     if dense_min != float("inf"):
         result.dense_min_distance_cm = round(dense_min, 1)
         result.min_distance_cm = result.dense_min_distance_cm
+
+    # 低活动检测
+    result.low_activity_segments = _detect_low_activity(data, window if window else (0, min_len/fps), fps)
     result.collision_intervals = _compress_collision_rows(rows)
 
 

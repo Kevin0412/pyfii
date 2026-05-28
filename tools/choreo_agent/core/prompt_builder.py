@@ -83,9 +83,10 @@ def build_segment_prompt(
     user = f"""生成 {segment_id} ({start_time}-{end_time}s) Pyfii 编舞代码。
 
 要求：
-- 2 个 keyframe，非对称几何（间距>=200cm）
+- 2 个 keyframe（每个 2-4 秒），非对称几何（间距>=200cm）
 - 只用 move2(d, (x,y,z), t) 移动（内部已含 delay，不要额外 d.delay）
 - best_assign 排列
+- 灯光：每 keyframe 用 apply_light(d, "#RRGGBB", 3-5)，不同 keyframe 用不同色系（冷→暖→白）
 - 段代码是片段，不写 marker/import/创建 drone/重定义 prev
 - 总 move2(d,p,t_ms) 的 t_ms 之和 ≤ (段长-1)×1000 ms（留1秒余量）（{end_time - start_time}s）
 """
