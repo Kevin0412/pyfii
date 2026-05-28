@@ -154,6 +154,9 @@ class Session:
 
             def _try_temp(temp):
                 """单个温度尝试，返回 (response, validation)"""
+                import shutil as _shutil
+                design_path = self.project_root / "scripts" / "design.py"
+                backup = design_path.read_text()
                 try:
                     resp = self.generate_current_segment_with_llm(
                         provider=provider,
@@ -166,6 +169,8 @@ class Session:
                     return (resp, val)
                 except Exception:
                     return (None, None)
+                finally:
+                    design_path.write_text(backup)
 
             with _futures.ThreadPoolExecutor(max_workers=3) as _ex:
                 _futures_list = [_ex.submit(_try_temp, t) for t in temps]
