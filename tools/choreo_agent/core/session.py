@@ -148,55 +148,29 @@ class Session:
             if on_round_start:
                 on_round_start(index)
 
-            # 并发 3 个温度采样
+            # 顺序 3 温度采样（无竞态，可靠）
             temps = [0.5, 0.3, 0.1] if index == 1 else [0.3, 0.1, 0.05]
-            candidates = []
-
-            def _try_temp(temp):
-                """单个温度尝试，返回 (response, validation)"""
-                import shutil as _shutil
-                design_path = self.project_root / "scripts" / "design.py"
-                backup = design_path.read_text()
-                try:
-                    resp = self.generate_current_segment_with_llm(
-                        provider=provider,
-                        feedback=repair_feedback,
-                        temperature=temp,
-                    )
-                    if resp is None:
-                        return (None, None)
-                    val = self.validate()
-                    return (resp, val)
-                except Exception:
-                    return (None, None)
-
-            with _futures.ThreadPoolExecutor(max_workers=3) as _ex:
-                _futures_list = [_ex.submit(_try_temp, t) for t in temps]
-                for _f in _futures.as_completed(_futures_list):
-                    candidates.append(_f.result())
-
-            # 选 minD 最高的；将其代码写入 design.py
-            best_resp, best_val = None, None
+            best_resp, best_val, best_code = None, None, None
             best_minD = -1
-            best_code = None
-            for resp, val in candidates:
-                if val and val.min_distance_cm and val.min_distance_cm > best_minD:
-                    best_minD = val.min_distance_cm
-                    best_resp, best_val = resp, val
-                    # 读取最佳候选写入的 design.py（如果有的话）
-                    try:
-                        best_code = (self.project_root / "scripts" / "design.py").read_text()
-                    except Exception:
-                        pass
-            
-            # 将最佳代码写回 design.py
+
+            for temp in temps:
+                response = self.generate_current_segment_with_llm(
+                    provider=provider,
+                    feedback=repair_feedback,
+                    temperature=temp,
+                )
+                if response is None:
+                    continue
+                result = self.validate()
+                if result and result.min_distance_cm and result.min_distance_cm > best_minD:
+                    best_minD = result.min_distance_cm
+                    best_resp, best_val = response, result
+                    best_code = (self.project_root / "scripts" / "design.py").read_text()
+
             if best_code:
                 (self.project_root / "scripts" / "design.py").write_text(best_code)
 
             if best_resp is not None and best_val is not None:
-                # 回写最佳代码到 design.py
-                if best_code:
-                    (self.project_root / "scripts" / "design.py").write_text(best_code)
                 self._record_validation_result(best_val)
                 rounds.append(GenerationRound(index=index, response=best_resp, validation=best_val))
                 if best_val.passed:
@@ -204,7 +178,7 @@ class Session:
 
                 raw_output = best_val.raw_stderr[:2000] if hasattr(best_val, 'raw_stderr') and best_val.raw_stderr else ""
                 repair_parts = [
-                    f"上一轮并发{len(candidates)}次采样后最佳验证反馈（第 {index} 轮）：\n{best_val.repair_feedback()}",
+                    f"上一轮 3 温度最佳验证反馈（第 {index} 轮）：\n{best_val.repair_feedback()}",
                     f"pyfii 原始输出：\n{raw_output}" if raw_output else "",
                     _conservative_safety_feedback(index, best_val),
                 ]
@@ -214,7 +188,8 @@ class Session:
                 )
             else:
                 rounds.append(GenerationRound(index=index, response=None, validation=None))
-                repair_feedback = "上一轮所有并发采样均失败（代码无法插入）。请检查代码格式。"
+                repair_feedback = "上一轮所有温度采样均失败。请检查代码格式。"
+
 
         return rounds
 
