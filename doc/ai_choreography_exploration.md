@@ -252,3 +252,52 @@ AI 产物轨迹蒸馏见：[ai_generated_distillation.md](ai_generated_distillat
 ## Provider 配置
 
 根目录 `ai_providers.example.json` 只保留强模型路径需要的 provider scaffold。本地密钥写在被忽略的 `ai_providers.local.json`。
+
+## Agent 自动生成进展 (2026-05-28)
+
+基于 `tools/choreo_agent/` 框架的自动化编舞 agent 实验结果。
+
+### 核心突破：非对称几何安全模式
+
+经过大量试错，发现唯一稳定通过安全验证（minD > 51cm, d=0, a=0）的非对称几何模式：
+
+1. **breathe + expand**：先小幅度呼吸展开（从 prev 偏移 30-40cm），让 best_assign 正确排列，再大跳至非对称目标
+2. **显式 `prev` 更新**：每段尾必须 `prev = [(d.x,d.y,d.z) for d in drones]`
+3. **flight_time_ms** 动态计算 delay，避免动作未完成和时间溢出
+4. **动态 keyframe 数**：段长 < 10s 用 1 kf，否则 2 kf
+
+### 全流程基准
+
+手工编写 breathe+expand 模式的全流程（S01-S06+LAND，68s）达到 zero-warning：
+- dist=0, act=0, minD=61.2cm
+- 文件：`tools/choreo_agent/agent_projects/_archive/20260528_full_asymmetric/design.py`
+- 2D/3D 视频已导出
+
+### Agent 表现
+
+- **S02 (13-23s, 10s)**：agent 稳定生成通过代码，~60% hit rate（10 轮内）
+- **S03 (23-31s, 8s)**：agent 卡在局部最优（minD=5.4cm），收敛失败
+- **S04-LAND**：agent 未收敛，需手工代码
+
+### Agent 基础设施
+
+- 3 温度顺序采样（0.9/0.5/0.1 → 0.5/0.2/0.05）
+- 自然语言碰撞反馈（"d4和d6在14.2s仅5.6cm"）
+- 时间预算静态检查 + double-delay 检测
+- 前段通过代码注入 system prompt
+- checkpoint 跨段持久（已修复竞态 bug）
+- TUI 交互界面 (`tui.py`)
+- 混合模式一键脚本 (`run_hybrid_pipeline.py`)：agent S02 + 手工 S03-LAND
+
+### 关键发现
+
+1. **best_assign 不充分**：在非对称几何中，best_assign 的 2D 距离优化不足以避免 3D 轨迹交叉。cannon_choreo.py 的成功依赖手工设计的几何配合 best_assign。
+2. **窄段（<10s）是瓶颈**：8s 窗口的空间+时间约束超出 LLM 优化能力。
+3. **代码持久化是基础**：早期并发采样的竞态条件导致设计文件被回退，修复后 agent 稳定性大幅提升。
+4. **LLM 需要具体代码示例**：抽象模式描述不如一个通过的完整代码段有效。
+
+### 待解决
+
+- S03+ 窄段自动收敛（需离线排列优化或更强模型）
+- 多 keyframe 的安全性保证
+- 灯光节奏与音乐节拍同步
