@@ -144,6 +144,51 @@ for gi in range(2):
 ```
 
 
+
+## 非同步动作（进阶）
+
+不同无人机可以有不同的飞行时间，形成波浪/涟漪效果：
+
+```python
+geo = [...]
+targets = best_assign(prev, geo)
+base_t = 3000  # 基础飞行时间(ms)
+for i, drone in enumerate(drones):
+    tx, ty, tz = targets[i]
+    t = base_t + i * 200  # 每架机递增200ms
+    move2(drone, (clamp_xy(tx), clamp_xy(ty), clamp_z(tz)), t)
+    apply_light(drone, '#ff8844', 4)
+    drone.delay(t + 400)
+prev = [(targets[i][0], targets[i][1], targets[i][2]) for i in range(7)]
+```
+
+关键：`t = base_t + i * offset` 实现错峰到达。offset 可为正（序列）或负（反向序列）。
+
+
+## 连续轨迹（高密度关键帧）
+
+用小步长、多 keyframe 模拟连续运动：
+
+```python
+n_kf = 8  # 关键帧数量
+for gi in range(n_kf):
+    angle = 2 * math.pi * gi / n_kf
+    r = 180 + 40 * math.sin(angle)
+    geo = [(280 + r * math.cos(2*math.pi*i/7 + angle),
+            280 + r * math.sin(2*math.pi*i/7 + angle),
+            150 + 30 * math.cos(angle)) for i in range(7)]
+    targets = best_assign(prev, geo) if gi > 0 else geo
+    t = 1500  # 每小段1.5s
+    for i, drone in enumerate(drones):
+        tx, ty, tz = targets[i]
+        move2(drone, (clamp_xy(tx), clamp_xy(ty), clamp_z(tz)), t)
+        apply_light(drone, '#44aadd', 2)
+        drone.delay(t + 200)
+    prev = [(targets[i][0], targets[i][1], targets[i][2]) for i in range(7)]
+```
+
+关键：n_kf ≥ 6 时可视为连续运动，步长小避免碰撞。
+
 ## 禁止
 - 不添加任何 import
 - 不调用 d.VelXY/VelZ/delay/move2 底层 API — 只用 move2(d, p, t)
