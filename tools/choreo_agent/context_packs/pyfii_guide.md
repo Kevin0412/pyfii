@@ -71,7 +71,6 @@ targets = best_assign(prev, geo)
 apply_light(d, "#RRGGBB", ticks)
 ```
 
-## 完整段模板
 ## 人类设计模式（从 dntg20220730_v3 蒸馏）
 
 ### 模式 A：数学轨迹（推荐）
