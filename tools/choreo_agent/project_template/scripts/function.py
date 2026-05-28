@@ -26,15 +26,15 @@ def Vel(p1, p2, t):
             return v
     return 200
 
-def move2(d, p, t, T=100):
-    """DNTG 风格：反算速度 → VelXY → move2 → delay
-    d: drone, p: (x,y,z) 目标, t: 总时间(ms), T: 留给灯光的时间(ms)
+def move2(d, p, t):
+    """反算速度 → VelXY → move2。不 delay——留给灯光。
+    d: drone, p: (x,y,z) 目标, t: 总飞行时间(ms)
+    用法：move2(drone, (x,y,z), 3000); apply_light(drone, '#fff', 6)
     """
-    v = Vel((d.x, d.y, d.z), p, (t-T)/1000)
+    v = Vel((d.x, d.y, d.z), p, t/1000)
     d.VelXY(v, 2*v)
     d.VelZ(v, 2*v)
     d.move2(p[0], p[1], p[2])
-    d.delay(t)
 
 # ---------- 坐标裁剪 ----------
 def clamp_xy(v):
