@@ -81,30 +81,28 @@ def chat(
             f"provider={provider} model={cfg['model']}"
         )
 
-    previous_handler = signal.getsignal(signal.SIGALRM)
-    signal.signal(signal.SIGALRM, on_timeout)
-    signal.setitimer(signal.ITIMER_REAL, wall_timeout_s)
-    try:
-        url = f"{cfg['base_url'].rstrip('/')}/chat/completions"
-        if use_stream:
-            return _chat_stream(
-                url=url,
-                payload=payload,
-                headers=headers,
-                timeout=timeout,
-                fallback_model=cfg["model"],
-                on_delta=on_delta,
-                on_heartbeat=on_heartbeat,
-            )
-        return _chat_once(
-            url=url,
-            payload=payload,
-            headers=headers,
-            timeout=timeout,
-        )
-    finally:
-        signal.setitimer(signal.ITIMER_REAL, 0)
-        signal.signal(signal.SIGALRM, previous_handler)
+    import time as _time
+    _max_retries = 3
+    _last_error = None
+    url = f"{cfg['base_url'].rstrip('/')}/chat/completions"
+    for _attempt in range(_max_retries):
+        try:
+            previous_handler = signal.getsignal(signal.SIGALRM)
+            signal.signal(signal.SIGALRM, on_timeout)
+            signal.setitimer(signal.ITIMER_REAL, wall_timeout_s)
+            try:
+                if use_stream:
+                    return _chat_stream(url=url, payload=payload, headers=headers, timeout=timeout,
+                                        fallback_model=cfg["model"], on_delta=on_delta, on_heartbeat=on_heartbeat)
+                return _chat_once(url=url, payload=payload, headers=headers, timeout=timeout)
+            finally:
+                signal.setitimer(signal.ITIMER_REAL, 0)
+                signal.signal(signal.SIGALRM, previous_handler)
+        except (httpx.ConnectTimeout, httpx.ReadTimeout, httpx.ConnectError) as e:
+            _last_error = e
+            if _attempt < _max_retries - 1:
+                _time.sleep(2 ** _attempt)  # 1s, 2s, 4s backoff
+    raise _last_error
 
 
 def _chat_once(
