@@ -96,6 +96,24 @@ for gi in range(2):
 
 段代码嵌入到已有 design.py 的 marker 之间执行，drones 和 prev 已存在。
 
+
+## 非对称几何安全模式（已验证）
+
+第一步：小幅度呼吸（从 prev 偏移 30-40cm）
+第二步：非对称大展开（四角/散射/V形，间距≥200cm）
+
+```python
+geo1 = [(prev[i][0] + 35*math.sin(i*2.5), prev[i][1] + 35*math.cos(i*2.5), Z1) for i in range(7)]
+geo2 = [(x1,y1,z2), ..., (x7,y7,z2)]  # 非对称坐标
+
+for gi in range(2):
+    geos = [geo1, geo2]
+    targets = best_assign(prev, geos[gi]) if gi > 0 else geos[gi]
+    ...
+```
+
+关键：第一步小幅度移动让 best_assign 正确排列，第二步大跳时才不会交叉。
+
 ## 禁止
 - 不添加任何 import
 - 不调用 d.VelXY/VelZ/delay/move2 底层 API — 只用 move2(d, p, t)
