@@ -90,6 +90,11 @@ def auto_init(drones, start_sec=None):
         d.inittime(_GLOBAL_TIME)
     return _GLOBAL_TIME
 
+def should_land(drones, min_sec=60):
+    """当前总时间 >= min_sec 时返回 True，触发降落"""
+    max_t = max(d.time for d in drones) / 1000
+    return max_t >= min_sec
+
 # ---------- 兼容旧版 ----------
 def flight_time_ms(d, v, a):
     """飞行时间(ms) — 兼容旧代码"""

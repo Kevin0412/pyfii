@@ -43,7 +43,9 @@ apply_light(d, "#RRGGBB", ticks)
 geo = [(x1,y1,z1), ..., (x7,y7,z7)]
 geo2 = [(x1,y1,z1), ..., (x7,y7,z7)]
 
-t0 = auto_init(drones, 13)  # 第一个段给起始秒，后续段不传参数
+t0 = auto_init(drones, 4)   # S01 起始秒
+# 后续段：auto_init(drones) 自动接续
+# 每段末尾检查：if should_land(drones): break  # 超60s自动降落
 for i, drone in enumerate(drones):
     drone.delay(i * 80)
 
