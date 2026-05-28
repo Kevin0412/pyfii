@@ -77,6 +77,7 @@ class ValidationResult:
     degradation: dict = field(default_factory=dict)
     degradation_errors: list[str] = field(default_factory=list)
     code_quality_ok: bool = True
+    estimated_total_delay_ms: int = 0
     code_quality_errors: list[str] = field(default_factory=list)
     exit_state: list[list[int]] | None = None
     error_message: str = ""
@@ -211,6 +212,7 @@ def validate(
 
     active_code = _extract_first_unlocked_segment_code(code) or code
     result.code_quality_errors = _check_static_code_quality(active_code)
+    result.estimated_total_delay_ms = _estimate_total_delay_ms(active_code)
     result.code_quality_ok = not result.code_quality_errors
 
     # 2-4. 执行+读回+验收
@@ -326,6 +328,20 @@ def validate(
         result.error_message = str(e)
 
     return result
+
+
+
+def _estimate_total_delay_ms(code: str) -> int:
+    """估算段代码中所有 delay 的毫秒总数（包含 move2 封装的 t_ms）"""
+    import re
+    total = 0
+    # move2(d, (x,y,z), t_ms) 中的 t_ms
+    for m in re.finditer(r'move2\([^,]+,\s*\([^)]+\),\s*(\d+)', code):
+        total += int(m.group(1))
+    # d.delay(ms)
+    for m in re.finditer(r'\.delay\((\d+)\)', code):
+        total += int(m.group(1))
+    return total
 
 
 def _check_static_code_quality(code: str) -> list[str]:
