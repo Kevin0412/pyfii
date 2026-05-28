@@ -174,6 +174,9 @@ class Session:
                 self._record_validation_result(best_val)
                 rounds.append(GenerationRound(index=index, response=best_resp, validation=best_val))
                 if best_val.passed:
+                    quality = best_val.repair_feedback()
+                    if quality:
+                        repair_feedback = _join_feedback(feedback, quality)
                     break
 
                 raw_output = best_val.raw_stderr[:2000] if hasattr(best_val, 'raw_stderr') and best_val.raw_stderr else ""

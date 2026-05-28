@@ -98,8 +98,7 @@ class ValidationResult:
             and not self.collision_intervals
             and self.code_quality_ok
             and (
-                skip_continuity
-                or not self.continuity_required
+                not self.continuity_required
                 or (
                     self.hover_check_ok
                     and not self.hover_segments
@@ -126,7 +125,24 @@ class ValidationResult:
         )
 
     def repair_feedback(self) -> str:
-        """把验证失败转成可直接喂给 LLM 的修复反馈。"""
+        """验证反馈：失败时给出修复建议，通过时给出质量提示。"""
+        if self.passed:
+            return self._quality_feedback()
+        return self._failure_feedback()
+
+    def _quality_feedback(self) -> str:
+        """安全通过时的质量反馈"""
+        lines = []
+        if self.low_activity_segments:
+            lines.append(f"悬停段（需增加 keyframe 填充）：")
+            for s, e in self.low_activity_segments[:5]:
+                lines.append(f"  {s:.1f}-{e:.1f}s ({e-s:.1f}s)")
+        if not lines:
+            return ""
+        return "\n".join(lines)
+
+    def _failure_feedback(self) -> str:
+        """验证失败时的修复反馈"""
         hard_gate = (
             "硬门要求：compile=True, run=True, read_fii=True, distance warnings=0, "
             "action warnings=0, minD > 51cm"
