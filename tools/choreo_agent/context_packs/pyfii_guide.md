@@ -1,26 +1,35 @@
-# Pyfii 编舞 — 科学设计
+# Pyfii 编舞
 
-## 核心思路：选模式，不写坐标
-用算法保证几何安全，agent 只选模式、速度和灯光。
-
+## 核心 API
 ```python
-geo = safe_geo('expand')        # 展开/旋转/呼吸/收缩
+move2(d, (x,y,z), t_ms)   # 反算速度+飞行，不要额外 delay
+apply_light(d, "#RRGGBB", ticks)
+best_assign(prev, geo)
+safe_geo(mode)             # 算法保证7点间距≥120cm
+```
+
+## safe_geo 模式
+| 模式 | 半径 | 适用于 |
+|------|------|--------|
+| expand | 泊松圆盘采样 | 推进/展开 |
+| rotate | 150cm环+1中心 | 高潮/旋转 |
+| breathe | 120-220cm呼吸 | 过渡 |
+| contract | 80-130cm收缩 | 收束/降落 |
+
+## 代码模板
+```python
+geo = safe_geo('expand')
 targets = best_assign(prev, geo)
 for i, drone in enumerate(drones):
-    move2(drone, (clamp_xy(targets[i][0]), clamp_xy(targets[i][1]), clamp_z(targets[i][2])), 3000)
+    tx, ty, tz = clamp_xy(targets[i][0]), clamp_xy(targets[i][1]), clamp_z(targets[i][2])
+    move2(drone, (tx, ty, tz), 3500)
     apply_light(drone, '#ff6644', 4)
-    drone.delay(3000 + 400)
+    drone.delay(3500 + 400)
 prev = [(targets[i][0], targets[i][1], targets[i][2]) for i in range(7)]
 ```
 
-## 四种模式
-| 模式 | 适用于 | 效果 |
-|------|--------|------|
-| `expand` | 推进/展开段 | 泊松圆盘采样，非对称散布全场 |
-| `rotate` | 高潮/旋转段 | 中心1机+外围6机旋转环 |
-| `breathe` | 过渡段 | 同心环呼吸(120-220cm半径) |
-| `contract` | 收束/降落段 | 收缩到80-130cm半径 |
-
 ## 规则
-- 不用 inittime（auto_init 自动处理）
+- 不用 inittime / VelXY / flight_time_ms
+- 不用 drone.x = tx
+- 不用同心圆
 - 每段尾更新 prev
