@@ -69,7 +69,7 @@ def chat(
     wall_timeout_s = float(cfg.get("timeout_s", DEFAULT_WALL_TIMEOUT_S))
     read_timeout_s = float(cfg.get("read_timeout_s", min(DEFAULT_READ_TIMEOUT_S, wall_timeout_s)))
     timeout = httpx.Timeout(
-        connect=float(cfg.get("connect_timeout_s", 30)),
+        connect=float(cfg.get("connect_timeout_s", 60)),
         read=read_timeout_s,
         write=float(cfg.get("write_timeout_s", 30)),
         pool=float(cfg.get("pool_timeout_s", 30)),
@@ -82,7 +82,7 @@ def chat(
         )
 
     import time as _time
-    _max_retries = 3
+    _max_retries = 6
     _last_error = None
     url = f"{cfg['base_url'].rstrip('/')}/chat/completions"
     for _attempt in range(_max_retries):
