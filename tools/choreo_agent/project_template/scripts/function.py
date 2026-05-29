@@ -74,6 +74,44 @@ def best_assign(starts, targets):
         if score > best_score: best_score = score; best = tt
     return best
 
+# ---------- 安全几何生成 ----------
+# 如需使用：from core.safe_geo import generate_safe_geo
+# geo = generate_safe_geo('expand', min_spacing=120)
+# 内置备用（不依赖 safe_geo 模块）：
+import random as _random, math as _math
+
+def safe_geo(mode='expand', n=7, min_spacing=120, center=(280,280), z_min=140, z_max=220):
+    """生成安全几何——保证7点XY间距>=min_spacing。
+    mode: expand/rotate/breathe/contract
+    """
+    pts = []
+    if mode == 'rotate':
+        r = max(150, min_spacing)
+        for i in range(n-1):
+            a = 2*_math.pi*i/(n-1)+_random.uniform(0,0.5)
+            pts.append((int(center[0]+r*_math.cos(a)), int(center[1]+r*_math.sin(a)), _random.randint(z_min,z_max)))
+        pts.append((center[0], center[1], _random.randint(z_min,z_max)))
+    elif mode == 'breathe':
+        r = _random.randint(120, 220)
+        for i in range(n):
+            a = 2*_math.pi*i/n+_random.uniform(0,0.3)
+            pts.append((int(center[0]+r*_math.cos(a)), int(center[1]+r*_math.sin(a)), _random.randint(z_min,z_max)))
+    elif mode == 'contract':
+        r = _random.randint(80, 130)
+        for i in range(n):
+            a = 2*_math.pi*i/n
+            pts.append((int(center[0]+r*_math.cos(a)), int(center[1]+r*_math.sin(a)), z_min))
+    else:  # expand — 泊松圆盘
+        att=0
+        while len(pts)<n and att<500:
+            x=_random.randint(50,510); y=_random.randint(50,510); z=_random.randint(z_min,z_max)
+            if all(((x-px)**2+(y-py)**2)**0.5 >= min_spacing for px,py,_ in pts): pts.append((x,y,z))
+            att+=1
+        while len(pts)<n:
+            x=_random.randint(80,480); y=_random.randint(80,480)
+            if all(((x-px)**2+(y-py)**2)**0.5 >= min_spacing*0.7 for px,py,_ in pts): pts.append((x,y,_random.randint(z_min,z_max)))
+    return pts[:n]
+
 # ---------- 自动计时 ----------
 _GLOBAL_TIME = 0
 
