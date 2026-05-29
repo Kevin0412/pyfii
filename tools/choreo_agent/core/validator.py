@@ -381,12 +381,35 @@ def _estimate_total_delay_ms(code: str) -> int:
 
 def _check_static_code_quality(code: str) -> list[str]:
     tree = ast.parse(code)
-    return [
+    errors = [
         *_check_segment_imports(tree),
         *_check_agent_helper_leak_from_tree(tree),
         *_check_inittime_arguments(tree),
         *_check_velocity_pairing(tree),
     ]
+    errors.extend(_check_geo_spacing(code))
+    return errors
+
+
+def _check_geo_spacing(code: str) -> list[str]:
+    """检查 geo 坐标间距，提前拒绝过近的几何"""
+    import re
+    geo_pattern = re.compile(r'geo\d*\s*=\s*\[(.*?)\]', re.DOTALL)
+    coord_pattern = re.compile(r'\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*\)')
+    errors = []
+    for geo_match in geo_pattern.finditer(code):
+        coords = [(int(x), int(y)) for x, y, z in coord_pattern.findall(geo_match.group(1))]
+        if len(coords) < 2:
+            continue
+        for i in range(len(coords)):
+            for j in range(i + 1, len(coords)):
+                d = ((coords[i][0] - coords[j][0]) ** 2 + (coords[i][1] - coords[j][1]) ** 2) ** 0.5
+                if d < 80:
+                    errors.append(
+                        f"geo坐标间距不足：点{i}({coords[i][0]},{coords[i][1]})和点{j}({coords[j][0]},{coords[j][1]})"
+                        f"仅{d:.0f}cm（需>=80cm）。增大此两点坐标间距。"
+                    )
+    return errors
 
 
 def _check_agent_helper_leak(code: str) -> list[str]:
