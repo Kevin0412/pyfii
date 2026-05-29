@@ -98,7 +98,7 @@ def chat(
             finally:
                 signal.setitimer(signal.ITIMER_REAL, 0)
                 signal.signal(signal.SIGALRM, previous_handler)
-        except (httpx.ConnectTimeout, httpx.ReadTimeout, httpx.ConnectError) as e:
+        except (httpx.ConnectTimeout, httpx.ReadTimeout, httpx.ConnectError, httpx.RemoteProtocolError) as e:
             _last_error = e
             if _attempt < _max_retries - 1:
                 _time.sleep(2 ** _attempt)  # 1s, 2s, 4s backoff
