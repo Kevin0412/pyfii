@@ -265,7 +265,7 @@ def validate(
     try:
         started_at = time.time()
         proc = subprocess.run(
-            [PYTHON, str(script_path)],
+            [PYTHON, str(Path(script_path).resolve())],
             cwd=str(REPO_ROOT),
             capture_output=True,
             text=True,
