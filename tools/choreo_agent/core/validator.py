@@ -77,6 +77,7 @@ class ValidationResult:
     degradation: dict = field(default_factory=dict)
     degradation_errors: list[str] = field(default_factory=list)
     code_quality_ok: bool = True
+    altitude_ok: bool = True  # 无人机是否真的飞起来了
     estimated_total_delay_ms: int = 0
     code_quality_errors: list[str] = field(default_factory=list)
     geo_spacing_info: list[str] = field(default_factory=list)
@@ -98,6 +99,7 @@ class ValidationResult:
             and self.dense_min_distance_cm > 51
             and not self.collision_intervals
             and self.code_quality_ok
+            and self.altitude_ok
             and (
                 not self.continuity_required
                 or (
@@ -193,6 +195,8 @@ class ValidationResult:
 
         lines.append(f"distance warnings: {self.distance_warnings}")
         lines.append(f"action warnings: {self.action_warnings}")
+        if not self.altitude_ok:
+            lines.append("严重：无人机未达到飞行高度！所有机 z 最低需 > 50cm。检查 move2 调用是否生效。")
         lines.append(f"minD: {self.min_distance_cm}cm（安全的二维间距需>=51cm）")
         lines.append("修复提示：增大geo坐标间距(>=120cm)，或错峰不同时到达")
         lines.append(f"dense minD: {self.dense_min_distance_cm}cm")
@@ -308,6 +312,16 @@ def validate(
         if not _output_updated(output_dir, started_at):
             result.error_message = f"Expected output dir was not updated: {output_dir}"
             return result
+
+        # 检查无人机是否真的飞起来了（至少 50cm 高度）
+        try:
+            import pyfii as _pf_alt
+            _alt_data, _ = _pf_alt.read_fii(str(output_dir), fps=1, ignore_acc=True)
+            max_z = max(max(d[3] for d in drone) for drone in _alt_data)
+            if max_z < 50:
+                result.altitude_ok = False
+        except Exception:
+            pass
 
         if result.distance_warnings >= 0:
             result.read_fii_ok = True
