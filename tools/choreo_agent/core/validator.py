@@ -206,11 +206,11 @@ class ValidationResult:
             lines.append(f"动作密度不足：{len(self.low_activity_segments)} 个低活动区间（无人机平均位移<5cm/s持续>2s）")
             for start_s, end_s in self.low_activity_segments[:3]:
                 lines.append(f"  {start_s:.1f}-{end_s:.1f}s 几乎悬停")
-        if self.collision_intervals:
-            lines.append("碰撞轨迹数据（0.1s/行，x,y,z,vx,vy,vz）：")
-            traj = _format_collision_trajectory(self.collision_intervals[:3])
-            if traj:
-                lines.append(traj)
+        # 当前段完整轨迹（0.1s采样，7架无人机x,y,z,vx,vy,vz）
+        traj = _format_segment_trajectory()
+        if traj:
+            lines.append("当前段轨迹数据（0.1s/行）：")
+            lines.append(traj)
 
             for item in self.collision_intervals[:8]:
                 pair = item.get("pair")
@@ -277,7 +277,41 @@ def _generate_collision_screenshot(intervals: list) -> str | None:
 
 
 
-def _format_collision_trajectory(intervals: list) -> str:
+def _format_segment_trajectory() -> str:
+    """格式化当前段的完整轨迹数据（0.1s采样，7架无人机）"""
+    if not hasattr(_format_segment_trajectory, 'data'):
+        return ""
+    try:
+        data = _format_segment_trajectory.data
+        t0 = _format_segment_trajectory.t0
+        fps = _format_segment_trajectory.fps
+        seg_start = _format_segment_trajectory.seg_start
+        seg_end = _format_segment_trajectory.seg_end
+        sample_step = max(1, fps // 10)
+        start_f = int((seg_start - t0) * fps)
+        end_f = int((seg_end - t0) * fps)
+        start_f = max(0, start_f)
+        end_f = min(len(data[0]) - 1, end_f)
+        
+        lines = [f"段 {seg_start:.0f}-{seg_end:.0f}s，采样间隔 {sample_step/fps:.1f}s"]
+        # 表头
+        header = "   t   "
+        for d_i in range(7):
+            header += f"  d{d_i}_x d{d_i}_y d{d_i}_z  d{d_i}_vx d{d_i}_vy d{d_i}_vz"
+        lines.append(header)
+        
+        for f in range(start_f, end_f + 1, sample_step):
+            t = t0 + f / fps
+            row = f"{t:6.1f}"
+            for d_i in range(7):
+                d = data[d_i][f]
+                vx, vy, vz = d[5] if isinstance(d[5], (tuple, list)) and len(d[5]) == 3 else (0, 0, 0)
+                row += f"  {d[1]:4.0f} {d[2]:4.0f} {d[3]:4.0f}  {vx:4.0f} {vy:4.0f} {vz:4.0f}"
+            lines.append(row)
+        return "
+".join(lines)
+    except Exception as e:
+        return f"(trajectory error: {e})"
     """格式化碰撞时刻的轨迹数据（坐标+速度）"""
     if not intervals or not hasattr(_format_collision_trajectory, 'data'):
         return ""
@@ -318,6 +352,8 @@ def validate(
 ) -> ValidationResult:
     result = ValidationResult()
     result.quality_window = quality_window
+    _format_segment_trajectory.seg_start = quality_window[0] if quality_window else 0
+    _format_segment_trajectory.seg_end = quality_window[1] if quality_window else 60
     result.continuity_required = quality_window is not None
 
     # 1. 语法层
@@ -684,9 +720,9 @@ def _detect_hover(
     fii_dir = _find_fii_dir(output_dir)
 
     data, _t0, *_ = pf.read_fii(str(fii_dir), fps=60, ignore_acc=True)
-    _format_collision_trajectory.data = data
-    _format_collision_trajectory.t0 = _t0
-    _format_collision_trajectory.fps = 60
+    _format_segment_trajectory.data = data
+    _format_segment_trajectory.t0 = _t0
+    _format_segment_trajectory.fps = 60
     _generate_collision_screenshot.data = data  # 供截图使用
 
     N = len(data)
