@@ -44,7 +44,6 @@ geo = [(x1,y1,z1), ..., (x7,y7,z7)]
 geo2 = [(x1,y1,z1), ..., (x7,y7,z7)]
 
 for i, drone in enumerate(drones):
-    drone.inittime(13)
     drone.delay(i * 80)
 
 for gi in range(2):
@@ -66,7 +65,6 @@ geo = [(x1,y1,z1), (x2,y2,z2), ...]   # 非对称几何，间距≥200cm
 geo2 = [(x1,y1,z1), ...]
 
 for i, d in enumerate(drones):
-    d.inittime(START_SEC)
     d.delay(i * 80)
 
 for gi in range(2):
