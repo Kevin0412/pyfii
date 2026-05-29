@@ -203,6 +203,10 @@ class ValidationResult:
                 lines.append(f"  {start_s:.1f}-{end_s:.1f}s 几乎悬停")
         if self.collision_intervals:
             lines.append("二维投影危险区间（拉开XY间距>=100cm）：")
+            # 生成碰撞截图
+            img_path = _generate_collision_screenshot(self.collision_intervals[:3])
+            if img_path:
+                lines.append(f"碰撞截图：{img_path}")
             for item in self.collision_intervals[:8]:
                 pair = item.get("pair")
                 lines.append(
@@ -229,6 +233,37 @@ class ValidationResult:
         from core.best_assign import best_assign
         perm, min_d = best_assign(starts_xy, targets_xy)
         return f"使用排列 perm={perm} (min_d={min_d:.1f}cm) 替换当前恒等映射。"
+
+
+
+def _generate_collision_screenshot(intervals: list) -> str | None:
+    """生成碰撞时刻的2D轨迹截图"""
+    if not intervals or not hasattr(_generate_collision_screenshot, 'data'):
+        return None
+    try:
+        import matplotlib
+        matplotlib.use('Agg')
+        import matplotlib.pyplot as plt
+        data = _generate_collision_screenshot.data
+        fig, ax = plt.subplots(figsize=(8, 8))
+        colors = ['red','blue','green','orange','purple','brown','pink']
+        N = 7
+        for i in range(N):
+            frames = min(200, len(data[i]))
+            xs = [data[i][f][1] for f in range(frames) if data[i][f][1] > 0]
+            ys = [data[i][f][2] for f in range(frames) if data[i][f][1] > 0]
+            if xs:
+                ax.plot(xs, ys, color=colors[i], alpha=0.5, linewidth=1)
+                ax.scatter(xs[-1], ys[-1], color=colors[i], s=30)
+        ax.set_xlim(0, 560); ax.set_ylim(0, 560)
+        ax.set_title(f'2D Trajectory (collision at {intervals[0].get("start_s",0):.1f}s)')
+        import tempfile, os
+        path = os.path.join(tempfile.gettempdir(), 'pyfii_collision.png')
+        plt.savefig(path, dpi=72)
+        plt.close()
+        return path
+    except Exception:
+        return None
 
 
 def validate(
@@ -598,6 +633,7 @@ def _detect_hover(
     fii_dir = _find_fii_dir(output_dir)
 
     data, _t0, *_ = pf.read_fii(str(fii_dir), fps=60, ignore_acc=True)
+    _generate_collision_screenshot.data = data  # 供截图使用
 
     N = len(data)
     fps = 60

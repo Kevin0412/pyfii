@@ -96,6 +96,7 @@ class Session:
                     temperature=temperature,
                     on_delta=on_delta,
                     on_heartbeat=on_heartbeat,
+                    image_paths=_extract_image_paths(feedback),
                 )
         except Exception as exc:
             seg.attempts.append({
@@ -495,6 +496,14 @@ def _append_attempt_event(seg: SegmentState, event: dict) -> None:
         seg.attempts[-1].update(event)
     else:
         seg.attempts.append(event)
+
+
+
+def _extract_image_paths(feedback: str) -> list[str] | None:
+    """从 feedback 中提取截图路径"""
+    import re, os
+    paths = re.findall(r'碰撞截图：(\S+\.png)', feedback)
+    return [p for p in paths if os.path.exists(p)] or None
 
 
 def _join_feedback(initial: str, repair: str) -> str:

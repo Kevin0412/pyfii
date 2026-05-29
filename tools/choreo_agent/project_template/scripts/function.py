@@ -82,7 +82,6 @@ import random as _random, math as _math
 
 def safe_geo(mode='expand', n=7, min_spacing=120, min_dist=120, center=(280,280), z_min=140, z_max=220):
     """生成安全几何。使用固定种子保证可重复"""
-    _random.seed(42)  # 固定种子
     """生成安全几何——保证7点XY间距>=min_spacing。
     mode: expand/rotate/breathe/contract
     """

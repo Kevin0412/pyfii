@@ -34,11 +34,31 @@ def load_config(provider_name: str = "deepseek") -> dict:
     return providers[provider_name]
 
 
+
+def _build_user_content(text: str, image_paths: list[str] | None = None):
+    """构建用户消息内容，支持图片"""
+    if not image_paths:
+        return text
+    import base64
+    content = [{"type": "text", "text": text}]
+    for path in image_paths:
+        with open(path, "rb") as f:
+            b64 = base64.b64encode(f.read()).decode()
+        ext = path.rsplit(".", 1)[-1].lower()
+        mime = f"image/{ext}" if ext in ("png","jpg","jpeg","gif","webp") else "image/png"
+        content.append({
+            "type": "image_url",
+            "image_url": {"url": f"data:{mime};base64,{b64}"}
+        })
+    return content
+
+
 def chat(
     system: str,
     user: str,
     provider: str = "deepseek",
     temperature: float = 0.2,
+    image_paths: list[str] | None = None,
     on_delta: Callable[[str], None] | None = None,
     on_heartbeat: Callable[[], None] | None = None,
 ) -> LlmResponse:
@@ -49,7 +69,7 @@ def chat(
         "model": cfg["model"],
         "messages": [
             {"role": "system", "content": system},
-            {"role": "user", "content": user},
+            {"role": "user", "content": _build_user_content(user, image_paths)},
         ],
         "temperature": temperature,
         "max_tokens": cfg.get("max_output_tokens", 16384),
