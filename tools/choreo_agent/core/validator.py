@@ -227,6 +227,7 @@ class ValidationResult:
                 "不要用固定 delay 混过去。"
             )
         
+        return "\n".join(lines)
 
     def compute_assign_feedback(self, starts_xy, targets_xy):
         """计算 best_assign 并返回修复建议"""
