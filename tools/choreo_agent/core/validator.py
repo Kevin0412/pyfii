@@ -243,6 +243,11 @@ def validate(
         result.compile_ok = True
     except SyntaxError as e:
         result.error_message = f"Syntax error: {e}"
+        # 即使语法错，也做 geo 间距检查——帮 agent 定位问题
+        try:
+            result.code_quality_errors = _check_geo_spacing(code)
+        except Exception:
+            pass
         return result
 
     active_code = _extract_first_unlocked_segment_code(code) or code
