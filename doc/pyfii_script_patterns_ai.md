@@ -1,3 +1,5 @@
+> **已归档** — 见 [INDEX.md](INDEX.md)
+
 # AI 生成的 pyfii 编码模式
 
 分析 GPT-5.5/Codex 生成脚本的 pyfii 代码组织方式。分析对象：

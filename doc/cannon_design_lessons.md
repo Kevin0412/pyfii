@@ -1,3 +1,5 @@
+> **已归档** — 见 [INDEX.md](INDEX.md)
+
 # DeepSeek Cannon 设计全流程经验总结
 
 > 为 Agent 搭建提供方法论基础

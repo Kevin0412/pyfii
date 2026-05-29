@@ -1,3 +1,5 @@
+> **已归档** — 见 [INDEX.md](INDEX.md)
+
 # AI 生成编队产物蒸馏
 
 对 GPT-5.5/Codex 生成的 `.fii` 产物做轨迹读回分析。AI 产物全部在有加速度模式下生成，因此仅用 `ignore_acc=False` 单模式验证。

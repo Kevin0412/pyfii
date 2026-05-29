@@ -1,3 +1,5 @@
+> **已归档** — 见 [INDEX.md](INDEX.md)
+
 # DeepSeek Cannon 开发反思与 Agent 设计启示
 
 ## 一、本次开发数据
