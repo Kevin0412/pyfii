@@ -80,7 +80,7 @@ def best_assign(starts, targets):
 # 内置备用（不依赖 safe_geo 模块）：
 import random as _random, math as _math
 
-def safe_geo(mode='expand', n=7, min_spacing=120, center=(280,280), z_min=140, z_max=220):
+def safe_geo(mode='expand', n=7, min_spacing=120, min_dist=120, center=(280,280), z_min=140, z_max=220):
     """生成安全几何——保证7点XY间距>=min_spacing。
     mode: expand/rotate/breathe/contract
     """
@@ -105,11 +105,11 @@ def safe_geo(mode='expand', n=7, min_spacing=120, center=(280,280), z_min=140, z
         att=0
         while len(pts)<n and att<500:
             x=_random.randint(50,510); y=_random.randint(50,510); z=_random.randint(z_min,z_max)
-            if all(((x-px)**2+(y-py)**2)**0.5 >= min_spacing for px,py,_ in pts): pts.append((x,y,z))
+            if all(((x-px)**2+(y-py)**2)**0.5 >= min(min_spacing, min_dist) for px,py,_ in pts): pts.append((x,y,z))
             att+=1
         while len(pts)<n:
             x=_random.randint(80,480); y=_random.randint(80,480)
-            if all(((x-px)**2+(y-py)**2)**0.5 >= min_spacing*0.7 for px,py,_ in pts): pts.append((x,y,_random.randint(z_min,z_max)))
+            if all(((x-px)**2+(y-py)**2)**0.5 >= min(min_spacing, min_dist)*0.7 for px,py,_ in pts): pts.append((x,y,_random.randint(z_min,z_max)))
     return pts[:n]
 
 # ---------- 自动计时 ----------

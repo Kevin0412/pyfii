@@ -105,11 +105,7 @@ class Session:
             })
             self.state.save(self.project_root)
             raise
-        # prefix 模式输出已经是纯代码，不需要提取
-        if response.text.strip().startswith(('#', 'import', 'from', 'def', 'class', 'try', 'for', 'if', 'while')):
-            code = response.text.strip()
-        else:
-            code = _extract_python_code(response.text)
+        code = _extract_python_code(response.text)
         code = _strip_imports(code)
         if not code.strip():
             return LlmResponse(text="# FAILED: 无有效代码", model="none", input_tokens=0, output_tokens=0)
