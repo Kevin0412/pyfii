@@ -403,10 +403,14 @@ class Session:
 
 
 def _extract_python_code(text: str) -> str:
-    """从 LLM 输出中提取 Python 代码，兼容 fenced markdown。"""
+    """从 LLM 输出中提取 Python 代码，兼容 fenced markdown 和 思考/代码 格式。"""
     fenced = re.findall(r"```(?:python|py)?\s*(.*?)```", text, flags=re.IGNORECASE | re.DOTALL)
     if fenced:
         return _strip_segment_markers(fenced[0])
+    # 思维链格式：提取"代码："之后或最后一个代码块
+    m = re.search(r'代码[：:]\s*\n(.*)', text, re.DOTALL)
+    if m:
+        return _strip_segment_markers(m.group(1))
     raw = text.strip()
     if raw.startswith("```"):
         raw = re.sub(r"^```(?:python|py)?\s*", "", raw, flags=re.IGNORECASE)
