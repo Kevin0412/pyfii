@@ -189,7 +189,8 @@ class ValidationResult:
 
         lines.append(f"distance warnings: {self.distance_warnings}")
         lines.append(f"action warnings: {self.action_warnings}")
-        lines.append(f"minD: {self.min_distance_cm}cm")
+        lines.append(f"minD: {self.min_distance_cm}cm（安全的二维间距需>=51cm）")
+        lines.append("修复提示：增大geo坐标间距(>=120cm)，或错峰不同时到达")
         lines.append(f"dense minD: {self.dense_min_distance_cm}cm")
         lines.append(f"XY span: {self.xy_span}")
         if self.low_activity_segments:
@@ -197,7 +198,7 @@ class ValidationResult:
             for start_s, end_s in self.low_activity_segments[:3]:
                 lines.append(f"  {start_s:.1f}-{end_s:.1f}s 几乎悬停")
         if self.collision_intervals:
-            lines.append("密采样危险区间（必须优先修复）：")
+            lines.append("二维投影危险区间（拉开XY间距>=100cm）：")
             for item in self.collision_intervals[:8]:
                 pair = item.get("pair")
                 lines.append(
