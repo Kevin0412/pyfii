@@ -499,13 +499,6 @@ def _append_attempt_event(seg: SegmentState, event: dict) -> None:
 
 
 
-def _extract_image_paths(feedback: str) -> list[str] | None:
-    """从 feedback 中提取截图路径"""
-    import re, os
-    paths = re.findall(r'碰撞截图：(\S+\.png)', feedback)
-    return [p for p in paths if os.path.exists(p)] or None
-
-
 def _join_feedback(initial: str, repair: str) -> str:
     if initial.strip():
         return initial.strip() + "\n\n" + repair

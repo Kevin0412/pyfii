@@ -142,7 +142,8 @@ class ValidationResult:
         # 设计质量指标
         if self.motion_quality:
             mq = self.motion_quality
-            lines.append(f"\n设计质量：")
+            lines.append(f"
+设计质量：")
             if 'speed_variance' in mq:
                 sv = mq['speed_variance']
                 if sv < 500:
@@ -158,7 +159,8 @@ class ValidationResult:
         
         if not lines:
             return ""
-        return "\n".join(lines)
+        return "
+".join(lines)
 
     def _failure_feedback(self) -> str:
         """验证失败时的修复反馈"""
@@ -177,7 +179,8 @@ class ValidationResult:
         ]
         if not self.compile_ok:
             lines.append(f"语法失败：{self.error_message[-500:]}")
-            return "\n".join(lines)
+            return "
+".join(lines)
         if self.code_quality_errors:
             lines.append("代码结构失败：")
             lines.extend(f"- {item}" for item in self.code_quality_errors)
@@ -186,10 +189,12 @@ class ValidationResult:
             lines.extend(f"- {item}" for item in self.geo_spacing_info)
         if not self.run_ok:
             lines.append(f"脚本执行失败：{self.error_message[-500:]}")
-            return "\n".join(lines)
+            return "
+".join(lines)
         if not self.read_fii_ok:
             lines.append(f"read_fii 未通过：{self.error_message[-500:]}")
-            return "\n".join(lines)
+            return "
+".join(lines)
 
         lines.append(f"distance warnings: {self.distance_warnings}")
         lines.append(f"action warnings: {self.action_warnings}")
@@ -202,11 +207,11 @@ class ValidationResult:
             for start_s, end_s in self.low_activity_segments[:3]:
                 lines.append(f"  {start_s:.1f}-{end_s:.1f}s 几乎悬停")
         if self.collision_intervals:
-            lines.append("二维投影危险区间（拉开XY间距>=100cm）：")
-            # 生成碰撞截图
-            img_path = _generate_collision_screenshot(self.collision_intervals[:3])
-            if img_path:
-                lines.append(f"碰撞截图：{img_path}")
+            lines.append("碰撞轨迹数据（0.1s/行，x,y,z,vx,vy,vz）：")
+            traj = _format_collision_trajectory(self.collision_intervals[:3])
+            if traj:
+                lines.append(traj)
+
             for item in self.collision_intervals[:8]:
                 pair = item.get("pair")
                 lines.append(
@@ -219,11 +224,16 @@ class ValidationResult:
             details = ", ".join(self.action_details[:10]) if self.action_details else "unknown"
             lines.append(
                 f"动作未完成风险：{self.action_warnings} 个警告。受影响: {details}。"
-                "每个 move2 后 delay 必须基于距离计算：\n"
-                "  d = sqrt((tx-prev_x)^2+(ty-prev_y)^2+(tz-prev_z)^2)\n"
-                "  drone.move2(tx, ty, tz)\n"
-                "  apply_light(drone, color, ticks)\n"
-                "  drone.delay(flight_time_ms(d, v, a) - ticks*100 + 200)\n"
+                "每个 move2 后 delay 必须基于距离计算：
+"
+                "  d = sqrt((tx-prev_x)^2+(ty-prev_y)^2+(tz-prev_z)^2)
+"
+                "  drone.move2(tx, ty, tz)
+"
+                "  apply_light(drone, color, ticks)
+"
+                "  drone.delay(flight_time_ms(d, v, a) - ticks*100 + 200)
+"
                 "不要用固定 delay 混过去。"
             )
         
@@ -264,6 +274,41 @@ def _generate_collision_screenshot(intervals: list) -> str | None:
         return path
     except Exception:
         return None
+
+
+
+def _format_collision_trajectory(intervals: list) -> str:
+    """格式化碰撞时刻的轨迹数据（坐标+速度）"""
+    if not intervals or not hasattr(_format_collision_trajectory, 'data'):
+        return ""
+    try:
+        data = _format_collision_trajectory.data
+        t0 = _format_collision_trajectory.t0
+        fps = _format_collision_trajectory.fps
+        sample_step = max(1, fps // 10)  # 0.1s sampling
+        lines = []
+        for ci in intervals[:3]:
+            start_f = int((ci.get('start_s', 0) - t0) * fps)
+            end_f = int((ci.get('end_s', 0) - t0) * fps)
+            start_f = max(0, start_f - sample_step * 3)
+            end_f = min(len(data[0]) - 1, end_f + sample_step * 3)
+            lines.append(f"碰撞区间 {ci.get('start_s',0):.1f}-{ci.get('end_s',0):.1f}s")
+            header = "frame  time"
+            for d in range(7):
+                header += f"  d{d}_x d{d}_y d{d}_z d{d}_vx d{d}_vy d{d}_vz"
+            lines.append(header)
+            for f in range(start_f, end_f + 1, sample_step):
+                t = t0 + f / fps
+                row = f"{f:5d} {t:4.1f}s"
+                for d_i in range(7):
+                    d = data[d_i][f]
+                    vx, vy, vz = d[5] if isinstance(d[5], (tuple, list)) and len(d[5]) == 3 else (0, 0, 0)
+                    row += f"  {d[1]:3.0f} {d[2]:3.0f} {d[3]:3.0f} {vx:3.0f} {vy:3.0f} {vz:3.0f}"
+                lines.append(row)
+        return "
+".join(lines)
+    except Exception as e:
+        return f"(trajectory format error: {e})"
 
 
 def validate(
@@ -517,7 +562,9 @@ def _repair_timing_plan(
         f"- 重新规划时，所有无人机的 move/light/delay 累计预算应让有效群体运动结束在 "
         f"{finish_floor:.2f}-{end_s:.2f}s。"
     )
-    return "段落时间预算修复建议：\n" + "\n".join(lines)
+    return "段落时间预算修复建议：
+" + "
+".join(lines)
 
 
 def _check_inittime_arguments(tree: ast.AST) -> list[str]:
@@ -612,9 +659,13 @@ def _node_display(node: ast.AST) -> str:
 
 def _extract_first_unlocked_segment_code(code: str) -> str:
     match = re.search(
-        r"^# === PYFII_AGENT_SEGMENT_START[^\n]*locked=false[^\n]* ===\n"
+        r"^# === PYFII_AGENT_SEGMENT_START[^
+]*locked=false[^
+]* ===
+"
         r"(?P<body>.*?)"
-        r"^# === PYFII_AGENT_SEGMENT_END[^\n]* ===",
+        r"^# === PYFII_AGENT_SEGMENT_END[^
+]* ===",
         code,
         flags=re.MULTILINE | re.DOTALL,
     )
@@ -633,6 +684,9 @@ def _detect_hover(
     fii_dir = _find_fii_dir(output_dir)
 
     data, _t0, *_ = pf.read_fii(str(fii_dir), fps=60, ignore_acc=True)
+    _format_collision_trajectory.data = data
+    _format_collision_trajectory.t0 = _t0
+    _format_collision_trajectory.fps = 60
     _generate_collision_screenshot.data = data  # 供截图使用
 
     N = len(data)
@@ -1301,7 +1355,8 @@ def _parse_action_warnings(output: str) -> list[str]:
     details = []
     # 格式: In Xs,action isn't completed.在Xs秒动作未完成。
     pattern = re.compile(r'[Dd](\d+).*?[Ii]n\s*(\d+)s,action isn')
-    for line in output.split('\n'):
+    for line in output.split('
+'):
         m = pattern.search(line)
         if m:
             details.append(f"d{m.group(1)} at {m.group(2)}s")
