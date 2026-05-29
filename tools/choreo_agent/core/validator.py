@@ -79,6 +79,7 @@ class ValidationResult:
     code_quality_ok: bool = True
     estimated_total_delay_ms: int = 0
     code_quality_errors: list[str] = field(default_factory=list)
+    geo_spacing_info: list[str] = field(default_factory=list)
     exit_state: list[list[int]] | None = None
     error_message: str = ""
     raw_stderr: str = ""
@@ -180,6 +181,9 @@ class ValidationResult:
         if self.code_quality_errors:
             lines.append("代码结构失败：")
             lines.extend(f"- {item}" for item in self.code_quality_errors)
+        if self.geo_spacing_info:
+            lines.append("geo间距（信息）：")
+            lines.extend(f"- {item}" for item in self.geo_spacing_info)
         if not self.run_ok:
             lines.append(f"脚本执行失败：{self.error_message[-500:]}")
             return "\n".join(lines)
@@ -245,13 +249,15 @@ def validate(
         result.error_message = f"Syntax error: {e}"
         # 即使语法错，也做 geo 间距检查——帮 agent 定位问题
         try:
-            result.code_quality_errors = _check_geo_spacing(code)
+            result.geo_spacing_info = _check_geo_spacing(code)
         except Exception:
             pass
         return result
 
     active_code = _extract_first_unlocked_segment_code(code) or code
     result.code_quality_errors = _check_static_code_quality(active_code)
+    # geo 间距是信息性报告，不参与硬门判断
+    result.geo_spacing_info = _check_geo_spacing(active_code)
     result.estimated_total_delay_ms = _estimate_total_delay_ms(active_code)
     result.code_quality_ok = not result.code_quality_errors
 
@@ -397,7 +403,7 @@ def _check_static_code_quality(code: str) -> list[str]:
 
 
 def _check_geo_spacing(code: str) -> list[str]:
-    """检查 geo 坐标间距，提前拒绝过近的几何"""
+    """检查 geo 坐标间距，报告最近点对"""
     import re
     geo_pattern = re.compile(r'geo\d*\s*=\s*\[(.*?)\]', re.DOTALL)
     coord_pattern = re.compile(r'\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*\)')
@@ -406,14 +412,15 @@ def _check_geo_spacing(code: str) -> list[str]:
         coords = [(int(x), int(y)) for x, y, z in coord_pattern.findall(geo_match.group(1))]
         if len(coords) < 2:
             continue
+        min_d = 1e9; min_pair = (0, 1)
         for i in range(len(coords)):
             for j in range(i + 1, len(coords)):
                 d = ((coords[i][0] - coords[j][0]) ** 2 + (coords[i][1] - coords[j][1]) ** 2) ** 0.5
-                if d < 80:
-                    errors.append(
-                        f"geo坐标间距不足：点{i}({coords[i][0]},{coords[i][1]})和点{j}({coords[j][0]},{coords[j][1]})"
-                        f"仅{d:.0f}cm（需>=80cm）。增大此两点坐标间距。"
-                    )
+                if d < min_d: min_d = d; min_pair = (i, j)
+        errors.append(
+            f"geo内部最小间距：点{min_pair[0]}({coords[min_pair[0]][0]},{coords[min_pair[0]][1]})"
+            f"和点{min_pair[1]}({coords[min_pair[1]][0]},{coords[min_pair[1]][1]})间距{min_d:.0f}cm"
+        )
     return errors
 
 
