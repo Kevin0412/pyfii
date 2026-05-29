@@ -91,19 +91,16 @@ def build_segment_prompt(
     }
     template_hint = intent_templates.get(intent, "breathe+expand")
     
-    user = f"""生成 {segment_id} ({start_time}-{end_time}s) Pyfii 编舞代码。
-
-设计意图：{intent}
-推荐模板：{template_hint}
+    user = f"""续写 {segment_id} ({start_time}-{end_time}s)。当前7机坐标：
+{prev_state}
 
 要求：
-- geo1 必须从 prev 小幅度偏移：geo1 = [(prev[i][0]+35*sin, prev[i][1]+35*cos, Z) for i in range(7)]
-- geo2 间距≥120cm（非对称），不做同心圆
-- 只用 move2(d, (x,y,z), t) 移动，t=2000-4000ms
-- best_assign 排列
-- 灯光：apply_light(d, "#RRGGBB", 3-5)
-- 段尾：prev = [(d.x, d.y, d.z) for d in drones]
-- 总 move2 t_ms 之和 ≤ (段长-1)×1000 ms（{end_time - start_time}s）
+- 设计 {1 if (end_time-start_time)<10 else 2} 组关键帧几何(geo)，每组7个(x,y,z)坐标
+- geo间距≥100cm，不做同心圆
+- 用 best_assign(prev, geo) 分配目标
+- 用 move2(d, (x,y,z), t) 移动，t根据距离计算(2000-4000ms)
+- 段尾更新 prev = [(d.x,d.y,d.z) for d in drones]
+- 设计意图: {intent}  ({template_hint})
 """
 
     if feedback:
