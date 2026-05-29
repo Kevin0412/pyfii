@@ -80,15 +80,30 @@ def build_segment_prompt(
 ) -> tuple[str, str]:
     system = build_system_prompt()
 
+    # 设计意图 → 模板建议
+    intent_templates = {
+        "展开": "breathe+expand: geo1从prev偏移30-40cm，geo2大幅展开(间距≥200cm)",
+        "分组": "role mapping: 不同机走不同路径(if role=='wing':...elif role=='core':...)",
+        "旋转": "math trajectory: 用复数旋转或sin/cos生成geo，营造旋转感",
+        "呼吸": "density breathing: 多kf循环，半径在150-300cm间脉动",
+        "收束": "收缩: geo从大到小，灯光暖色→冷色，准备收尾",
+        "降落": "land: 半径缩小到120cm，Z降到100cm，速度降低",
+    }
+    template_hint = intent_templates.get(intent, "breathe+expand")
+    
     user = f"""生成 {segment_id} ({start_time}-{end_time}s) Pyfii 编舞代码。
 
+设计意图：{intent}
+推荐模板：{template_hint}
+
 要求：
-- {1 if (end_time - start_time) < 10 else 2} 个 keyframe（每个 2-4 秒），非对称几何（间距>=200cm）
-- 只用 move2(d, (x,y,z), t) 移动（内部已含 delay，不要额外 d.delay）
+- geo1 必须从 prev 小幅度偏移：geo1 = [(prev[i][0]+35*sin, prev[i][1]+35*cos, Z) for i in range(7)]
+- geo2 间距≥120cm（非对称），不做同心圆
+- 只用 move2(d, (x,y,z), t) 移动，t=2000-4000ms
 - best_assign 排列
-- 灯光：每 keyframe 用 apply_light(d, "#RRGGBB", 3-5)，不同 keyframe 用不同色系（冷→暖→白）
-- 段代码是片段，不写 marker/import/创建 drone/重定义 prev
-- 总 move2(d,p,t_ms) 的 t_ms 之和 ≤ (段长-1)×1000 ms（留1秒余量）（{end_time - start_time}s）
+- 灯光：apply_light(d, "#RRGGBB", 3-5)
+- 段尾：prev = [(d.x, d.y, d.z) for d in drones]
+- 总 move2 t_ms 之和 ≤ (段长-1)×1000 ms（{end_time - start_time}s）
 """
 
     if feedback:
