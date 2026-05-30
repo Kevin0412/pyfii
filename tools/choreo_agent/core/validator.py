@@ -126,6 +126,7 @@ class ValidationResult:
 
     def repair_feedback(self) -> str:
         """把验证失败转成可直接喂给 LLM 的修复反馈。"""
+        _fill_traj_cache_from_disk()
         hard_gate = (
             "硬门要求：compile=True, run=True, read_fii=True, distance warnings=0, "
             "action warnings=0, minD > 51cm"
@@ -139,6 +140,11 @@ class ValidationResult:
             "自动验证未通过，禁止进入下一步。请只重写当前未锁定段，不要修改 locked 段，不要输出 marker。",
             hard_gate + "。",
         ]
+        # 轨迹数据（最先输出，不因早期 return 遗漏）
+        traj = _format_segment_trajectory()
+        if traj:
+            lines.append("当前段完整轨迹（0.1s/行，x,y,z,vx,vy,vz）：")
+            lines.append(traj)
         if not self.compile_ok:
             lines.append(f"语法失败：{self.error_message[-500:]}")
             return "\n".join(lines)
@@ -503,6 +509,24 @@ def _extract_first_unlocked_segment_code(code: str) -> str:
     return match.group("body") if match else ""
 
 
+
+def _fill_traj_cache_from_disk():
+    """从磁盘 .fii 读轨迹数据，不依赖 subprocess 成功。"""
+    if _traj_cache.get("data"):
+        return
+    try:
+        import pyfii as pf
+        from pathlib import Path as _P
+        fii_dir = _find_fii_dir(_P("tools/choreo_agent/agent_projects/cannon_agent_test_s01/output"))
+        if not fii_dir:
+            return
+        data, t0, *_ = pf.read_fii(str(fii_dir), fps=60, ignore_acc=True)
+        _traj_cache["data"] = data
+        _traj_cache["t0"] = t0
+        _traj_cache["fps"] = 60
+    except Exception:
+        pass
+
 def _detect_hover(
     output_dir: Path,
     threshold_cm: float = HOVER_MOVE_THRESHOLD_CM_PER_FRAME,
@@ -515,6 +539,9 @@ def _detect_hover(
     fii_dir = _find_fii_dir(output_dir)
 
     data, _t0, *_ = pf.read_fii(str(fii_dir), fps=60, ignore_acc=True)
+    _traj_cache["data"] = data
+    _traj_cache["t0"] = _t0
+    _traj_cache["fps"] = 60
 
     N = len(data)
     fps = 60

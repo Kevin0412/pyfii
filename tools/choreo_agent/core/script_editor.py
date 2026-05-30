@@ -72,8 +72,15 @@ def replace_active_segment(
     if locked_hashes != new_hashes:
         return False
 
+    # 清理残留的独立 --- 行（非注释）
+    cleaned = []
+    for line in new_lines:
+        s = line.strip()
+        if s == '---' and not line.lstrip().startswith('#'):
+            continue  # 跳过残留
+        cleaned.append(line)
     tmp = script_path.with_suffix(".tmp")
-    tmp.write_text("\n".join(new_lines) + "\n", encoding="utf-8")
+    tmp.write_text("\n".join(cleaned) + "\n", encoding="utf-8")
     tmp.replace(script_path)
     return True
 

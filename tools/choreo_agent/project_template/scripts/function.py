@@ -84,3 +84,11 @@ def flight_time_ms(d, v, a):
 
 def distance_3d(p1, p2):
     return Distance(p1, p2)
+
+
+# ---------- 自动计时 ----------
+def auto_init(drones):
+    """自动设置段起始时间 = max(inittime) + 1"""
+    t = max(d.init_time for d in drones) + 1
+    for d in drones:
+        d.inittime(t)
