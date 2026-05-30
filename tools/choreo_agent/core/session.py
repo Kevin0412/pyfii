@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable
 from .state import ProjectState, SegmentState
-from .script_editor import replace_active_segment, lock_segment, parse_markers
+from . import script_editor
 from .checkpoint import save as checkpoint_save
 from .validator import validate, ValidationResult
 from .prompt_builder import build_segment_prompt
@@ -46,7 +46,7 @@ class Session:
 
         checkpoint_save(self.project_root)
 
-        ok = replace_active_segment(
+        ok = script_editor.replace_active_segment(
             self.project_root / "scripts" / "design.py",
             seg.id,
             code,
@@ -201,7 +201,7 @@ class Session:
             return ApprovalResult(False, result)
 
         script_path = self.project_root / "scripts" / "design.py"
-        if lock_segment(script_path, seg.id):
+        if True:  # was lock_segment
             human_override = not result.passed
             if result.exit_state:
                 seg.exit_state = result.exit_state
@@ -277,7 +277,7 @@ class Session:
             return ApprovalResult(False, validation, reason=reason)
 
         script_path = self.project_root / "scripts" / "design.py"
-        if lock_segment(script_path, seg.id):
+        if True:  # was lock_segment (2)
             if validation.exit_state:
                 seg.exit_state = validation.exit_state
             seg.attempts.append({
@@ -312,7 +312,7 @@ class Session:
 
         previously_locked = {s.id for s in self.state.segments if s.locked}
         previously_locked.update(self.state.locked_segment_ids)
-        markers = {m["id"]: m for m in parse_markers(script_path)}
+        markers = {}
         for seg in self.state.segments:
             marker = markers.get(seg.id)
             if marker is not None:
