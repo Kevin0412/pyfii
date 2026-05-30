@@ -321,7 +321,12 @@ def predict_crossings(
 
 
 def _segment_segment_distance_2d(a1, a2, b1, b2):
-    """Minimum distance between two 2D line segments."""
+    """Minimum distance between two 2D line segments, detecting interior crossings."""
+    def _cross(a, b, c):
+        """cross product (b-a) x (c-a)"""
+        return (b[0]-a[0])*(c[1]-a[1]) - (b[1]-a[1])*(c[0]-a[0])
+    def _on_segment(p, a, b):
+        return min(a[0],b[0]) <= p[0] <= max(a[0],b[0]) and min(a[1],b[1]) <= p[1] <= max(a[1],b[1])
     def _point_seg_dist(p, s1, s2):
         dx, dy = s2[0] - s1[0], s2[1] - s1[1]
         if dx == 0 and dy == 0:
@@ -329,7 +334,19 @@ def _segment_segment_distance_2d(a1, a2, b1, b2):
         t = max(0, min(1, ((p[0] - s1[0])*dx + (p[1] - s1[1])*dy) / (dx*dx + dy*dy)))
         proj = (s1[0] + t*dx, s1[1] + t*dy)
         return ((p[0] - proj[0])**2 + (p[1] - proj[1])**2)**0.5
-    
+    # 线段相交判定：a1-a2 与 b1-b2
+    d1 = _cross(a1, a2, b1)
+    d2 = _cross(a1, a2, b2)
+    d3 = _cross(b1, b2, a1)
+    d4 = _cross(b1, b2, a2)
+    if ((d1 > 0 and d2 < 0) or (d1 < 0 and d2 > 0)) and ((d3 > 0 and d4 < 0) or (d3 < 0 and d4 > 0)):
+        return 0  # 线段相交
+    # 共线情况
+    if d1 == 0 and _on_segment(b1, a1, a2): return 0
+    if d2 == 0 and _on_segment(b2, a1, a2): return 0
+    if d3 == 0 and _on_segment(a1, b1, b2): return 0
+    if d4 == 0 and _on_segment(a2, b1, b2): return 0
+    # 常规距离
     d1 = _point_seg_dist(a1, b1, b2)
     d2 = _point_seg_dist(a2, b1, b2)
     d3 = _point_seg_dist(b1, a1, a2)
