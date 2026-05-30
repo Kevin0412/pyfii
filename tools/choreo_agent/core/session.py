@@ -96,7 +96,6 @@ class Session:
                     temperature=temperature,
                     on_delta=on_delta,
                     on_heartbeat=on_heartbeat,
-                    image_paths=None,
                 )
         except Exception as exc:
             seg.attempts.append({
@@ -106,7 +105,11 @@ class Session:
             })
             self.state.save(self.project_root)
             raise
-        code = _extract_python_code(response.text)
+        # prefix 模式输出已经是纯代码，不需要提取
+        if response.text.strip().startswith(('#', 'import', 'from', 'def', 'class', 'try', 'for', 'if', 'while')):
+            code = response.text.strip()
+        else:
+            code = _extract_python_code(response.text)
         code = _strip_imports(code)
         if not code.strip():
             return LlmResponse(text="# FAILED: 无有效代码", model="none", input_tokens=0, output_tokens=0)
@@ -138,58 +141,38 @@ class Session:
         rounds: list[GenerationRound] = []
         repair_feedback = feedback
 
-        import concurrent.futures as _futures
-        import copy as _copy
-
         for index in range(1, max_attempts + 1):
             if on_round_start:
                 on_round_start(index)
-
-            # 顺序 3 温度采样（无竞态，可靠）
-            temps = [0.9, 0.5, 0.1] if index == 1 else [0.5, 0.2, 0.05]
-            best_resp, best_val, best_code = None, None, None
-            best_minD = -1
-
-            for temp in temps:
-                response = self.generate_current_segment_with_llm(
-                    provider=provider,
-                    feedback=repair_feedback,
-                    temperature=temp,
-                )
-                if response is None:
-                    continue
-                result = self.validate()
-                if result and result.min_distance_cm and result.min_distance_cm > best_minD:
-                    best_minD = result.min_distance_cm
-                    best_resp, best_val = response, result
-                    best_code = (self.project_root / "scripts" / "design.py").read_text()
-
-            if best_code:
-                (self.project_root / "scripts" / "design.py").write_text(best_code)
-
-            if best_resp is not None and best_val is not None:
-                self._record_validation_result(best_val)
-                rounds.append(GenerationRound(index=index, response=best_resp, validation=best_val))
-                if best_val.passed:
-                    quality = best_val.repair_feedback()
-                    if quality:
-                        repair_feedback = _join_feedback(feedback, quality)
-                    break
-
-                raw_output = best_val.raw_stderr[:2000] if hasattr(best_val, 'raw_stderr') and best_val.raw_stderr else ""
-                repair_parts = [
-                    f"上一轮 3 温度最佳验证反馈（第 {index} 轮）：\n{best_val.repair_feedback()}",
-                    f"pyfii 原始输出：\n{raw_output}" if raw_output else "",
-                    _conservative_safety_feedback(index, best_val),
-                ]
-                repair_feedback = _join_feedback(
-                    feedback,
-                    "\n\n".join(part for part in repair_parts if part),
-                )
-            else:
+            round_temp = temperature if index == 1 else max(0.05, temperature * 0.4)
+            response = self.generate_current_segment_with_llm(
+                provider=provider,
+                feedback=repair_feedback,
+                temperature=round_temp,
+                on_delta=on_delta,
+                on_heartbeat=on_heartbeat,
+            )
+            if response is None:
                 rounds.append(GenerationRound(index=index, response=None, validation=None))
-                repair_feedback = "上一轮所有温度采样均失败。请检查代码格式。"
+                repair_feedback = "上一轮生成的代码无法插入（语法错误或违反段标记协议）。请检查代码格式。"
+                continue
 
+            result = self.validate()
+            self._record_validation_result(result)
+            rounds.append(GenerationRound(index=index, response=response, validation=result))
+            if result.passed:
+                break
+
+            raw_output = result.raw_stderr[:2000] if hasattr(result, 'raw_stderr') else ""
+            repair_parts = [
+                f"上一轮自动验证反馈（第 {index} 轮）：\n{result.repair_feedback()}",
+                f"pyfii 原始输出：\n{raw_output}" if raw_output else "",
+                _conservative_safety_feedback(index, result),
+            ]
+            repair_feedback = _join_feedback(
+                feedback,
+                "\n\n".join(part for part in repair_parts if part),
+            )
 
         return rounds
 
@@ -386,24 +369,9 @@ class Session:
         self.state.save(self.project_root)
 
     def _previous_exit_state(self) -> list:
-        """获取前一段的出口坐标，优先从 state 读取，回退到 .fii 采样"""
         index = self.state.current_segment_index - 1
         if 0 <= index < len(self.state.segments):
-            es = self.state.segments[index].exit_state
-            if es:
-                return es
-        # 回退：从 .fii 读取前一段结束时刻的坐标
-        try:
-            import pyfii as pf
-            prev_seg = self.state.segments[index] if 0 <= index < len(self.state.segments) else None
-            if prev_seg:
-                fii_dir = self.project_root / "output"
-                data, t0_s, *_ = pf.read_fii(str(fii_dir), fps=60, ignore_acc=True)
-                target_s = prev_seg.end_time
-                f = max(0, min(len(data[0])-1, int((target_s - t0_s) * 60)))
-                return [(float(data[i][f][1]), float(data[i][f][2]), float(data[i][f][3])) for i in range(7)]
-        except Exception:
-            pass
+            return self.state.segments[index].exit_state or []
         return []
 
     def _record_validation_result(self, result: ValidationResult) -> None:
@@ -415,14 +383,10 @@ class Session:
 
 
 def _extract_python_code(text: str) -> str:
-    """从 LLM 输出中提取 Python 代码，兼容 fenced markdown 和 思考/代码 格式。"""
+    """从 LLM 输出中提取 Python 代码，兼容 fenced markdown。"""
     fenced = re.findall(r"```(?:python|py)?\s*(.*?)```", text, flags=re.IGNORECASE | re.DOTALL)
     if fenced:
         return _strip_segment_markers(fenced[0])
-    # 思维链格式：提取"代码："之后或最后一个代码块
-    m = re.search(r'代码[：:]\s*\n(.*)', text, re.DOTALL)
-    if m:
-        return _strip_segment_markers(m.group(1))
     raw = text.strip()
     if raw.startswith("```"):
         raw = re.sub(r"^```(?:python|py)?\s*", "", raw, flags=re.IGNORECASE)
@@ -438,7 +402,6 @@ def _strip_segment_markers(code: str) -> str:
         and "PYFII_AGENT_SEGMENT_END" not in line
     ]
     return "\n".join(lines).strip() + "\n"
-
 
 def _strip_imports(code: str) -> str:
     """移除 agent 可能添加的 import 行"""
@@ -512,7 +475,6 @@ def _append_attempt_event(seg: SegmentState, event: dict) -> None:
         seg.attempts[-1].update(event)
     else:
         seg.attempts.append(event)
-
 
 
 def _join_feedback(initial: str, repair: str) -> str:

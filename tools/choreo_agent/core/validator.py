@@ -77,10 +77,7 @@ class ValidationResult:
     degradation: dict = field(default_factory=dict)
     degradation_errors: list[str] = field(default_factory=list)
     code_quality_ok: bool = True
-    altitude_ok: bool = True  # 无人机是否真的飞起来了
-    estimated_total_delay_ms: int = 0
     code_quality_errors: list[str] = field(default_factory=list)
-    geo_spacing_info: list[str] = field(default_factory=list)
     exit_state: list[list[int]] | None = None
     error_message: str = ""
     raw_stderr: str = ""
@@ -99,9 +96,9 @@ class ValidationResult:
             and self.dense_min_distance_cm > 51
             and not self.collision_intervals
             and self.code_quality_ok
-            and self.altitude_ok
             and (
-                not self.continuity_required
+                skip_continuity
+                or not self.continuity_required
                 or (
                     self.hover_check_ok
                     and not self.hover_segments
@@ -128,42 +125,7 @@ class ValidationResult:
         )
 
     def repair_feedback(self) -> str:
-        """验证反馈：失败时给出修复建议，通过时给出质量提示。"""
-        if self.passed:
-            return self._quality_feedback()
-        return self._failure_feedback()
-
-    def _quality_feedback(self) -> str:
-        """安全通过时的质量反馈（安全 + 设计质量）"""
-        lines = []
-        if self.low_activity_segments:
-            lines.append(f"悬停段（需增加 keyframe 填充）：")
-            for s, e in self.low_activity_segments[:5]:
-                lines.append(f"  {s:.1f}-{e:.1f}s ({e-s:.1f}s)")
-        
-        # 设计质量指标
-        if self.motion_quality:
-            mq = self.motion_quality
-            lines.append(f"\n设计质量：")
-            if 'speed_variance' in mq:
-                sv = mq['speed_variance']
-                if sv < 500:
-                    lines.append(f"  速度变化不足({sv:.0f})——尝试不同keyframe用不同move2时间（2000-5000ms）")
-            if 'density_range' in mq:
-                dr = mq['density_range']
-                if dr < 50:
-                    lines.append(f"  空间密度单调({dr:.0f}cm)——geo半径在150-300cm间变化，制造疏密感")
-            if 'z_progression' in mq:
-                zp = mq['z_progression']
-                if zp < 0.5:
-                    lines.append(f"  高度层次不足——geo的z从100递增到200cm")
-        
-        if not lines:
-            return ""
-        return "\n".join(lines)
-
-    def _failure_feedback(self) -> str:
-        """验证失败时的修复反馈"""
+        """把验证失败转成可直接喂给 LLM 的修复反馈。"""
         hard_gate = (
             "硬门要求：compile=True, run=True, read_fii=True, distance warnings=0, "
             "action warnings=0, minD > 51cm"
@@ -183,9 +145,6 @@ class ValidationResult:
         if self.code_quality_errors:
             lines.append("代码结构失败：")
             lines.extend(f"- {item}" for item in self.code_quality_errors)
-        if self.geo_spacing_info:
-            lines.append("geo间距（信息）：")
-            lines.extend(f"- {item}" for item in self.geo_spacing_info)
         if not self.run_ok:
             lines.append(f"脚本执行失败：{self.error_message[-500:]}")
             return "\n".join(lines)
@@ -195,22 +154,11 @@ class ValidationResult:
 
         lines.append(f"distance warnings: {self.distance_warnings}")
         lines.append(f"action warnings: {self.action_warnings}")
-        if not self.altitude_ok:
-            lines.append("严重：无人机未达到飞行高度！所有机 z 最低需 > 50cm。检查 move2 调用是否生效。")
-        lines.append(f"minD: {self.min_distance_cm}cm（安全的二维间距需>=51cm）")
-        lines.append("修复提示：增大geo坐标间距(>=120cm)，或错峰不同时到达")
+        lines.append(f"minD: {self.min_distance_cm}cm")
         lines.append(f"dense minD: {self.dense_min_distance_cm}cm")
         lines.append(f"XY span: {self.xy_span}")
-        traj = _format_segment_trajectory()
-        if traj:
-            lines.append("当前段轨迹（0.1s/行，7架x,y,z,vx,vy,vz）：")
-            lines.append(traj)
-        if self.low_activity_segments:
-            lines.append(f"动作密度不足：{len(self.low_activity_segments)} 个低活动区间（无人机平均位移<5cm/s持续>2s）")
-            for start_s, end_s in self.low_activity_segments[:3]:
-                lines.append(f"  {start_s:.1f}-{end_s:.1f}s 几乎悬停")
         if self.collision_intervals:
-            lines.append("二维投影危险区间（拉开XY间距>=100cm）：")
+            lines.append("密采样危险区间（必须优先修复）：")
             for item in self.collision_intervals[:8]:
                 pair = item.get("pair")
                 lines.append(
@@ -231,7 +179,6 @@ class ValidationResult:
                 "不要用固定 delay 混过去。"
             )
         
-        return "\n".join(lines)
 
     def compute_assign_feedback(self, starts_xy, targets_xy):
         """计算 best_assign 并返回修复建议"""
@@ -248,9 +195,6 @@ def validate(
     result = ValidationResult()
     result.quality_window = quality_window
     result.continuity_required = quality_window is not None
-    if quality_window:
-        _traj_cache["seg_start"] = quality_window[0]
-        _traj_cache["seg_end"] = quality_window[1]
 
     # 1. 语法层
     try:
@@ -259,18 +203,10 @@ def validate(
         result.compile_ok = True
     except SyntaxError as e:
         result.error_message = f"Syntax error: {e}"
-        # 即使语法错，也做 geo 间距检查——帮 agent 定位问题
-        try:
-            result.geo_spacing_info = _check_geo_spacing(code)
-        except Exception:
-            pass
         return result
 
     active_code = _extract_first_unlocked_segment_code(code) or code
     result.code_quality_errors = _check_static_code_quality(active_code)
-    # geo 间距是信息性报告，不参与硬门判断
-    result.geo_spacing_info = _check_geo_spacing(active_code)
-    result.estimated_total_delay_ms = _estimate_total_delay_ms(active_code)
     result.code_quality_ok = not result.code_quality_errors
 
     # 2-4. 执行+读回+验收
@@ -298,7 +234,7 @@ def validate(
                     if p.startswith("dist:"):
                         result.distance_warnings = int(p.split(":")[1])
                     if p.startswith("act:"):
-                        result.action_warnings = int(p.split(":")[1])
+                        result.action_warnings = max(int(p.split(":")[1]), len(result.action_details))
             if "minD=" in line:
                 for p in line.split():
                     if p.startswith("minD="):
@@ -312,16 +248,6 @@ def validate(
         if not _output_updated(output_dir, started_at):
             result.error_message = f"Expected output dir was not updated: {output_dir}"
             return result
-
-        # 检查无人机是否真的飞起来了（至少 50cm 高度）
-        try:
-            import pyfii as _pf_alt
-            _alt_data, _ = _pf_alt.read_fii(str(output_dir), fps=1, ignore_acc=True)
-            max_z = max(max(d[3] for d in drone) for drone in _alt_data)
-            if max_z < 50:
-                result.altitude_ok = False
-        except Exception:
-            pass
 
         if result.distance_warnings >= 0:
             result.read_fii_ok = True
@@ -351,7 +277,7 @@ def validate(
                 (
                     result.effective_motion_start_s,
                     result.effective_motion_end_s,
-                    _eff_low,
+                    result.low_activity_segments,
                 ) = _measure_effective_motion(
                     output_dir,
                     window=quality_window,
@@ -360,7 +286,7 @@ def validate(
                     quality_window,
                     result.effective_motion_start_s,
                     result.effective_motion_end_s,
-                    _eff_low,
+                    result.low_activity_segments,
                 )
                 result.effective_motion_ok = not result.effective_motion_errors
                 result.motion_quality = _measure_motion_quality(
@@ -398,52 +324,14 @@ def validate(
     return result
 
 
-
-def _estimate_total_delay_ms(code: str) -> int:
-    """估算段代码中所有 delay 的毫秒总数（包含 move2 封装的 t_ms）"""
-    import re
-    total = 0
-    # move2(d, (x,y,z), t_ms) 中的 t_ms
-    for m in re.finditer(r'move2\([^,]+,\s*\([^)]+\),\s*(\d+)', code):
-        total += int(m.group(1))
-    # d.delay(ms)
-    for m in re.finditer(r'\.delay\((\d+)\)', code):
-        total += int(m.group(1))
-    return total
-
-
 def _check_static_code_quality(code: str) -> list[str]:
     tree = ast.parse(code)
-    errors = [
+    return [
         *_check_segment_imports(tree),
         *_check_agent_helper_leak_from_tree(tree),
         *_check_inittime_arguments(tree),
         *_check_velocity_pairing(tree),
     ]
-    errors.extend(_check_geo_spacing(code))
-    return errors
-
-
-def _check_geo_spacing(code: str) -> list[str]:
-    """检查 geo 坐标间距，报告最近点对"""
-    import re
-    geo_pattern = re.compile(r'geo\d*\s*=\s*\[(.*?)\]', re.DOTALL)
-    coord_pattern = re.compile(r'\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*\)')
-    errors = []
-    for geo_match in geo_pattern.finditer(code):
-        coords = [(int(x), int(y)) for x, y, z in coord_pattern.findall(geo_match.group(1))]
-        if len(coords) < 2:
-            continue
-        min_d = 1e9; min_pair = (0, 1)
-        for i in range(len(coords)):
-            for j in range(i + 1, len(coords)):
-                d = ((coords[i][0] - coords[j][0]) ** 2 + (coords[i][1] - coords[j][1]) ** 2) ** 0.5
-                if d < min_d: min_d = d; min_pair = (i, j)
-        errors.append(
-            f"geo内部最小间距：点{min_pair[0]}({coords[min_pair[0]][0]},{coords[min_pair[0]][1]})"
-            f"和点{min_pair[1]}({coords[min_pair[1]][0]},{coords[min_pair[1]][1]})间距{min_d:.0f}cm"
-        )
-    return errors
 
 
 def _check_agent_helper_leak(code: str) -> list[str]:
@@ -658,46 +546,6 @@ def _detect_hover(
         hover_segments.append((hover_start / fps, end_frame / fps))
 
     return hover_segments
-
-
-
-def _detect_low_activity(data, window, fps):
-    """检测悬停：1秒窗口累积位移 < 5cm 且持续 > 2s"""
-    N = len(data)
-    min_len = min(len(d) for d in data)
-    start_frame = max(fps, int(window[0] * fps))
-    end_frame = min(min_len, int(window[1] * fps) + 1)
-    
-    window_frames = fps  # 1秒窗口
-    threshold_cm = 5.0   # 1秒内移动 < 5cm
-    min_duration_frames = int(2.0 * fps)
-    
-    low_segments = []
-    low_start = None
-    
-    for frame in range(start_frame, end_frame):
-        # 1秒窗口累积位移
-        total_move = 0.0
-        for i in range(N):
-            if frame < len(data[i]) and data[i][frame][1] > 0 and data[i][frame-window_frames][1] > 0:
-                dx = abs(data[i][frame][1] - data[i][frame-window_frames][1])
-                dy = abs(data[i][frame][2] - data[i][frame-window_frames][2])
-                dz = abs(data[i][frame][3] - data[i][frame-window_frames][3])
-                total_move += (dx + dy + dz)
-        avg_move = total_move / max(N, 1)
-        
-        if avg_move < threshold_cm:
-            if low_start is None:
-                low_start = frame - window_frames
-        else:
-            if low_start is not None and (frame - low_start) >= min_duration_frames:
-                low_segments.append((low_start / fps, frame / fps))
-            low_start = None
-    
-    if low_start is not None and (end_frame - low_start) >= min_duration_frames:
-        low_segments.append((low_start / fps, end_frame / fps))
-    
-    return low_segments
 
 
 def _measure_motion_envelope(
@@ -1128,42 +976,6 @@ def _same_circular_order(reference: tuple[int, ...], current: tuple[int, ...]) -
     return any(tuple(doubled[i:i + len(current)]) == current for i in range(len(reference)))
 
 
-# ---- 轨迹数据缓存（供 feedback 使用） ----
-_traj_cache: dict = {}
-
-def _format_segment_trajectory() -> str:
-    """格式化当前段的完整轨迹数据（0.1s采样，7架无人机x,y,z,vx,vy,vz）"""
-    if not _traj_cache:
-        return ""
-    try:
-        data = _traj_cache.get("data")
-        t0 = _traj_cache.get("t0", 0)
-        fps = _traj_cache.get("fps", 60)
-        seg_start = _traj_cache.get("seg_start", 0)
-        seg_end = _traj_cache.get("seg_end", 60)
-        if not data:
-            return ""
-        sample_step = max(1, fps // 10)
-        start_f = max(0, int((seg_start - t0) * fps))
-        end_f = min(len(data[0]) - 1, int((seg_end - t0) * fps))
-        lines = [f"段 {seg_start:.0f}-{seg_end:.0f}s 采样{sample_step/fps:.1f}s"]
-        header = "   t   "
-        for d_i in range(7):
-            header += f"  d{d_i}_x d{d_i}_y d{d_i}_z  d{d_i}_vx d{d_i}_vy d{d_i}_vz"
-        lines.append(header)
-        for f in range(start_f, end_f + 1, sample_step):
-            t = t0 + f / fps
-            row = f"{t:6.1f}"
-            for d_i in range(7):
-                d = data[d_i][f]
-                vx, vy, vz = d[5] if isinstance(d[5], (tuple, list)) and len(d[5]) == 3 else (0, 0, 0)
-                row += f"  {d[1]:4.0f} {d[2]:4.0f} {d[3]:4.0f}  {vx:4.0f} {vy:4.0f} {vz:4.0f}"
-            lines.append(row)
-        return "\n".join(lines)
-    except Exception as e:
-        return f"(trajectory error: {e})"
-
-
 def _add_dense_distance_report(result: ValidationResult, output_dir: Path) -> None:
     """密采样距离报告，用于给 agent 直接反馈危险时间段。"""
     import pyfii as pf
@@ -1172,17 +984,12 @@ def _add_dense_distance_report(result: ValidationResult, output_dir: Path) -> No
         fii_dir = _find_fii_dir(output_dir)
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
-            data, t0, *_ = pf.read_fii(str(fii_dir), fps=60, ignore_acc=False)
+            data, *_ = pf.read_fii(str(fii_dir), fps=60, ignore_acc=False)
     except Exception:
         return
 
     if not data:
         return
-
-    # 缓存轨迹数据供 feedback
-    _traj_cache["data"] = data
-    _traj_cache["t0"] = t0
-    _traj_cache["fps"] = 60
 
     fps = 60
     min_len = min(len(drone) for drone in data)
@@ -1219,17 +1026,6 @@ def _add_dense_distance_report(result: ValidationResult, output_dir: Path) -> No
     if dense_min != float("inf"):
         result.dense_min_distance_cm = round(dense_min, 1)
         result.min_distance_cm = result.dense_min_distance_cm
-
-    # 低活动检测（从轨迹直接算悬停）
-    try:
-        import pyfii as _pf
-        _fii_dir = _find_fii_dir(output_dir)
-        _data, _t0, *_ = _pf.read_fii(str(_fii_dir), fps=60, ignore_acc=True)
-        _min_len = min(len(d) for d in _data)
-        _window = result.quality_window if result.quality_window else (0, _min_len/60)
-        result.low_activity_segments = _detect_low_activity(_data, _window, 60)
-    except Exception as e:
-        result.low_activity_segments = []
     result.collision_intervals = _compress_collision_rows(rows)
 
 

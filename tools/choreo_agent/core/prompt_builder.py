@@ -83,14 +83,10 @@ def build_segment_prompt(
     user = f"""生成 {segment_id} ({start_time}-{end_time}s) Pyfii 编舞代码。
 
 要求：
-- {1 if (end_time - start_time) < 10 else 2} 个 keyframe（每个 2-4 秒）
-- **必须使用预计算 geo 候选**（不要自创坐标）
-- 只用 move2(d, (x,y,z), t) 移动（内部已含 delay）
+- 2个 keyframe，非对称几何（间距≥200cm）
+- 只用 move2(d, (x,y,z), t) 移动
 - best_assign 排列
-- 灯光：每 keyframe 用 apply_light(d, "#RRGGBB", 3-5)，不同 keyframe 用不同色系（冷→暖→白）
-- 段代码是片段，不写 marker/import/创建 drone/重定义 prev
-**重要：直接复制预计算 geo 候选中的坐标，不要自己写坐标。**
-- 总 move2(d,p,t_ms) 的 t_ms 之和 ≤ (段长-1)×1000 ms（留1秒余量）（{end_time - start_time}s）
+- 更新 d.x, d.y, d.z 追踪
 """
 
     if feedback:
@@ -98,33 +94,4 @@ def build_segment_prompt(
 
 
 
-    # 预计算 geo 候选
-    if prev_state and len(prev_state) == 7:
-        try:
-            from .planning_tools import generate_safe_geo, check_min_spacing
-            candidates = []
-            for mode, label in [("expand","展开"), ("rotate","旋转"), ("breathe","呼吸")]:
-                geo = generate_safe_geo(prev_state, mode=mode, n=7, min_spacing_cm=120, seed=42)
-                min_d, pair = check_min_spacing(geo)
-                candidates.append(f"  {label}: {geo}  minXY={min_d:.0f}cm")
-            user += chr(10).join(["","预计算 geo 候选（挑一个或自创）："] + candidates)
-        except Exception:
-            pass
     return system, user
-
-def _extract_last_locked_segment(design_py: str, locked_segment_ids=None) -> str:
-    """提取最后一个 locked=true 的段的代码"""
-    lines = design_py.splitlines()
-    seg_lines = []
-    in_target = False
-    for line in lines:
-        if "PYFII_AGENT_SEGMENT_START" in line and "locked=true" in line:
-            in_target = True
-            seg_lines = []
-            continue
-        if "PYFII_AGENT_SEGMENT_END" in line and in_target:
-            in_target = False
-            break
-        if in_target and line.strip() and not line.strip().startswith("#"):
-            seg_lines.append(line)
-    return "\n".join(seg_lines[-30:])  # 只取最后30行，避免过长
