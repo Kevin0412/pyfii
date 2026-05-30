@@ -96,7 +96,7 @@ class Session:
                     temperature=temperature,
                     on_delta=on_delta,
                     on_heartbeat=on_heartbeat,
-                    image_paths=_extract_image_paths(feedback),
+                    image_paths=None,
                 )
         except Exception as exc:
             seg.attempts.append({

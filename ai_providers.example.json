@@ -31,26 +31,14 @@
       }
     },
     "mimo": {
-      "model": "mimo-v2.5-pro",
       "base_url": "https://token-plan-cn.xiaomimimo.com/v1",
       "api_key": "your-mimo-api-key",
-      "connect_timeout_s": 60,
-      "read_timeout_s": 300,
-      "timeout_s": 600,
-      "temperature": 0.3,
-      "max_tokens": 8000,
-      "_note": "mimo-v2.5-pro: text only. $0.14/$0.28 per M tokens. 1M context, reasoning=true"
+      "model": "mimo-v2.5-pro"
     },
     "mimo_vision": {
-      "model": "mimo-v2.5",
       "base_url": "https://token-plan-cn.xiaomimimo.com/v1",
       "api_key": "your-mimo-api-key",
-      "connect_timeout_s": 60,
-      "read_timeout_s": 300,
-      "timeout_s": 600,
-      "temperature": 0.3,
-      "max_tokens": 8000,
-      "_note": "mimo-v2.5: supports text+image. $0.435/$0.87 per M tokens. 1M context, reasoning=true"
+      "model": "mimo-v2.5"
     }
   }
 }
