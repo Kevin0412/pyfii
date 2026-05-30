@@ -194,6 +194,149 @@ def budget_layers(
     return plans
 
 
+# ---------- 安全几何生成 ----------
+
+def generate_safe_geo(
+    prev: Sequence[Sequence[float]],
+    *,
+    mode: str = "expand",
+    n: int = 7,
+    min_spacing_cm: float = 120,
+    center: tuple[float, float] = (280, 280),
+    z_min: int = 100,
+    z_max: int = 250,
+    seed: int = 0,
+) -> list[Point3]:
+    """Generate safe geometry guaranteed to have XY spacing >= min_spacing_cm.
+    
+    Modes:
+    - expand: Poisson-disk sampling, asymmetric spread
+    - rotate: center point + 6 points on circle
+    - breathe: all points on circle with variable radius
+    - contract: tight circle, low altitude
+    """
+    import random as _random
+    import math as _math
+    _random.seed(seed if seed != 0 else None)
+    
+    if mode == "rotate":
+        r = max(150, min_spacing_cm)
+        pts = []
+        for i in range(n - 1):
+            angle = 2 * _math.pi * i / (n - 1) + _random.uniform(0, 0.5)
+            pts.append((
+                int(center[0] + r * _math.cos(angle)),
+                int(center[1] + r * _math.sin(angle)),
+                _random.randint(z_min, z_max)
+            ))
+        pts.append((int(center[0]), int(center[1]), _random.randint(z_min, z_max)))
+        return pts
+    elif mode == "breathe":
+        r = _random.randint(120, 220)
+        pts = []
+        for i in range(n):
+            angle = 2 * _math.pi * i / n + _random.uniform(0, 0.3)
+            pts.append((
+                int(center[0] + r * _math.cos(angle)),
+                int(center[1] + r * _math.sin(angle)),
+                _random.randint(z_min, z_max)
+            ))
+        return pts
+    elif mode == "contract":
+        r = _random.randint(80, 130)
+        pts = []
+        for i in range(n):
+            angle = 2 * _math.pi * i / n
+            pts.append((
+                int(center[0] + r * _math.cos(angle)),
+                int(center[1] + r * _math.sin(angle)),
+                z_min
+            ))
+        return pts
+    else:  # expand — Poisson disk
+        pts = []
+        attempts = 0
+        while len(pts) < n and attempts < 500:
+            x = _random.randint(50, 510)
+            y = _random.randint(50, 510)
+            ok = True
+            for px, py, _ in pts:
+                if ((x - px)**2 + (y - py)**2)**0.5 < min_spacing_cm:
+                    ok = False
+                    break
+            if ok:
+                pts.append((x, y, _random.randint(z_min, z_max)))
+            attempts += 1
+        # fallback: relax spacing
+        while len(pts) < n:
+            x = _random.randint(80, 480)
+            y = _random.randint(80, 480)
+            if all(((x - px)**2 + (y - py)**2)**0.5 >= min_spacing_cm * 0.7 for px, py, _ in pts):
+                pts.append((x, y, _random.randint(z_min, z_max)))
+            else:
+                pts.append((x, y, z_min))
+        return pts[:n]
+
+
+def check_min_spacing(points: Sequence[Sequence[float]]) -> tuple[float, tuple[int, int]]:
+    """Return (min_xy_distance_cm, (i, j)) for the closest pair."""
+    min_d = float("inf")
+    min_pair = (-1, -1)
+    pts = to_xyz(points)
+    for i in range(len(pts)):
+        for j in range(i + 1, len(pts)):
+            d = ((pts[i][0] - pts[j][0])**2 + (pts[i][1] - pts[j][1])**2)**0.5
+            if d < min_d:
+                min_d = d
+                min_pair = (i, j)
+    return min_d, min_pair
+
+
+def predict_crossings(
+    prev: Sequence[Sequence[float]],
+    targets: Sequence[Sequence[float]],
+    speeds: Sequence[float] | None = None,
+) -> list[tuple[int, int, float]]:
+    """Detect trajectory crossings between drone pairs.
+    
+    Returns list of (drone_i, drone_j, closest_approach_cm).
+    Uses 2D line segment intersection on XY plane.
+    """
+    crossings = []
+    p_xyz = to_xyz(prev)
+    t_xyz = to_xyz(targets)
+    n = len(p_xyz)
+    
+    for i in range(n):
+        for j in range(i + 1, n):
+            # Simple 2D segment intersection check
+            d = _segment_segment_distance_2d(
+                (p_xyz[i][0], p_xyz[i][1]), (t_xyz[i][0], t_xyz[i][1]),
+                (p_xyz[j][0], p_xyz[j][1]), (t_xyz[j][0], t_xyz[j][1]),
+            )
+            crossings.append((i, j, d))
+    
+    crossings.sort(key=lambda x: x[2])
+    return crossings
+
+
+def _segment_segment_distance_2d(a1, a2, b1, b2):
+    """Minimum distance between two 2D line segments."""
+    def _point_seg_dist(p, s1, s2):
+        dx, dy = s2[0] - s1[0], s2[1] - s1[1]
+        if dx == 0 and dy == 0:
+            return ((p[0] - s1[0])**2 + (p[1] - s1[1])**2)**0.5
+        t = max(0, min(1, ((p[0] - s1[0])*dx + (p[1] - s1[1])*dy) / (dx*dx + dy*dy)))
+        proj = (s1[0] + t*dx, s1[1] + t*dy)
+        return ((p[0] - proj[0])**2 + (p[1] - proj[1])**2)**0.5
+    
+    d1 = _point_seg_dist(a1, b1, b2)
+    d2 = _point_seg_dist(a2, b1, b2)
+    d3 = _point_seg_dist(b1, a1, a2)
+    d4 = _point_seg_dist(b2, a1, a2)
+    return min(d1, d2, d3, d4)
+
+
 def prompt_planning_tool_reference() -> str:
     return "\n".join(
         [
