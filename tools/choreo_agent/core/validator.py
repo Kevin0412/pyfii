@@ -157,6 +157,10 @@ class ValidationResult:
         lines.append(f"minD: {self.min_distance_cm}cm")
         lines.append(f"dense minD: {self.dense_min_distance_cm}cm")
         lines.append(f"XY span: {self.xy_span}")
+        traj = _format_segment_trajectory()
+        if traj:
+            lines.append("当前段轨迹（0.1s/行，7架x,y,z,vx,vy,vz）：")
+            lines.append(traj)
         if self.collision_intervals:
             lines.append("密采样危险区间（必须优先修复）：")
             for item in self.collision_intervals[:8]:
@@ -194,6 +198,9 @@ def validate(
 ) -> ValidationResult:
     result = ValidationResult()
     result.quality_window = quality_window
+    if quality_window:
+            _traj_cache["seg_start"] = quality_window[0]
+            _traj_cache["seg_end"] = quality_window[1]
     result.continuity_required = quality_window is not None
 
     # 1. 语法层
@@ -976,6 +983,42 @@ def _same_circular_order(reference: tuple[int, ...], current: tuple[int, ...]) -
     return any(tuple(doubled[i:i + len(current)]) == current for i in range(len(reference)))
 
 
+
+# ---- 轨迹数据缓存 ----
+_traj_cache: dict = {}
+
+def _format_segment_trajectory() -> str:
+    """格式化当前段完整轨迹（0.1s采样，7架 x,y,z,vx,vy,vz）"""
+    if not _traj_cache:
+        return ""
+    try:
+        data = _traj_cache.get("data")
+        t0 = _traj_cache.get("t0", 0)
+        fps = _traj_cache.get("fps", 60)
+        seg_start = _traj_cache.get("seg_start", 0)
+        seg_end = _traj_cache.get("seg_end", 60)
+        if not data:
+            return ""
+        sample_step = max(1, fps // 10)
+        start_f = max(0, int((seg_start - t0) * fps))
+        end_f = min(len(data[0]) - 1, int((seg_end - t0) * fps))
+        lines = [f"段 {seg_start:.0f}-{seg_end:.0f}s 采样{sample_step/fps:.1f}s"]
+        header = "   t   "
+        for d_i in range(7):
+            header += f"  d{d_i}_x d{d_i}_y d{d_i}_z  d{d_i}_vx d{d_i}_vy d{d_i}_vz"
+        lines.append(header)
+        for f in range(start_f, end_f + 1, sample_step):
+            t = t0 + f / fps
+            row = f"{t:6.1f}"
+            for d_i in range(7):
+                d = data[d_i][f]
+                vx, vy, vz = d[5] if isinstance(d[5], (tuple, list)) and len(d[5]) == 3 else (0, 0, 0)
+                row += f"  {d[1]:4.0f} {d[2]:4.0f} {d[3]:4.0f}  {vx:4.0f} {vy:4.0f} {vz:4.0f}"
+            lines.append(row)
+        return "\n".join(lines)
+    except Exception as e:
+        return f"(trajectory error: {e})"
+
 def _add_dense_distance_report(result: ValidationResult, output_dir: Path) -> None:
     """密采样距离报告，用于给 agent 直接反馈危险时间段。"""
     import pyfii as pf
@@ -984,7 +1027,10 @@ def _add_dense_distance_report(result: ValidationResult, output_dir: Path) -> No
         fii_dir = _find_fii_dir(output_dir)
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
-            data, *_ = pf.read_fii(str(fii_dir), fps=60, ignore_acc=False)
+            data, t0, *_ = pf.read_fii(str(fii_dir), fps=60, ignore_acc=False)
+        _traj_cache["data"] = data
+        _traj_cache["t0"] = t0
+        _traj_cache["fps"] = 60
     except Exception:
         return
 
