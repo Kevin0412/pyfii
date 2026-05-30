@@ -108,7 +108,6 @@ class Session:
             raise
         code = _extract_python_code(response.text)
         code = _strip_imports(code)
-        code = _replace_geo_with_safe_candidates(code, self._previous_exit_state())
         if not code.strip():
             return LlmResponse(text="# FAILED: 无有效代码", model="none", input_tokens=0, output_tokens=0)
 
@@ -424,56 +423,6 @@ def _strip_segment_markers(code: str) -> str:
         and "PYFII_AGENT_SEGMENT_END" not in line
     ]
     return "\n".join(lines).strip() + "\n"
-
-
-def _add_stagger_delays(code: str, prev_state: list, geo_coords: list) -> str:
-    """检测路径交叉，自动添加错峰延迟"""
-    try:
-        from .planning_tools import predict_crossings
-        crossings = predict_crossings(prev_state, geo_coords)
-        # 如果最近距离 < 80cm，给每架机加错峰
-        if crossings and crossings[0][2] < 80:
-            stagger = 'drone.delay(i * 60 + random.randint(0, 100))'
-            if 'drone.delay' not in code.split('move2')[0]:
-                code = code.replace('for i, drone in enumerate(drones):',
-                                    'for i, drone in enumerate(drones):\n    drone.delay(i * 60)', 1)
-    except Exception:
-        pass
-    return code
-
-
-def _replace_geo_with_safe_candidates(code: str, prev_state: list | None) -> str:
-    """替换 LLM 写的 geo 坐标为安全的预计算候选"""
-    if not prev_state or len(prev_state) != 7:
-        return code
-    try:
-        from .planning_tools import generate_safe_geo, check_min_spacing
-        import re as _re
-        candidates = {}
-        for mode in ['expand', 'rotate', 'breathe']:
-            geo = generate_safe_geo(prev_state, mode=mode, n=7, min_spacing_cm=120, seed=42)
-            min_d, _ = check_min_spacing(geo)
-            candidates[mode] = (geo, min_d)
-        
-        # 找 geo = [...] 或 geoXXX = [...] 模式
-        geo_pattern = _re.compile(r'(geo\w*)\s*=\s*\[.*?\]', _re.DOTALL)
-        matches = list(geo_pattern.finditer(code))
-        if not matches:
-            return code
-        
-        # 用最佳候选替换第一个 geo，用次佳替换第二个
-        sorted_modes = sorted(candidates.items(), key=lambda x: -x[1][1])
-        for i, match in enumerate(matches):
-            if i < len(sorted_modes):
-                mode_name = sorted_modes[i][0]
-                geo_coords = sorted_modes[i][1][0]
-                replacement = f'{match.group(1)} = {geo_coords}'
-                code = code[:match.start()] + replacement + code[match.end():]
-        if matches and sorted_modes:
-            code = _add_stagger_delays(code, prev_state, sorted_modes[0][1][0])
-        return code
-    except Exception:
-        return code
 
 
 def _strip_imports(code: str) -> str:
