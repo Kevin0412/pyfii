@@ -87,8 +87,11 @@ def distance_3d(p1, p2):
 
 
 # ---------- 自动计时 ----------
-def auto_init(drones):
-    """自动设置段起始时间 = max(inittime) + 1"""
-    t = max(d.init_time for d in drones) + 1
+def auto_init(drones, start_time: float = None):
+    """设置段起始时间。不传则 max+1"""
+    if start_time is not None:
+        t = start_time
+    else:
+        t = max(d.init_time for d in drones) + 1
     for d in drones:
         d.inittime(t)

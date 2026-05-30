@@ -369,24 +369,20 @@ class Session:
         self.state.save(self.project_root)
 
     def _previous_exit_state(self) -> list:
-        """前一段出口坐标，优先 state 回退 .fii"""
-        index = self.state.current_segment_index - 1
-        if 0 <= index < len(self.state.segments):
-            es = self.state.segments[index].exit_state
-            if es:
-                return es
-        # 回退：从 .fii 读取前段结束时刻坐标
-        try:
-            import pyfii as pf
-            prev_seg = self.state.segments[index] if 0 <= index < len(self.state.segments) else None
-            if prev_seg:
-                fii_dir = self.project_root / "output"
-                data, t0, *_ = pf.read_fii(str(fii_dir), fps=60, ignore_acc=True)
-                target_s = prev_seg.end_time
-                f = max(0, min(len(data[0]) - 1, int((target_s - t0) * 60)))
-                return [(float(data[i][f][1]), float(data[i][f][2]), float(data[i][f][3])) for i in range(7)]
-        except Exception:
-            pass
+        """前一段出口坐标——优先读 docstring，回退 state，再回退 .fii"""
+        from .script_editor import read_prev_from_docstring
+        seg = self.state.current_segment
+        if seg:
+            # 尝试从当前段的 docstring 读取（被上一段更新过）
+            prev = read_prev_from_docstring(self.project_root / "scripts" / "design.py", seg.id)
+            if prev:
+                return prev
+            # 尝试前一段的 exit_state
+            index = self.state.current_segment_index - 1
+            if 0 <= index < len(self.state.segments):
+                es = self.state.segments[index].exit_state
+                if es:
+                    return es
         return []
 
     def _record_validation_result(self, result: ValidationResult) -> None:
@@ -395,6 +391,22 @@ class Session:
             return
         seg.attempts[-1]["validation"] = _validation_snapshot(result)
         self.state.save(self.project_root)
+
+    def _propagate_prev_to_next_segment(self):
+        """当前段通过后，更新下一段 docstring 的 prev。"""
+        from .script_editor import update_prev_in_docstring
+        seg = self.state.current_segment
+        if not seg or not seg.exit_state:
+            return
+        # 找下一段
+        idx = self.state.current_segment_index
+        if idx + 1 < len(self.state.segments):
+            next_seg = self.state.segments[idx + 1]
+            update_prev_in_docstring(
+                self.project_root / "scripts" / "design.py",
+                next_seg.id,
+                seg.exit_state,
+            )
 
 
 def _extract_python_code(text: str) -> str:
