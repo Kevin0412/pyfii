@@ -426,6 +426,22 @@ def _strip_segment_markers(code: str) -> str:
     return "\n".join(lines).strip() + "\n"
 
 
+def _add_stagger_delays(code: str, prev_state: list, geo_coords: list) -> str:
+    """检测路径交叉，自动添加错峰延迟"""
+    try:
+        from .planning_tools import predict_crossings
+        crossings = predict_crossings(prev_state, geo_coords)
+        # 如果最近距离 < 80cm，给每架机加错峰
+        if crossings and crossings[0][2] < 80:
+            stagger = 'drone.delay(i * 60 + random.randint(0, 100))'
+            if 'drone.delay' not in code.split('move2')[0]:
+                code = code.replace('for i, drone in enumerate(drones):',
+                                    'for i, drone in enumerate(drones):\n    drone.delay(i * 60)', 1)
+    except Exception:
+        pass
+    return code
+
+
 def _replace_geo_with_safe_candidates(code: str, prev_state: list | None) -> str:
     """替换 LLM 写的 geo 坐标为安全的预计算候选"""
     if not prev_state or len(prev_state) != 7:
@@ -453,6 +469,8 @@ def _replace_geo_with_safe_candidates(code: str, prev_state: list | None) -> str
                 geo_coords = sorted_modes[i][1][0]
                 replacement = f'{match.group(1)} = {geo_coords}'
                 code = code[:match.start()] + replacement + code[match.end():]
+        if matches and sorted_modes:
+            code = _add_stagger_delays(code, prev_state, sorted_modes[0][1][0])
         return code
     except Exception:
         return code
