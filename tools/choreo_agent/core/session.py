@@ -369,9 +369,24 @@ class Session:
         self.state.save(self.project_root)
 
     def _previous_exit_state(self) -> list:
+        """前一段出口坐标，优先 state 回退 .fii"""
         index = self.state.current_segment_index - 1
         if 0 <= index < len(self.state.segments):
-            return self.state.segments[index].exit_state or []
+            es = self.state.segments[index].exit_state
+            if es:
+                return es
+        # 回退：从 .fii 读取前段结束时刻坐标
+        try:
+            import pyfii as pf
+            prev_seg = self.state.segments[index] if 0 <= index < len(self.state.segments) else None
+            if prev_seg:
+                fii_dir = self.project_root / "output"
+                data, t0, *_ = pf.read_fii(str(fii_dir), fps=60, ignore_acc=True)
+                target_s = prev_seg.end_time
+                f = max(0, min(len(data[0]) - 1, int((target_s - t0) * 60)))
+                return [(float(data[i][f][1]), float(data[i][f][2]), float(data[i][f][3])) for i in range(7)]
+        except Exception:
+            pass
         return []
 
     def _record_validation_result(self, result: ValidationResult) -> None:

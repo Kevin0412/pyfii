@@ -1110,7 +1110,7 @@ def _sample_exit_state(output_dir: Path, time_s: float | None = None) -> list[li
         fii_dir = _find_fii_dir(output_dir)
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
-            data, *_ = pf.read_fii(str(fii_dir), fps=60, ignore_acc=True)
+            data, t0, *_ = pf.read_fii(str(fii_dir), fps=60, ignore_acc=True)
     except Exception:
         return None
 
@@ -1125,7 +1125,7 @@ def _sample_exit_state(output_dir: Path, time_s: float | None = None) -> list[li
         if time_s is None:
             frame = len(drone) - 1
         else:
-            frame = max(0, min(len(drone) - 1, int(round(time_s * fps))))
+            frame = max(0, min(len(drone) - 1, int(round((time_s - t0) * fps))))
         row = drone[frame]
         sampled.append([
             int(round(float(row[1]))),
