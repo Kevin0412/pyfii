@@ -96,6 +96,18 @@ def build_segment_prompt(
 
 
 
+    # 预计算 geo 候选
+    if prev_state and len(prev_state) == 7:
+        try:
+            from .planning_tools import generate_safe_geo, check_min_spacing
+            candidates = []
+            for mode, label in [("expand","展开"), ("rotate","旋转"), ("breathe","呼吸")]:
+                geo = generate_safe_geo(prev_state, mode=mode, n=7, min_spacing_cm=120, seed=42)
+                min_d, pair = check_min_spacing(geo)
+                candidates.append(f"  {label}: {geo}  minXY={min_d:.0f}cm")
+            user += chr(10).join(["","预计算 geo 候选（挑一个或自创）："] + candidates)
+        except Exception:
+            pass
     return system, user
 
 def _extract_last_locked_segment(design_py: str, locked_segment_ids=None) -> str:
