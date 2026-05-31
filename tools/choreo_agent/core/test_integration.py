@@ -106,6 +106,79 @@ def test_generate_never_calls_chat_prefix():
     assert 'chat_prefix' not in s.split('def generate_current_segment_with_llm')[1].split('def generate_until_safe_with_llm')[0]
     print('PASSED: generate_current_segment_with_llm never calls chat_prefix')
 
+
+def test_stream_parses_reasoning_and_result_deltas():
+    """Streaming parser separates provider thinking from final content."""
+    from unittest.mock import patch
+    from core.llm_client import _chat_stream
+
+    class FakeResponse:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return False
+
+        def raise_for_status(self):
+            pass
+
+        def iter_lines(self):
+            yield 'data: {"model":"mock","choices":[{"delta":{"reasoning_content":"think "}}]}'
+            yield 'data: {"choices":[{"delta":{"content":"result"}}]}'
+            yield 'data: [DONE]'
+
+    thinking = []
+    result = []
+    with patch("core.llm_client.httpx.stream", return_value=FakeResponse()):
+        response = _chat_stream(
+            url="https://example.test/chat/completions",
+            payload={},
+            headers={},
+            timeout=None,
+            fallback_model="mock",
+            on_delta=result.append,
+            on_reasoning_delta=thinking.append,
+            on_heartbeat=None,
+        )
+
+    assert "".join(thinking) == "think "
+    assert "".join(result) == "result"
+    assert response.text == "result"
+    assert response.reasoning_text == "think "
+    print("PASSED: stream parser separates thinking and result")
+
+
+def test_chat_retries_transient_error_once():
+    """chat() retries transient network errors before surfacing failure."""
+    from unittest.mock import patch
+    import httpx
+    from core.llm_client import chat, LlmResponse
+
+    cfg = {
+        "model": "mock",
+        "base_url": "https://example.test",
+        "api_key": "test-key",
+        "stream": False,
+        "max_retries": 1,
+        "retry_backoff_s": 0,
+        "timeout_s": 10,
+    }
+    calls = []
+
+    def fake_chat_once(**_kwargs):
+        calls.append(1)
+        if len(calls) == 1:
+            raise httpx.ConnectTimeout("temporary connect timeout")
+        return LlmResponse(text="OK", model="mock")
+
+    with patch("core.llm_client.load_config", return_value=cfg), \
+            patch("core.llm_client._chat_once", side_effect=fake_chat_once):
+        response = chat("sys", "user", provider="mock")
+
+    assert response.text == "OK"
+    assert len(calls) == 2
+    print("PASSED: chat retries transient error once")
+
 if __name__ == "__main__":
     test_chat_mimo_no_prefix()
     test_chat_prefix_mimo_rejects()
@@ -114,4 +187,6 @@ if __name__ == "__main__":
     test_planning_pass_flow()
     test_cli_g_uses_planning_pass()
     test_generate_never_calls_chat_prefix()
-    print("\nALL 6 INTEGRATION TESTS PASSED")
+    test_stream_parses_reasoning_and_result_deltas()
+    test_chat_retries_transient_error_once()
+    print("\nALL 9 INTEGRATION TESTS PASSED")

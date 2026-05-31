@@ -9,7 +9,10 @@ CONTEXT_DIR = Path(__file__).resolve().parent.parent / "context_packs"
 PACK_ORDER = [
     "pyfii_api_minimal.md",
     "pyfii_guide.md",
+    "pyfii_segment_protocol.md",
     "pyfii_coding_rules.md",
+    "pyfii_design_patterns.md",
+    "pyfii_light_patterns.md",
     "pyfii_anti_patterns.md",
     "pyfii_validation_rules.md",
 ]

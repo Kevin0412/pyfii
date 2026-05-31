@@ -1,6 +1,7 @@
 """LLM Client — 统一调用接口"""
 import json
 import signal
+import time
 import httpx
 from pathlib import Path
 from dataclasses import dataclass
@@ -10,6 +11,8 @@ REPO_ROOT = Path(__file__).resolve().parents[3]
 CONFIG_PATH = REPO_ROOT / "ai_providers.local.json"
 DEFAULT_WALL_TIMEOUT_S = 900
 DEFAULT_READ_TIMEOUT_S = 300
+DEFAULT_MAX_RETRIES = 2
+DEFAULT_RETRY_BACKOFF_S = 2.0
 
 
 @dataclass
@@ -18,9 +21,14 @@ class LlmResponse:
     model: str
     input_tokens: int | None = None
     output_tokens: int | None = None
+    reasoning_text: str = ""
 
 
 class LlmTimeoutError(TimeoutError):
+    pass
+
+
+class LlmRequestError(RuntimeError):
     pass
 
 
@@ -40,6 +48,7 @@ def chat(
     provider: str = "deepseek",
     temperature: float = 0.2,
     on_delta: Callable[[str], None] | None = None,
+    on_reasoning_delta: Callable[[str], None] | None = None,
     on_heartbeat: Callable[[], None] | None = None,
 ) -> LlmResponse:
     """发送 chat completion 请求"""
@@ -55,7 +64,9 @@ def chat(
         "max_tokens": cfg.get("max_output_tokens", 16384),
     }
     payload.update(cfg.get("extra_body", {}))
-    use_stream = bool(cfg.get("stream", True))
+    # CLI/debug callers pass callbacks specifically because they need live visibility.
+    # In that case force streaming even if an older local config still has stream=false.
+    use_stream = bool(cfg.get("stream", True) or on_delta or on_reasoning_delta or on_heartbeat)
     if use_stream:
         payload["stream"] = True
         if "stream_options" in cfg:
@@ -68,6 +79,7 @@ def chat(
 
     wall_timeout_s = float(cfg.get("timeout_s", DEFAULT_WALL_TIMEOUT_S))
     read_timeout_s = float(cfg.get("read_timeout_s", min(DEFAULT_READ_TIMEOUT_S, wall_timeout_s)))
+    no_content_timeout_s = float(cfg.get("no_content_timeout_s", STREAM_NO_CONTENT_TIMEOUT_S))
     timeout = httpx.Timeout(
         connect=float(cfg.get("connect_timeout_s", 30)),
         read=read_timeout_s,
@@ -86,22 +98,43 @@ def chat(
     signal.setitimer(signal.ITIMER_REAL, wall_timeout_s)
     try:
         url = f"{cfg['base_url'].rstrip('/')}/chat/completions"
-        if use_stream:
-            return _chat_stream(
-                url=url,
-                payload=payload,
-                headers=headers,
-                timeout=timeout,
-                fallback_model=cfg["model"],
-                on_delta=on_delta,
-                on_heartbeat=on_heartbeat,
-            )
-        return _chat_once(
-            url=url,
-            payload=payload,
-            headers=headers,
-            timeout=timeout,
-        )
+        attempts = max(1, int(cfg.get("max_retries", DEFAULT_MAX_RETRIES)) + 1)
+        retry_backoff_s = float(cfg.get("retry_backoff_s", DEFAULT_RETRY_BACKOFF_S))
+        last_exc: Exception | None = None
+        for attempt in range(1, attempts + 1):
+            try:
+                if use_stream:
+                    return _chat_stream(
+                        url=url,
+                        payload=payload,
+                        headers=headers,
+                        timeout=timeout,
+                        fallback_model=cfg["model"],
+                        on_delta=on_delta,
+                        on_reasoning_delta=on_reasoning_delta,
+                        on_heartbeat=on_heartbeat,
+                        no_content_timeout_s=no_content_timeout_s,
+                    )
+                return _chat_once(
+                    url=url,
+                    payload=payload,
+                    headers=headers,
+                    timeout=timeout,
+                )
+            except Exception as exc:
+                last_exc = exc
+                if attempt >= attempts or not _is_retryable_exception(exc):
+                    if attempt > 1 and _is_retryable_exception(exc):
+                        raise LlmRequestError(
+                            f"LLM request failed after {attempt} attempts: "
+                            f"provider={provider} model={cfg['model']} "
+                            f"last_error={type(exc).__name__}: {str(exc)[-300:]}"
+                        ) from exc
+                    raise
+                if on_heartbeat:
+                    on_heartbeat()
+                time.sleep(_retry_delay_s(attempt, retry_backoff_s))
+        raise last_exc or LlmRequestError("LLM request failed before sending")
     finally:
         signal.setitimer(signal.ITIMER_REAL, 0)
         signal.signal(signal.SIGALRM, previous_handler)
@@ -124,12 +157,14 @@ def _chat_once(
 
     choice = data["choices"][0]
     usage = data.get("usage", {})
+    message = choice.get("message", {})
 
     return LlmResponse(
-        text=choice["message"]["content"],
+        text=message.get("content", ""),
         model=data.get("model", ""),
         input_tokens=usage.get("prompt_tokens"),
         output_tokens=usage.get("completion_tokens"),
+        reasoning_text=_as_text(message.get("reasoning_content") or message.get("reasoning") or message.get("thinking")),
     )
 
 
@@ -142,11 +177,15 @@ def _chat_stream(
     timeout: httpx.Timeout,
     fallback_model: str,
     on_delta: Callable[[str], None] | None,
+    on_reasoning_delta: Callable[[str], None] | None,
     on_heartbeat: Callable[[], None] | None,
+    no_content_timeout_s: float = STREAM_NO_CONTENT_TIMEOUT_S,
 ) -> LlmResponse:
     chunks: list[str] = []
+    reasoning_chunks: list[str] = []
     model = fallback_model
     usage = {}
+    last_semantic_at = time.monotonic()
 
     with httpx.stream(
         "POST",
@@ -181,23 +220,81 @@ def _chat_stream(
             if not choices:
                 if on_heartbeat:
                     on_heartbeat()
+                _raise_if_no_semantic_delta(last_semantic_at, no_content_timeout_s)
                 continue
 
             delta = choices[0].get("delta") or {}
+            reasoning = _as_text(delta.get("reasoning_content") or delta.get("reasoning") or delta.get("thinking"))
             content = delta.get("content") or ""
+            if reasoning:
+                reasoning_chunks.append(reasoning)
+                last_semantic_at = time.monotonic()
+                if on_reasoning_delta:
+                    on_reasoning_delta(reasoning)
             if content:
                 chunks.append(content)
+                last_semantic_at = time.monotonic()
                 if on_delta:
                     on_delta(content)
-            elif on_heartbeat:
-                on_heartbeat()
+            elif not reasoning:
+                if on_heartbeat:
+                    on_heartbeat()
+                _raise_if_no_semantic_delta(last_semantic_at, no_content_timeout_s)
 
     return LlmResponse(
         text="".join(chunks),
         model=model,
         input_tokens=usage.get("prompt_tokens"),
         output_tokens=usage.get("completion_tokens"),
+        reasoning_text="".join(reasoning_chunks),
     )
+
+
+def _as_text(value) -> str:
+    if value is None:
+        return ""
+    if isinstance(value, str):
+        return value
+    if isinstance(value, dict):
+        for key in ("content", "text", "reasoning_content"):
+            if key in value:
+                return _as_text(value[key])
+    return str(value)
+
+
+def _raise_if_no_semantic_delta(last_semantic_at: float, no_content_timeout_s: float) -> None:
+    if no_content_timeout_s <= 0:
+        return
+    elapsed = time.monotonic() - last_semantic_at
+    if elapsed > no_content_timeout_s:
+        raise LlmTimeoutError(
+            f"LLM stream produced no thinking/content delta for {elapsed:.0f}s"
+        )
+
+
+def _is_retryable_exception(exc: Exception) -> bool:
+    if isinstance(exc, LlmTimeoutError):
+        return True
+    retryable_types = (
+        httpx.TimeoutException,
+        httpx.ConnectError,
+        httpx.ReadError,
+        httpx.RemoteProtocolError,
+        httpx.ProtocolError,
+        httpx.NetworkError,
+    )
+    if isinstance(exc, retryable_types):
+        return True
+    if isinstance(exc, httpx.HTTPStatusError):
+        status = exc.response.status_code
+        return status == 429 or 500 <= status <= 599
+    return False
+
+
+def _retry_delay_s(attempt: int, base_s: float) -> float:
+    if base_s <= 0:
+        return 0
+    return min(30.0, base_s * (2 ** (attempt - 1)))
 
 
 def chat_prefix(

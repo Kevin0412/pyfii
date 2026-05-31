@@ -46,14 +46,15 @@ class Session:
         feedback: str = "",
         temperature: float = 0.3,
         on_delta: Callable[[str], None] | None = None,
+        on_reasoning_delta: Callable[[str], None] | None = None,
         on_heartbeat: Callable[[], None] | None = None,
+        stage: str = "generation",
     ) -> LlmResponse | None:
-        """调用 LLM 生成当前段，并写入 design.py。"""
+        """调用 LLM 生成当前段；只返回候选文本，不直接写入 design.py。"""
         seg = self.state.current_segment
         if seg is None or seg.locked:
             return None
 
-        script_path = self.project_root / "scripts" / "design.py"
         system, user = build_segment_prompt(
             segment_id=seg.id,
             start_time=seg.start_time,
@@ -62,26 +63,18 @@ class Session:
             prev_state=self._previous_exit_state(),
             feedback=feedback,
         )
-        try:
-            response = chat(
-                system=system,
-                user=user,
-                provider=provider,
-                temperature=temperature,
-                on_delta=on_delta,
-                on_heartbeat=on_heartbeat,
-            )
-        except Exception as exc:
-            seg.attempts.append({
-                "provider": provider,
-                "feedback": feedback[:500],
-                "generation_error": str(exc)[-500:],
-            })
-            self.state.save(self.project_root)
-            raise
-        # prefix 模式输出已经是纯代码，不需要提取
-        return response
-        return response
+        return self._chat_stage(
+            seg=seg,
+            provider=provider,
+            stage=stage,
+            system=system,
+            user=user,
+            temperature=temperature,
+            feedback=feedback,
+            on_delta=on_delta,
+            on_reasoning_delta=on_reasoning_delta,
+            on_heartbeat=on_heartbeat,
+        )
 
     def generate_until_safe_with_llm(
         self,
@@ -91,6 +84,7 @@ class Session:
         max_attempts: int = 3,
         use_planning_pass: bool = False,
         on_delta: Callable[[str], None] | None = None,
+        on_reasoning_delta: Callable[[str], None] | None = None,
         on_heartbeat: Callable[[], None] | None = None,
         on_round_start: Callable[[int], None] | None = None,
     ) -> list[GenerationRound]:
@@ -115,34 +109,75 @@ class Session:
                         seg.id, seg.start_time, seg.end_time,
                         seg.intent or "", self._previous_exit_state(),
                     )
-                    plan_resp = chat("", plan_prompt, provider=provider, temperature=0.2)
+                    plan_resp = self._chat_stage(
+                        seg=seg,
+                        provider=provider,
+                        stage="planning_json",
+                        system="",
+                        user=plan_prompt,
+                        temperature=0.2,
+                        feedback=repair_feedback,
+                        on_delta=on_delta,
+                        on_reasoning_delta=on_reasoning_delta,
+                        on_heartbeat=on_heartbeat,
+                    )
                     plan = parse_plan_json(plan_resp.text)
                     if plan:
+                        self._record_attempt_update({"planning_parse_ok": True})
                         # Stage 2: JSON → budget table (local math)
                         budget = plan_to_budget_table(plan, self._previous_exit_state())
+                        self._record_attempt_update({"budget_chars": len(budget)})
                         # Stage 3: budget → code
                         code_prompt = build_coding_prompt(budget, seg.id, seg.start_time, seg.end_time)
-                        code_resp = chat("", code_prompt, provider=provider, temperature=0.3)
+                        code_resp = self._chat_stage(
+                            seg=seg,
+                            provider=provider,
+                            stage="planning_code",
+                            system="",
+                            user=code_prompt,
+                            temperature=0.3,
+                            feedback=repair_feedback,
+                            on_delta=on_delta,
+                            on_reasoning_delta=on_reasoning_delta,
+                            on_heartbeat=on_heartbeat,
+                        )
                         # Override: use code from planning pass
                         response = code_resp
                     else:
+                        self._record_attempt_update({
+                            "planning_parse_ok": False,
+                            "planning_parse_error": "no valid JSON plan",
+                        })
                         response = self.generate_current_segment_with_llm(
                             provider=provider, feedback=repair_feedback,
                             temperature=round_temp,
+                            on_delta=on_delta,
+                            on_reasoning_delta=on_reasoning_delta,
+                            on_heartbeat=on_heartbeat,
+                            stage="fallback_no_plan",
                         )
-                except Exception:
+                except Exception as exc:
+                    self._record_attempt_update({
+                        "planning_pass_error": f"{type(exc).__name__}: {str(exc)[-500:]}",
+                    })
                     response = self.generate_current_segment_with_llm(
                         provider=provider, feedback=repair_feedback,
                         temperature=round_temp,
+                        on_delta=on_delta,
+                        on_reasoning_delta=on_reasoning_delta,
+                        on_heartbeat=on_heartbeat,
+                        stage="fallback_after_planning_error",
                     )
             else:
                 response = self.generate_current_segment_with_llm(
-                provider=provider,
-                feedback=repair_feedback,
-                temperature=round_temp,
-                on_delta=on_delta,
-                on_heartbeat=on_heartbeat,
-            )
+                    provider=provider,
+                    feedback=repair_feedback,
+                    temperature=round_temp,
+                    on_delta=on_delta,
+                    on_reasoning_delta=on_reasoning_delta,
+                    on_heartbeat=on_heartbeat,
+                    stage="direct_generation",
+                )
             if response is None:
                 rounds.append(GenerationRound(index=index, response=None, validation=None))
                 repair_feedback = "上一轮生成的代码无法插入（语法错误或违反段标记协议）。请检查代码格式。"
@@ -151,12 +186,21 @@ class Session:
             # Extract candidate code from LLM response
             code = _extract_candidate_code(response.text) if hasattr(response, 'text') else ''
             if not code.strip():
+                self._record_attempt_update({
+                    "candidate_code_chars": 0,
+                    "candidate_empty": True,
+                })
                 rounds.append(GenerationRound(index=index, response=response, validation=None))
                 repair_feedback = "空代码 — 请生成有效 Python"
                 continue
+            self._record_attempt_update({
+                "candidate_code_chars": len(code),
+                "candidate_empty": False,
+            })
             
             # Preflight BEFORE writing to design.py
             pf = preflight_check(code)
+            self._record_preflight_result(pf)
             if not pf:
                 # Internal repair loop (max 5 rounds)
                 repair_ok = False
@@ -166,9 +210,20 @@ class Session:
                         provider=provider,
                         feedback=repair_fb,
                         temperature=max(0.1, temperature * 0.5),
+                        on_delta=on_delta,
+                        on_reasoning_delta=on_reasoning_delta,
+                        on_heartbeat=on_heartbeat,
+                        stage=f"preflight_repair_{repair_i + 1}",
                     )
+                    if response is None:
+                        break
                     code = _extract_candidate_code(response.text)
+                    self._record_attempt_update({
+                        "candidate_code_chars": len(code),
+                        "candidate_empty": not bool(code.strip()),
+                    })
                     pf = preflight_check(code)
+                    self._record_preflight_result(pf)
                     if pf:
                         repair_ok = True
                         break
@@ -180,9 +235,14 @@ class Session:
             # Write to design.py (only after preflight passes)
             script_path = self.project_root / "scripts" / "design.py"
             if not replace_active_segment(script_path, seg.id, code, self.state.locked_segment_ids):
+                self._record_attempt_update({
+                    "write_ok": False,
+                    "write_error": "replace_active_segment returned False",
+                })
                 rounds.append(GenerationRound(index=index, response=response, validation=None))
                 repair_feedback = "代码写入失败 — 检查段 marker 是否匹配"
                 continue
+            self._record_attempt_update({"write_ok": True})
             
             result = self.validate()
             self._record_validation_result(result)
@@ -396,6 +456,112 @@ class Session:
 
     def save(self) -> None:
         self.state.save(self.project_root)
+
+    def _chat_stage(
+        self,
+        seg: SegmentState,
+        provider: str,
+        stage: str,
+        system: str,
+        user: str,
+        temperature: float,
+        feedback: str,
+        on_delta: Callable[[str], None] | None = None,
+        on_reasoning_delta: Callable[[str], None] | None = None,
+        on_heartbeat: Callable[[], None] | None = None,
+    ) -> LlmResponse:
+        try:
+            response = chat(
+                system=system,
+                user=user,
+                provider=provider,
+                temperature=temperature,
+                on_delta=on_delta,
+                on_reasoning_delta=on_reasoning_delta,
+                on_heartbeat=on_heartbeat,
+            )
+        except Exception as exc:
+            self._record_generation_error(
+                seg=seg,
+                provider=provider,
+                stage=stage,
+                feedback=feedback,
+                exc=exc,
+                system_chars=len(system),
+                user_chars=len(user),
+            )
+            raise
+        self._record_generation_response(
+            seg=seg,
+            provider=provider,
+            stage=stage,
+            feedback=feedback,
+            response=response,
+            system_chars=len(system),
+            user_chars=len(user),
+        )
+        return response
+
+    def _record_generation_response(
+        self,
+        seg: SegmentState,
+        provider: str,
+        stage: str,
+        feedback: str,
+        response: LlmResponse,
+        system_chars: int,
+        user_chars: int,
+    ) -> None:
+        seg.attempts.append({
+            "provider": provider,
+            "stage": stage,
+            "feedback": feedback[:500],
+            "model": response.model,
+            "input_tokens": response.input_tokens,
+            "output_tokens": response.output_tokens,
+            "system_prompt_chars": system_chars,
+            "user_prompt_chars": user_chars,
+            "response_chars": len(response.text or ""),
+            "reasoning_chars": len(response.reasoning_text or ""),
+        })
+        self.state.save(self.project_root)
+
+    def _record_generation_error(
+        self,
+        seg: SegmentState,
+        provider: str,
+        stage: str,
+        feedback: str,
+        exc: Exception,
+        system_chars: int = 0,
+        user_chars: int = 0,
+    ) -> None:
+        seg.attempts.append({
+            "provider": provider,
+            "stage": stage,
+            "feedback": feedback[:500],
+            "system_prompt_chars": system_chars,
+            "user_prompt_chars": user_chars,
+            "generation_error_type": type(exc).__name__,
+            "generation_error": str(exc)[-500:],
+        })
+        self.state.save(self.project_root)
+
+    def _record_attempt_update(self, event: dict) -> None:
+        seg = self.state.current_segment
+        if seg is None:
+            return
+        if seg.attempts:
+            seg.attempts[-1].update(event)
+        else:
+            seg.attempts.append(event)
+        self.state.save(self.project_root)
+
+    def _record_preflight_result(self, result) -> None:
+        self._record_attempt_update({
+            "preflight_ok": bool(result),
+            "preflight_errors": list(getattr(result, "errors", []))[:20],
+        })
 
     def _previous_exit_state(self) -> list:
         index = self.state.current_segment_index - 1

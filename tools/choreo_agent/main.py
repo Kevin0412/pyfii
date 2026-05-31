@@ -104,7 +104,7 @@ def main():
 
         elif cmd.startswith("g"):
             feedback = raw_cmd[1:].strip()
-            print(f"Generating with {provider}; max_attempts=5. Streaming is enabled; reasoning is not printed.")
+            print(f"Generating with {provider}; max_attempts=5. Streaming thinking/results when the provider sends them.")
             stream = _StreamPrinter()
             try:
                 rounds = session.generate_until_safe_with_llm(
@@ -113,6 +113,7 @@ def main():
                     max_attempts=5,
                     use_planning_pass=True,
                     on_delta=stream.delta,
+                    on_reasoning_delta=stream.reasoning_delta,
                     on_heartbeat=stream.heartbeat,
                     on_round_start=stream.begin_round,
                 )
@@ -270,37 +271,50 @@ def _compact_degradation(degradation: dict) -> dict:
 
 class _StreamPrinter:
     def __init__(self):
-        self.started = False
+        self.content_started = False
+        self.reasoning_started = False
         self.heartbeat_count = 0
         self.round_index = None
 
     def begin_round(self, index: int) -> None:
-        if self.started:
+        if self.content_started or self.reasoning_started:
             print("\n--- end stream ---")
         elif self.heartbeat_count:
             print()
-        self.started = False
+        self.content_started = False
+        self.reasoning_started = False
         self.heartbeat_count = 0
         self.round_index = index
 
-    def delta(self, text: str) -> None:
-        if not self.started:
+    def reasoning_delta(self, text: str) -> None:
+        if not self.reasoning_started:
             if self.heartbeat_count:
                 print()
             suffix = f" round {self.round_index}" if self.round_index else ""
-            print(f"--- LLM stream{suffix} ---")
-            self.started = True
+            print(f"--- LLM thinking{suffix} ---")
+            self.reasoning_started = True
+        print(text, end="", flush=True)
+
+    def delta(self, text: str) -> None:
+        if not self.content_started:
+            if self.heartbeat_count:
+                print()
+            if self.reasoning_started:
+                print()
+            suffix = f" round {self.round_index}" if self.round_index else ""
+            print(f"--- LLM result{suffix} ---")
+            self.content_started = True
         print(text, end="", flush=True)
 
     def heartbeat(self) -> None:
-        if self.started:
+        if self.content_started or self.reasoning_started:
             return
         self.heartbeat_count += 1
         if self.heartbeat_count % 20 == 0:
             print(".", end="", flush=True)
 
     def finish(self) -> None:
-        if self.started:
+        if self.content_started or self.reasoning_started:
             print("\n--- end stream ---")
         elif self.heartbeat_count:
             print()
