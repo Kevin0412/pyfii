@@ -35,7 +35,7 @@ def build_segment_prompt(
     # API 参考
     api_ref = """## 可用API（from function import *）
 ```python
-move2(d, (x,y,z), t_ms, T=100)  # 反算速度→VelXY+VelZ→move2→delay(t_ms)。内部已含delay！
+move2(d, (x,y,z), t_ms, T=100)  # 反算速度+VXY+VZ+d.move2(x,y,z)。不推进时间
 apply_light(d, "#RRGGBB", ticks) # ticks×100ms灯光
 best_assign(prev, geo)           # 最优排列 → targets 列表
 clamp_xy(v)  # [0,560]; clamp_z(v)  # [80,250]
@@ -51,7 +51,7 @@ clamp_xy(v)  # [0,560]; clamp_z(v)  # [80,250]
 ## 要求
 - 2个 keyframe，非对称几何（XY间距≥200cm）
 - best_assign排列（不用恒等映射）
-- move2(d,(x,y,z),t_ms)移动（已含delay，不额外drone.delay()）
+- move2(d,(x,y,z),t_ms) + apply_light(d,c,ticks) + d.delay(move_ms-ticks*100)
 - 每keyframe设灯光 apply_light(d,"#RRGGBB",3-5)，不同keyframe不同色
 - Z轴渐进（100→150→200→150）
 - 段尾更新 prev = [(t[0],t[1],t[2]) for t in targets]

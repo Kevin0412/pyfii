@@ -44,7 +44,8 @@ def test_takeoff_landing_exempt_from_continuity_gate():
         motion_envelope_ok=True,
         motion_quality_ok=False,
     )
-    assert result.passed
+    # 空模板无exit_state → passed=False（exit_state 硬契约）
+    assert not result.passed, "空模板应不通过（无exit_state）"
     assert "整体悬停" not in result.repair_feedback()
 
 

@@ -74,9 +74,11 @@ def best_assign(starts, targets):
     return best
 
 # ---------- 灯光 ----------
-def apply_light(drone, color_hex: str, ticks: int):
-    """设置灯光，ticks×100ms"""
-    drone.light(color_hex, ticks)
+def apply_light(drone, color_hex: str, ticks: int, interval_ms: int = 100):
+    """灯光：ticks 次 TurnOnAll，每次 interval_ms。总耗时 ticks*interval_ms。"""
+    for _ in range(ticks):
+        drone.TurnOnAll(color_hex)
+        drone.delay(interval_ms)
 
 # ---------- 自动计时 ----------
 def auto_init(drones):

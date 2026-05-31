@@ -85,8 +85,10 @@ class ValidationResult:
     continuity_error: str = ""
 
     @property
-    def passed(self, segment_id: str = "") -> bool:
-        """段安全通过。非 LAND 段要求 exit_state 非空。"""
+    def passed(self) -> bool:
+        """段安全通过。必须 exit_state 非空（7坐标）。"""
+        if not self.exit_state or len(self.exit_state) != 7:
+            return False
         base = (
             self.compile_ok
             and self.run_ok
@@ -110,10 +112,6 @@ class ValidationResult:
                 )
             )
         )
-        # 非 LAND 段必须有出口坐标
-        if segment_id.upper() not in ("LAND", "S99", ""):
-            if not self.exit_state or len(self.exit_state) != 7:
-                return False
         return base
 
     @property
@@ -904,10 +902,6 @@ def _measure_degradation(
                 key=lambda item: item[1],
             )
         )
-        # 非 LAND 段必须有出口坐标
-        if segment_id.upper() not in ("LAND", "S99", ""):
-            if not self.exit_state or len(self.exit_state) != 7:
-                return False
         return base
         if order_ref is None:
             order_ref = order
