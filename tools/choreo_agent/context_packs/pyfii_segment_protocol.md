@@ -72,7 +72,7 @@ drone.delay(rest_ms_for_this_move)
 - 把音乐段拆成 2-5 个 keyframe interval，例如开场、汇聚、展开、收束；每个 interval 必须对应一个明确的舞台意图。
 - 对每个 interval，估算每架机的 3D 距离，用飞行时间公式选择速度/加速度，让真实移动覆盖 interval 的主体。
 - 不要把多个短几何快速串完后用静止等待填尾；如果 interval 太长，降低速度、增加路径弧度、增加中间 keyframe 或改变高度层。
-- 至少安排一个真实 `move2()` / Z/XY 变化在 `segment_end - 1s` 后仍在执行，并在 `segment_end` 前完成。
+- 不再要求真实运动覆盖到 `segment_end - 1s`；如果动作主体提前完成，后续段会用 `auto_init(drones)` 接到真实完成时间后。仍需保证主体动作有足够长度、幅度和安全性。
 - 如果段落是 4-24s，动作不能在 10s 左右结束；每架机的主体动作链应覆盖到 23s 后。
 
 ## 3D 舞台模型

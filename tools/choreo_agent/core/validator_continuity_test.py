@@ -52,12 +52,14 @@ def test_takeoff_landing_exempt_from_continuity_gate():
 def test_motion_envelope_for_5_to_13_segment():
     assert _check_motion_envelope((5, 13), 5.8, 12.4) == []
     assert _check_motion_envelope((5, 13), 6.0, 12.4)
-    assert _check_motion_envelope((5, 13), 5.8, 12.0)
+    # Early finish is no longer a hard gate; auto_init can compress the next segment.
+    assert _check_motion_envelope((5, 13), 5.8, 10.0) == []
 
 
 def test_effective_motion_blocks_tail_filler_and_low_activity():
     assert _check_effective_motion((13, 23), 13.4, 22.3, []) == []
-    assert _check_effective_motion((13, 23), 13.4, 20.9, [])
+    assert _check_effective_motion((13, 23), 13.4, 16.0, []) == []
+    assert _check_effective_motion((13, 23), 13.4, 15.0, [])
     assert _check_effective_motion((13, 23), 13.4, 22.3, [(20.2, 22.0)])
 
 
@@ -205,10 +207,11 @@ drone.move2(100, 100, 120)
     ) == []
 
 
-def test_repair_timing_plan_reports_missing_tail_motion():
-    text = _repair_timing_plan((4, 13), 4.1, 10.2)
-    assert "收束早了" in text
-    assert "12.00-13.00s" in text
+def test_repair_timing_plan_reports_late_start_only():
+    assert _repair_timing_plan((4, 13), 4.1, 10.2) == ""
+    text = _repair_timing_plan((4, 13), 5.5, 10.2)
+    assert "启动晚了" in text
+    assert "auto_init" in text
 
 
 if __name__ == "__main__":
@@ -224,5 +227,5 @@ if __name__ == "__main__":
     test_code_quality_blocks_float_variable_inittime()
     test_code_quality_requires_velocity_pairing()
     test_code_quality_accepts_paired_integer_timing()
-    test_repair_timing_plan_reports_missing_tail_motion()
+    test_repair_timing_plan_reports_late_start_only()
     print("OK")

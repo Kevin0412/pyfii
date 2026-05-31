@@ -48,8 +48,8 @@ for t in range(0, min(len(d) for d in data), 60):
 ```text
 global_hover_segments must be empty
 max_global_hover <= 1.0s
-low_activity_segments must be empty
-effective_motion_end > segment_end - 1.0s
+low_activity_segments must be empty inside the actual active motion window
+effective_motion_duration >= 2.5s
 ```
 
 修复原则：
@@ -58,23 +58,21 @@ effective_motion_end > segment_end - 1.0s
 - 让至少一组无人机在任意 1 秒窗口内有可见 `move2()` 或 Z 变化；单机慢挪、小幅 Z 抖动不算有效群体运动。
 - 如果音乐需要呼吸停顿，把全体静止压到 0.8 秒以内，并用分组错峰承接。
 
-当前段还有运动包络约束：如果段落规划为 `5-13s`，明显运动必须在 `6.0s` 前开始，并在 `12.0s` 后、`13.0s` 前完成收束。通用形式是：
+当前段还有运动包络约束：如果段落规划为 `5-13s`，明显运动必须在 `6.0s` 前开始。动作提前完成不再作为硬失败；下一段会通过 `auto_init(drones)` 接到上一段真实动作完成之后，相当于压缩尾部空白。通用形式是：
 
 ```text
 motion_start < segment_start + 1.0s
-motion_end   > segment_end - 1.0s
 effective_motion_start < segment_start + 1.0s
-effective_motion_end   > segment_end - 1.0s
+effective_motion_duration >= 2.5s
 ```
 
-如果 motion_end 明显早于 `segment_end - 1s`，通常不是视觉问题，而是时间线写法问题：
+如果 motion_end 明显早于 `segment_end - 1s`，这不再直接卡死；但仍需确保动作主体长度、幅度和安全性足够：
 
 - Python 循环不是全局时间轴；每架机的命令链可能已经在前半段执行完。
 - `move2()` 不推进时间；必须用后续短灯光/`delay()` 给这次移动留执行时间，再进入下一个 `move2()`。
 - 合理的 `delay()` 是某次移动的执行预算；不合理的是没有运动覆盖的长时间填尾。
-- 修复时应重排每架机的 keyframe interval，按距离选择速度/加速度，让真实 `move2()` / Z/XY 变化持续覆盖到段尾。
-- 最后一段收束移动必须在 `segment_end - 1s` 后仍在执行，并在 `segment_end` 前完成。
-- 段尾动作必须是有效群体运动：至少一组无人机共同参与，有足够位移；不能靠一两架慢挪、10-20cm 小波动或错峰 delay 把 `motion_end` 拖到段尾。
+- 修复时应重排每架机的 keyframe interval，按距离选择速度/加速度，让真实 `move2()` / Z/XY 变化至少覆盖一段有观感的主体动作。
+- 不要靠一两架慢挪、10-20cm 小波动或错峰 delay 假装动作长度；有效群体运动必须有足够位移和参与机数。
 
 ## 有效动作质量门
 

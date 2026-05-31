@@ -28,6 +28,7 @@ MIN_EFFECTIVE_TOTAL_MOVE_CM_PER_FRAME = 1.0
 MIN_EFFECTIVE_ACTIVE_DRONES = 2
 MAX_GLOBAL_HOVER_S = 1.0
 SEGMENT_EDGE_BUFFER_S = 1.0
+MIN_EFFECTIVE_MOTION_DURATION_S = 2.5
 MIN_MEANINGFUL_EXCURSION_CM = 30.0
 MIN_MOVING_DRONE_FRACTION = 0.7
 AGENT_SIDE_HELPERS = {
@@ -186,15 +187,15 @@ class ValidationResult:
             lines.append("运动包络失败：")
             lines.extend(f"- {item}" for item in self.motion_envelope_errors)
             lines.append(
-                "修复：不要在段尾补纯 delay/灯光；请延长最后一个真实 move2 的 flying_ms，"
-                "或增加一个有明显 XY/Z 位移的末段 keyframe，让真实运动结束时间落在窗口最后 1 秒内。"
+                "修复：首个正式 move2 应尽早发起。尾部空白不再作为硬失败，"
+                "会由 auto_init/下一段接续压缩。"
             )
         if self.effective_motion_errors:
             lines.append("有效群体运动失败：")
             lines.extend(f"- {item}" for item in self.effective_motion_errors)
             lines.append(
-                "修复：至少多数无人机必须在段尾前 1 秒仍有可见群体运动；"
-                "小幅高度抖动或单机慢挪不算，必须调整 keyframe 时间预算和 flying_ms。"
+                "修复：至少多数无人机需要持续一段足够长的真实群体运动；"
+                "小幅高度抖动或单机慢挪不算，必须增加主体动作长度、路径长度或 keyframe 数。"
             )
         if self.hover_segments:
             lines.append(self.hover_feedback)
@@ -293,11 +294,6 @@ def validate(
 
         if result.continuity_required:
             try:
-                result.hover_segments = _detect_hover(output_dir, window=quality_window)
-                result.hover_check_ok = True
-            except Exception as e:
-                result.hover_error = str(e)
-            try:
                 result.motion_start_s, result.motion_end_s = _measure_motion_envelope(
                     output_dir,
                     window=quality_window,
@@ -308,16 +304,27 @@ def validate(
                     result.motion_end_s,
                 )
                 result.motion_envelope_ok = not result.motion_envelope_errors
+
+                continuity_window = _compressed_continuity_window(
+                    quality_window,
+                    result.motion_end_s,
+                )
+                try:
+                    result.hover_segments = _detect_hover(output_dir, window=continuity_window)
+                    result.hover_check_ok = True
+                except Exception as e:
+                    result.hover_error = str(e)
+
                 (
                     result.effective_motion_start_s,
                     result.effective_motion_end_s,
                     result.low_activity_segments,
                 ) = _measure_effective_motion(
                     output_dir,
-                    window=quality_window,
+                    window=continuity_window,
                 )
                 result.effective_motion_errors = _check_effective_motion(
-                    quality_window,
+                    continuity_window,
                     result.effective_motion_start_s,
                     result.effective_motion_end_s,
                     result.low_activity_segments,
@@ -325,19 +332,19 @@ def validate(
                 result.effective_motion_ok = not result.effective_motion_errors
                 result.motion_quality = _measure_motion_quality(
                     output_dir,
-                    window=quality_window,
+                    window=continuity_window,
                 )
                 result.motion_quality_errors = _check_motion_quality(
-                    quality_window,
+                    continuity_window,
                     result.motion_quality,
                 )
                 result.motion_quality_ok = not result.motion_quality_errors
                 result.degradation = _measure_degradation(
                     output_dir,
-                    window=quality_window,
+                    window=continuity_window,
                 )
                 result.degradation_errors = _check_degradation(
-                    quality_window,
+                    continuity_window,
                     result.degradation,
                 )
                 result.degradation_ok = not result.degradation_errors
@@ -406,25 +413,16 @@ def _repair_timing_plan(
     if quality_window is None:
         return ""
     start_s, end_s = quality_window
-    finish_floor = end_s - SEGMENT_EDGE_BUFFER_S
     lines = []
     if motion_start_s is not None and motion_start_s >= start_s + SEGMENT_EDGE_BUFFER_S:
         lines.append(
             f"- 启动晚了 {motion_start_s - (start_s + SEGMENT_EDGE_BUFFER_S):.2f}s："
-            f"首个正式 move2 应在 {start_s:.2f}s 后尽快发起，通常使用 inittime({int(start_s)})。"
-        )
-    if motion_end_s is not None and motion_end_s <= finish_floor:
-        missing_s = finish_floor - motion_end_s
-        lines.append(
-            f"- 收束早了约 {missing_s:.2f}s：不要补纯 delay；"
-            "请把这段时间分配给真实移动，做法是降低 speed/accel、加入第 4/5 个有构图意义的 keyframe，"
-            "或拉长弧线路径/高度层变化。"
+            f"首个正式 move2 应在 {start_s:.2f}s 后尽快发起；S01 用 wait_until，S02+ 用 auto_init。"
         )
     if not lines:
         return ""
     lines.append(
-        f"- 重新规划时，所有无人机的 move/light/delay 累计预算应让有效群体运动结束在 "
-        f"{finish_floor:.2f}-{end_s:.2f}s。"
+        "- 重新规划时，先保证动作主体有足够长度；若提前收束，下一段会通过 auto_init 接续。"
     )
     return "段落时间预算修复建议：\n" + "\n".join(lines)
 
@@ -641,7 +639,6 @@ def _check_motion_envelope(
     start_s, end_s = window
     errors = []
     start_deadline = start_s + SEGMENT_EDGE_BUFFER_S
-    end_floor = end_s - SEGMENT_EDGE_BUFFER_S
 
     if motion_start_s is None or motion_end_s is None:
         return [f"当前段 {start_s:.2f}-{end_s:.2f}s 内没有检测到明显运动。"]
@@ -649,11 +646,19 @@ def _check_motion_envelope(
         errors.append(
             f"动作启动过晚：{motion_start_s:.2f}s；应在 {start_deadline:.2f}s 前开始运动。"
         )
-    if motion_end_s <= end_floor:
-        errors.append(
-            f"动作收束过早：{motion_end_s:.2f}s；应在 {end_floor:.2f}s 后、{end_s:.2f}s 前完成收束。"
-        )
     return errors
+
+
+def _compressed_continuity_window(
+    window: tuple[float, float],
+    motion_end_s: float | None,
+) -> tuple[float, float]:
+    """用实际动作末尾压缩审美窗口，尾部空白交给 auto_init/下一段处理。"""
+    start_s, end_s = window
+    if motion_end_s is None:
+        return window
+    compressed_end = min(end_s, max(motion_end_s + 0.1, start_s + MIN_EFFECTIVE_MOTION_DURATION_S))
+    return (start_s, compressed_end)
 
 
 def _measure_effective_motion(
@@ -732,7 +737,6 @@ def _check_effective_motion(
     start_s, end_s = window
     errors = []
     start_deadline = start_s + SEGMENT_EDGE_BUFFER_S
-    end_floor = end_s - SEGMENT_EDGE_BUFFER_S
 
     if effective_start_s is None or effective_end_s is None:
         return [f"当前段 {start_s:.2f}-{end_s:.2f}s 内没有检测到有效群体运动。"]
@@ -740,9 +744,10 @@ def _check_effective_motion(
         errors.append(
             f"有效群体运动启动过晚：{effective_start_s:.2f}s；应在 {start_deadline:.2f}s 前开始。"
         )
-    if effective_end_s <= end_floor:
+    effective_duration = effective_end_s - effective_start_s
+    if effective_duration < MIN_EFFECTIVE_MOTION_DURATION_S:
         errors.append(
-            f"有效群体运动收束过早：{effective_end_s:.2f}s；应在 {end_floor:.2f}s 后、{end_s:.2f}s 前完成。"
+            f"有效群体运动持续时间过短：{effective_duration:.2f}s；至少需要 {MIN_EFFECTIVE_MOTION_DURATION_S:.1f}s。"
         )
     if low_activity_segments:
         errors.append(
