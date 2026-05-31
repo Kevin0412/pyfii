@@ -89,14 +89,15 @@ def _check_syntax(code, r):
 
 
 def _check_no_bare_api(code, r):
-    """禁止 d.move2(x,y,z) 裸调——应使用 function.py 的 move2(d, (x,y,z), t_ms)"""
-    # 检测 d.move2( — 参数不是 (p, t) 形式
-    bare = re.findall(r'(\w+)\.move2\((?!.*,\s*\d+\s*\))', code)
-    if bare:
-        r.add(f"裸调 move2: {', '.join(bare)}.move2() — 用 move2(d, (x,y,z), t_ms) 包装器")
+    """禁止 d.move2(x,y,z) / d.VelXY / d.VelZ 裸调"""
+    # 检测 drone.move2(...) — 任何对象 .move2( 调用
+    bare_move2 = re.findall(r'(\w+)\.move2\(', code)
+    if bare_move2:
+        r.add(f"裸调 move2: {', '.join(bare_move2[:3])}.move2() — 用 move2(d, (x,y,z), t_ms) 包装器")
     # 检测 VelXY/VelZ
-    if re.search(r'\.VelXY\(', code) or re.search(r'\.VelZ\(', code):
-        r.add("裸调 VelXY/VelZ — 用 move2 包装器")
+    bare_vel = re.findall(r'(\w+)\.Vel(XY|Z)\(', code)
+    if bare_vel:
+        r.add(f"裸调 VelXY/VelZ: {', '.join([f'{m[0]}.Vel{m[1]}' for m in bare_vel[:3]])} — 用 move2 包装器")
 
 
 def _check_no_inittime(code, r):

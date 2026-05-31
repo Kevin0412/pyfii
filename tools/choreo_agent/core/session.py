@@ -9,8 +9,9 @@ from .script_editor import replace_active_segment, lock_segment, parse_markers
 from .checkpoint import save as checkpoint_save
 from .validator import validate, ValidationResult
 from .preflight import preflight_check, preflight_feedback
+from .planning_pass import build_planning_prompt, parse_plan_json, plan_to_budget_table, build_coding_prompt
 from .prompt_builder import build_segment_prompt
-from .llm_client import chat, chat_prefix, LlmResponse
+from .llm_client import chat, chat_prefix, LlmResponse, load_config as _load_provider_config
 
 
 @dataclass
@@ -80,14 +81,15 @@ class Session:
             feedback=feedback,
         )
         try:
-            try:
+            cfg = _load_provider_config(provider)
+            if cfg.get("supports_prefix_completion", False):
                 response = chat_prefix(
                     system=system,
                     user=user,
                     provider=provider,
                     temperature=temperature,
                 )
-            except Exception:
+            else:
                 response = chat(
                     system=system,
                     user=user,
@@ -132,6 +134,7 @@ class Session:
         feedback: str = "",
         temperature: float = 0.3,
         max_attempts: int = 3,
+        use_planning_pass: bool = False,
         on_delta: Callable[[str], None] | None = None,
         on_heartbeat: Callable[[], None] | None = None,
         on_round_start: Callable[[int], None] | None = None,
@@ -144,7 +147,37 @@ class Session:
             if on_round_start:
                 on_round_start(index)
             round_temp = temperature if index == 1 else max(0.05, temperature * 0.4)
-            response = self.generate_current_segment_with_llm(
+            
+            # Planning pass (first round only)
+            if use_planning_pass and index == 1:
+                try:
+                    # Stage 1: LLM → JSON plan
+                    plan_prompt = build_planning_prompt(
+                        seg.id, seg.start_time, seg.end_time,
+                        seg.intent or "", self._previous_exit_state(),
+                    )
+                    plan_resp = chat("", plan_prompt, provider=provider, temperature=0.2)
+                    plan = parse_plan_json(plan_resp.text)
+                    if plan:
+                        # Stage 2: JSON → budget table (local math)
+                        budget = plan_to_budget_table(plan, self._previous_exit_state())
+                        # Stage 3: budget → code
+                        code_prompt = build_coding_prompt(budget, seg.id, seg.start_time, seg.end_time)
+                        code_resp = chat("", code_prompt, provider=provider, temperature=0.3)
+                        # Override: use code from planning pass
+                        response = code_resp
+                    else:
+                        response = self.generate_current_segment_with_llm(
+                            provider=provider, feedback=repair_feedback,
+                            temperature=round_temp,
+                        )
+                except Exception:
+                    response = self.generate_current_segment_with_llm(
+                        provider=provider, feedback=repair_feedback,
+                        temperature=round_temp,
+                    )
+            else:
+                response = self.generate_current_segment_with_llm(
                 provider=provider,
                 feedback=repair_feedback,
                 temperature=round_temp,
@@ -156,9 +189,9 @@ class Session:
                 repair_feedback = "上一轮生成的代码无法插入（语法错误或违反段标记协议）。请检查代码格式。"
                 continue
 
-            # Preflight check — catch structural errors before expensive validator
+            # Preflight check — catch structural errors BEFORE writing to design.py
             code = _extract_python_code(response.text) if hasattr(response, 'text') else ""
-            code = _strip_imports(code)
+            # Do NOT strip imports — preflight should catch and reject them
             pf = preflight_check(code)
             if not pf:
                 # Internal repair loop (max 5 rounds)
@@ -171,7 +204,6 @@ class Session:
                         temperature=max(0.1, temperature * 0.5),
                     )
                     code = _extract_python_code(response.text)
-                    code = _strip_imports(code)
                     pf = preflight_check(code)
                     if pf:
                         repair_ok = True

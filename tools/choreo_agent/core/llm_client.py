@@ -45,8 +45,10 @@ def chat(
     """发送 chat completion 请求"""
     cfg = load_config(provider)
     if not cfg.get("supports_prefix_completion", False):
-        # Fall back to regular chat
-        return chat(system, user, provider, temperature)
+        raise RuntimeError(
+            f"chat_prefix requires supports_prefix_completion=true. "
+            f"Provider '{provider}' does not support prefix mode. Use chat() instead."
+        )
 
     payload = {
         "model": cfg["model"],

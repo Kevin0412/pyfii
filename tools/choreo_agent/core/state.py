@@ -16,6 +16,7 @@ class SegmentState:
     attempts: list = field(default_factory=list)
     final_permutation: Optional[tuple] = None
     exit_state: Optional[list] = None
+    degradation_signature: Optional[str] = None  # 退化指纹，跨段去重用
 
 
 @dataclass
@@ -54,6 +55,7 @@ class ProjectState:
                     "intent": s.intent,
                     "attempts": s.attempts,
                     "exit_state": s.exit_state,
+                    "degradation_signature": s.degradation_signature,
                 }
                 for s in self.segments
             ],
@@ -81,6 +83,7 @@ class ProjectState:
                 intent=s.get("intent", ""),
                 attempts=s.get("attempts", []),
                 exit_state=s.get("exit_state"),
+                degradation_signature=s.get("degradation_signature"),
             )
             for s in data.get("segments", [])
         ]
