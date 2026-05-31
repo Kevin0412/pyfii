@@ -26,15 +26,20 @@ def Vel(p1, p2, t):
             return v
     return 200
 
-def move2(d, p, t, T=100):
-    """DNTG 风格：反算速度 → VelXY → move2 → delay
-    d: drone, p: (x,y,z) 目标, t: 总时间(ms), T: 留给灯光的时间(ms)
+def move2(d, p, t_ms, T=100):
+    """反算速度 → VelXY/VelZ → d.move2。不 delay。
+    
+    原理：
+    1. v = Vel(start, p, (t_ms-T)/1000)
+    2. d.VelXY(v, 2v); d.VelZ(v, 2v)
+    3. d.move2(p[0], p[1], p[2])
+    
+    ⚠️ 不调用 d.delay()——调用者需显式 drone.delay()
     """
-    v = Vel((d.x, d.y, d.z), p, (t-T)/1000)
-    d.VelXY(v, 2*v)
-    d.VelZ(v, 2*v)
+    v = Vel((d.x, d.y, d.z), p, (t_ms - T) / 1000)
+    d.VelXY(v, 2 * v)
+    d.VelZ(v, 2 * v)
     d.move2(p[0], p[1], p[2])
-    d.delay(t)
 
 # ---------- 坐标裁剪 ----------
 def clamp_xy(v):
@@ -43,21 +48,12 @@ def clamp_xy(v):
 def clamp_z(v):
     return max(80, min(250, int(round(v))))
 
-# ---------- 灯光 ----------
-def apply_light(drone, color, ticks, interval_ms=100):
-    for tick in range(ticks):
-        bright = int(100 + 155*math.sin(tick*math.pi/max(ticks, 1)))
-        r = int(color[1:3], 16)*bright//255
-        g = int(color[3:5], 16)*bright//255
-        b = int(color[5:7], 16)*bright//255
-        drone.TurnOnAll(f"#{r:02x}{g:02x}{b:02x}")
-        drone.delay(interval_ms)
-
 # ---------- 排列 ----------
 def best_assign(starts, targets):
-    """遍历全排列，找最小路径间距最大的分配"""
+    """最优排列：遍历全排列找最小路径间距最大的分配。返回 targets 列表。"""
+    import itertools
     n = len(starts)
-    best_score, best = -1e9, None
+    best_score, best = -1e9, targets
     for perm in itertools.permutations(range(n)):
         tt = [targets[i] for i in perm]
         md = 1e9
@@ -68,19 +64,23 @@ def best_assign(starts, targets):
                           starts[i][1]*ratio + tt[i][1]*(1-ratio))
                     aj = (starts[j][0]*ratio + tt[j][0]*(1-ratio),
                           starts[j][1]*ratio + tt[j][1]*(1-ratio))
-                    d = math.hypot(ai[0]-aj[0], ai[1]-aj[1])
-                    if d < md: md = d
-        score = md*2000 - max(Distance(starts[i], tt[i]) for i in range(n))*0.01
-        if score > best_score: best_score = score; best = tt
+                    d = ((ai[0]-aj[0])**2 + (ai[1]-aj[1])**2)**0.5
+                    if d < md:
+                        md = d
+        score = md * 2000 - max(Distance(starts[i], tt[i]) for i in range(n)) * 0.01
+        if score > best_score:
+            best_score = score
+            best = tt
     return best
 
-# ---------- 兼容旧版 ----------
-def flight_time_ms(d, v, a):
-    """飞行时间(ms) — 兼容旧代码"""
-    if d <= 0: return 0
-    accel_dist = v*v/(2*a)
-    t = 2*v/a + (d-2*accel_dist)/v if d >= 2*accel_dist else 2*math.sqrt(d/a)
-    return int(math.ceil(t*1000))
+# ---------- 灯光 ----------
+def apply_light(drone, color_hex: str, ticks: int):
+    """设置灯光，ticks×100ms"""
+    drone.light(color_hex, ticks)
 
-def distance_3d(p1, p2):
-    return Distance(p1, p2)
+# ---------- 自动计时 ----------
+def auto_init(drones):
+    """自动设置段起始时间 = max(inittime) + 1"""
+    t = max(d.init_time for d in drones) + 1
+    for d in drones:
+        d.inittime(t)

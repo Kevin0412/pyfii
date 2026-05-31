@@ -85,8 +85,9 @@ class ValidationResult:
     continuity_error: str = ""
 
     @property
-    def passed(self) -> bool:
-        return (
+    def passed(self, segment_id: str = "") -> bool:
+        """段安全通过。非 LAND 段要求 exit_state 非空。"""
+        base = (
             self.compile_ok
             and self.run_ok
             and self.read_fii_ok
@@ -109,6 +110,11 @@ class ValidationResult:
                 )
             )
         )
+        # 非 LAND 段必须有出口坐标
+        if segment_id.upper() not in ("LAND", "S99", ""):
+            if not self.exit_state or len(self.exit_state) != 7:
+                return False
+        return base
 
     @property
     def hover_feedback(self) -> str:
@@ -898,6 +904,11 @@ def _measure_degradation(
                 key=lambda item: item[1],
             )
         )
+        # 非 LAND 段必须有出口坐标
+        if segment_id.upper() not in ("LAND", "S99", ""):
+            if not self.exit_state or len(self.exit_state) != 7:
+                return False
+        return base
         if order_ref is None:
             order_ref = order
             order_stable += 1

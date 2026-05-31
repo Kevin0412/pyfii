@@ -15,7 +15,7 @@
         "energy": 0.35,
         "emotion": "gradual opening"
       },
-      "intent": "从起飞后的散布状态开始，生成明亮、庄严、渐进的开场正式编舞；动作必须在段首 1 秒内开始，在段尾最后 1 秒内完成收束，中间不能有超过 1 秒整体悬停；要求安全、连贯、几何丰富，起飞布局与 S01 动作一起设计。",
+      "intent": "\u4ece\u8d77\u98de\u540e\u7684\u6563\u5e03\u72b6\u6001\u5f00\u59cb\uff0c\u751f\u6210\u660e\u4eae\u3001\u5e84\u4e25\u3001\u6e10\u8fdb\u7684\u5f00\u573a\u6b63\u5f0f\u7f16\u821e\uff1b\u52a8\u4f5c\u5fc5\u987b\u5728\u6bb5\u9996 1 \u79d2\u5185\u5f00\u59cb\uff0c\u5728\u6bb5\u5c3e\u6700\u540e 1 \u79d2\u5185\u5b8c\u6210\u6536\u675f\uff0c\u4e2d\u95f4\u4e0d\u80fd\u6709\u8d85\u8fc7 1 \u79d2\u6574\u4f53\u60ac\u505c\uff1b\u8981\u6c42\u5b89\u5168\u3001\u8fde\u8d2f\u3001\u51e0\u4f55\u4e30\u5bcc\uff0c\u8d77\u98de\u5e03\u5c40\u4e0e S01 \u52a8\u4f5c\u4e00\u8d77\u8bbe\u8ba1\u3002",
       "attempts": [],
       "exit_state": null
     },
@@ -28,7 +28,7 @@
         "energy": 0.45,
         "emotion": "flowing expansion"
       },
-      "intent": "承接 S01 出口位置，形成更开阔的流动展开和方向性推进；几何语言可包含弧线、V 形、扇形和前后景深，不要重复上一段队形。",
+      "intent": "\u627f\u63a5 S01 \u51fa\u53e3\u4f4d\u7f6e\uff0c\u5f62\u6210\u66f4\u5f00\u9614\u7684\u6d41\u52a8\u5c55\u5f00\u548c\u65b9\u5411\u6027\u63a8\u8fdb\uff1b\u51e0\u4f55\u8bed\u8a00\u53ef\u5305\u542b\u5f27\u7ebf\u3001V \u5f62\u3001\u6247\u5f62\u548c\u524d\u540e\u666f\u6df1\uff0c\u4e0d\u8981\u91cd\u590d\u4e0a\u4e00\u6bb5\u961f\u5f62\u3002",
       "attempts": [],
       "exit_state": null
     },
@@ -41,7 +41,7 @@
         "energy": 0.55,
         "emotion": "measured canon"
       },
-      "intent": "承接上一段出口位置，做排队错峰、交错穿梭或分组呼应的 canon 式推进；保持安全线距，避免中心对穿。",
+      "intent": "\u627f\u63a5\u4e0a\u4e00\u6bb5\u51fa\u53e3\u4f4d\u7f6e\uff0c\u505a\u6392\u961f\u9519\u5cf0\u3001\u4ea4\u9519\u7a7f\u68ad\u6216\u5206\u7ec4\u547c\u5e94\u7684 canon \u5f0f\u63a8\u8fdb\uff1b\u4fdd\u6301\u5b89\u5168\u7ebf\u8ddd\uff0c\u907f\u514d\u4e2d\u5fc3\u5bf9\u7a7f\u3002",
       "attempts": [],
       "exit_state": null
     },
@@ -54,7 +54,7 @@
         "energy": 0.65,
         "emotion": "lyrical geometry"
       },
-      "intent": "进入更舒展的中段，使用星芒、波浪、框线或非圆几何变化；动作要有层次和呼吸，但不能退化为刚性圆、双排或小范围抖动。",
+      "intent": "\u8fdb\u5165\u66f4\u8212\u5c55\u7684\u4e2d\u6bb5\uff0c\u4f7f\u7528\u661f\u8292\u3001\u6ce2\u6d6a\u3001\u6846\u7ebf\u6216\u975e\u5706\u51e0\u4f55\u53d8\u5316\uff1b\u52a8\u4f5c\u8981\u6709\u5c42\u6b21\u548c\u547c\u5438\uff0c\u4f46\u4e0d\u80fd\u9000\u5316\u4e3a\u521a\u6027\u5706\u3001\u53cc\u6392\u6216\u5c0f\u8303\u56f4\u6296\u52a8\u3002",
       "attempts": [],
       "exit_state": null
     },
@@ -67,7 +67,7 @@
         "energy": 0.85,
         "emotion": "bright climax"
       },
-      "intent": "高潮段，做全场尺度的展开、爆发、回卷或分组交换；视觉要明亮有力，安全优先但不能缩成保守小动作。",
+      "intent": "\u9ad8\u6f6e\u6bb5\uff0c\u505a\u5168\u573a\u5c3a\u5ea6\u7684\u5c55\u5f00\u3001\u7206\u53d1\u3001\u56de\u5377\u6216\u5206\u7ec4\u4ea4\u6362\uff1b\u89c6\u89c9\u8981\u660e\u4eae\u6709\u529b\uff0c\u5b89\u5168\u4f18\u5148\u4f46\u4e0d\u80fd\u7f29\u6210\u4fdd\u5b88\u5c0f\u52a8\u4f5c\u3002",
       "attempts": [],
       "exit_state": null
     },
@@ -80,7 +80,7 @@
         "energy": 0.6,
         "emotion": "closing signature"
       },
-      "intent": "尾声署名和收束段，承接高潮出口位置，形成清晰、优雅、可识别的结束姿态；仍需在短时间内保持连贯真实运动。",
+      "intent": "\u5c3e\u58f0\u7f72\u540d\u548c\u6536\u675f\u6bb5\uff0c\u627f\u63a5\u9ad8\u6f6e\u51fa\u53e3\u4f4d\u7f6e\uff0c\u5f62\u6210\u6e05\u6670\u3001\u4f18\u96c5\u3001\u53ef\u8bc6\u522b\u7684\u7ed3\u675f\u59ff\u6001\uff1b\u4ecd\u9700\u5728\u77ed\u65f6\u95f4\u5185\u4fdd\u6301\u8fde\u8d2f\u771f\u5b9e\u8fd0\u52a8\u3002",
       "attempts": [],
       "exit_state": null
     },
@@ -93,7 +93,7 @@
         "energy": 0.2,
         "emotion": "landing"
       },
-      "intent": "降落段：安全平滑降落。起飞和降落不计入正式编舞连续性硬门，但仍要通过执行和安全验证。",
+      "intent": "\u964d\u843d\u6bb5\uff1a\u5b89\u5168\u5e73\u6ed1\u964d\u843d\u3002\u8d77\u98de\u548c\u964d\u843d\u4e0d\u8ba1\u5165\u6b63\u5f0f\u7f16\u821e\u8fde\u7eed\u6027\u786c\u95e8\uff0c\u4f46\u4ecd\u8981\u901a\u8fc7\u6267\u884c\u548c\u5b89\u5168\u9a8c\u8bc1\u3002",
       "attempts": [],
       "exit_state": null
     }

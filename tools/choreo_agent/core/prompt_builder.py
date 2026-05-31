@@ -37,7 +37,7 @@ def build_segment_prompt(
 ```python
 move2(d, (x,y,z), t_ms, T=100)  # 反算速度→VelXY+VelZ→move2→delay(t_ms)。内部已含delay！
 apply_light(d, "#RRGGBB", ticks) # ticks×100ms灯光
-best_assign(prev_xy, geo_xy)     # 最优排列→(perm, min_d_cm)
+best_assign(prev, geo)           # 最优排列 → targets 列表
 clamp_xy(v)  # [0,560]; clamp_z(v)  # [80,250]
 ```"""
 

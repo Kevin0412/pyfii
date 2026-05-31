@@ -203,8 +203,9 @@ class Session:
         script_path = self.project_root / "scripts" / "design.py"
         if lock_segment(script_path, seg.id):
             human_override = not result.passed
-            if result.exit_state:
-                seg.exit_state = result.exit_state
+            if not result.exit_state or len(result.exit_state) != 7:
+                return ApprovalResult(False, result, reason="exit_state 为空，不允许锁定")
+            seg.exit_state = result.exit_state
             seg.attempts.append({
                 "human_approval": True,
                 "human_override": human_override,
@@ -278,8 +279,9 @@ class Session:
 
         script_path = self.project_root / "scripts" / "design.py"
         if lock_segment(script_path, seg.id):
-            if validation.exit_state:
-                seg.exit_state = validation.exit_state
+            if not validation.exit_state or len(validation.exit_state) != 7:
+                return ApprovalResult(False, validation, reason="exit_state 为空，不允许锁定")
+            seg.exit_state = validation.exit_state
             seg.attempts.append({
                 "ai_approval": True,
                 "human_override": False,
@@ -374,18 +376,12 @@ class Session:
             es = self.state.segments[index].exit_state
             if es:
                 return es
-            # fallback: read from .fii — use last frame with z>0
+            # fallback: read from .fii at previous segment end_time
             try:
-                import pyfii as pf
+                from core.validator import _sample_exit_state
+                prev_seg = self.state.segments[index]
                 fii_dir = self.project_root / 'output'
-                data, t0, *_ = pf.read_fii(str(fii_dir), fps=60, ignore_acc=True)
-                # 找最后一个有飞行数据的帧
-                last_f = min(len(d) - 1 for d in data)
-                for f in range(last_f, 0, -1):
-                    if any(data[i][f][3] > 10 for i in range(7)):
-                        last_f = f
-                        break
-                return [(float(data[i][last_f][1]), float(data[i][last_f][2]), float(data[i][last_f][3])) for i in range(7)]
+                return _sample_exit_state(fii_dir, time_s=prev_seg.end_time) or []
             except Exception:
                 pass
         return []
