@@ -101,6 +101,54 @@ def test_seg_not_undefined():
     print("PASSED: seg defined before use")
 
 
+
+def test_replace_preserves_for_loop_indent():
+    """S01 replacement with for-loop preserves inner indentation."""
+    from core.script_editor import replace_active_segment
+    import tempfile, shutil, py_compile
+    from pathlib import Path
+
+    tmp = Path(tempfile.mkdtemp())
+    tmpl = Path(__file__).resolve().parent.parent / "project_template"
+    shutil.copytree(tmpl, tmp, dirs_exist_ok=True)
+
+    design = tmp / "scripts" / "design.py"
+
+    code = """prev = [(d.x, d.y, d.z) for d in drones]
+geo = [(100,120,150)] * 7
+for i, drone in enumerate(drones):
+    move2(drone, (geo[i][0], geo[i][1], geo[i][2]), 3000)
+    apply_light(drone, "#ff6644", 4)
+    drone.delay(2600)
+return prev"""
+
+    ok = replace_active_segment(design, "S01", code, [])
+    assert ok, "replace failed"
+
+    # Verify compiles
+    py_compile.compile(str(design), doraise=True)
+
+    # Check for-loop indentation
+    content = design.read_text()
+    lines = content.splitlines()
+    in_for = False
+    for i, line in enumerate(lines):
+        if "for i, drone in enumerate" in line:
+            in_for = True
+            for_indent = len(line) - len(line.lstrip())
+        if in_for and "move2" in line:
+            move_indent = len(line) - len(line.lstrip())
+            assert move_indent == for_indent + 4, f"move2 indent {move_indent} != for+4 ({for_indent}+4)"
+            break
+
+    # s02 unaffected
+    assert "def s02" in content
+    s02_start = content.find("def s02")
+    assert "locked=false" in content[s02_start:s02_start+200]
+
+    shutil.rmtree(tmp)
+    print("PASSED: for-loop indent preserved, compiles OK, s02 untouched")
+
 if __name__ == "__main__":
     test_template_runs()
     test_marker_in_function_body()
@@ -108,4 +156,5 @@ if __name__ == "__main__":
     test_locked_hash_protection()
     test_preflight_still_rejects_def()
     test_seg_not_undefined()
+    test_replace_preserves_for_loop_indent()
     print("\nALL FUNCTION SEGMENT TESTS PASSED")

@@ -62,17 +62,16 @@ def replace_active_segment(
                   if not l.strip().startswith(MARKER_START)
                   and not l.strip().startswith(MARKER_END)]
 
-    # Auto-indent: use marker line's indentation
+    # Auto-indent: normalize with dedent, then add marker_indent
     marker_indent = len(lines[target_start]) - len(lines[target_start].lstrip())
-    indent_prefix = " " * (marker_indent + 4)  # marker is inside function → body is +4
+    indent_prefix = " " * marker_indent
 
-    # Indent clean code if needed
-    indented_code = []
-    for line in clean_code:
-        if line.strip():  # non-empty lines get indented
-            indented_code.append(indent_prefix + line.lstrip())
-        else:
-            indented_code.append(line)
+    import textwrap
+    body = textwrap.dedent("\n".join(clean_code)).strip("\n")
+    indented_code = [
+        indent_prefix + line if line.strip() else ""
+        for line in body.splitlines()
+    ]
 
     new_lines = (
         lines[:target_start + 1]
