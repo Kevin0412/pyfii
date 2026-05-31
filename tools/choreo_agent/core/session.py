@@ -189,15 +189,14 @@ class Session:
                 repair_feedback = "上一轮生成的代码无法插入（语法错误或违反段标记协议）。请检查代码格式。"
                 continue
 
-            # Preflight check — catch structural errors BEFORE writing to design.py
-            code = getattr(response, 'text', '') or self._pending_code or ''
+            # Extract candidate code from LLM response
+            code = _extract_candidate_code(response.text) if hasattr(response, 'text') else ''
             if not code.strip():
                 rounds.append(GenerationRound(index=index, response=response, validation=None))
                 repair_feedback = "空代码 — 请生成有效 Python"
                 continue
             
-            # Extract and preflight
-            code = _extract_python_code(code) if '```' in code or 'def ' in code else code
+            # Preflight BEFORE writing to design.py
             pf = preflight_check(code)
             if not pf:
                 # Internal repair loop (max 5 rounds)
@@ -209,7 +208,7 @@ class Session:
                         feedback=repair_fb,
                         temperature=max(0.1, temperature * 0.5),
                     )
-                    code = _extract_python_code(response.text)
+                    code = _extract_candidate_code(response.text)
                     pf = preflight_check(code)
                     if pf:
                         repair_ok = True
@@ -464,6 +463,13 @@ class Session:
             seg.exit_state = result.exit_state
         self.state.save(self.project_root)
 
+
+
+def _extract_candidate_code(response_text: str) -> str:
+    """从 LLM response 提取 Python 代码候选。"""
+    if response_text.strip().startswith(('#', 'import', 'from', 'def', 'class', 'try', 'for', 'if', 'while')):
+        return response_text.strip()
+    return _extract_python_code(response_text)
 
 def _extract_python_code(text: str) -> str:
     """从 LLM 输出中提取 Python 代码，兼容 fenced markdown。"""
