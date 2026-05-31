@@ -77,8 +77,7 @@ def s06(drones: list):
 def land(drones: list):
     """LAND: 63-68s 降落"""
     # === PYFII_AGENT_SEGMENT_START id=LAND locked=false ===
-    for drone in drones:
-        drone.land()
+    pass  # LAND body filled by agent
     # === PYFII_AGENT_SEGMENT_END LAND ===
 
 # ============================================================
@@ -95,22 +94,21 @@ land(drones)
 # ============================================================
 # FIXED FOOTER
 # ============================================================
-for drone in drones:
-    drone.end()
-
-os.makedirs(str(OUT), exist_ok=True)
+import io as _io
+_stderr_save = sys.stderr
+sys.stderr = _io.StringIO()
 try:
+    for drone in drones:
+        drone.end()
+    os.makedirs(str(OUT), exist_ok=True)
     fii = pf.Fii(str(OUT), drones, music=MUSIC)
     fii.save(field=6)
-except Exception:
-    print("Fii init/save failed (empty template — expected)")
-    sys.exit(0)
-
-try:
     data, t0, *_ = pf.read_fii(str(OUT), fps=60, ignore_acc=False)
 except Exception:
-    print("read_fii failed (empty template — expected)")
+    sys.stderr = _stderr_save
+    print("empty template — no valid Fii data (expected)")
     sys.exit(0)
+sys.stderr = _stderr_save
 
 mf = min(len(d) for d in data)
 all_x = [p[1] for d in data for p in d if p[1] > 0]

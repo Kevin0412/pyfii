@@ -7,12 +7,15 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 
 def test_template_runs():
-    """Empty template executes without error."""
+    """Empty template: exit 0, no stderr errors."""
     from subprocess import run, PIPE
     tmpl = Path(__file__).resolve().parent.parent / "project_template" / "scripts" / "design.py"
     r = run(["python", str(tmpl)], capture_output=True, text=True, timeout=30)
-    assert "read_fii failed" in r.stdout or "已保存" in r.stdout, f"Unexpected output: {r.stdout[-200:]}"
-    print("PASSED: empty template runs")
+    assert r.returncode == 0, f"exit={r.returncode}, stderr={r.stderr[-200:]}"
+    assert "traceback" not in r.stderr.lower(), f"stderr has traceback: {r.stderr[-200:]}"
+    assert "error" not in r.stderr.lower(), f"stderr has error: {r.stderr[-200:]}"
+    assert "valueerror" not in r.stderr.lower(), f"stderr has ValueError: {r.stderr[-200:]}"
+    print("PASSED: empty template exit 0, no stderr errors")
 
 
 def test_marker_in_function_body():
