@@ -374,14 +374,18 @@ class Session:
             es = self.state.segments[index].exit_state
             if es:
                 return es
-            # fallback: read from .fii
+            # fallback: read from .fii — use last frame with z>0
             try:
                 import pyfii as pf
                 fii_dir = self.project_root / 'output'
                 data, t0, *_ = pf.read_fii(str(fii_dir), fps=60, ignore_acc=True)
-                target_s = self.state.segments[index].end_time
-                f = max(0, min(len(data[0]) - 1, int((target_s - t0) * 60)))
-                return [(float(data[i][f][1]), float(data[i][f][2]), float(data[i][f][3])) for i in range(7)]
+                # 找最后一个有飞行数据的帧
+                last_f = min(len(d) - 1 for d in data)
+                for f in range(last_f, 0, -1):
+                    if any(data[i][f][3] > 10 for i in range(7)):
+                        last_f = f
+                        break
+                return [(float(data[i][last_f][1]), float(data[i][last_f][2]), float(data[i][last_f][3])) for i in range(7)]
             except Exception:
                 pass
         return []
