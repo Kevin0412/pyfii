@@ -104,6 +104,9 @@ class Session:
         on_round_start: Callable[[int], None] | None = None,
     ) -> list[GenerationRound]:
         """生成当前段并自动验证；失败则把危险反馈回灌给 LLM。"""
+        seg = self.state.current_segment
+        if seg is None or seg.locked:
+            return []
         rounds: list[GenerationRound] = []
         repair_feedback = feedback
 

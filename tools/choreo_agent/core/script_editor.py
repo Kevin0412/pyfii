@@ -16,11 +16,11 @@ def parse_markers(script_path: Path) -> list[dict]:
     current_start = 0
 
     for i, line in enumerate(lines):
-        if line.startswith(MARKER_START):
+        if line.strip().startswith(MARKER_START):
             current_id = _extract(line, "id")
             current_locked = _extract(line, "locked") == "true"
             current_start = i + 1
-        elif line.startswith(MARKER_END) and current_id:
+        elif line.strip().startswith(MARKER_END) and current_id:
             blocks.append({
                 "id": current_id,
                 "locked": current_locked,
@@ -44,11 +44,11 @@ def replace_active_segment(
     target_start = None
     target_end = None
     for i, line in enumerate(lines):
-        if line.startswith(MARKER_START) and _extract(line, "id") == segment_id:
+        if line.strip().startswith(MARKER_START) and _extract(line, "id") == segment_id:
             if segment_id in locked_segment_ids:
                 return False
             target_start = i
-        if target_start is not None and line.startswith(MARKER_END) and i > target_start:
+        if target_start is not None and line.strip().startswith(MARKER_END) and i > target_start:
             target_end = i
             break
 
@@ -62,9 +62,21 @@ def replace_active_segment(
                   if not l.strip().startswith(MARKER_START)
                   and not l.strip().startswith(MARKER_END)]
 
+    # Auto-indent: use marker line's indentation
+    marker_indent = len(lines[target_start]) - len(lines[target_start].lstrip())
+    indent_prefix = " " * (marker_indent + 4)  # marker is inside function → body is +4
+
+    # Indent clean code if needed
+    indented_code = []
+    for line in clean_code:
+        if line.strip():  # non-empty lines get indented
+            indented_code.append(indent_prefix + line.lstrip())
+        else:
+            indented_code.append(line)
+
     new_lines = (
         lines[:target_start + 1]
-        + clean_code
+        + indented_code
         + lines[target_end:]
     )
 
@@ -98,11 +110,11 @@ def _hash_locked(lines: list[str], locked_ids: list[str]) -> dict[str, str]:
     in_locked = False
     buf = []
     for line in lines:
-        if line.startswith(MARKER_START):
+        if line.strip().startswith(MARKER_START):
             in_segment = _extract(line, "id")
             in_locked = _extract(line, "locked") == "true"
             buf = []
-        elif line.startswith(MARKER_END) and in_segment:
+        elif line.strip().startswith(MARKER_END) and in_segment:
             if in_locked and in_segment in locked_ids:
                 hashes[in_segment] = hashlib.sha256(
                     "\n".join(buf).encode()
