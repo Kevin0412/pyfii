@@ -10,13 +10,8 @@ PACK_ORDER = [
     "pyfii_api_minimal.md",
     "pyfii_guide.md",
     "pyfii_coding_rules.md",
-    "pyfii_segment_protocol.md",
     "pyfii_anti_patterns.md",
-    "pyfii_best_assign.md",
-    "pyfii_light_patterns.md",
     "pyfii_validation_rules.md",
-    "pyfii_design_patterns.md",
-    "agent_coding_style.md",
 ]
 
 
