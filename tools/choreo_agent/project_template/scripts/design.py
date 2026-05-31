@@ -94,15 +94,21 @@ land(drones)
 # ============================================================
 # FIXED FOOTER
 # ============================================================
-try:
+# Only save Fii if drones have actual actions
+has_actions = any(len(getattr(d, 'outputString', '')) > 200 for d in drones)
+if has_actions:
     for drone in drones:
         drone.end()
     os.makedirs(str(OUT), exist_ok=True)
-    fii = pf.Fii(str(OUT), drones, music=MUSIC)
-    fii.save(field=6)
-    data, t0, *_ = pf.read_fii(str(OUT), fps=60, ignore_acc=False)
-except Exception:
-    print("empty template — no valid Fii data (expected)")
+    try:
+        fii = pf.Fii(str(OUT), drones, music=MUSIC)
+        fii.save(field=6)
+        data, t0, *_ = pf.read_fii(str(OUT), fps=60, ignore_acc=False)
+    except Exception:
+        print("Fii save/read failed")
+        sys.exit(1)
+else:
+    print("empty template — no drone actions")
     sys.exit(0)
 
 

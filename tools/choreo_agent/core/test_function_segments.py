@@ -7,12 +7,15 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 
 def test_template_runs():
-    """Empty template: exit 0."""
+    """Empty template: exit 0, stderr clean (no traceback/error/index/value)."""
     from subprocess import run, PIPE
     tmpl = Path(__file__).resolve().parent.parent / "project_template" / "scripts" / "design.py"
     r = run(["python", str(tmpl)], capture_output=True, text=True, timeout=30)
-    assert r.returncode == 0, f"exit={r.returncode}, stderr={r.stderr[-200:]}"
-    print("PASSED: empty template exit 0")
+    assert r.returncode == 0, f"exit={r.returncode}"
+    lower = r.stderr.lower()
+    for bad in ['traceback', 'error', 'valueerror', 'indexerror']:
+        assert bad not in lower, f"stderr contains '{bad}': {r.stderr[-300:]}"
+    print("PASSED: empty template exit 0, clean stderr")
 
 
 def test_marker_in_function_body():
