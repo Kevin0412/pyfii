@@ -371,7 +371,19 @@ class Session:
     def _previous_exit_state(self) -> list:
         index = self.state.current_segment_index - 1
         if 0 <= index < len(self.state.segments):
-            return self.state.segments[index].exit_state or []
+            es = self.state.segments[index].exit_state
+            if es:
+                return es
+            # fallback: read from .fii
+            try:
+                import pyfii as pf
+                fii_dir = self.project_root / 'output'
+                data, t0, *_ = pf.read_fii(str(fii_dir), fps=60, ignore_acc=True)
+                target_s = self.state.segments[index].end_time
+                f = max(0, min(len(data[0]) - 1, int((target_s - t0) * 60)))
+                return [(float(data[i][f][1]), float(data[i][f][2]), float(data[i][f][3])) for i in range(7)]
+            except Exception:
+                pass
         return []
 
     def _record_validation_result(self, result: ValidationResult) -> None:
@@ -379,6 +391,8 @@ class Session:
         if seg is None or not seg.attempts:
             return
         seg.attempts[-1]["validation"] = _validation_snapshot(result)
+        if result.exit_state:
+            seg.exit_state = result.exit_state
         self.state.save(self.project_root)
 
 
