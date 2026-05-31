@@ -175,13 +175,35 @@ class ValidationResult:
             details = ", ".join(self.action_details[:10]) if self.action_details else "unknown"
             lines.append(
                 f"动作未完成风险：{self.action_warnings} 个警告。受影响: {details}。"
-                "每个 move2 后 delay 必须基于距离计算：\n"
+                "每个 move2 后 delay 必须基于距离计算，并使用 function.py 的 move2 包装器：\n"
                 "  d = sqrt((tx-prev_x)^2+(ty-prev_y)^2+(tz-prev_z)^2)\n"
-                "  drone.move2(tx, ty, tz)\n"
+                "  move2(drone, (tx, ty, tz), flying_ms)\n"
                 "  apply_light(drone, color, ticks)\n"
-                "  drone.delay(flight_time_ms(d, v, a) - ticks*100 + 200)\n"
+                "  drone.delay(flying_ms - ticks*100 + 200)\n"
                 "不要用固定 delay 混过去。"
             )
+        if self.motion_envelope_errors:
+            lines.append("运动包络失败：")
+            lines.extend(f"- {item}" for item in self.motion_envelope_errors)
+            lines.append(
+                "修复：不要在段尾补纯 delay/灯光；请延长最后一个真实 move2 的 flying_ms，"
+                "或增加一个有明显 XY/Z 位移的末段 keyframe，让真实运动结束时间落在窗口最后 1 秒内。"
+            )
+        if self.effective_motion_errors:
+            lines.append("有效群体运动失败：")
+            lines.extend(f"- {item}" for item in self.effective_motion_errors)
+            lines.append(
+                "修复：至少多数无人机必须在段尾前 1 秒仍有可见群体运动；"
+                "小幅高度抖动或单机慢挪不算，必须调整 keyframe 时间预算和 flying_ms。"
+            )
+        if self.hover_segments:
+            lines.append(self.hover_feedback)
+        if self.motion_quality_errors:
+            lines.append("动作质量失败：")
+            lines.extend(f"- {item}" for item in self.motion_quality_errors)
+        if self.degradation_errors:
+            lines.append("退化失败：")
+            lines.extend(f"- {item}" for item in self.degradation_errors)
         traj = _format_segment_trajectory()
         if traj:
             lines.append("轨迹数据（0.1s采样）：")

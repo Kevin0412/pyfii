@@ -1,6 +1,7 @@
 """Session — 核心控制器"""
 import json
 import re
+import textwrap
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable
@@ -206,7 +207,7 @@ class Session:
                 # Internal repair loop (max 5 rounds)
                 repair_ok = False
                 for repair_i in range(5):
-                    repair_fb = preflight_feedback(pf)
+                    repair_fb = _preflight_repair_feedback(pf, code)
                     response = self.generate_current_segment_with_llm(
                         provider=provider,
                         feedback=repair_fb,
@@ -230,7 +231,7 @@ class Session:
                         break
                 if not repair_ok:
                     rounds.append(GenerationRound(index=index, response=response, validation=None))
-                    repair_feedback = preflight_feedback(pf)
+                    repair_feedback = _preflight_repair_feedback(pf, code)
                     continue
             
             # Write to design.py (only after preflight passes)
@@ -599,7 +600,9 @@ def _extract_candidate_code(response_text: str) -> str:
 
 def _extract_python_code(text: str) -> str:
     """从 LLM 输出中提取 Python 代码，兼容 fenced markdown。"""
-    fenced = re.findall(r"```(?:python|py)?\s*(.*?)```", text, flags=re.IGNORECASE | re.DOTALL)
+    fenced = re.findall(r"```(?:python|py)?[ \t]*\r?\n(.*?)```", text, flags=re.IGNORECASE | re.DOTALL)
+    if not fenced:
+        fenced = re.findall(r"```(?:python|py)?\s*(.*?)```", text, flags=re.IGNORECASE | re.DOTALL)
     if fenced:
         return _strip_segment_markers(fenced[0])
     raw = text.strip()
@@ -612,11 +615,12 @@ def _extract_python_code(text: str) -> str:
 def _strip_segment_markers(code: str) -> str:
     lines = [
         line
-        for line in code.strip().splitlines()
+        for line in code.strip("\n").splitlines()
         if "PYFII_AGENT_SEGMENT_START" not in line
         and "PYFII_AGENT_SEGMENT_END" not in line
     ]
-    return "\n".join(lines).strip() + "\n"
+    body = textwrap.dedent("\n".join(lines)).strip()
+    return (body + "\n") if body else ""
 
 def _strip_imports(code: str) -> str:
     """移除 agent 可能添加的 import 行"""
@@ -696,6 +700,17 @@ def _join_feedback(initial: str, repair: str) -> str:
     if initial.strip():
         return initial.strip() + "\n\n" + repair
     return repair
+
+
+def _preflight_repair_feedback(result, code: str) -> str:
+    return (
+        preflight_feedback(result)
+        + "\n\n上一轮候选代码如下，请在此基础上修正，输出完整当前段代码片段：\n"
+        + "```python\n"
+        + code[:6000]
+        + "\n```\n"
+        + "硬要求：只输出可被插入函数体的代码；不要 import、不要 def/class、不要 markdown 解释、不要裸调 VelXY/drone.move2、不要 inittime。"
+    )
 
 
 def _conservative_safety_feedback(index: int, result: ValidationResult) -> str:

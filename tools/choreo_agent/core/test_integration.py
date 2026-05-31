@@ -179,6 +179,25 @@ def test_chat_retries_transient_error_once():
     assert len(calls) == 2
     print("PASSED: chat retries transient error once")
 
+
+def test_extract_candidate_code_dedents_fenced_body():
+    """Indented fenced code is normalized before preflight."""
+    from core.session import _extract_candidate_code
+    from core.preflight import preflight_check
+
+    response = """```python
+        prev = [(d.x, d.y, d.z) for d in drones]
+        for i, drone in enumerate(drones):
+            move2(drone, (100, 120, 150), 3000)
+            apply_light(drone, "#ffaa00", 4)
+            drone.delay(2700)
+        prev = [(d.x, d.y, d.z) for d in drones]
+    ```"""
+    code = _extract_candidate_code(response)
+    assert code.startswith("prev =")
+    assert preflight_check(code), code
+    print("PASSED: candidate code dedents fenced body")
+
 if __name__ == "__main__":
     test_chat_mimo_no_prefix()
     test_chat_prefix_mimo_rejects()
@@ -189,4 +208,5 @@ if __name__ == "__main__":
     test_generate_never_calls_chat_prefix()
     test_stream_parses_reasoning_and_result_deltas()
     test_chat_retries_transient_error_once()
-    print("\nALL 9 INTEGRATION TESTS PASSED")
+    test_extract_candidate_code_dedents_fenced_body()
+    print("\nALL 10 INTEGRATION TESTS PASSED")
