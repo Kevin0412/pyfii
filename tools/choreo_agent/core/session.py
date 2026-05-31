@@ -74,10 +74,10 @@ class Session:
             segment_id=seg.id,
             start_time=seg.start_time,
             end_time=seg.end_time,
-            music_cue=seg.music_cue,
-            intent=seg.intent,
+            guide={},
+            intent=seg.intent or "",
             prev_state=self._previous_exit_state(),
-            design_py=script_path.read_text(encoding="utf-8"),
+            system="",
             feedback=feedback,
         )
         try:
