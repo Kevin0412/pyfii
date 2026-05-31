@@ -26,8 +26,7 @@ def test_bad_code_never_writes_design_py():
         output_tokens=20,
     )
 
-    with patch('core.session.chat', return_value=bad_response):
-        with patch('core.session.chat_prefix', return_value=bad_response):
+    with patch('core.session.chat', return_value=bad_response), patch('core.session.chat_prefix', return_value=bad_response):
             try:
                 s = Session(str(proj))
                 rounds = s.generate_until_safe_with_llm(
@@ -80,8 +79,7 @@ prev = [(g[0], g[1], g[2]) for g in geo1]
         sg["attempts"] = []
     json.dump(st, open(proj / "state.json", "w"), indent=2)
 
-    with patch('core.session.chat', return_value=clean_response):
-        with patch('core.session.chat_prefix', return_value=clean_response):
+    with patch('core.session.chat', return_value=clean_response), patch('core.session.chat_prefix', return_value=clean_response):
             try:
                 s = Session(str(proj))
                 rounds = s.generate_until_safe_with_llm(
