@@ -82,7 +82,8 @@ def apply_light(drone, color_hex: str, ticks: int, interval_ms: int = 100):
 
 # ---------- 自动计时 ----------
 def auto_init(drones):
-    """自动设置段起始时间 = max(inittime) + 1"""
-    t = max(d.init_time for d in drones) + 1
+    """把所有无人机时间游标切到当前最大游标所在的整数秒。"""
+    t = math.ceil(max(getattr(d, "time", 0) for d in drones) / 1000)
     for d in drones:
         d.inittime(t)
+    return t

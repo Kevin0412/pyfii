@@ -33,5 +33,5 @@ drone.delay(3000)
 ## 禁止
 - d.VelXY / d.VelZ 裸调
 - d.move2() 裸调（必须用 function.py 的 move2）
-- inittime() 调用（auto_init 处理）
+- inittime() 调用（时间游标由 takeoff/delay/move 链自然推进）
 - import 新模块

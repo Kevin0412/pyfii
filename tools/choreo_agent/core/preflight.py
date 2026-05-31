@@ -102,7 +102,7 @@ def _check_no_bare_api(code, r):
 
 def _check_no_inittime(code, r):
     if "inittime" in code:
-        r.add("调用 inittime() — auto_init 已处理，删除此调用")
+        r.add("调用 inittime() — 时间游标由 takeoff/delay/move 链自然推进，删除此调用")
 
 
 def preflight_feedback(result: PreflightResult) -> str:

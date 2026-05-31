@@ -128,4 +128,8 @@ def build_coding_prompt(budget_table: str, segment_id: str, start_time: float, e
 - 段尾：prev = [(t[0],t[1],t[2]) for t in targets_kf2]
 - 禁止 import/def/markdown/inittime/VelXY
 
-只输出 Python 代码片段（4空格缩进）。"""
+只输出 fenced Python：
+```python
+# 你的代码
+```
+不要 marker/import/def/解释。"""

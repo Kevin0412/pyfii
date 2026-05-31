@@ -63,23 +63,14 @@ class Session:
             feedback=feedback,
         )
         try:
-            cfg = _load_provider_config(provider)
-            if cfg.get("supports_prefix_completion", False):
-                response = chat_prefix(
-                    system=system,
-                    user=user,
-                    provider=provider,
-                    temperature=temperature,
-                )
-            else:
-                response = chat(
-                    system=system,
-                    user=user,
-                    provider=provider,
-                    temperature=temperature,
-                    on_delta=on_delta,
-                    on_heartbeat=on_heartbeat,
-                )
+            response = chat(
+                system=system,
+                user=user,
+                provider=provider,
+                temperature=temperature,
+                on_delta=on_delta,
+                on_heartbeat=on_heartbeat,
+            )
         except Exception as exc:
             seg.attempts.append({
                 "provider": provider,

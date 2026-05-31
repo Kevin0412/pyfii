@@ -6,7 +6,8 @@
       "api_key": "",
       "model": "gpt-5.5",
       "reasoning_effort": "xhigh",
-      "max_output_tokens": 98304
+      "max_output_tokens": 98304,
+      "supports_prefix_completion": false
     },
     "deepseek": {
       "base_url": "https://api.deepseek.com",
@@ -17,7 +18,8 @@
         "thinking": {
           "type": "enabled"
         }
-      }
+      },
+      "supports_prefix_completion": false
     },
     "deepseek_pro": {
       "base_url": "https://api.deepseek.com",
@@ -28,7 +30,8 @@
         "thinking": {
           "type": "enabled"
         }
-      }
+      },
+      "supports_prefix_completion": false
     },
     "mimo": {
       "base_url": "https://token-plan-cn.xiaomimimo.com/v1",

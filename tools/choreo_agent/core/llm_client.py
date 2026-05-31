@@ -133,6 +133,8 @@ def _chat_once(
     )
 
 
+STREAM_NO_CONTENT_TIMEOUT_S = 240
+
 def _chat_stream(
     url: str,
     payload: dict,

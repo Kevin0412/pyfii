@@ -98,6 +98,14 @@ def test_cli_g_uses_planning_pass():
         "main.py g command must include use_planning_pass=True"
     print("PASSED: CLI g command uses planning pass")
 
+
+
+def test_generate_never_calls_chat_prefix():
+    """generate_current_segment_with_llm never calls chat_prefix."""
+    s=open('tools/choreo_agent/core/session.py').read()
+    assert 'chat_prefix' not in s.split('def generate_current_segment_with_llm')[1].split('def generate_until_safe_with_llm')[0]
+    print('PASSED: generate_current_segment_with_llm never calls chat_prefix')
+
 if __name__ == "__main__":
     test_chat_mimo_no_prefix()
     test_chat_prefix_mimo_rejects()
@@ -105,4 +113,5 @@ if __name__ == "__main__":
     test_degradation_signature_cross_segment()
     test_planning_pass_flow()
     test_cli_g_uses_planning_pass()
-    print("\nALL 5 INTEGRATION TESTS PASSED")
+    test_generate_never_calls_chat_prefix()
+    print("\nALL 6 INTEGRATION TESTS PASSED")
