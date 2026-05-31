@@ -111,6 +111,7 @@ def main():
                     provider=provider,
                     feedback=feedback,
                     max_attempts=5,
+                    use_planning_pass=True,
                     on_delta=stream.delta,
                     on_heartbeat=stream.heartbeat,
                     on_round_start=stream.begin_round,

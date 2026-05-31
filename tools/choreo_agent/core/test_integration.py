@@ -88,10 +88,21 @@ def test_planning_pass_flow():
     print("PASSED: planning pass full flow")
 
 
+
+def test_cli_g_uses_planning_pass():
+    """CLI g command passes use_planning_pass=True to generate_until_safe_with_llm."""
+    # This is a code inspection test, not runtime
+    main_path = Path(__file__).resolve().parent.parent / "main.py"
+    content = main_path.read_text()
+    assert "use_planning_pass=True" in content, \
+        "main.py g command must include use_planning_pass=True"
+    print("PASSED: CLI g command uses planning pass")
+
 if __name__ == "__main__":
     test_chat_mimo_no_prefix()
     test_chat_prefix_mimo_rejects()
     test_bad_code_does_not_write_design_py()
     test_degradation_signature_cross_segment()
     test_planning_pass_flow()
+    test_cli_g_uses_planning_pass()
     print("\nALL 5 INTEGRATION TESTS PASSED")
