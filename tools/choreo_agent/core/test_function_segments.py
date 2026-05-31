@@ -34,7 +34,7 @@ def test_replace_s01_only_affects_s01():
     """Replacing S01 function body doesn't touch s02."""
     from core.script_editor import replace_active_segment, parse_markers
 
-    tmp = Path(tempfile.mkdtemp())
+    tmp = Path(tempfile.mkdtemp(dir=Path(__file__).resolve().parent.parent.parent))
     tmpl = Path(__file__).resolve().parent.parent / "project_template"
     shutil.copytree(tmpl, tmp, dirs_exist_ok=True)
 
@@ -111,7 +111,7 @@ def test_replace_preserves_for_loop_indent():
     import tempfile, shutil, py_compile
     from pathlib import Path
 
-    tmp = Path(tempfile.mkdtemp())
+    tmp = Path(tempfile.mkdtemp(dir=Path(__file__).resolve().parent.parent.parent))
     tmpl = Path(__file__).resolve().parent.parent / "project_template"
     shutil.copytree(tmpl, tmp, dirs_exist_ok=True)
 
@@ -172,7 +172,7 @@ def test_code_quality_no_template_imports():
     from core.validator import validate
     import tempfile, shutil
 
-    tmp = Path(tempfile.mkdtemp())
+    tmp = Path(tempfile.mkdtemp(dir=Path(__file__).resolve().parent.parent.parent))
     tmpl = Path(__file__).resolve().parent.parent / "project_template"
     shutil.copytree(tmpl, tmp, dirs_exist_ok=True)
 
@@ -195,6 +195,41 @@ return prev"""
 
     shutil.rmtree(tmp)
 
+
+def test_s01_not_empty_template():
+    """Minimal S01 produces real output, not empty template path."""
+    import tempfile, shutil, py_compile
+    from subprocess import run, PIPE
+    from pathlib import Path
+    from core.script_editor import replace_active_segment
+    from core.validator import validate
+
+    tmp = Path(tempfile.mkdtemp(dir=Path(__file__).resolve().parent.parent.parent))
+    tmpl = Path(__file__).resolve().parent.parent / "project_template"
+    shutil.copytree(tmpl, tmp, dirs_exist_ok=True)
+
+    design = tmp / "scripts" / "design.py"
+    s01 = """prev = [(d.x, d.y, d.z) for d in drones]
+for i, drone in enumerate(drones):
+    drone.takeoff(1, 120)
+    drone.delay(1500)
+prev = [(d.x, d.y, d.z) for d in drones]
+return prev"""
+    replace_active_segment(design, "S01", s01, [])
+
+    # Run design.py
+    r = run(["python", str(design)], capture_output=True, text=True, timeout=30)
+    assert r.returncode == 0, f"exit={r.returncode}, stderr={r.stderr[-200:]}"
+    assert "empty template" not in r.stdout, f"Should not be empty: {r.stdout[-200:]}"
+    
+    # Validate
+    v = validate(design, tmp / "output", quality_window=(4, 13))
+    assert v.read_fii_ok, f"read_fii failed: {v.error_message}"
+    assert not v.code_quality_errors, f"code_quality errors: {v.code_quality_errors}"
+
+    shutil.rmtree(tmp)
+    print("PASSED: minimal S01 produces real output, read_fii OK")
+
 if __name__ == "__main__":
     test_template_runs()
     test_marker_in_function_body()
@@ -205,4 +240,5 @@ if __name__ == "__main__":
     test_extract_indented_marker_body()
     test_code_quality_no_template_imports()
     test_replace_preserves_for_loop_indent()
+    test_s01_not_empty_template()
     print("\nALL FUNCTION SEGMENT TESTS PASSED")

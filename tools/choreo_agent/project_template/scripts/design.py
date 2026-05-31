@@ -95,7 +95,7 @@ land(drones)
 # FIXED FOOTER
 # ============================================================
 # Only save Fii if drones have actual actions
-has_actions = any(len(getattr(d, 'outputString', '')) > 200 for d in drones)
+has_actions = any(len(getattr(d, 'action_list', [])) > 0 or bool(getattr(d, 'light_actions', {})) for d in drones)
 if has_actions:
     for drone in drones:
         drone.end()
