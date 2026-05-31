@@ -94,9 +94,6 @@ land(drones)
 # ============================================================
 # FIXED FOOTER
 # ============================================================
-import io as _io
-_stderr_save = sys.stderr
-sys.stderr = _io.StringIO()
 try:
     for drone in drones:
         drone.end()
@@ -105,10 +102,9 @@ try:
     fii.save(field=6)
     data, t0, *_ = pf.read_fii(str(OUT), fps=60, ignore_acc=False)
 except Exception:
-    sys.stderr = _stderr_save
     print("empty template — no valid Fii data (expected)")
     sys.exit(0)
-sys.stderr = _stderr_save
+
 
 mf = min(len(d) for d in data)
 all_x = [p[1] for d in data for p in d if p[1] > 0]

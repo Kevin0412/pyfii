@@ -499,13 +499,17 @@ def _node_display(node: ast.AST) -> str:
 
 def _extract_first_unlocked_segment_code(code: str) -> str:
     match = re.search(
-        r"^# === PYFII_AGENT_SEGMENT_START[^\n]*locked=false[^\n]* ===\n"
+        r"^\s*# === PYFII_AGENT_SEGMENT_START[^\n]*locked=false[^\n]* ===\n"
         r"(?P<body>.*?)"
-        r"^# === PYFII_AGENT_SEGMENT_END[^\n]* ===",
+        r"^\s*# === PYFII_AGENT_SEGMENT_END[^\n]* ===",
         code,
         flags=re.MULTILINE | re.DOTALL,
     )
-    return match.group("body") if match else ""
+    body = match.group("body") if match else ""
+    if body:
+        import textwrap
+        body = textwrap.dedent(body)
+    return body
 
 
 def _detect_hover(
