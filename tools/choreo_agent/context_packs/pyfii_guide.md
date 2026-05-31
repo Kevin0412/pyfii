@@ -1,63 +1,37 @@
-# Pyfii 编舞 — DNTG 风格
+# Pyfii 编舞 API
 
-## 只有一个核心 API
-
+## 核心 API（from function import *）
 ```python
-move2(d, (x, y, z), t_ms)
+move2(d, (x,y,z), t_ms, T=100)
+# 反算速度 → VelXY(v,2v)+VelZ(v,2v) → d.move2(x,y,z)。不推进时间游标。
+
+apply_light(d, "#RRGGBB", ticks)
+# ticks次TurnOnAll，每次delay 100ms。推进 cursor: ticks*100ms。
+
+best_assign(prev, geo)
+# 遍历全排列找最小路径间距最大的分配。返回 targets 列表。
+
+clamp_xy(v)  # [0, 560]
+clamp_z(v)   # [80, 250]
 ```
 
-- `d`: 无人机对象
-- `(x, y, z)`: 目标坐标 (cm)，xy∈[0,560]，z∈[80,250]
-- `t_ms`: 总时间 (ms)，内部自动反算速度 + VelXY + move2 + delay
+## 时序模型（每次移动）
+```python
+move2(drone, (tx, ty, tz), flying_ms)           # 1. 发起飞行
+apply_light(drone, '#color', ticks)              # 2. 灯光 (推进 ticks*100ms)
+drone.delay(max(0, flying_ms - ticks * 100))     # 3. 等待飞行完成
+```
 
 ## 起飞
-
 ```python
-d.X = d.x = clamp_xy(x0)
-d.Y = d.y = clamp_xy(y0)
-d.takeoff(1, z0)              # 1秒后起飞到z0(cm)
-```
-
-## 相对移动
-
-```python
-move2(d, (d.x+dx, d.y+dy, d.z+dz), t_ms)
-```
-
-## 排列
-
-```python
-targets = best_assign(prev, geo)
-```
-
-## 灯光
-
-```python
-apply_light(d, "#RRGGBB", ticks)
-```
-
-## 完整段模板
-
-```python
-geo = [(x1,y1,z1), (x2,y2,z2), ...]   # 非对称几何，间距≥200cm
-geo2 = [(x1,y1,z1), ...]
-
-for i, d in enumerate(drones):
-    d.inittime(START_SEC)
-    d.delay(i * 80)
-
-for gi in range(2):
-    geos = [geo, geo2]
-    targets = best_assign(prev, geos[gi]) if gi > 0 else geos[gi]
-    for i, d in enumerate(drones):
-        move2(d, (clamp_xy(targets[i][0]), clamp_xy(targets[i][1]), clamp_z(targets[i][2])), 1200)
-        apply_light(d, "#2255aa", 5)
-        d.x, d.y, d.z = targets[i]   # 更新追踪
-    prev = [(d.x, d.y, d.z) for d in drones]
+drone.X = drone.x = x
+drone.Y = drone.y = y
+drone.takeoff(1, height_cm)
+drone.delay(3000)
 ```
 
 ## 禁止
-- 不添加任何 import
-- 不调用 d.VelXY/VelZ/delay/move2 底层 API — 只用 move2(d, p, t)
-- 不发明不存在属性
-- 不同心圆
+- d.VelXY / d.VelZ 裸调
+- d.move2() 裸调（必须用 function.py 的 move2）
+- inittime() 调用（auto_init 处理）
+- import 新模块

@@ -74,10 +74,8 @@ class Session:
             segment_id=seg.id,
             start_time=seg.start_time,
             end_time=seg.end_time,
-            guide={},
             intent=seg.intent or "",
             prev_state=self._previous_exit_state(),
-            system="",
             feedback=feedback,
         )
         try:
