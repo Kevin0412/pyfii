@@ -44,6 +44,9 @@ def chat(
 ) -> LlmResponse:
     """发送 chat completion 请求"""
     cfg = load_config(provider)
+    if not cfg.get("supports_prefix_completion", False):
+        # Fall back to regular chat
+        return chat(system, user, provider, temperature)
 
     payload = {
         "model": cfg["model"],

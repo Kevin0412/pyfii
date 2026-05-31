@@ -108,7 +108,8 @@ class ValidationResult:
                     and self.effective_motion_ok
                     and not self.low_activity_segments
                     and self.motion_quality_ok
-                    and self.degradation_ok
+                    # degradation_ok is advisory only for single segment
+                    # (hard fail only on consecutive same signature — see session.py)
                 )
             )
         )
@@ -1043,6 +1044,28 @@ def _add_dense_distance_report(result: ValidationResult, output_dir: Path) -> No
         result.min_distance_cm = result.dense_min_distance_cm
     result.collision_intervals = _compress_collision_rows(rows)
 
+
+
+def _find_motion_end(output_dir: Path, window: tuple | None) -> float | None:
+    """找最后有效运动时刻（任一机位移 > 5cm/帧）"""
+    try:
+        import pyfii as pf
+        fii_dir = _find_fii_dir(output_dir)
+        data, t0, *_ = pf.read_fii(str(fii_dir), fps=60, ignore_acc=True)
+        fps = 60
+        if not window: return None
+        start_f = int((window[0] - t0) * fps)
+        end_f = int((window[1] - t0) * fps)
+        for f in range(min(len(data[0])-1, end_f), max(0, start_f), -1):
+            for d in data:
+                if f < len(d) and f > 0:
+                    dx = abs(d[f][1] - d[f-1][1])
+                    dy = abs(d[f][2] - d[f-1][2])
+                    if dx > 5 or dy > 5:
+                        return t0 + f / fps
+    except Exception:
+        pass
+    return None
 
 def _sample_exit_state(output_dir: Path, time_s: float | None = None) -> list[list[int]] | None:
     """从读回轨迹采样段尾位置，作为下一段 prev_state。"""

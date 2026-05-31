@@ -33,12 +33,16 @@
     "mimo": {
       "base_url": "https://token-plan-cn.xiaomimimo.com/v1",
       "api_key": "your-mimo-api-key",
-      "model": "mimo-v2.5-pro"
+      "model": "mimo-v2.5-pro",
+      "supports_prefix_completion": false,
+      "supports_stream": true
     },
     "mimo_vision": {
       "base_url": "https://token-plan-cn.xiaomimimo.com/v1",
       "api_key": "your-mimo-api-key",
-      "model": "mimo-v2.5"
+      "model": "mimo-v2.5",
+      "supports_prefix_completion": false,
+      "supports_stream": true
     }
   }
 }

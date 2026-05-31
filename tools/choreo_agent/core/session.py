@@ -8,6 +8,7 @@ from .state import ProjectState, SegmentState
 from .script_editor import replace_active_segment, lock_segment, parse_markers
 from .checkpoint import save as checkpoint_save
 from .validator import validate, ValidationResult
+from .preflight import preflight_check, preflight_feedback
 from .prompt_builder import build_segment_prompt
 from .llm_client import chat, chat_prefix, LlmResponse
 
@@ -155,6 +156,31 @@ class Session:
                 repair_feedback = "上一轮生成的代码无法插入（语法错误或违反段标记协议）。请检查代码格式。"
                 continue
 
+            # Preflight check — catch structural errors before expensive validator
+            code = _extract_python_code(response.text) if hasattr(response, 'text') else ""
+            code = _strip_imports(code)
+            pf = preflight_check(code)
+            if not pf:
+                # Internal repair loop (max 5 rounds)
+                repair_ok = False
+                for repair_i in range(5):
+                    repair_fb = preflight_feedback(pf)
+                    response = self.generate_current_segment_with_llm(
+                        provider=provider,
+                        feedback=repair_fb,
+                        temperature=max(0.1, temperature * 0.5),
+                    )
+                    code = _extract_python_code(response.text)
+                    code = _strip_imports(code)
+                    pf = preflight_check(code)
+                    if pf:
+                        repair_ok = True
+                        break
+                if not repair_ok:
+                    rounds.append(GenerationRound(index=index, response=response, validation=None))
+                    repair_feedback = preflight_feedback(pf)
+                    continue
+            
             result = self.validate()
             self._record_validation_result(result)
             rounds.append(GenerationRound(index=index, response=response, validation=result))
