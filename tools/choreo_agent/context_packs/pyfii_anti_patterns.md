@@ -90,7 +90,7 @@ XY span 太低 = 浪费 560×560 场地。
 ## 8. 时间误解
 
 `d.delay(42)` 不是 42 秒，是 42 毫秒。
-`d.inittime(4)` 是 4 秒。
+底层 `d.inittime(4)` 是 4 秒，但 final agent 代码不要直接写；用 `wait_until(drones, 4)` 或 `auto_init(drones)`。
 
 ---
 
@@ -107,7 +107,7 @@ XY span 太低 = 浪费 560×560 场地。
 手工指定 drone→target 映射 → 必出碰撞。
 crosscut_v9 用排列搜索才安全。
 
-**修复**: 几何切换必须在 agent 规划层用 `best_assign()` / `assign_targets()`，然后把 `perm` 和目标表硬编码进 final segment。不要把搜索函数或 import 写进 `design.py`。
+**修复**: 几何切换必须做路径分配。final segment 可直接用 `targets = best_assign(prev, geo)`，它返回重排后的 targets 列表；不要自己写搜索函数、不要 import、不要拆 `(perm, min_d)`。
 
 ## 全平面编舞
 所有几何在同一高度平面，没有Z轴层次。应该每个几何给定不同Z。

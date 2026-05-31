@@ -99,15 +99,16 @@ class Session:
             if on_round_start:
                 on_round_start(index)
             round_temp = temperature if index == 1 else max(0.05, temperature * 0.4)
+            previous_exit_state = self._previous_exit_state()
             
             # Planning pass (first round only)
-            if use_planning_pass and index == 1:
+            if use_planning_pass and index == 1 and len(previous_exit_state) == 7:
                 seg = self.state.current_segment
                 try:
                     # Stage 1: LLM → JSON plan
                     plan_prompt = build_planning_prompt(
                         seg.id, seg.start_time, seg.end_time,
-                        seg.intent or "", self._previous_exit_state(),
+                        seg.intent or "", previous_exit_state,
                     )
                     plan_resp = self._chat_stage(
                         seg=seg,
@@ -125,7 +126,7 @@ class Session:
                     if plan:
                         self._record_attempt_update({"planning_parse_ok": True})
                         # Stage 2: JSON → budget table (local math)
-                        budget = plan_to_budget_table(plan, self._previous_exit_state())
+                        budget = plan_to_budget_table(plan, previous_exit_state)
                         self._record_attempt_update({"budget_chars": len(budget)})
                         # Stage 3: budget → code
                         code_prompt = build_coding_prompt(budget, seg.id, seg.start_time, seg.end_time)

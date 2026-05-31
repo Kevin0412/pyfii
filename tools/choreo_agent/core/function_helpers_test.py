@@ -29,6 +29,10 @@ class FakeDrone:
         self.z = z
         self.moves.append((x, y, z))
 
+    def delay(self, ms: int):
+        self.called.append(("delay", ms))
+        self.time += ms
+
 
 def _load_template_function_module():
     path = Path(__file__).resolve().parent.parent / "project_template" / "scripts" / "function.py"
@@ -65,7 +69,34 @@ def test_auto_init_waits_for_last_move_without_delay():
     print("PASSED: auto_init waits for pending final move")
 
 
+def test_best_assign_accepts_2d_and_returns_targets():
+    module = _load_template_function_module()
+    starts = [(0, 0), (100, 0)]
+    targets = [(100, 0), (0, 0)]
+
+    assigned = module.best_assign(starts, targets)
+
+    assert assigned == [(0, 0), (100, 0)]
+    print("PASSED: best_assign accepts 2D and returns targets list")
+
+
+def test_wait_until_uses_delay_not_inittime():
+    module = _load_template_function_module()
+    drones = [FakeDrone(1000), FakeDrone(2500)]
+
+    t = module.wait_until(drones, 4)
+
+    assert t == 4
+    assert drones[0].time == 4000
+    assert drones[1].time == 4000
+    assert drones[0].called == [("delay", 3000)]
+    assert drones[1].called == [("delay", 1500)]
+    print("PASSED: wait_until aligns by delay, not inittime")
+
+
 if __name__ == "__main__":
     test_auto_init_uses_time_cursor_not_missing_init_time()
     test_auto_init_waits_for_last_move_without_delay()
+    test_best_assign_accepts_2d_and_returns_targets()
+    test_wait_until_uses_delay_not_inittime()
     print("OK")

@@ -10,7 +10,7 @@ apply_light(d, "#RRGGBB", ticks)
 # ticks次TurnOnAll，每次delay 100ms。推进 cursor: ticks*100ms。
 
 best_assign(prev, geo)
-# 遍历全排列找最小路径间距最大的分配。返回 targets 列表。
+# 遍历全排列找最小路径间距最大的分配。返回重排后的 targets 列表；不要拆 perm/min_d。
 
 clamp_xy(v)  # [0, 560]
 clamp_z(v)   # [80, 250]
@@ -31,7 +31,7 @@ drone.delay(max(0, flying_ms - ticks * 100))     # 3. 等待飞行完成
 drone.X = drone.x = x
 drone.Y = drone.y = y
 drone.takeoff(1, height_cm)
-drone.delay(3000)
+wait_until(drones, 4)
 ```
 
 ## 禁止

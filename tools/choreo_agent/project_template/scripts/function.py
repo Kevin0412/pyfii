@@ -8,8 +8,19 @@ import itertools
 
 # ---------- 几何 ----------
 def Distance(p1, p2):
-    """3D距离 (cm)"""
-    return ((p1[0]-p2[0])**2 + (p1[1]-p2[1])**2 + (p1[2]-p2[2])**2) ** 0.5
+    """2D/3D 距离 (cm)。缺省 z=0，避免 best_assign 误传 XY 时崩溃。"""
+    a = _xyz(p1)
+    b = _xyz(p2)
+    return ((a[0]-b[0])**2 + (a[1]-b[1])**2 + (a[2]-b[2])**2) ** 0.5
+
+def _xyz(p, default_z=0):
+    if len(p) < 2:
+        raise ValueError(f"point must contain x/y: {p!r}")
+    return (
+        float(p[0]),
+        float(p[1]),
+        float(p[2]) if len(p) >= 3 else float(default_z),
+    )
 
 def Time(p1, p2, v, a):
     """飞行时间 (秒)，给定起点、终点、速度、加速度"""
@@ -53,24 +64,31 @@ def clamp_z(v):
 
 # ---------- 排列 ----------
 def best_assign(starts, targets):
-    """最优排列：遍历全排列找最小路径间距最大的分配。返回 targets 列表。"""
+    """最优排列：遍历全排列找最小路径间距最大的分配。返回重排后的 targets 列表。
+
+    starts/targets 可以是 2D 或 3D 点；返回值保持 target 原始维度。
+    正确用法：targets = best_assign(prev, geo)，不要拆 perm/min_d。
+    """
     import itertools
     n = len(starts)
+    starts_xyz = [_xyz(p) for p in starts]
+    targets_xyz = [_xyz(p) for p in targets]
     best_score, best = -1e9, targets
     for perm in itertools.permutations(range(n)):
         tt = [targets[i] for i in perm]
+        tt_xyz = [targets_xyz[i] for i in perm]
         md = 1e9
         for ratio in [0.2, 0.4, 0.6, 0.8]:
             for i in range(n):
                 for j in range(i+1, n):
-                    ai = (starts[i][0]*ratio + tt[i][0]*(1-ratio),
-                          starts[i][1]*ratio + tt[i][1]*(1-ratio))
-                    aj = (starts[j][0]*ratio + tt[j][0]*(1-ratio),
-                          starts[j][1]*ratio + tt[j][1]*(1-ratio))
+                    ai = (starts_xyz[i][0]*ratio + tt_xyz[i][0]*(1-ratio),
+                          starts_xyz[i][1]*ratio + tt_xyz[i][1]*(1-ratio))
+                    aj = (starts_xyz[j][0]*ratio + tt_xyz[j][0]*(1-ratio),
+                          starts_xyz[j][1]*ratio + tt_xyz[j][1]*(1-ratio))
                     d = ((ai[0]-aj[0])**2 + (ai[1]-aj[1])**2)**0.5
                     if d < md:
                         md = d
-        score = md * 2000 - max(Distance(starts[i], tt[i]) for i in range(n)) * 0.01
+        score = md * 2000 - max(Distance(starts_xyz[i], tt_xyz[i]) for i in range(n)) * 0.01
         if score > best_score:
             best_score = score
             best = tt
@@ -94,3 +112,11 @@ def auto_init(drones):
     for d in drones:
         d.inittime(t)
     return t
+
+def wait_until(drones, target_s):
+    """不用 inittime，靠 delay 把每架机自然等待到目标绝对秒。适合 S01 起飞后对齐。"""
+    target_ms = int(round(float(target_s) * 1000))
+    for d in drones:
+        now_ms = max(int(getattr(d, "time", 0)), int(getattr(d, "_agent_motion_end_ms", 0)))
+        d.delay(max(0, target_ms - now_ms))
+    return target_ms / 1000

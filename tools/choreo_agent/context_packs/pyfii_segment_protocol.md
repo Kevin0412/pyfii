@@ -40,26 +40,27 @@ for i, drone in enumerate(drones):
     drone.Y = drone.y = clamp_xy(start_positions[i][1])
     drone.takeoff(1, 110)
 
-# 正式编舞从 4s 后开始调度；inittime 必须用整数秒
-for i, drone in enumerate(drones):
-    drone.inittime(4)
-    ...
+# 正式编舞从 4s 后开始调度；final segment 不直接写 inittime
+wait_until(drones, 4)
+prev = [(d.x, d.y, d.z) for d in drones]
+...
 ```
 
 起飞和起飞后的准备等待不计入正式编舞质量门；正式段窗口内仍必须满足安全、运动包络、连续性和有效动作质量。
 
 ## 时间线规划
 
-PyFii 时间不是 Python `for` 循环的全局时间；每架无人机都有自己的命令游标。`inittime()` 把本机游标切到绝对秒数，`delay()` / `apply_light()` 推进本机游标，`move2()` 只在当前游标发起移动但不推进游标。
+PyFii 时间不是 Python `for` 循环的全局时间；每架无人机都有自己的命令游标。底层 `inittime()` 可把本机游标切到绝对秒数，但 final agent 代码不要直接调用它；跨段对齐用 `auto_init(drones)`，S01 起飞后对齐用 `wait_until(drones, start_s)`。`delay()` / `apply_light()` 推进本机游标，`move2()` 只在当前游标发起移动但不推进游标。
 
 段内不要每次移动都 `inittime()`。推荐结构是：
 
 ```python
-drone.inittime(segment_start)
-drone.move2(x1, y1, z1)
+auto_init(drones)
+prev = [(d.x, d.y, d.z) for d in drones]
+move2(drone, (x1, y1, z1), flying_ms_1)
 apply_light(drone, color, 3)
 drone.delay(rest_ms_for_this_move)
-drone.move2(x2, y2, z2)
+move2(drone, (x2, y2, z2), flying_ms_2)
 apply_light(drone, color2, 3)
 drone.delay(rest_ms_for_this_move)
 ```
@@ -114,7 +115,7 @@ layers = [layer_open, layer_push, layer_fold, layer_resolve]
 plans = budget_layers(prev_positions, layers, cues, feels=["soft", "crisp", "balanced", "soft"])
 ```
 
-规划层产物必须转成 final segment 里的硬编码表：
+规划层产物必须转成 final segment 里的硬编码表，或调用 `function.py` 里已提供的轻量 `best_assign(prev, geo)`：
 
 ```python
 perms = [...]
@@ -128,7 +129,7 @@ delays_ms = [...]
 final `design.py` 中不要出现：
 
 - `import tools.choreo_agent...`
-- `best_assign()` / `itertools.permutations`
+- 自己定义 `best_assign()` / `itertools.permutations`
 - `dist3()` / `flight_time_ms()` / `speed_for_interval()` / `move_interval()`
 - `timeline_cues()` / `assign_targets()` / `budget_layer()` / `budget_layers()`
 
@@ -146,16 +147,11 @@ geo = [
 
 ## 排列搜索
 
-几何切换必须在 agent 规划层使用 `best_assign()` 或 `assign_targets()` 做路径分配，但 final segment 只能写硬编码结果。
+几何切换必须做路径分配。final segment 可以直接使用 `function.py` 提供的 `best_assign(prev, geo)`；它返回重排后的 targets 列表，不返回 `(perm, min_d)`，不要拆包。
 
 ```python
-# 规划阶段得到:
-# perm = (2, 0, 5, 1, 6, 3, 4)
-# min_distance_cm = 78.4
-
-# final design.py 里只留下:
-perm = (2, 0, 5, 1, 6, 3, 4)
-targets = [geo_layer[perm[i]] for i in range(7)]
+geo = [(120,180,150), ...]  # 7 个完整 (x,y,z)
+targets = best_assign(prev, geo)
 ```
 
 排列搜索使用计算几何精确线段距离（叉积+投影），不采样。安全目标优先：宁可路线稍长，也不要让两条移动线段接近 51cm 阈值。
@@ -184,7 +180,7 @@ def apply_light(drone, color, ticks):
 for i,d in enumerate(ds): d.delay(i*offset_ms)  # offset=100-600ms
 ```
 
-排在 inittime 之后、第一个 move2 之前。
+排在 `auto_init(drones)` 或 `wait_until(drones, start_s)` 之后、第一个 move2 之前。
 
 注意：错峰只改变起步时间，不自动保证连贯性。正式段里每个 1 秒窗口都应至少有一组无人机在 `move2` 或轻微 Z/XY 变化中，不能出现全体一起等灯光/等 delay 的空窗。
 
@@ -196,14 +192,14 @@ for i,d in enumerate(ds): d.delay(i*offset_ms)  # offset=100-600ms
 drone.move(drone.x + dx, drone.y + dy, drone.z + dz)
 
 # 条件分支：不同机走不同路径
+auto_init(drones)
 for i, drone in enumerate(drones):
-    drone.inittime(10)
     if i < 3:
-        drone.move2(280 + 80*i, 280, 180)
+        move2(drone, (280 + 80*i, 280, 180), 2800)
     elif i == 3:
-        drone.move2(280, 280, 200)
+        move2(drone, (280, 280, 200), 2800)
     else:
-        drone.move2(280, 280 + 80*(i-4), 180)
+        move2(drone, (280, 280 + 80*(i-4), 180), 2800)
 ```
 
 ## 示例完整段

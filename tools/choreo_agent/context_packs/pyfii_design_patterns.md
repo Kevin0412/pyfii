@@ -186,16 +186,15 @@ intervals = [
 
 ## 计算沙箱
 
-生成代码前，先用沙箱计算最佳排列和飞行时间。在生成的代码中加入沙箱计算块：
+生成代码前，先在 agent 规划阶段计算最佳排列和飞行时间。不要把沙箱计算块写进 final segment：
 
 ```python
 # === SANDBOX_CALC ===
-prev_xy = [(x1,y1), ...]
-geo_xy = [(x1,y1), ...]
+prev = [(x1,y1,z1), ...]
+geo = [(x1,y1,z1), ...]
 
 # 计算最佳排列
-result = best_assign(prev_xy, geo_xy)
-# result = {"perm": [0,1,2,...], "min_d_cm": 89.0}
+targets = best_assign(prev, geo)  # 返回重排后的 targets 列表，不拆 perm/min_d
 
 # 计算飞行时间
 v, a = 200, 400
@@ -207,9 +206,10 @@ for i in range(7):
 # === SANDBOX_END ===
 ```
 
-然后将计算结果硬编码到代码中：
-- perm = (0, 1, 2, 3, 4, 5, 6)  # from sandbox
-- drone.delay(Y)  # flight_time_ms result + margin
+然后将计算结果变成 final 代码里的常量：
+- targets = best_assign(prev, geo)  # 或直接写硬编码 targets 表
+- move2(drone, target, flying_ms)
+- drone.delay(Y)  # flying_ms - light_ticks*100 + margin
 
 ## DNTG 反算速度
 
@@ -223,4 +223,4 @@ def vel_for_distance_time(distance_cm, time_s):
 
 ## 时间预算速查
 每个 move2 需要的 delay = flight_time_ms(d, v, a) - light_ticks*100 + 100。
-全段总 delay 累加必须小于 (end_time - inittime)*1000 - 1000ms 余量。
+全段总 delay 累加必须小于正式窗口长度 * 1000 - 1000ms 余量。

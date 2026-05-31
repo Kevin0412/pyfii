@@ -19,9 +19,9 @@ drones = [pf.Drone(0, 0, pf.drone_config_6m, f"192.168.51.{51+i}") for i in rang
 drone.X = drone.x = 280       # 起始 X
 drone.Y = drone.y = 280       # 起始 Y
 drone.takeoff(1, 110)         # (耗时秒, 目标高度cm)
-drone.inittime(4)               # 开始时间秒，必须是整数
+wait_until(drones, 4)          # S01 起飞后靠 delay 对齐正式窗口
 # ... moves and lights ...
-drone.inittime(68)
+auto_init(drones)              # 后续段/降落前对齐到上一段真实完成后
 drone.land()
 drone.end()
 ```
@@ -29,29 +29,25 @@ drone.end()
 ## Time
 
 ```python
-drone.inittime(24)  # 秒，整数。把本机命令游标切到绝对时间，不可倒退。
+auto_init(drones)   # 跨段对齐；内部处理底层 inittime，final segment 不直接写 inittime
+wait_until(drones, 4)  # S01 起飞后自然等待到 4s
 drone.delay(100)    # 毫秒。推进本机命令游标；delay(42) 是 42ms，不是 42s。
 ```
 
-`inittime()` 不是每个移动前都要调用。段内常用结构是：
+final agent 代码不要直接调用 `drone.inittime()`、`drone.VelXY()` 或 `drone.move2()`；需要绝对对齐时使用 `auto_init(drones)` 或 `wait_until(drones, start_s)`，移动用 `function.py` 的 `move2()` 包装器。段内常用结构是：
 
 ```python
-drone.inittime(segment_start)
-drone.VelXY(v, a)
-drone.VelZ(v, a)
-drone.move2(x1, y1, z1)  # 在当前游标发起移动；move2 本身不推进游标
+auto_init(drones)
+move2(drone, (x1, y1, z1), flying_ms_1)  # 在当前游标发起移动；move2 本身不推进游标
 drone.delay(t_ms)        # 给这次移动留执行时间，期间无人机正在飞
-drone.move2(x2, y2, z2)  # 下一次移动在新的游标时间开始
+move2(drone, (x2, y2, z2), flying_ms_2)  # 下一次移动在新的游标时间开始
 ```
 
 ## Move
 
 `drone.x`, `drone.y`, `drone.z` 记录当前目标点，可用于相对移动：
 
-```python
-drone.move2(x, y, z)       # 绝对坐标
-drone.move(drone.x+dx, drone.y+dy, drone.z+dz)  # 相对移动
-```
+final segment 使用 `move2(drone, (x, y, z), flying_ms)`；裸调 `drone.move2()` 会被 preflight 拒绝。
 
 坐标必须是整数。`math.cos/sin` 返回浮点数，必须取整：
 ```python
@@ -72,7 +68,7 @@ def clamp_z(v):
     return max(80, min(250, int(round(v))))
 ```
 
-## Speed
+## Speed（底层说明，不复制到 final segment）
 
 ```python
 drone.VelXY(120, 240)   # (speed cm/s, acc cm/s²)
@@ -82,7 +78,7 @@ drone.VelZ(120, 240)    # 纵向速度
 speed range = (20, 200) cm/s。acceleration 默认 ~200 cm/s²，范围 (50, 400)。
 示例里的 `120, 240` 只是 API 格式示范，不表示 acceleration 必须等于 2 * speed；acceleration 可以根据柔和/利落/急促等动作质感独立选择。
 
-`VelXY` 和 `VelZ` 最好成对设置，并使用同一组 speed/acceleration。这不是 PyFii Python API 本身的物理限制，而是为了匹配原始 XML/回放里的速度字段语义，避免水平与垂直运动被不同规则解释。每次 keyframe 重新选择速度时，同时写：
+`VelXY` 和 `VelZ` 最好成对设置，并使用同一组 speed/acceleration。这不是 PyFii Python API 本身的物理限制，而是为了匹配原始 XML/回放里的速度字段语义，避免水平与垂直运动被不同规则解释。final segment 不直接写这些底层调用；由 `function.py` 的 `move2()` 包装器统一写入：
 
 ```python
 drone.VelXY(speed, accel)

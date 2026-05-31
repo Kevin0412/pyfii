@@ -60,7 +60,8 @@ def build_system_prompt() -> str:
     parts.append("""
 ## 输出格式
 只输出当前段的 Python 代码片段（4空格缩进），不输出 marker、import、或 function 定义。
-代码从 `prev = [(d.x, d.y, d.z) for d in drones]` 开始，以 `prev = [...]` 或 `return duration` 结束。
+S01 可先写 `start_positions`、`takeoff()` 和 `wait_until(drones, start_time)`，然后再写 `prev = [(d.x, d.y, d.z) for d in drones]`。
+S02+ 从 `auto_init(drones)` 和 `prev = [(d.x, d.y, d.z) for d in drones]` 开始。
 """)
     return "\n\n".join(parts)
 
@@ -94,14 +95,24 @@ def build_segment_prompt(
     else:
         prev_text = "无上一段坐标（首段）"
 
+    is_s01 = segment_id.upper() == "S01"
+    if is_s01:
+        segment_start_rule = f"""- 首段必须先设计 `start_positions`，设置 `drone.X = drone.x` 与 `drone.Y = drone.y`，再 `drone.takeoff(1, 110)`
+- 起飞后调用 `wait_until(drones, {start_time})` 对齐正式编舞窗口；不要直接写 `inittime()`
+- 然后写 `prev = [(d.x, d.y, d.z) for d in drones]` 并开始正式 move2 动作"""
+    else:
+        segment_start_rule = """- 段首调用 `auto_init(drones)`，再写 `prev = [(d.x, d.y, d.z) for d in drones]`
+- 不要直接写 `inittime()`；跨段对齐由 `auto_init` 处理"""
+
     user = f"""## {segment_id} ({start_time}-{end_time}s, 时长{end_time - start_time}s)
 意图：{intent or segment_id}
 
 {prev_text}
 
 ## 要求
+{segment_start_rule}
 - 2个 keyframe，非对称几何（XY间距≥200cm）
-- best_assign排列（返回targets列表，不要拆perm/min_d）
+- `targets = best_assign(prev, geo)`；prev/geo 用完整 `(x,y,z)`，返回值就是重排后的 targets 列表，不要拆 `perm/min_d`
 - 每次移动：move2 → apply_light → drone.delay(flying_ms-ticks*100)
 - Z轴渐进（100→150→200→150）
 - 段尾更新 prev = [(t[0],t[1],t[2]) for t in targets]
