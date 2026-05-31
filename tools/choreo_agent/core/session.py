@@ -190,8 +190,14 @@ class Session:
                 continue
 
             # Preflight check — catch structural errors BEFORE writing to design.py
-            code = _extract_python_code(response.text) if hasattr(response, 'text') else ""
-            # Do NOT strip imports — preflight should catch and reject them
+            code = getattr(response, 'text', '') or self._pending_code or ''
+            if not code.strip():
+                rounds.append(GenerationRound(index=index, response=response, validation=None))
+                repair_feedback = "空代码 — 请生成有效 Python"
+                continue
+            
+            # Extract and preflight
+            code = _extract_python_code(code) if '```' in code or 'def ' in code else code
             pf = preflight_check(code)
             if not pf:
                 # Internal repair loop (max 5 rounds)
@@ -212,6 +218,13 @@ class Session:
                     rounds.append(GenerationRound(index=index, response=response, validation=None))
                     repair_feedback = preflight_feedback(pf)
                     continue
+            
+            # Write to design.py (only after preflight passes)
+            script_path = self.project_root / "scripts" / "design.py"
+            if not replace_active_segment(script_path, seg.id, code, self.state.locked_segment_ids):
+                rounds.append(GenerationRound(index=index, response=response, validation=None))
+                repair_feedback = "代码写入失败 — 检查段 marker 是否匹配"
+                continue
             
             result = self.validate()
             self._record_validation_result(result)

@@ -44,11 +44,6 @@ def chat(
 ) -> LlmResponse:
     """发送 chat completion 请求"""
     cfg = load_config(provider)
-    if not cfg.get("supports_prefix_completion", False):
-        raise RuntimeError(
-            f"chat_prefix requires supports_prefix_completion=true. "
-            f"Provider '{provider}' does not support prefix mode. Use chat() instead."
-        )
 
     payload = {
         "model": cfg["model"],
@@ -215,6 +210,10 @@ def chat_prefix(
     """
     import json, httpx, time
     from pathlib import Path
+    cfg_check = load_config(provider)
+    if not cfg_check.get("supports_prefix_completion", False):
+        raise RuntimeError(f"Provider '{provider}' does not support prefix. Use chat().")
+
     config_path = Path(__file__).resolve().parents[3] / "ai_providers.local.json"
     cfg = json.loads(config_path.read_text())["providers"].get(provider)
     if not cfg:
