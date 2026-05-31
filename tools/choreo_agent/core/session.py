@@ -114,6 +114,7 @@ class Session:
             
             # Planning pass (first round only)
             if use_planning_pass and index == 1:
+                seg = self.state.current_segment
                 try:
                     # Stage 1: LLM → JSON plan
                     plan_prompt = build_planning_prompt(
