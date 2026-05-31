@@ -7,14 +7,7 @@ CONTEXT_DIR = Path(__file__).resolve().parent.parent / "context_packs"
 
 # 加载顺序：API 基础 → 规则 → 模式 → 验证
 PACK_ORDER = [
-    "pyfii_api_minimal.md",
     "pyfii_guide.md",
-    "pyfii_segment_protocol.md",
-    "pyfii_coding_rules.md",
-    "pyfii_design_patterns.md",
-    "pyfii_light_patterns.md",
-    "pyfii_anti_patterns.md",
-    "pyfii_validation_rules.md",
 ]
 
 
@@ -55,8 +48,8 @@ def build_system_prompt() -> str:
         content = _load_context_pack(name)
         if content:
             parts.append(content)
-    parts.append(_motion_math_summary())
-    parts.append(_planning_tools_summary())
+    pass  # motion_math summary removed
+    pass  # planning_tools summary removed
     parts.append("""
 ## 输出格式
 只输出当前段的 Python 代码片段（4空格缩进），不输出 marker、import、或 function 定义。
