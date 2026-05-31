@@ -1,65 +1,76 @@
-"""独立函数段编辑器 —— 用 # AGENT_CODE_START / # AGENT_CODE_END 标记可编辑区。"""
-
-import re
+"""Marker-based design.py editor. 只允许修改当前未锁定段。"""
+import hashlib
 from pathlib import Path
 
 
-def replace_active_segment(script_path: Path, segment_id: str, code: str, locked_ids: list[str]) -> bool:
-    """替换 sXX(drones) 函数中 AGENT_CODE_START/END 之间的代码。"""
-    try:
-        lines = script_path.read_text(encoding="utf-8").splitlines()
-    except Exception:
-        return False
+MARKER_START = "# === PYFII_AGENT_SEGMENT_START"
+MARKER_END = "# === PYFII_AGENT_SEGMENT_END"
 
-    seg_idx = int(segment_id[1:])  # S02 → 2
-    if segment_id == "LAND":
-        fn_name = "land"
-    else:
-        fn_name = f"s{seg_idx:02d}"
 
-    # 找函数定义行
-    fn_start = None
+def parse_markers(script_path: Path) -> list[dict]:
+    """解析 design.py 中所有段 marker。返回 [{id, locked, start_line, end_line}]"""
+    lines = script_path.read_text(encoding="utf-8").splitlines()
+    blocks = []
+    current_id = None
+    current_locked = False
+    current_start = 0
+
     for i, line in enumerate(lines):
-        if f"def {fn_name}(" in line:
-            fn_start = i
+        if line.startswith(MARKER_START):
+            current_id = _extract(line, "id")
+            current_locked = _extract(line, "locked") == "true"
+            current_start = i + 1
+        elif line.startswith(MARKER_END) and current_id:
+            blocks.append({
+                "id": current_id,
+                "locked": current_locked,
+                "start_line": current_start,
+                "end_line": i,
+            })
+            current_id = None
+
+    return blocks
+
+
+def replace_active_segment(
+    script_path: Path,
+    segment_id: str,
+    new_code: str,
+    locked_segment_ids: list[str],
+) -> bool:
+    """替换当前段代码。locked 段被改动则拒绝。"""
+    lines = script_path.read_text(encoding="utf-8").splitlines()
+
+    target_start = None
+    target_end = None
+    for i, line in enumerate(lines):
+        if line.startswith(MARKER_START) and _extract(line, "id") == segment_id:
+            if segment_id in locked_segment_ids:
+                return False
+            target_start = i
+        if target_start is not None and line.startswith(MARKER_END) and i > target_start:
+            target_end = i
             break
-    if fn_start is None:
+
+    if target_start is None or target_end is None:
         return False
 
-    # 在函数体里找 AGENT_CODE_START 和 AGENT_CODE_END
-    code_start = None
-    code_end = None
-    for i in range(fn_start, len(lines)):
-        if "# AGENT_CODE_START" in lines[i]:
-            code_start = i
-        elif "# AGENT_CODE_END" in lines[i] and code_start is not None:
-            code_end = i
-            break
+    locked_hashes = _hash_locked(lines, locked_segment_ids)
 
-    if code_start is None:
-        # 没有标记——在 return 前插入
-        for i in range(fn_start, len(lines)):
-            if lines[i].strip().startswith("return ") or lines[i].strip() == "return":
-                indent = len(lines[i]) - len(lines[i].lstrip())
-                marker_prefix = " " * indent
-                new_lines = (
-                    lines[:i]
-                    + [f"{marker_prefix}# AGENT_CODE_START"]
-                    + [f"{marker_prefix}{cl}" for cl in code.strip().splitlines()]
-                    + [f"{marker_prefix}# AGENT_CODE_END"]
-                    + lines[i:]
-                )
-                break
-        else:
-            # 没找到 return——在函数末尾插入
-            new_lines = lines + [f"    # AGENT_CODE_START"] + [f"    {cl}" for cl in code.strip().splitlines()] + [f"    # AGENT_CODE_END"]
-    else:
-        # 替换 AGENT_CODE_START 和 AGENT_CODE_END 之间的内容
-        before = lines[: code_start + 1]
-        after = lines[code_end:]
-        indent = len(lines[code_start]) - len(lines[code_start].lstrip())
-        marker_prefix = " " * indent if indent > 0 else "    "
-        new_lines = before + [f"{marker_prefix}{cl}" for cl in code.strip().splitlines()] + after
+    # 过滤 agent 代码中可能含有的 marker 行
+    clean_code = [l for l in new_code.splitlines()
+                  if not l.strip().startswith(MARKER_START)
+                  and not l.strip().startswith(MARKER_END)]
+
+    new_lines = (
+        lines[:target_start + 1]
+        + clean_code
+        + lines[target_end:]
+    )
+
+    new_hashes = _hash_locked(new_lines, locked_segment_ids)
+    if locked_hashes != new_hashes:
+        return False
 
     tmp = script_path.with_suffix(".tmp")
     tmp.write_text("\n".join(new_lines) + "\n", encoding="utf-8")
@@ -67,74 +78,86 @@ def replace_active_segment(script_path: Path, segment_id: str, code: str, locked
     return True
 
 
-def read_segment_code(script_path: Path, segment_id: str) -> str | None:
-    """读取 sXX(drones) 函数中 AGENT_CODE 之间的代码。"""
-    lines = script_path.read_text(encoding="utf-8").splitlines()
-    seg_idx = int(segment_id[1:]) if segment_id != "LAND" else -1
-    fn_name = "land" if segment_id == "LAND" else f"s{seg_idx:02d}"
-
-    fn_start = None
-    for i, line in enumerate(lines):
-        if f"def {fn_name}(" in line:
-            fn_start = i
-            break
-    if fn_start is None:
-        return None
-
-    code_lines = []
-    in_code = False
-    for i in range(fn_start, len(lines)):
-        if "# AGENT_CODE_START" in lines[i]:
-            in_code = True
-            continue
-        if "# AGENT_CODE_END" in lines[i]:
-            break
-        if in_code:
-            code_lines.append(lines[i])
-    return "\n".join(code_lines).strip() or None
+def lock_segment(script_path: Path, segment_id: str) -> bool:
+    """将段标记为 locked=true"""
+    content = script_path.read_text(encoding="utf-8")
+    old = f"{MARKER_START} id={segment_id} locked=false"
+    new = f"{MARKER_START} id={segment_id} locked=true"
+    if old in content:
+        content = content.replace(old, new)
+        tmp = script_path.with_suffix(".tmp")
+        tmp.write_text(content, encoding="utf-8")
+        tmp.replace(script_path)
+        return True
+    return False
 
 
-def read_prev_from_docstring(script_path: Path, segment_id: str) -> list | None:
-    """从函数 docstring 中读取 prev 坐标。"""
-    lines = script_path.read_text(encoding="utf-8").splitlines()
-    seg_idx = int(segment_id[1:]) if segment_id != "LAND" else -1
-    fn_name = "land" if segment_id == "LAND" else f"s{seg_idx:02d}"
+def _hash_locked(lines: list[str], locked_ids: list[str]) -> dict[str, str]:
+    hashes = {}
+    in_segment = None
+    in_locked = False
+    buf = []
+    for line in lines:
+        if line.startswith(MARKER_START):
+            in_segment = _extract(line, "id")
+            in_locked = _extract(line, "locked") == "true"
+            buf = []
+        elif line.startswith(MARKER_END) and in_segment:
+            if in_locked and in_segment in locked_ids:
+                hashes[in_segment] = hashlib.sha256(
+                    "\n".join(buf).encode()
+                ).hexdigest()
+            in_segment = None
+            in_locked = False
+        elif in_segment:
+            buf.append(line)
+    return hashes
 
-    for i, line in enumerate(lines):
-        if f"def {fn_name}(" in line:
-            # 找 docstring 中的 prev: 行
-            for j in range(i + 1, min(i + 20, len(lines))):
-                if "prev:" in lines[j] and "[" in lines[j]:
-                    # 提取坐标
-                    text = lines[j].split("prev:")[-1]
-                    floats = re.findall(r"[-+]?\d*\.?\d+", text)
-                    if len(floats) >= 21:
-                        return [
-                            (float(floats[k]), float(floats[k + 1]), float(floats[k + 2]))
-                            for k in range(0, 21, 3)
-                        ]
-            break
+
+def _extract(line: str, key: str) -> str | None:
+    for part in line.split():
+        if part.startswith(f"{key}="):
+            return part.split("=", 1)[1]
     return None
 
 
-def update_prev_in_docstring(script_path: Path, segment_id: str, prev: list) -> bool:
-    """更新函数 docstring 中的 prev 坐标注释。"""
-    if not prev or len(prev) != 7:
-        return False
+def _auto_fix_perms(code_lines, prev_lines):
+    """检测恒等映射 perm=(0,1,...,6)，尝试从 prev 和 geo 推断更好排列"""
+    import re
+    fixed = list(code_lines)
+    
+    # 找 perm = (0, 1, 2, 3, 4, 5, 6) 模式
+    ident_pattern = re.compile(r'perm\s*=\s*\(\s*0\s*,\s*1\s*,\s*2\s*,\s*3\s*,\s*4\s*,\s*5\s*,\s*6\s*\)')
+    
+    for i, line in enumerate(fixed):
+        if ident_pattern.search(line):
+            # 替换为 TODO 注释，让 agent 下次修复
+            fixed[i] = line.replace(
+                '(0, 1, 2, 3, 4, 5, 6)',
+                '(?, ?, ?, ?, ?, ?, ?)  # FIXME: 用条件分支或 best_assign 替换恒等映射'
+            )
+    
+    return fixed
 
-    seg_idx = int(segment_id[1:]) if segment_id != "LAND" else -1
-    fn_name = "land" if segment_id == "LAND" else f"s{seg_idx:02d}"
-
-    lines = script_path.read_text(encoding="utf-8").splitlines()
-    for i, line in enumerate(lines):
-        if f"def {fn_name}(" in line:
-            for j in range(i + 1, min(i + 20, len(lines))):
-                if "prev:" in lines[j]:
-                    prev_str = "prev: [" + ",".join(
-                        f"({p[0]:.0f},{p[1]:.0f},{p[2]:.0f})" for p in prev
-                    ) + "]"
-                    indent = len(lines[j]) - len(lines[j].lstrip())
-                    lines[j] = " " * indent + prev_str
-                    script_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
-                    return True
-    return False
+def _inject_best_assign(lines):
+    """如果代码中没有 best_assign 调用，自动注入"""
+    code = "\n".join(lines)
+    # 只在非注释行检查
+    has_best_assign = any("best_assign(" in l and not l.strip().startswith("#") for l in lines)
+    if has_best_assign:
+        return lines
+    
+    # 找 for gi in range 循环，在 targets 赋值前插入 best_assign
+    import re
+    new = []
+    for line in lines:
+        # 替换 patterns: 硬编码 perm 或直接索引
+        if "perm" in line and ("(0," in line or "(0,1,2," in line):
+            new.append("    # AUTO-FIX: best_assign below")
+            new.append("    targets = best_assign(prev, geo[gi])")
+            continue
+        if "targets = geo[gi]" in line and "best_assign" not in line:
+            new.append("    targets = best_assign(prev, geo[gi])")
+            continue
+        new.append(line)
+    return new

@@ -126,7 +126,6 @@ class ValidationResult:
 
     def repair_feedback(self) -> str:
         """把验证失败转成可直接喂给 LLM 的修复反馈。"""
-        _fill_traj_cache_from_disk()
         hard_gate = (
             "硬门要求：compile=True, run=True, read_fii=True, distance warnings=0, "
             "action warnings=0, minD > 51cm"
@@ -140,11 +139,6 @@ class ValidationResult:
             "自动验证未通过，禁止进入下一步。请只重写当前未锁定段，不要修改 locked 段，不要输出 marker。",
             hard_gate + "。",
         ]
-        # 轨迹数据（最先输出，不因早期 return 遗漏）
-        traj = _format_segment_trajectory()
-        if traj:
-            lines.append("当前段完整轨迹（0.1s/行，x,y,z,vx,vy,vz）：")
-            lines.append(traj)
         if not self.compile_ok:
             lines.append(f"语法失败：{self.error_message[-500:]}")
             return "\n".join(lines)
@@ -163,10 +157,6 @@ class ValidationResult:
         lines.append(f"minD: {self.min_distance_cm}cm")
         lines.append(f"dense minD: {self.dense_min_distance_cm}cm")
         lines.append(f"XY span: {self.xy_span}")
-        traj = _format_segment_trajectory()
-        if traj:
-            lines.append("当前段轨迹（0.1s/行，7架x,y,z,vx,vy,vz）：")
-            lines.append(traj)
         if self.collision_intervals:
             lines.append("密采样危险区间（必须优先修复）：")
             for item in self.collision_intervals[:8]:
@@ -188,6 +178,11 @@ class ValidationResult:
                 "  drone.delay(flight_time_ms(d, v, a) - ticks*100 + 200)\n"
                 "不要用固定 delay 混过去。"
             )
+        traj = _format_segment_trajectory()
+        if traj:
+            lines.append("轨迹数据（0.1s采样）：")
+            lines.append(traj)
+        return chr(10).join(lines)
         
 
     def compute_assign_feedback(self, starts_xy, targets_xy):
@@ -205,8 +200,8 @@ def validate(
     result = ValidationResult()
     result.quality_window = quality_window
     if quality_window:
-            _traj_cache["seg_start"] = quality_window[0]
-            _traj_cache["seg_end"] = quality_window[1]
+        _traj_cache["seg_start"] = quality_window[0]
+        _traj_cache["seg_end"] = quality_window[1]
     result.continuity_required = quality_window is not None
 
     # 1. 语法层
@@ -508,24 +503,6 @@ def _extract_first_unlocked_segment_code(code: str) -> str:
     )
     return match.group("body") if match else ""
 
-
-
-def _fill_traj_cache_from_disk():
-    """从磁盘 .fii 读轨迹数据，不依赖 subprocess 成功。"""
-    if _traj_cache.get("data"):
-        return
-    try:
-        import pyfii as pf
-        from pathlib import Path as _P
-        fii_dir = _find_fii_dir(_P("tools/choreo_agent/agent_projects/cannon_agent_test_s01/output"))
-        if not fii_dir:
-            return
-        data, t0, *_ = pf.read_fii(str(fii_dir), fps=60, ignore_acc=True)
-        _traj_cache["data"] = data
-        _traj_cache["t0"] = t0
-        _traj_cache["fps"] = 60
-    except Exception:
-        pass
 
 def _detect_hover(
     output_dir: Path,
@@ -1010,42 +987,6 @@ def _same_circular_order(reference: tuple[int, ...], current: tuple[int, ...]) -
     return any(tuple(doubled[i:i + len(current)]) == current for i in range(len(reference)))
 
 
-
-# ---- 轨迹数据缓存 ----
-_traj_cache: dict = {}
-
-def _format_segment_trajectory() -> str:
-    """格式化当前段完整轨迹（0.1s采样，7架 x,y,z,vx,vy,vz）"""
-    if not _traj_cache:
-        return ""
-    try:
-        data = _traj_cache.get("data")
-        t0 = _traj_cache.get("t0", 0)
-        fps = _traj_cache.get("fps", 60)
-        seg_start = _traj_cache.get("seg_start", 0)
-        seg_end = _traj_cache.get("seg_end", 60)
-        if not data:
-            return ""
-        sample_step = max(1, fps // 10)
-        start_f = max(0, int((seg_start - t0) * fps))
-        end_f = min(len(data[0]) - 1, int((seg_end - t0) * fps))
-        lines = [f"段 {seg_start:.0f}-{seg_end:.0f}s 采样{sample_step/fps:.1f}s"]
-        header = "   t   "
-        for d_i in range(7):
-            header += f"  d{d_i}_x d{d_i}_y d{d_i}_z  d{d_i}_vx d{d_i}_vy d{d_i}_vz"
-        lines.append(header)
-        for f in range(start_f, end_f + 1, sample_step):
-            t = t0 + f / fps
-            row = f"{t:6.1f}"
-            for d_i in range(7):
-                d = data[d_i][f]
-                vx, vy, vz = d[5] if isinstance(d[5], (tuple, list)) and len(d[5]) == 3 else (0, 0, 0)
-                row += f"  {d[1]:4.0f} {d[2]:4.0f} {d[3]:4.0f}  {vx:4.0f} {vy:4.0f} {vz:4.0f}"
-            lines.append(row)
-        return "\n".join(lines)
-    except Exception as e:
-        return f"(trajectory error: {e})"
-
 def _add_dense_distance_report(result: ValidationResult, output_dir: Path) -> None:
     """密采样距离报告，用于给 agent 直接反馈危险时间段。"""
     import pyfii as pf
@@ -1054,10 +995,7 @@ def _add_dense_distance_report(result: ValidationResult, output_dir: Path) -> No
         fii_dir = _find_fii_dir(output_dir)
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
-            data, t0, *_ = pf.read_fii(str(fii_dir), fps=60, ignore_acc=False)
-        _traj_cache["data"] = data
-        _traj_cache["t0"] = t0
-        _traj_cache["fps"] = 60
+            data, *_ = pf.read_fii(str(fii_dir), fps=60, ignore_acc=False)
     except Exception:
         return
 
@@ -1110,7 +1048,7 @@ def _sample_exit_state(output_dir: Path, time_s: float | None = None) -> list[li
         fii_dir = _find_fii_dir(output_dir)
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
-            data, t0, *_ = pf.read_fii(str(fii_dir), fps=60, ignore_acc=True)
+            data, *_ = pf.read_fii(str(fii_dir), fps=60, ignore_acc=True)
     except Exception:
         return None
 
@@ -1125,7 +1063,7 @@ def _sample_exit_state(output_dir: Path, time_s: float | None = None) -> list[li
         if time_s is None:
             frame = len(drone) - 1
         else:
-            frame = max(0, min(len(drone) - 1, int(round((time_s - t0) * fps))))
+            frame = max(0, min(len(drone) - 1, int(round(time_s * fps))))
         row = drone[frame]
         sampled.append([
             int(round(float(row[1]))),
@@ -1202,3 +1140,36 @@ def _parse_action_warnings(output: str) -> list[str]:
         if m:
             details.append(f"d{m.group(1)} at {m.group(2)}s")
     return details
+
+
+# ---- 轨迹数据缓存 ----
+_traj_cache: dict = {}
+
+def _format_segment_trajectory() -> str:
+    if not _traj_cache:
+        return ""
+    try:
+        data = _traj_cache.get("data"); t0 = _traj_cache.get("t0", 0)
+        fps = _traj_cache.get("fps", 60)
+        seg_start = _traj_cache.get("seg_start", 0); seg_end = _traj_cache.get("seg_end", 60)
+        if not data: return ""
+        step = max(1, fps // 10)
+        sf = max(0, int((seg_start - t0) * fps)); ef = min(len(data[0]) - 1, int((seg_end - t0) * fps))
+        lines = [f"段 {seg_start:.0f}-{seg_end:.0f}s"]
+        h = "   t   "
+        for d_i in range(7): h += f"  d{d_i}_x d{d_i}_y d{d_i}_z  d{d_i}_vx d{d_i}_vy d{d_i}_vz"
+        lines.append(h)
+        for f in range(sf, ef + 1, step):
+            t = t0 + f / fps; row = f"{t:6.1f}"
+            for d_i in range(7):
+                d = data[d_i][f]
+                vx,vy,vz = d[5] if isinstance(d[5],(tuple,list)) and len(d[5])==3 else (0,0,0)
+                row += f"  {d[1]:4.0f} {d[2]:4.0f} {d[3]:4.0f}  {vx:4.0f} {vy:4.0f} {vz:4.0f}"
+            lines.append(row)
+        traj = _format_segment_trajectory()
+        if traj:
+            lines.append("轨迹数据（0.1s采样）：")
+            lines.append(traj)
+        return chr(10).join(lines)
+    except Exception as e:
+        return f"(traj err: {e})"

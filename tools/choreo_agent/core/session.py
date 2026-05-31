@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable
 from .state import ProjectState, SegmentState
-from . import script_editor
+from .script_editor import replace_active_segment, lock_segment, parse_markers
 from .checkpoint import save as checkpoint_save
 from .validator import validate, ValidationResult
 from .prompt_builder import build_segment_prompt
@@ -46,7 +46,7 @@ class Session:
 
         checkpoint_save(self.project_root)
 
-        ok = script_editor.replace_active_segment(
+        ok = replace_active_segment(
             self.project_root / "scripts" / "design.py",
             seg.id,
             code,
@@ -201,7 +201,7 @@ class Session:
             return ApprovalResult(False, result)
 
         script_path = self.project_root / "scripts" / "design.py"
-        if True:  # was lock_segment
+        if lock_segment(script_path, seg.id):
             human_override = not result.passed
             if result.exit_state:
                 seg.exit_state = result.exit_state
@@ -277,7 +277,7 @@ class Session:
             return ApprovalResult(False, validation, reason=reason)
 
         script_path = self.project_root / "scripts" / "design.py"
-        if True:  # was lock_segment (2)
+        if lock_segment(script_path, seg.id):
             if validation.exit_state:
                 seg.exit_state = validation.exit_state
             seg.attempts.append({
@@ -312,7 +312,7 @@ class Session:
 
         previously_locked = {s.id for s in self.state.segments if s.locked}
         previously_locked.update(self.state.locked_segment_ids)
-        markers = {}
+        markers = {m["id"]: m for m in parse_markers(script_path)}
         for seg in self.state.segments:
             marker = markers.get(seg.id)
             if marker is not None:
@@ -369,20 +369,9 @@ class Session:
         self.state.save(self.project_root)
 
     def _previous_exit_state(self) -> list:
-        """前一段出口坐标——优先读 docstring，回退 state，再回退 .fii"""
-        from .script_editor import read_prev_from_docstring
-        seg = self.state.current_segment
-        if seg:
-            # 尝试从当前段的 docstring 读取（被上一段更新过）
-            prev = read_prev_from_docstring(self.project_root / "scripts" / "design.py", seg.id)
-            if prev:
-                return prev
-            # 尝试前一段的 exit_state
-            index = self.state.current_segment_index - 1
-            if 0 <= index < len(self.state.segments):
-                es = self.state.segments[index].exit_state
-                if es:
-                    return es
+        index = self.state.current_segment_index - 1
+        if 0 <= index < len(self.state.segments):
+            return self.state.segments[index].exit_state or []
         return []
 
     def _record_validation_result(self, result: ValidationResult) -> None:
@@ -391,22 +380,6 @@ class Session:
             return
         seg.attempts[-1]["validation"] = _validation_snapshot(result)
         self.state.save(self.project_root)
-
-    def _propagate_prev_to_next_segment(self):
-        """当前段通过后，更新下一段 docstring 的 prev。"""
-        from .script_editor import update_prev_in_docstring
-        seg = self.state.current_segment
-        if not seg or not seg.exit_state:
-            return
-        # 找下一段
-        idx = self.state.current_segment_index
-        if idx + 1 < len(self.state.segments):
-            next_seg = self.state.segments[idx + 1]
-            update_prev_in_docstring(
-                self.project_root / "scripts" / "design.py",
-                next_seg.id,
-                seg.exit_state,
-            )
 
 
 def _extract_python_code(text: str) -> str:

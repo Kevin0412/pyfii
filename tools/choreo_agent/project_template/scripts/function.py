@@ -27,17 +27,7 @@ def Vel(p1, p2, t):
     return 200
 
 def move2(d, p, t, T=100):
-    """封装：反算速度 → 设VelXY/VelZ → d.move2(x,y,z,timestamp) → delay(t_ms)
-    
-    原理：
-    1. 根据距离 p 和时间 t 反算速度 v
-    2. d.VelXY(v, v*2); d.VelZ(v, v*2) 设速度/加速度
-    3. d.move2(p[0], p[1], p[2]) 执行飞行
-    4. d.delay(t_ms) 等待完成
-    
-    耗时 = t_ms（不额外加 delay）
-    注意：同一时刻只能一个动作，错峰用 drone.delay(i * stagger)
-    
+    """DNTG 风格：反算速度 → VelXY → move2 → delay
     d: drone, p: (x,y,z) 目标, t: 总时间(ms), T: 留给灯光的时间(ms)
     """
     v = Vel((d.x, d.y, d.z), p, (t-T)/1000)
@@ -94,14 +84,3 @@ def flight_time_ms(d, v, a):
 
 def distance_3d(p1, p2):
     return Distance(p1, p2)
-
-
-# ---------- 自动计时 ----------
-def auto_init(drones, start_time: float = None):
-    """设置段起始时间。不传则 max+1"""
-    if start_time is not None:
-        t = start_time
-    else:
-        t = max(d.init_time for d in drones) + 1
-    for d in drones:
-        d.inittime(t)
