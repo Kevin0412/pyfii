@@ -902,7 +902,7 @@ def _measure_degradation(
                 key=lambda item: item[1],
             )
         )
-        return base
+
         if order_ref is None:
             order_ref = order
             order_stable += 1
