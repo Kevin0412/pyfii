@@ -3,7 +3,8 @@
 ## 核心 API（from function import *）
 ```python
 move2(d, (x,y,z), t_ms, T=100)
-# 反算速度 → VelXY(v,2v)+VelZ(v,2v) → d.move2(x,y,z)。不推进时间游标。
+# 反算速度 → VelXY(v,2v)+VelZ(v,2v) → d.move2(x,y,z)。
+# 不推进时间游标；但记录预计飞行结束时间，供 auto_init 防止下一段提前开始。
 
 apply_light(d, "#RRGGBB", ticks)
 # ticks次TurnOnAll，每次delay 100ms。推进 cursor: ticks*100ms。
@@ -21,6 +22,9 @@ move2(drone, (tx, ty, tz), flying_ms)           # 1. 发起飞行
 apply_light(drone, '#color', ticks)              # 2. 灯光 (推进 ticks*100ms)
 drone.delay(max(0, flying_ms - ticks * 100))     # 3. 等待飞行完成
 ```
+
+最后一个 move2 后面如果没有显式 delay，下一段开始前必须调用 `auto_init(drones)`，
+它会按 `Drone.time` 和 helper 记录的未完成移动时间，把下一段推迟到动作完成之后。
 
 ## 起飞
 ```python

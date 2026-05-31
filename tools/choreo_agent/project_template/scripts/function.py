@@ -34,12 +34,15 @@ def move2(d, p, t_ms, T=100):
     2. d.VelXY(v, 2v); d.VelZ(v, 2v)
     3. d.move2(p[0], p[1], p[2])
     
-    ⚠️ 不调用 d.delay()——调用者需显式 drone.delay()
+    不调用 d.delay()；但会记录预计飞行完成时间，供 auto_init 防止下一段提前开始。
     """
+    start_ms = int(getattr(d, "time", 0))
     v = Vel((d.x, d.y, d.z), p, (t_ms - T) / 1000)
     d.VelXY(v, 2 * v)
     d.VelZ(v, 2 * v)
     d.move2(p[0], p[1], p[2])
+    end_ms = start_ms + max(0, int(round(t_ms)))
+    d._agent_motion_end_ms = max(int(getattr(d, "_agent_motion_end_ms", 0)), end_ms)
 
 # ---------- 坐标裁剪 ----------
 def clamp_xy(v):
@@ -82,8 +85,12 @@ def apply_light(drone, color_hex: str, ticks: int, interval_ms: int = 100):
 
 # ---------- 自动计时 ----------
 def auto_init(drones):
-    """把所有无人机时间游标切到当前最大游标所在的整数秒。"""
-    t = math.ceil(max(getattr(d, "time", 0) for d in drones) / 1000)
+    """把所有无人机时间游标切到当前最大游标/未完成移动之后的整数秒。"""
+    latest_ms = max(
+        max(int(getattr(d, "time", 0)), int(getattr(d, "_agent_motion_end_ms", 0)))
+        for d in drones
+    )
+    t = math.ceil(latest_ms / 1000)
     for d in drones:
         d.inittime(t)
     return t
