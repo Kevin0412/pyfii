@@ -40,24 +40,6 @@ class Session:
 
     # ---- 生成 ----
 
-    def generate_segment(self, code: str) -> bool:
-        """写入 AI 生成的当前段代码"""
-        seg = self.state.current_segment
-        if seg is None or seg.locked:
-            return False
-
-        checkpoint_save(self.project_root)
-
-        ok = replace_active_segment(
-            self.project_root / "scripts" / "design.py",
-            seg.id,
-            code,
-            self.state.locked_segment_ids,
-        )
-        if ok:
-            self._pending_code = code
-        return ok
-
     def generate_current_segment_with_llm(
         self,
         provider: str = "deepseek",
@@ -107,25 +89,7 @@ class Session:
             self.state.save(self.project_root)
             raise
         # prefix 模式输出已经是纯代码，不需要提取
-        if response.text.strip().startswith(('#', 'import', 'from', 'def', 'class', 'try', 'for', 'if', 'while')):
-            code = response.text.strip()
-        else:
-            code = _extract_python_code(response.text)
-        code = _strip_imports(code)
-        if not code.strip():
-            return LlmResponse(text="# FAILED: 无有效代码", model="none", input_tokens=0, output_tokens=0)
-
-        if not self.generate_segment(code):
-            return None
-
-        seg.attempts.append({
-            "provider": provider,
-            "model": response.model,
-            "input_tokens": response.input_tokens,
-            "output_tokens": response.output_tokens,
-            "feedback": feedback[:500],
-        })
-        self.state.save(self.project_root)
+        return response
         return response
 
     def generate_until_safe_with_llm(
