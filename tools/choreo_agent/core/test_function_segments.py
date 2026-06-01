@@ -82,6 +82,26 @@ def test_locked_hash_protection():
     print("PASSED: locked hash protection works")
 
 
+def test_update_segment_docstring_window():
+    """Effective auto_init/compressed windows are reflected in function docstrings."""
+    from core.script_editor import update_segment_docstring
+    import tempfile, shutil
+
+    tmp = Path(tempfile.mkdtemp(dir=Path(__file__).resolve().parent.parent.parent))
+    tmpl = Path(__file__).resolve().parent.parent / "project_template"
+    shutil.copytree(tmpl, tmp, dirs_exist_ok=True)
+
+    design = tmp / "scripts" / "design.py"
+    assert update_segment_docstring(design, "S06", 45.0, 50.0)
+    assert update_segment_docstring(design, "S01", 4.0, 10.5)
+    content = design.read_text()
+    assert '"""S06: 45-50s"""' in content
+    assert '"""S01: 4-10.5s 起飞+初始展开"""' in content
+
+    shutil.rmtree(tmp)
+    print("PASSED: segment docstring windows sync with effective state")
+
+
 def test_preflight_still_rejects_def():
     """Preflight rejects def/class in agent output."""
     from core.preflight import preflight_check
@@ -258,6 +278,7 @@ if __name__ == "__main__":
     test_marker_in_function_body()
     test_replace_s01_only_affects_s01()
     test_locked_hash_protection()
+    test_update_segment_docstring_window()
     test_preflight_still_rejects_def()
     test_seg_not_undefined()
     test_extract_indented_marker_body()

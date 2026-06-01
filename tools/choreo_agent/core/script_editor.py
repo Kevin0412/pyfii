@@ -1,5 +1,6 @@
 """Marker-based design.py editor. 只允许修改当前未锁定段。"""
 import hashlib
+import re
 from pathlib import Path
 
 
@@ -103,6 +104,39 @@ def lock_segment(script_path: Path, segment_id: str) -> bool:
     return False
 
 
+def update_segment_docstring(
+    script_path: Path,
+    segment_id: str,
+    start_time: float,
+    end_time: float,
+) -> bool:
+    """Sync `def sXX` one-line docstring with the effective state window."""
+    lines = script_path.read_text(encoding="utf-8").splitlines()
+    function_name = segment_id.lower()
+    def_pattern = re.compile(rf"^(\s*)def\s+{re.escape(function_name)}\s*\(")
+
+    for index, line in enumerate(lines):
+        if not def_pattern.match(line):
+            continue
+        for doc_index in range(index + 1, min(index + 6, len(lines))):
+            stripped = lines[doc_index].strip()
+            if not stripped:
+                continue
+            match = re.fullmatch(r'("""|\'\'\')(?P<text>.*)\1', stripped)
+            if not match:
+                return False
+            quote = match.group(1)
+            text = match.group("text")
+            prefix = " " * (len(lines[doc_index]) - len(lines[doc_index].lstrip()))
+            synced = _synced_docstring_text(segment_id, text, start_time, end_time)
+            lines[doc_index] = f"{prefix}{quote}{synced}{quote}"
+            tmp = script_path.with_suffix(".tmp")
+            tmp.write_text("\n".join(lines) + "\n", encoding="utf-8")
+            tmp.replace(script_path)
+            return True
+    return False
+
+
 def _hash_locked(lines: list[str], locked_ids: list[str]) -> dict[str, str]:
     hashes = {}
     in_segment = None
@@ -130,6 +164,34 @@ def _extract(line: str, key: str) -> str | None:
         if part.startswith(f"{key}="):
             return part.split("=", 1)[1]
     return None
+
+
+def _synced_docstring_text(
+    segment_id: str,
+    text: str,
+    start_time: float,
+    end_time: float,
+) -> str:
+    segment_id = segment_id.upper()
+    window = f"{_fmt_time(start_time)}-{_fmt_time(end_time)}s"
+    fallback = f"{segment_id}: {window}"
+    if not text.startswith(f"{segment_id}:"):
+        return fallback
+
+    rest = text[len(f"{segment_id}:"):].strip()
+    rest = re.sub(
+        r"^\d+(?:\.\d+)?-\d+(?:\.\d+)?s\b\s*",
+        "",
+        rest,
+    )
+    return f"{fallback} {rest}".rstrip()
+
+
+def _fmt_time(value: float) -> str:
+    number = float(value)
+    if number.is_integer():
+        return str(int(number))
+    return f"{number:g}"
 
 
 def _auto_fix_perms(code_lines, prev_lines):

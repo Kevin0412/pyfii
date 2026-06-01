@@ -14,7 +14,7 @@
 | 4 | TUI | CLI REPL 可用，Textual 待做 |
 | 5 | LLM 接入 (DeepSeek / custom_gpt) | ✅ |
 | 6 | 自动修复闭环 | ✅ generate_until_safe_with_llm |
-| 7 | 试跑 cannon_in_d | S01 已锁定；S02 5轮失败后已补 planning layer，待重新实测 |
+| 7 | 试跑 cannon_in_d | ✅ DeepSeek `S01-S08 + LAND` 全流程锁定，已生成视频验收文件 |
 | 8 | agent-side planning tools | ✅ timeline_cues / assign_targets / budget_layers |
 
 ## 待做
@@ -22,8 +22,7 @@
 - 音乐分析自动化 (BPM/能量/段落检测)
 - Safe/Fast 模式切换 ✅ 已有 manual/fast CLI；仍需更好 UI
 - best_assign / planning_tools 的候选结果更细粒度注入到 prompt feedback
-- S02 在不退化为车道/圆/固定高度的前提下成功锁定
-- S02-LAND 全部通过
+- 双模型多次生成稳定性测试：DeepSeek / MIMO 各多次 fresh run，统计 S02、S03、LAND 成功率和失败原因
 - Context 文件自动更新 (design_memory.md, handoff.md, segment_cards)
 - 退化检测集成到验证流水线 ✅ 已有基础车道/刚性圆检测；仍需跨段重复检测
 
@@ -120,7 +119,25 @@ marker机制: # === PYFII_AGENT_SEGMENT_START id=S01 locked=false ===
 
 # 11. 开发阶段
 
-Phase 0-6 已完成，Phase 7(多段试跑 cannon_in_d) 进行中
+Phase 0-8 已完成第一轮闭环。`codex_operate3_deepseek_20260601_010516` 已从
+S01 推进到 LAND，并通过 `dist=0 / act=0 / minD=70.7cm` 的最终回放检查。
+
+# 11.1 阶段性实测结论
+
+- Agent 可以从空模板逐段生成、验证、锁定，并在压缩时间线不足 60s 时自动追加 S07/S08。
+- `auto_init()` 会压缩段尾空白；因此实际质量窗口可能从 nominal window 平移到更晚/更短的位置。系统会把通过验证后的有效窗口写回 `state.json`，并同步更新 `design.py` 函数 docstring，例如 `S06: 58-63s` 会修正为实际窗口。
+- LAND 必须走专用降落协议：不再写 keyframe / move2，只做短灯光提示和 `d.land()`。
+- 4-5s 的追加正式段不能靠拉长 `flying_ms` 凑时长；如果路径太短，底层最小速度会提前完成。短段需要边界/角点目标和 `far_assign(..., min_path_cm=220)`，让多数无人机有足够长的真实运动。
+- 验收视频已能由 `pf.show(..., save=...)` 导出；必要时再用 ffmpeg 转 H.264 兼容版。
+
+# 11.2 下一阶段：稳定性测试
+
+交给 deepseek-tui 的下一步不是继续改单次样例，而是做批量 fresh-run 稳定性：
+
+- 每次从 project_template 新建项目，不复用旧 run。
+- DeepSeek/MIMO 分别跑多次，至少记录 `S01/S02/S03/最后 LAND` 成功率。
+- 失败必须归因：API/网络、preflight、碰撞、动作未完成、低活动/悬停、退化重复、LAND 协议错误、docstring/state 不一致。
+- 多次失败才改系统提示或验证器；不要用手工编辑 `design.py` 代替 agent 能力。
 
 # 12-13. Token预算
 

@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable
 from .state import ProjectState, SegmentState
-from .script_editor import replace_active_segment, lock_segment, parse_markers
+from .script_editor import replace_active_segment, lock_segment, parse_markers, update_segment_docstring
 from .checkpoint import save as checkpoint_save
 from .validator import validate, ValidationResult
 from .preflight import preflight_check, preflight_feedback
@@ -319,6 +319,7 @@ class Session:
             if candidate.passed:
                 seg.start_time = candidate_window[0]
                 seg.end_time = candidate_window[1]
+                update_segment_docstring(script_path, seg.id, seg.start_time, seg.end_time)
                 self.state.save(self.project_root)
                 return candidate
         return None
@@ -375,15 +376,16 @@ class Session:
             ),
         )
         self.state.segments.insert(land_index, segment)
-        if self._insert_design_segment_before_land(segment_id):
+        if self._insert_design_segment_before_land(segment):
             return True
         self.state.segments.pop(land_index)
         return False
 
-    def _insert_design_segment_before_land(self, segment_id: str) -> bool:
+    def _insert_design_segment_before_land(self, segment: SegmentState) -> bool:
         script_path = self.project_root / "scripts" / "design.py"
         if not script_path.exists():
             return False
+        segment_id = segment.id
         content = script_path.read_text(encoding="utf-8")
         if f"id={segment_id} " in content:
             return True
@@ -391,7 +393,7 @@ class Session:
         function_name = segment_id.lower()
         block = f'''
 def {function_name}(drones: list):
-    """{segment_id}: LAND 前追加正式编舞"""
+    """{segment_id}: {segment.start_time:g}-{segment.end_time:g}s LAND 前追加正式编舞"""
     # === PYFII_AGENT_SEGMENT_START id={segment_id} locked=false ===
     auto_init(drones)
     prev = [(d.x, d.y, d.z) for d in drones]
