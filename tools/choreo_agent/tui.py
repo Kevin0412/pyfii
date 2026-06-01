@@ -5,6 +5,8 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 PROJ = HERE / "agent_projects" / "cannon_agent_test_s01"
+sys.path.insert(0, str(HERE))
+from core import Session
 
 def load_state():
     return json.load(open(PROJ / "state.json"))
@@ -15,7 +17,10 @@ def show_status():
     print("  Pyfii Choreography Agent TUI")
     print("="*50)
     print(f"  锁定的段: {', '.join(st['locked_segment_ids'])}")
-    print(f"  当前段: {st['segments'][st['current_segment_index']]['id']}")
+    if st['current_segment_index'] < len(st['segments']):
+        print(f"  当前段: {st['segments'][st['current_segment_index']]['id']}")
+    else:
+        print("  当前段: none")
     print()
     for sg in st['segments']:
         lock = "🔒" if sg['locked'] else "🔓"
@@ -61,16 +66,15 @@ r = validate(Path('{PROJ}/scripts/design.py'), Path('{PROJ}/output'))
 print(f'd={{r.distance_warnings}} a={{r.action_warnings}} minD={{r.min_distance_cm}}')
 """], check=False)
         elif cmd == 'l':
-            st = load_state()
-            sid = st['segments'][st['current_segment_index']]['id']
-            st['locked_segment_ids'].append(sid)
-            json.dump(st, open(PROJ / "state.json", 'w'), indent=2)
-            print(f"  已锁定 {sid}")
+            session = Session(PROJ)
+            seg = session.state.current_segment
+            approval = session.approve_and_lock(allow_human_override=True)
+            if approval.locked and seg:
+                print(f"  已锁定 {seg.id}")
+            else:
+                print(f"  锁定失败: {approval.reason or 'validation/exit_state missing'}")
         elif cmd == 'n':
-            st = load_state()
-            st['current_segment_index'] += 1
-            json.dump(st, open(PROJ / "state.json", 'w'), indent=2)
-            print(f"  移到 {st['segments'][st['current_segment_index']]['id']}")
+            print("  禁止直接跳段；请先通过验证并锁定当前段。")
 
 if __name__ == "__main__":
     main()

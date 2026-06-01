@@ -99,6 +99,39 @@ def test_cli_g_uses_planning_pass():
     print("PASSED: CLI g command uses planning pass")
 
 
+def test_project_template_has_no_static_extra_segments():
+    """S07/S08 are dynamic continuation segments, not template defaults."""
+    import json
+
+    template_root = Path("tools/choreo_agent/project_template")
+    state = json.loads((template_root / "state.json").read_text())
+    segment_ids = [item["id"] for item in state["segments"]]
+    assert segment_ids == ["S01", "S02", "S03", "S04", "S05", "S06", "LAND"], segment_ids
+
+    design = (template_root / "scripts" / "design.py").read_text()
+    assert "def s07" not in design.lower()
+    assert "def s08" not in design.lower()
+    print("PASSED: template has no static S07/S08; continuations remain dynamic")
+
+
+def test_full_flow_runner_is_strict():
+    """The stability runner must not force-lock failures or use fixed segment lists."""
+    runner = Path("tools/choreo_agent/run_pipeline.py").read_text()
+    forbidden = [
+        "allow_human_override=True",
+        "_force_advance",
+        "SEGMENTS_TO_PROCESS",
+        "fallback",
+        "hand-written",
+    ]
+    for item in forbidden:
+        assert item not in runner, f"Forbidden runner pattern: {item}"
+    assert "while True:" in runner
+    assert "session.state.current_segment" in runner
+    assert "allow_human_override=False" in runner
+    print("PASSED: full-flow runner follows current_segment and never force-locks")
+
+
 
 def test_generate_never_calls_chat_prefix():
     """generate_current_segment_with_llm never calls chat_prefix."""
@@ -205,6 +238,8 @@ if __name__ == "__main__":
     test_degradation_signature_cross_segment()
     test_planning_pass_flow()
     test_cli_g_uses_planning_pass()
+    test_project_template_has_no_static_extra_segments()
+    test_full_flow_runner_is_strict()
     test_generate_never_calls_chat_prefix()
     test_stream_parses_reasoning_and_result_deltas()
     test_chat_retries_transient_error_once()

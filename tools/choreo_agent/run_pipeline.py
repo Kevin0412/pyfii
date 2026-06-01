@@ -1,194 +1,355 @@
 #!/usr/bin/env python3
-"""全自动 pyfii 编舞管道：顺序生成+锁定 S02-S06+LAND
-每段: generate_until_safe_with_llm (3x并发/轮, 最多15轮)
-通过硬门后自动锁定; 失败段记录后强制推进
+"""Fresh full-flow stability runner for choreo_agent.
+
+This runner is intentionally strict:
+- starts from project_template when requested;
+- follows Session.current_segment, so dynamic S07/S08 insertion is tested;
+- never uses human override or external replacement code;
+- records generation/validation summaries in agent_interaction.log and
+  stability_result.json.
 """
 
+from __future__ import annotations
+
+import argparse
 import json
+import shutil
 import sys
 import time
+import traceback
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(REPO_ROOT / "tools" / "choreo_agent"))
+TOOL_ROOT = REPO_ROOT / "tools" / "choreo_agent"
+sys.path.insert(0, str(TOOL_ROOT))
 
 from core import Session
-from core.validator import ValidationResult
-
-PROJ = REPO_ROOT / "tools/choreo_agent/agent_projects/cannon_agent_test_s01"
-SEGMENTS_TO_PROCESS = ["S02", "S03", "S04", "S05", "S06", "LAND"]
-MAX_ATTEMPTS = 15
-PROVIDER = "deepseek_pro"
 
 
-def _brief_result(val: ValidationResult) -> str:
+DEFAULT_MAX_CYCLES_PER_SEGMENT = 3
+DEFAULT_MAX_ATTEMPTS_PER_CYCLE = 5
+
+
+def main(argv: list[str] | None = None) -> int:
+    args = _parse_args(argv)
+    project_root = _resolve_project(args.project, args.fresh_name)
+    if args.fresh_name:
+        _init_fresh_project(project_root, provider=args.provider, mode=args.mode)
+
+    result = run_full_flow(
+        project_root=project_root,
+        provider=args.provider,
+        max_cycles_per_segment=args.max_cycles_per_segment,
+        max_attempts_per_cycle=args.max_attempts_per_cycle,
+        use_planning_pass=not args.no_planning_pass,
+    )
+    print(json.dumps(result["summary"], ensure_ascii=False, indent=2))
+    return 0 if result["summary"]["completed"] else 1
+
+
+def run_full_flow(
+    project_root: Path,
+    provider: str | None = None,
+    max_cycles_per_segment: int = DEFAULT_MAX_CYCLES_PER_SEGMENT,
+    max_attempts_per_cycle: int = DEFAULT_MAX_ATTEMPTS_PER_CYCLE,
+    use_planning_pass: bool = True,
+) -> dict:
+    project_root = Path(project_root).resolve()
+    log_path = project_root / "agent_interaction.log"
+    _append(log_path, f"\n\n# FULL FLOW START {time.strftime('%Y-%m-%d %H:%M:%S')}\n")
+
+    records: list[dict] = []
+    started_at = time.time()
+
+    while True:
+        session = Session(project_root)
+        seg = session.state.current_segment
+        if seg is None:
+            break
+
+        run_provider = provider or session.state.provider
+        segment_record = {
+            "segment": seg.id,
+            "start_time": seg.start_time,
+            "end_time": seg.end_time,
+            "provider": run_provider,
+            "cycles": [],
+            "locked": False,
+            "failure_category": None,
+        }
+        records.append(segment_record)
+        feedback = _segment_feedback(seg.id)
+        _append(
+            log_path,
+            (
+                f"\n# SEGMENT {seg.id} {seg.start_time}-{seg.end_time}s\n"
+                f"# FEEDBACK\n{feedback}\n"
+            ),
+        )
+
+        locked = False
+        for cycle in range(1, max_cycles_per_segment + 1):
+            _append(log_path, f"\n# {seg.id} CYCLE {cycle} START\n")
+            stream = _StreamLog(log_path, seg.id, cycle)
+            try:
+                rounds = session.generate_until_safe_with_llm(
+                    provider=run_provider,
+                    feedback=feedback,
+                    max_attempts=max_attempts_per_cycle,
+                    use_planning_pass=use_planning_pass,
+                    on_delta=stream.delta,
+                    on_reasoning_delta=stream.reasoning_delta,
+                    on_heartbeat=stream.heartbeat,
+                    on_round_start=stream.round_start,
+                )
+            except Exception as exc:
+                category = _failure_category_from_exception(exc)
+                cycle_record = {
+                    "cycle": cycle,
+                    "exception": f"{type(exc).__name__}: {str(exc)[-500:]}",
+                    "failure_category": category,
+                }
+                segment_record["cycles"].append(cycle_record)
+                segment_record["failure_category"] = category
+                _append(
+                    log_path,
+                    (
+                        f"\n# {seg.id} CYCLE {cycle} EXCEPTION\n"
+                        f"{cycle_record['exception']}\n"
+                        f"{traceback.format_exc()}\n"
+                    ),
+                )
+                feedback = feedback + "\n\nAPI/网络层失败；继续同一段。"
+                continue
+
+            cycle_record = {
+                "cycle": cycle,
+                "rounds": [_round_summary(round_item) for round_item in rounds],
+            }
+            segment_record["cycles"].append(cycle_record)
+            _append(
+                log_path,
+                f"\n# {seg.id} CYCLE {cycle} SUMMARY\n"
+                + json.dumps(cycle_record, ensure_ascii=False, indent=2)
+                + "\n",
+            )
+
+            if rounds and rounds[-1].validation and rounds[-1].validation.passed:
+                approval = session.approve_and_lock(allow_human_override=False)
+                lock_summary = {
+                    "locked": approval.locked,
+                    "reason": approval.reason,
+                    "validation": _validation_summary(approval.validation),
+                }
+                _append(
+                    log_path,
+                    f"\n# {seg.id} LOCK ATTEMPT\n"
+                    + json.dumps(lock_summary, ensure_ascii=False, indent=2)
+                    + "\n",
+                )
+                if approval.locked:
+                    segment_record["locked"] = True
+                    segment_record["final_validation"] = lock_summary["validation"]
+                    locked = True
+                    break
+                segment_record["failure_category"] = "lock_failed"
+                feedback = feedback + "\n\n验证通过但锁定失败：" + (approval.reason or "unknown")
+            else:
+                last_validation = rounds[-1].validation if rounds else None
+                category = _failure_category_from_validation(last_validation)
+                segment_record["failure_category"] = category
+                feedback = feedback + "\n\n继续修复 validator 反馈，目标是本段 passed=True。"
+                if last_validation is not None:
+                    feedback += "\n" + last_validation.repair_feedback()
+
+        if not locked:
+            _append(log_path, f"\n# STOP {seg.id} not locked\n")
+            break
+
+    session = Session(project_root)
+    completed = session.state.current_segment is None
+    summary = {
+        "project": str(project_root),
+        "provider": provider or session.state.provider,
+        "completed": completed,
+        "locked_segment_ids": session.state.locked_segment_ids,
+        "elapsed_s": round(time.time() - started_at, 1),
+        "failed_segment": None if completed else session.state.current_segment.id,
+        "records": records,
+    }
+    result = {"summary": summary}
+    (project_root / "stability_result.json").write_text(
+        json.dumps(result, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
+    _append(
+        log_path,
+        "\n# FULL FLOW RESULT\n" + json.dumps(summary, ensure_ascii=False, indent=2) + "\n",
+    )
+    return result
+
+
+class _StreamLog:
+    def __init__(self, log_path: Path, segment_id: str, cycle: int):
+        self.log_path = log_path
+        self.segment_id = segment_id
+        self.cycle = cycle
+        self._reasoning_open = False
+        self._content_open = False
+        self._last_heartbeat = 0.0
+
+    def round_start(self, index: int) -> None:
+        _append(self.log_path, f"\n# {self.segment_id} CYCLE {self.cycle} ROUND {index} START\n")
+
+    def reasoning_delta(self, text: str) -> None:
+        if not self._reasoning_open:
+            _append(self.log_path, f"\n# {self.segment_id} CYCLE {self.cycle} REASONING\n")
+            self._reasoning_open = True
+        _append(self.log_path, text)
+
+    def delta(self, text: str) -> None:
+        if not self._content_open:
+            _append(self.log_path, f"\n# {self.segment_id} CYCLE {self.cycle} CONTENT\n")
+            self._content_open = True
+        _append(self.log_path, text)
+
+    def heartbeat(self) -> None:
+        now = time.monotonic()
+        if now - self._last_heartbeat >= 15:
+            _append(self.log_path, f"\n# {self.segment_id} CYCLE {self.cycle} HEARTBEAT\n")
+            self._last_heartbeat = now
+
+
+def _round_summary(round_item) -> dict:
+    response = round_item.response
+    validation = round_item.validation
+    return {
+        "round": round_item.index,
+        "model": response.model if response else None,
+        "response_chars": len(response.text or "") if response else 0,
+        "reasoning_chars": len(response.reasoning_text or "") if response else 0,
+        "validation": _validation_summary(validation),
+    }
+
+
+def _validation_summary(validation) -> dict | None:
+    if validation is None:
+        return None
+    return {
+        "passed": validation.passed,
+        "quality_window": validation.quality_window,
+        "compile_ok": validation.compile_ok,
+        "run_ok": validation.run_ok,
+        "read_fii_ok": validation.read_fii_ok,
+        "dist": validation.distance_warnings,
+        "act": validation.action_warnings,
+        "minD": validation.min_distance_cm,
+        "dense_minD": validation.dense_min_distance_cm,
+        "motion": [validation.motion_start_s, validation.motion_end_s],
+        "effective": [validation.effective_motion_start_s, validation.effective_motion_end_s],
+        "motion_quality_ok": validation.motion_quality_ok,
+        "degradation_ok": validation.degradation_ok,
+        "code_quality_ok": validation.code_quality_ok,
+        "errors": {
+            "motion": validation.motion_envelope_errors[:3],
+            "effective": validation.effective_motion_errors[:3],
+            "quality": validation.motion_quality_errors[:3],
+            "degradation": validation.degradation_errors[:3],
+            "code": validation.code_quality_errors[:3],
+            "error": validation.error_message[-300:],
+        },
+    }
+
+
+def _failure_category_from_exception(exc: Exception) -> str:
+    name = type(exc).__name__.lower()
+    text = str(exc).lower()
+    if "llm" in name or "http" in text or "ssl" in text or "connect" in text or "protocol" in text:
+        return "api_network"
+    return "exception"
+
+
+def _failure_category_from_validation(validation) -> str:
+    if validation is None:
+        return "empty_or_unwritten"
+    if not validation.compile_ok:
+        return "compile"
+    if validation.code_quality_errors:
+        return "code_quality"
+    if not validation.run_ok or not validation.read_fii_ok:
+        return "runtime_or_read"
+    if validation.action_warnings:
+        return "action_incomplete"
+    if validation.distance_warnings or validation.collision_intervals:
+        return "collision"
+    if validation.motion_envelope_errors or validation.effective_motion_errors:
+        return "hover_or_low_activity"
+    if validation.motion_quality_errors:
+        return "motion_quality"
+    if validation.degradation_errors:
+        return "degradation"
+    return "unknown_validation"
+
+
+def _segment_feedback(segment_id: str) -> str:
+    sid = segment_id.upper()
+    if sid == "LAND":
+        return (
+            "继续 LAND。LAND 是降落段，不是正式编舞段。先 auto_init(drones)，"
+            "然后对全部 7 架短灯光提示并 d.land()。不要 move2，不要 keyframe。"
+        )
+    if sid in {"S07", "S08", "S09", "S10", "S11", "S12"}:
+        return (
+            f"继续 {sid}。这是 LAND 前自动追加的正式编舞段，用来让整首作品真实动作超过 60s。"
+            "用 1 个强 keyframe，目标靠近场地边界/角点，far_assign(prev, geo, min_path_cm=220)，"
+            "move2 3200-3800ms，并保持高度层。不要原地硬等。"
+        )
     return (
-        f"compile={val.compile_ok} run={val.run_ok} read={val.read_fii_ok} "
-        f"minD={val.dense_min_distance_cm}cm dense={val.dense_min_distance_cm}cm "
-        f"d_warn={val.distance_warnings} a_warn={val.action_warnings} "
-        f"collisions={len(val.collision_intervals)} "
-        f"code_ok={val.code_quality_ok} hover_ok={val.hover_check_ok} "
-        f"motion_env_ok={val.motion_envelope_ok} eff_ok={val.effective_motion_ok} "
-        f"qual_ok={val.motion_quality_ok} deg_ok={val.degradation_ok}"
+        f"继续 {sid}。只重写当前未锁定段，保持安全、连贯、非退化、有高度层。"
+        "不要手工改 locked 段；验证器通过后才能锁定。"
     )
 
 
-def main():
-    session = Session(PROJ)
-    provider = PROVIDER
-
-    print("=" * 70)
-    print(f"PyFii 编舞管道 — 全自动运行")
-    print(f"项目: {session.state.name or PROJ.name}")
-    print(f"Provider: {provider}")
-    print(f"Mode: {session.state.mode}")
-    print(f"已锁定: {session.state.locked_segment_ids}")
-    print(f"待处理: {SEGMENTS_TO_PROCESS}")
-    print("=" * 70)
-    sys.stdout.flush()
-
-    results = []
-    total_start = time.time()
-
-    for seg_id in SEGMENTS_TO_PROCESS:
-        seg = session.state.current_segment
-        if seg is None:
-            print(f"\n!!! 所有段已完成，退出。")
-            break
-
-        if seg.id != seg_id:
-            print(f"\n!!! 期望 {seg_id}，但当前段为 {seg.id}，状态已漂移。手动修复后重试。")
-            # 尝试同步
-            session.sync_state_with_markers(save=True)
-            seg = session.state.current_segment
-            if seg is None or seg.id != seg_id:
-                results.append({"segment": seg_id, "locked": False, "reason": "state drift"})
-                continue
-
-        if seg.locked:
-            print(f"\n>> {seg_id}: 已锁定，跳过")
-            results.append({"segment": seg_id, "locked": True, "reason": "already locked"})
-            continue
-
-        print(f"\n{'='*70}")
-        print(f">> 开始处理 {seg_id} ({seg.start_time}-{seg.end_time}s)")
-        print(f"{'='*70}")
-        sys.stdout.flush()
-
-        seg_start = time.time()
-
-        # 核心: 最多15轮，每轮3x并发LLM采样
-        try:
-            rounds = session.generate_until_safe_with_llm(
-                provider=provider,
-                feedback="",
-                max_attempts=MAX_ATTEMPTS,
-            )
-        except Exception as e:
-            print(f"\n✗ {seg_id} LLM 管道异常: {e}")
-            results.append({"segment": seg_id, "locked": False, "reason": f"exception: {str(e)[-200:]}"})
-            # 强制推进
-            _force_advance(session, seg_id)
-            session.save()
-            continue
-
-        seg_elapsed = time.time() - seg_start
-
-        # 汇总本轮结果
-        if not rounds:
-            print(f"\n✗ {seg_id} 无生成结果")
-            results.append({"segment": seg_id, "locked": False, "reason": "no generation results"})
-            _force_advance(session, seg_id)
-            session.save()
-            continue
-
-        last = rounds[-1]
-        val = last.validation
-
-        if val is None:
-            print(f"\n✗ {seg_id} 最后一轮无验证结果")
-            results.append({"segment": seg_id, "locked": False, "reason": "no validation"})
-            _force_advance(session, seg_id)
-            session.save()
-            continue
-
-        passed = val.passed
-        print(f"\n--- {seg_id} 最终状态 (共 {len(rounds)} 轮) ---")
-        print(f"  {_brief_result(val)}")
-        print(f"  passed={passed} elapsed={seg_elapsed:.0f}s")
-
-        if passed:
-            # 自动锁定
-            result = session.approve_and_lock(allow_human_override=False)
-            if result.locked:
-                print(f"  ✓ {seg_id} 自动锁定成功")
-                results.append({"segment": seg_id, "locked": True, "reason": "auto-locked"})
-            else:
-                print(f"  ✗ {seg_id} 验证通过但锁定失败 (marker lock failed)")
-                results.append({"segment": seg_id, "locked": False, "reason": "marker lock failed"})
-                _force_advance(session, seg_id)
-        else:
-            print(f"  ✗ {seg_id} 硬门未通过 ({MAX_ATTEMPTS}轮后)")
-            results.append({"segment": seg_id, "locked": False, "reason": f"failed after {len(rounds)} rounds"})
-            _force_advance(session, seg_id)
-
-        session.save()
-        sys.stdout.flush()
-
-    total_elapsed = time.time() - total_start
-
-    # ========== 最终汇总 ==========
-    print("\n" + "=" * 70)
-    print(f"管道完成 — 最终状态 (总耗时 {total_elapsed:.0f}s)")
-    print("=" * 70)
-
-    locked_count = 0
-    failed_count = 0
-    for r in results:
-        status = "✓ 锁定" if r["locked"] else "✗ 失败"
-        print(f"  {r['segment']}: {status} — {r['reason']}")
-        if r["locked"]:
-            locked_count += 1
-        else:
-            failed_count += 1
-
-    print(f"\n锁定: {locked_count}/{len(results)}  失败: {failed_count}/{len(results)}")
-
-    # 归档最终 design.py
-    final_design = PROJ / "scripts" / "design.py"
-    timestamp = time.strftime("%Y%m%d_%H%M%S")
-    archive_path = PROJ / f"design_final_{timestamp}.py"
-    if final_design.exists():
-        archive_path.write_text(final_design.read_text(encoding="utf-8"))
-        print(f"\n最终 design.py 已归档: {archive_path.name}")
-    else:
-        print(f"\n警告: design.py 不存在，无法归档")
-
-    # 保存结果 JSON
-    results_json = json.dumps(results, indent=2, ensure_ascii=False)
-    (PROJ / "pipeline_results.json").write_text(results_json, encoding="utf-8")
-    print(f"结果已保存: pipeline_results.json")
-
-    return results
+def _resolve_project(project: str | None, fresh_name: str | None) -> Path:
+    if fresh_name:
+        return TOOL_ROOT / "agent_projects" / fresh_name
+    if project:
+        path = Path(project)
+        return path if path.is_absolute() else REPO_ROOT / path
+    raise SystemExit("Provide --fresh-name or a project path.")
 
 
-def _force_advance(session: Session, seg_id: str) -> None:
-    """强制推进到下一段 (用于失败段跳过)"""
-    seg = session.state.current_segment
-    if seg is None or seg.id != seg_id:
-        return
-    # 使用 human override 强制锁定以推进
-    result = session.approve_and_lock(allow_human_override=True)
-    if result.locked:
-        print(f"  → {seg_id} 已强制锁定(override)以推进管道")
-    else:
-        # 手动推进索引
-        session.state.current_segment_index += 1
-        session.state.locked_segment_ids.append(seg_id)
-        seg.locked = True
-        session.save()
-        print(f"  → {seg_id} 已手动推进")
+def _init_fresh_project(project_root: Path, provider: str | None, mode: str) -> None:
+    template = TOOL_ROOT / "project_template"
+    if project_root.exists():
+        raise SystemExit(f"Refusing to overwrite existing project: {project_root}")
+    shutil.copytree(template, project_root)
+    state_path = project_root / "state.json"
+    state = json.loads(state_path.read_text(encoding="utf-8"))
+    state["name"] = project_root.name
+    if provider:
+        state["provider"] = provider
+    state["mode"] = mode
+    state_path.write_text(json.dumps(state, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
+def _append(path: Path, text: str) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("a", encoding="utf-8") as handle:
+        handle.write(text)
+
+
+def _parse_args(argv: list[str] | None) -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("project", nargs="?", help="Existing project path.")
+    parser.add_argument("--fresh-name", help="Create a fresh project under agent_projects/.")
+    parser.add_argument("--provider", help="Provider name from ai_providers.local.json.")
+    parser.add_argument("--mode", choices=["manual", "fast"], default="manual")
+    parser.add_argument("--max-cycles-per-segment", type=int, default=DEFAULT_MAX_CYCLES_PER_SEGMENT)
+    parser.add_argument("--max-attempts-per-cycle", type=int, default=DEFAULT_MAX_ATTEMPTS_PER_CYCLE)
+    parser.add_argument("--no-planning-pass", action="store_true")
+    return parser.parse_args(argv)
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())

@@ -22,7 +22,7 @@
 - 音乐分析自动化 (BPM/能量/段落检测)
 - Safe/Fast 模式切换 ✅ 已有 manual/fast CLI；仍需更好 UI
 - best_assign / planning_tools 的候选结果更细粒度注入到 prompt feedback
-- 双模型多次生成稳定性测试：DeepSeek / MIMO 各多次 fresh run，统计 S02、S03、LAND 成功率和失败原因
+- 双模型多次生成稳定性测试：DeepSeek / MIMO 各多次 fresh run，按 `STABILITY_TEST_PLAN.md` 统计完整 LAND 成功率和失败原因
 - Context 文件自动更新 (design_memory.md, handoff.md, segment_cards)
 - 退化检测集成到验证流水线 ✅ 已有基础车道/刚性圆检测；仍需跨段重复检测
 
@@ -132,7 +132,8 @@ S01 推进到 LAND，并通过 `dist=0 / act=0 / minD=70.7cm` 的最终回放检
 
 # 11.2 下一阶段：稳定性测试
 
-交给 deepseek-tui 的下一步不是继续改单次样例，而是做批量 fresh-run 稳定性：
+交给 deepseek-tui 的下一步不是继续改单次样例，而是按
+`tools/choreo_agent/STABILITY_TEST_PLAN.md` 做批量 fresh-run 稳定性：
 
 - 每次从 project_template 新建项目，不复用旧 run。
 - DeepSeek/MIMO 分别跑多次，至少记录 `S01/S02/S03/最后 LAND` 成功率。
