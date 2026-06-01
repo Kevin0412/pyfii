@@ -9,6 +9,9 @@ move2(d, (x,y,z), t_ms, T=100)
 apply_light(d, "#RRGGBB", ticks)
 # ticks次TurnOnAll，每次delay 100ms。推进 cursor: ticks*100ms。
 
+d.land()
+# 降落段使用。LAND 段先 auto_init(drones)，可短灯光提示后对每架机 d.land()。
+
 best_assign(prev, geo)
 # 遍历全排列找最小路径间距最大的分配。返回重排后的 targets 列表；不要拆 perm/min_d。
 
@@ -33,6 +36,12 @@ drone.delay(max(0, flying_ms - ticks * 100))     # 3. 等待飞行完成
 正式段主体移动不要用 7000ms 以上的慢速拖时长；常用 3000-5000ms。段尾空白由
 下一段 `auto_init()` 压缩，不靠超慢飞行或超长 delay 凑满整段。
 
+短窗口（4-5s）的正式追加段尤其不能只把 `flying_ms` 写大：如果路径只有
+70-120cm，底层最小速度/加速度会让真实运动提前结束。短窗口要用一个强
+keyframe，并让多数无人机移动 240cm 左右或更长；通常写
+`targets = far_assign(prev, geo, min_path_cm=220)`，目标几何要靠近场地边界/角点，
+不要挤在中心小范围交换。
+
 ## 高度层
 正式编舞段不能把一个 keyframe 写成全队同一高度。每个主体 keyframe 至少混合
 3 个高度层（例如 100/160/220），整段 Z range 建议 ≥90cm。坏例子：
@@ -45,6 +54,16 @@ drone.delay(max(0, flying_ms - ticks * 100))     # 3. 等待飞行完成
 前段可以被 `auto_init()` 压缩，但 LAND 前必须至少有一个正式编舞段真实结束在
 60s 之后。如果 S01-S06 压缩后还没到 60s，系统会在 LAND 前追加 S07/S08 等
 正式段继续编舞；不要靠某一段原地硬等来拖时间。
+
+## LAND 降落段
+LAND 不是正式编舞连续性段，不写 keyframe，不再 move2 凑动作。正确结构：
+```python
+auto_init(drones)
+for d in drones:
+    apply_light(d, "#ffffff", 3)
+    d.land()
+```
+不要只给单架无人机降落；不要再生成展开/回卷/交换动作。
 
 ## 起飞
 ```python

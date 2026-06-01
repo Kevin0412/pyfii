@@ -196,6 +196,29 @@ return prev"""
     shutil.rmtree(tmp)
 
 
+def test_code_quality_done_project_no_template_imports():
+    """When no unlocked marker remains, template imports are not active segment code."""
+    from core.validator import validate
+    import tempfile, shutil
+
+    tmp = Path(tempfile.mkdtemp(dir=Path(__file__).resolve().parent.parent.parent))
+    tmpl = Path(__file__).resolve().parent.parent / "project_template"
+    shutil.copytree(tmpl, tmp, dirs_exist_ok=True)
+
+    design = tmp / "scripts" / "design.py"
+    content = design.read_text()
+    content = content.replace("locked=false", "locked=true")
+    design.write_text(content)
+
+    v = validate(design, tmp / "output")
+    import_errors = [e for e in v.code_quality_errors if "import" in e.lower()]
+    assert not import_errors, f"Has import errors: {import_errors}"
+    assert v.code_quality_ok, f"code_quality errors: {v.code_quality_errors}"
+
+    shutil.rmtree(tmp)
+    print("PASSED: done project does not lint template imports as active code")
+
+
 def test_s01_not_empty_template():
     """Minimal S01 produces real output, not empty template path."""
     import tempfile, shutil, py_compile
@@ -239,6 +262,7 @@ if __name__ == "__main__":
     test_seg_not_undefined()
     test_extract_indented_marker_body()
     test_code_quality_no_template_imports()
+    test_code_quality_done_project_no_template_imports()
     test_replace_preserves_for_loop_indent()
     test_s01_not_empty_template()
     print("\nALL FUNCTION SEGMENT TESTS PASSED")

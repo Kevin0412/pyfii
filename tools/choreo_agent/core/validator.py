@@ -240,9 +240,15 @@ def validate(
         result.error_message = f"Syntax error: {e}"
         return result
 
-    active_code = _extract_first_unlocked_segment_code(code) or code
-    result.code_quality_errors = _check_static_code_quality(active_code)
-    result.code_quality_ok = not result.code_quality_errors
+    active_code = _extract_first_unlocked_segment_code(code)
+    if active_code:
+        result.code_quality_errors = _check_static_code_quality(active_code)
+        result.code_quality_ok = not result.code_quality_errors
+    else:
+        # No unlocked segment remains. Template-level imports are allowed; there is
+        # no active agent-generated body to lint.
+        result.code_quality_errors = []
+        result.code_quality_ok = True
 
     # 2-4. 执行+读回+验收
     try:

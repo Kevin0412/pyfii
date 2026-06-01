@@ -88,8 +88,14 @@ def build_segment_prompt(
     else:
         prev_text = "无上一段坐标（首段）"
 
-    is_s01 = segment_id.upper() == "S01"
-    if is_s01:
+    segment_upper = segment_id.upper()
+    is_s01 = segment_upper == "S01"
+    is_land = segment_upper in {"LAND", "LANDING"}
+    if is_land:
+        segment_start_rule = """- LAND 是降落段，不是正式编舞连续性段
+- 段首调用 `auto_init(drones)`，再对每架机执行短灯光提示和 `d.land()`
+- 不要写 keyframe，不要 move2，不要用 LAND 继续凑正式动作"""
+    elif is_s01:
         segment_start_rule = f"""- 首段必须先设计 `start_positions`，设置 `drone.X = drone.x` 与 `drone.Y = drone.y`，再 `drone.takeoff(1, 110)`
 - 起飞后调用 `wait_until(drones, {start_time})` 对齐正式编舞窗口；不要直接写 `inittime()`
 - 然后写 `prev = [(d.x, d.y, d.z) for d in drones]` 并开始正式 move2 动作"""
@@ -97,26 +103,51 @@ def build_segment_prompt(
         segment_start_rule = """- 段首调用 `auto_init(drones)`，再写 `prev = [(d.x, d.y, d.z) for d in drones]`
 - 不要直接写 `inittime()`；跨段对齐由 `auto_init` 处理"""
 
-    if segment_id.upper() in {"S04", "S05"}:
+    if segment_upper in {"S04", "S05"}:
         assign_rule = "- S04/S05 需要大动作或反馈出现路径太短时，用 `targets = far_assign(prev, geo, min_path_cm=90)`；其他承接/收束可用 `best_assign(prev, geo)`。返回值都是 targets 列表，不要拆 `perm/min_d`"
     else:
         assign_rule = "- `targets = best_assign(prev, geo)`；若反馈说路径太短/小范围抖动，可改用 `far_assign(prev, geo, min_path_cm=90)`。prev/geo 用完整 `(x,y,z)`，返回值就是重排后的 targets 列表，不要拆 `perm/min_d`"
 
-    user = f"""## {segment_id} ({start_time}-{end_time}s, 时长{end_time - start_time}s)
+    segment_duration = float(end_time - start_time)
+    if segment_duration <= 5.0:
+        keyframe_rule = (
+            "本段很短：只写 1 个强 keyframe，move2 用 3200-3800ms；"
+            "目标几何必须靠近场地边界/角点并明显远离 prev，让多数无人机路径约 240cm 或更长，"
+            "用 `targets = far_assign(prev, geo, min_path_cm=220)`，不要把点挤在中心，也不要只做 70-120cm 小挪动"
+        )
+        prev_update_rule = "段尾更新 prev = [(t[0],t[1],t[2]) for t in targets]"
+    else:
+        keyframe_rule = "2个 keyframe，非对称几何（XY间距≥200cm）"
+        prev_update_rule = "段尾更新 prev = [(t[0],t[1],t[2]) for t in targets]"
+
+    if is_land:
+        user = f"""## {segment_id} ({start_time}-{end_time}s, 时长{end_time - start_time}s)
 意图：{intent or segment_id}
 
 {prev_text}
 
 ## 要求
 {segment_start_rule}
-- 2个 keyframe，非对称几何（XY间距≥200cm）
+- 对 7 架无人机全部执行；可以统一白光/暖光闪烁 2-5 ticks 后 `d.land()`
+- 不要只给单架 `drones[i]` 操作；使用 `for d in drones:` 或等价 per-drone loop
+- 禁止inittime/VelXY/drone.x=tx/import
+- 只输出代码片段（4空格缩进）"""
+    else:
+        user = f"""## {segment_id} ({start_time}-{end_time}s, 时长{end_time - start_time}s)
+意图：{intent or segment_id}
+
+{prev_text}
+
+## 要求
+{segment_start_rule}
+- {keyframe_rule}
 - {assign_rule}
 - 每次移动必须在同一个 per-drone loop 内完成：move2 → apply_light → drone.delay(flying_ms-ticks*100+100)
 - 禁止只给 `drones[0]` 或单架无人机 delay/light；每架机都要给本次 move2 留执行时间
 - 主体 move2 通常用 3000-5000ms；不要用 7000ms+ 超慢移动凑时长，段尾由 auto_init 压缩
 - 高度层必须真实混合：每个主体 keyframe 至少 3 个 Z 层，整段 Z range ≥90cm；不要全队同一高度平面
 - LAND 前如果整体真实动作还没超过 60s，系统会追加 S07/S08 等正式段继续编舞；不要靠当前段硬等待
-- 段尾更新 prev = [(t[0],t[1],t[2]) for t in targets]
+- {prev_update_rule}
 - ## 时间预算
 段长: {end_time - start_time}s。所有 move2 的 flying_ms 之和必须≥ {(end_time - start_time - 1) * 1000:.0f}ms（留1s灯光余量）
 示例: 3个move2，各3000ms → 总9000ms，覆盖9s → 最后动作在 {start_time + 9}s 结束 ✓

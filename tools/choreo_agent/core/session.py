@@ -290,9 +290,13 @@ class Session:
         result: ValidationResult,
     ) -> ValidationResult | None:
         """If auto_init compressed the timeline, validate near the previous segment's end."""
-        if result.passed or result.motion_start_s is not None:
+        if result.passed:
             return None
-        if not any("没有检测到明显运动" in msg for msg in result.motion_envelope_errors):
+        can_shift = (
+            result.motion_start_s is not None
+            and any("启动过晚" in msg for msg in (result.motion_envelope_errors + result.effective_motion_errors))
+        )
+        if not can_shift and not any("没有检测到明显运动" in msg for msg in result.motion_envelope_errors):
             return None
         prev_end = self._previous_locked_motion_end_s()
         if prev_end is None:
@@ -301,10 +305,13 @@ class Session:
         duration = float(seg.end_time - seg.start_time)
         nominal_start = int(math.floor(seg.start_time))
         base_start = max(0, int(math.floor(prev_end + 1.0)))
-        if base_start >= nominal_start:
+        if can_shift:
+            base_start = max(base_start, int(math.floor(float(result.motion_start_s))))
+        if base_start > nominal_start + 12:
             return None
 
-        for candidate_start in range(base_start, min(nominal_start, base_start + 8) + 1):
+        candidate_stop = max(nominal_start, base_start + 8)
+        for candidate_start in range(base_start, candidate_stop + 1):
             if abs(candidate_start - seg.start_time) < 1e-9:
                 continue
             candidate_window = (float(candidate_start), float(candidate_start + duration))
