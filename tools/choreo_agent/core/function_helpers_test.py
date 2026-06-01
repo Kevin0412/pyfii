@@ -80,6 +80,19 @@ def test_best_assign_accepts_2d_and_returns_targets():
     print("PASSED: best_assign accepts 2D and returns targets list")
 
 
+def test_far_assign_encourages_large_safe_paths():
+    module = _load_template_function_module()
+    starts = [(100, 80, 150), (100, 230, 150), (100, 380, 150), (100, 530, 150)]
+    targets = [(500, 80, 200), (500, 230, 200), (500, 380, 200), (500, 530, 200)]
+
+    assigned = module.far_assign(starts, targets, min_path_cm=250)
+    distances = [module.Distance(a, b) for a, b in zip(starts, assigned)]
+
+    assert sorted(assigned) == sorted(targets)
+    assert sorted(distances)[len(distances) // 2] >= 250
+    print("PASSED: far_assign encourages larger paths")
+
+
 def test_wait_until_uses_delay_not_inittime():
     module = _load_template_function_module()
     drones = [FakeDrone(1000), FakeDrone(2500)]
@@ -98,5 +111,6 @@ if __name__ == "__main__":
     test_auto_init_uses_time_cursor_not_missing_init_time()
     test_auto_init_waits_for_last_move_without_delay()
     test_best_assign_accepts_2d_and_returns_targets()
+    test_far_assign_encourages_large_safe_paths()
     test_wait_until_uses_delay_not_inittime()
     print("OK")

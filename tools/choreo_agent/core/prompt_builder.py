@@ -97,6 +97,11 @@ def build_segment_prompt(
         segment_start_rule = """- 段首调用 `auto_init(drones)`，再写 `prev = [(d.x, d.y, d.z) for d in drones]`
 - 不要直接写 `inittime()`；跨段对齐由 `auto_init` 处理"""
 
+    if segment_id.upper() in {"S04", "S05"}:
+        assign_rule = "- S04/S05 需要大动作或反馈出现路径太短时，用 `targets = far_assign(prev, geo, min_path_cm=90)`；其他承接/收束可用 `best_assign(prev, geo)`。返回值都是 targets 列表，不要拆 `perm/min_d`"
+    else:
+        assign_rule = "- `targets = best_assign(prev, geo)`；若反馈说路径太短/小范围抖动，可改用 `far_assign(prev, geo, min_path_cm=90)`。prev/geo 用完整 `(x,y,z)`，返回值就是重排后的 targets 列表，不要拆 `perm/min_d`"
+
     user = f"""## {segment_id} ({start_time}-{end_time}s, 时长{end_time - start_time}s)
 意图：{intent or segment_id}
 
@@ -105,11 +110,17 @@ def build_segment_prompt(
 ## 要求
 {segment_start_rule}
 - 2个 keyframe，非对称几何（XY间距≥200cm）
-- `targets = best_assign(prev, geo)`；prev/geo 用完整 `(x,y,z)`，返回值就是重排后的 targets 列表，不要拆 `perm/min_d`
-- 每次移动：move2 → apply_light → drone.delay(flying_ms-ticks*100)
-- Z轴渐进（100→150→200→150）
+- {assign_rule}
+- 每次移动必须在同一个 per-drone loop 内完成：move2 → apply_light → drone.delay(flying_ms-ticks*100+100)
+- 禁止只给 `drones[0]` 或单架无人机 delay/light；每架机都要给本次 move2 留执行时间
+- 主体 move2 通常用 3000-5000ms；不要用 7000ms+ 超慢移动凑时长，段尾由 auto_init 压缩
+- 高度层必须真实混合：每个主体 keyframe 至少 3 个 Z 层，整段 Z range ≥90cm；不要全队同一高度平面
+- LAND 前如果整体真实动作还没超过 60s，系统会追加 S07/S08 等正式段继续编舞；不要靠当前段硬等待
 - 段尾更新 prev = [(t[0],t[1],t[2]) for t in targets]
-- t_ms之和 ≤ {(end_time - start_time - 1) * 1000:.0f}ms
+- ## 时间预算
+段长: {end_time - start_time}s。所有 move2 的 flying_ms 之和必须≥ {(end_time - start_time - 1) * 1000:.0f}ms（留1s灯光余量）
+示例: 3个move2，各3000ms → 总9000ms，覆盖9s → 最后动作在 {start_time + 9}s 结束 ✓
+反例: 2个move2，各2500ms → 总5000ms，覆盖5s → 动作在 {start_time + 5}s 结束 ✗（收束过早）
 - 禁止inittime/VelXY/drone.x=tx/import
 - 只输出代码片段（4空格缩进）"""
 

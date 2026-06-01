@@ -1,5 +1,6 @@
 """Session — 核心控制器"""
 import json
+import math
 import re
 import textwrap
 from dataclasses import dataclass
@@ -274,7 +275,136 @@ class Session:
         quality_window = None
         if seg is not None and not seg.locked and _requires_continuity_gate(seg):
             quality_window = (seg.start_time, seg.end_time)
-        return validate(script_path, output_dir, quality_window=quality_window)
+        result = validate(script_path, output_dir, quality_window=quality_window)
+        if seg is not None and quality_window is not None:
+            dynamic = self._retry_compressed_quality_window(script_path, output_dir, seg, result)
+            if dynamic is not None:
+                return dynamic
+        return result
+
+    def _retry_compressed_quality_window(
+        self,
+        script_path: Path,
+        output_dir: Path,
+        seg: SegmentState,
+        result: ValidationResult,
+    ) -> ValidationResult | None:
+        """If auto_init compressed the timeline, validate near the previous segment's end."""
+        if result.passed or result.motion_start_s is not None:
+            return None
+        if not any("没有检测到明显运动" in msg for msg in result.motion_envelope_errors):
+            return None
+        prev_end = self._previous_locked_motion_end_s()
+        if prev_end is None:
+            return None
+
+        duration = float(seg.end_time - seg.start_time)
+        nominal_start = int(math.floor(seg.start_time))
+        base_start = max(0, int(math.floor(prev_end + 1.0)))
+        if base_start >= nominal_start:
+            return None
+
+        for candidate_start in range(base_start, min(nominal_start, base_start + 8) + 1):
+            if abs(candidate_start - seg.start_time) < 1e-9:
+                continue
+            candidate_window = (float(candidate_start), float(candidate_start + duration))
+            candidate = validate(script_path, output_dir, quality_window=candidate_window)
+            if candidate.passed:
+                seg.start_time = candidate_window[0]
+                seg.end_time = candidate_window[1]
+                self.state.save(self.project_root)
+                return candidate
+        return None
+
+    def _previous_locked_motion_end_s(self) -> float | None:
+        current_index = self.state.current_segment_index
+        for seg in reversed(self.state.segments[:current_index]):
+            if not seg.locked:
+                continue
+            for attempt in reversed(seg.attempts):
+                validation = attempt.get("validation") if isinstance(attempt, dict) else None
+                if not isinstance(validation, dict):
+                    continue
+                value = validation.get("motion_end_s") or validation.get("effective_motion_end_s")
+                if value is not None:
+                    try:
+                        return float(value)
+                    except (TypeError, ValueError):
+                        continue
+        return None
+
+    def _ensure_pre_land_formal_segment(self) -> bool:
+        """Insert S07/S08/... before LAND when the compressed work has not crossed 60s."""
+        current = self.state.current_segment
+        if current is None or current.id.upper() != "LAND":
+            return False
+
+        last_motion_end = self._previous_locked_motion_end_s()
+        if last_motion_end is not None and last_motion_end > 60.0:
+            return False
+
+        segment_id = _next_extra_segment_id(self.state.segments)
+        if segment_id is None:
+            return False
+
+        land_index = self.state.current_segment_index
+        music_end = float(self.state.music_duration or 68.0)
+        formal_latest_end = max(60.5, music_end - 5.0)
+        start = max(0.0, math.floor((last_motion_end or 0.0) + 1.0))
+        end = min(start + 8.0, formal_latest_end)
+        if end - start < 4.0:
+            start = max(0.0, end - 5.0)
+
+        segment = SegmentState(
+            id=segment_id,
+            start_time=float(start),
+            end_time=float(end),
+            locked=False,
+            music_cue={"energy": 0.55, "emotion": "extended formal continuation"},
+            intent=(
+                f"{segment_id} 追加正式编舞段：前面段落被 auto_init 压缩后，LAND 前仍需继续正式动作；"
+                "承接上一段出口，做安全、连贯、有高度层的延展、回收或署名动作。"
+                "如果全片实际动作还没超过 60s，本段应继续贡献真实运动，而不是原地等待。"
+            ),
+        )
+        self.state.segments.insert(land_index, segment)
+        if self._insert_design_segment_before_land(segment_id):
+            return True
+        self.state.segments.pop(land_index)
+        return False
+
+    def _insert_design_segment_before_land(self, segment_id: str) -> bool:
+        script_path = self.project_root / "scripts" / "design.py"
+        if not script_path.exists():
+            return False
+        content = script_path.read_text(encoding="utf-8")
+        if f"id={segment_id} " in content:
+            return True
+
+        function_name = segment_id.lower()
+        block = f'''
+def {function_name}(drones: list):
+    """{segment_id}: LAND 前追加正式编舞"""
+    # === PYFII_AGENT_SEGMENT_START id={segment_id} locked=false ===
+    auto_init(drones)
+    prev = [(d.x, d.y, d.z) for d in drones]
+    return prev
+    # === PYFII_AGENT_SEGMENT_END {segment_id} ===
+'''
+        land_def = "\ndef land(drones: list):"
+        if land_def not in content:
+            return False
+        content = content.replace(land_def, block + land_def, 1)
+
+        land_call = "\nland(drones)"
+        if land_call not in content:
+            return False
+        content = content.replace(land_call, f"\n{function_name}(drones)" + land_call, 1)
+
+        tmp = script_path.with_suffix(".tmp")
+        tmp.write_text(content, encoding="utf-8")
+        tmp.replace(script_path)
+        return True
 
     # ---- 锁定 ----
 
@@ -304,6 +434,7 @@ class Session:
             seg.locked = True
             self.state.locked_segment_ids.append(seg.id)
             self.state.current_segment_index += 1
+            self._ensure_pre_land_formal_segment()
             self.state.save(self.project_root)
             self._pending_code = None
             return ApprovalResult(True, result, human_override=human_override)
@@ -382,6 +513,7 @@ class Session:
             if seg.id not in self.state.locked_segment_ids:
                 self.state.locked_segment_ids.append(seg.id)
             self.state.current_segment_index += 1
+            self._ensure_pre_land_formal_segment()
             self.state.save(self.project_root)
             self._pending_code = None
             return ApprovalResult(True, validation, ai_approval=True, reason=reason)
@@ -746,6 +878,19 @@ def _requires_continuity_gate(seg: SegmentState) -> bool:
     if intent.startswith(lifecycle_prefixes):
         return False
     return True
+
+
+def _next_extra_segment_id(segments: list[SegmentState]) -> str | None:
+    used = {s.id.upper() for s in segments}
+    max_index = 0
+    for segment_id in used:
+        if re.fullmatch(r"S\d{2}", segment_id):
+            max_index = max(max_index, int(segment_id[1:]))
+    for index in range(max(max_index + 1, 7), 20):
+        candidate = f"S{index:02d}"
+        if candidate not in used:
+            return candidate
+    return None
 
 
 def _validation_snapshot(result: ValidationResult) -> dict:

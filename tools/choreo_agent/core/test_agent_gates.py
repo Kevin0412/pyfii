@@ -64,6 +64,18 @@ def test_preflight_blocks_inittime():
     print("PASSED: preflight blocks inittime")
 
 
+def test_preflight_blocks_single_drone_timing():
+    r = preflight_check("""for d, t in zip(drones, targets):
+    move2(d, t, 3500)
+apply_light(drones[0], "#ff0000", 3)
+drones[0].delay(3200)
+""")
+    assert not r
+    joined = " ".join(r.errors)
+    assert "drones[i].delay" in joined or "apply_light(drones[i])" in joined
+    print("PASSED: preflight blocks single-drone timing")
+
+
 def test_preflight_accepts_clean():
     r = preflight_check("""prev = [(d.x,d.y,d.z) for d in drones]
 geo1 = [(100,120,150),(200,180,160),(300,240,140),(400,200,170),(500,160,130),(350,400,150),(150,380,140)]
@@ -106,6 +118,7 @@ if __name__ == "__main__":
     test_preflight_blocks_tool_leak()
     test_preflight_blocks_bare_api()
     test_preflight_blocks_inittime()
+    test_preflight_blocks_single_drone_timing()
     test_preflight_accepts_clean()
     test_planning_pass_importable()
     test_degradation_signature_in_state()

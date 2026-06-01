@@ -47,6 +47,8 @@ def preflight_check(code: str) -> PreflightResult:
     _check_no_bare_api(code, r)
     # 7. inittime calls
     _check_no_inittime(code, r)
+    # 8. Single-drone timing after group move
+    _check_no_single_drone_timing(code, r)
 
     return r
 
@@ -103,6 +105,14 @@ def _check_no_bare_api(code, r):
 def _check_no_inittime(code, r):
     if "inittime" in code:
         r.add("调用 inittime() — 时间游标由 takeoff/delay/move 链自然推进，删除此调用")
+
+
+def _check_no_single_drone_timing(code, r):
+    """Block common bad repair where only drones[0] gets light/delay after group moves."""
+    if re.search(r'\b(?:drones|ds)\s*\[[^\]]+\]\s*\.\s*delay\s*\(', code):
+        r.add("只给单架 drones[i].delay() 推进时间 — 每个 move2 后必须在同一个 per-drone loop 内给每架机留执行时间")
+    if re.search(r'\bapply_light\s*\(\s*(?:drones|ds)\s*\[[^\]]+\]', code):
+        r.add("只给单架 apply_light(drones[i]) — 正式段灯光/等待应在 per-drone loop 内作用到每架机或明确分组")
 
 
 def preflight_feedback(result: PreflightResult) -> str:

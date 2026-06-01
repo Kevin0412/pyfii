@@ -94,6 +94,54 @@ def best_assign(starts, targets):
             best = tt
     return best
 
+def far_assign(starts, targets, min_path_cm=90, min_spacing_cm=140):
+    """安全但鼓励远距离交换的分配。返回重排后的 targets 列表。
+
+    best_assign 会倾向最短安全路径，适合承接和收束；S04/S05 等长段如果继续
+    使用相似几何，很容易退化成小范围挪动。far_assign 在保持路径间距的前提下
+    奖励更大的中位路径长度，用来制造展开、回卷、交换等大动作。
+    """
+    n = len(starts)
+    starts_xyz = [_xyz(p) for p in starts]
+    targets_xyz = [_xyz(p) for p in targets]
+    best_score, best = -1e18, targets
+    for perm in itertools.permutations(range(n)):
+        tt = [targets[i] for i in perm]
+        tt_xyz = [targets_xyz[i] for i in perm]
+        min_path_spacing = 1e9
+        for step in range(1, 50):
+            ratio = step / 50
+            for i in range(n):
+                for j in range(i + 1, n):
+                    ai = (
+                        starts_xyz[i][0] * (1 - ratio) + tt_xyz[i][0] * ratio,
+                        starts_xyz[i][1] * (1 - ratio) + tt_xyz[i][1] * ratio,
+                    )
+                    aj = (
+                        starts_xyz[j][0] * (1 - ratio) + tt_xyz[j][0] * ratio,
+                        starts_xyz[j][1] * (1 - ratio) + tt_xyz[j][1] * ratio,
+                    )
+                    d = ((ai[0] - aj[0]) ** 2 + (ai[1] - aj[1]) ** 2) ** 0.5
+                    if d < min_path_spacing:
+                        min_path_spacing = d
+        path_lengths = [Distance(starts_xyz[i], tt_xyz[i]) for i in range(n)]
+        median_path = sorted(path_lengths)[n // 2]
+        max_path = max(path_lengths)
+        short_penalty = sum(max(0, float(min_path_cm) - d) for d in path_lengths)
+        spacing_penalty = max(0, float(min_spacing_cm) - min_path_spacing)
+        safe_spacing = min(min_path_spacing, 120)
+        score = (
+            safe_spacing * 1200
+            + median_path * 900
+            + max_path * 80
+            - short_penalty * 1000
+            - spacing_penalty * 12000
+        )
+        if score > best_score:
+            best_score = score
+            best = tt
+    return best
+
 # ---------- 灯光 ----------
 def apply_light(drone, color_hex: str, ticks: int, interval_ms: int = 100):
     """灯光：ticks 次 TurnOnAll，每次 interval_ms。总耗时 ticks*interval_ms。"""
