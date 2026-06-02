@@ -65,13 +65,11 @@ class Session:
             prev_state=self._previous_exit_state(),
             feedback=feedback,
         )
-        # Merge system into user — DeepSeek API handles all-in-user better
-        combined_user = system + chr(10) + chr(10) + user if system else user
         return self._chat_stage(
             seg=seg,
             provider=provider,
             stage=stage,
-            system="",
+            system=system,
             user=user,
             temperature=temperature,
             feedback=feedback,
