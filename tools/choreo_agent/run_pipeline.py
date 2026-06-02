@@ -42,6 +42,8 @@ def main(argv: list[str] | None = None) -> int:
         max_cycles_per_segment=args.max_cycles_per_segment,
         max_attempts_per_cycle=args.max_attempts_per_cycle,
         use_planning_pass=not args.no_planning_pass,
+        retry_sleep_s=args.retry_sleep_s,
+        max_api_exceptions_per_segment=args.max_api_exceptions_per_segment,
     )
     print(json.dumps(result["summary"], ensure_ascii=False, indent=2))
     return 0 if result["summary"]["completed"] else 1
@@ -53,6 +55,8 @@ def run_full_flow(
     max_cycles_per_segment: int = DEFAULT_MAX_CYCLES_PER_SEGMENT,
     max_attempts_per_cycle: int = DEFAULT_MAX_ATTEMPTS_PER_CYCLE,
     use_planning_pass: bool = True,
+    retry_sleep_s: int = 30,
+    max_api_exceptions_per_segment: int = 5,
 ) -> dict:
     project_root = Path(project_root).resolve()
     log_path = project_root / "agent_interaction.log"
@@ -119,6 +123,14 @@ def run_full_flow(
                         f"{traceback.format_exc()}\n"
                     ),
                 )
+                _write_partial_result(project_root, records, session, started_at)
+                # Count API exceptions per segment
+                api_exc_count = sum(1 for c in segment_record["cycles"] if c.get("failure_category") == "api_network")
+                if category == "api_network" and api_exc_count >= max_api_exceptions_per_segment:
+                    _append(log_path, f"\n# STOP {seg.id} max API exceptions reached\n")
+                    break
+                if category == "api_network":
+                    time.sleep(retry_sleep_s)
                 feedback = feedback + "\n\nAPI/网络层失败；继续同一段。"
                 continue
 
@@ -127,6 +139,7 @@ def run_full_flow(
                 "rounds": [_round_summary(round_item) for round_item in rounds],
             }
             segment_record["cycles"].append(cycle_record)
+            _write_partial_result(project_root, records, session, started_at)
             _append(
                 log_path,
                 f"\n# {seg.id} CYCLE {cycle} SUMMARY\n"
@@ -151,6 +164,7 @@ def run_full_flow(
                     segment_record["locked"] = True
                     segment_record["final_validation"] = lock_summary["validation"]
                     locked = True
+                    _write_partial_result(project_root, records, session, started_at)
                     break
                 segment_record["failure_category"] = "lock_failed"
                 feedback = feedback + "\n\n验证通过但锁定失败：" + (approval.reason or "unknown")
@@ -264,7 +278,8 @@ def _validation_summary(validation) -> dict | None:
 def _failure_category_from_exception(exc: Exception) -> str:
     name = type(exc).__name__.lower()
     text = str(exc).lower()
-    if "llm" in name or "http" in text or "ssl" in text or "connect" in text or "protocol" in text:
+    api_kw = ["llm", "http", "ssl", "connect", "protocol", "timeout", "read", "remote", "eof", "disconnect", "peer"]
+    if any(kw in name or kw in text for kw in api_kw):
         return "api_network"
     return "exception"
 
@@ -339,6 +354,27 @@ def _append(path: Path, text: str) -> None:
         handle.write(text)
 
 
+
+def _write_partial_result(project_root: Path, records: list, session, started_at: float,
+                          failed_segment: str | None = None) -> None:
+    """Write intermediate stability_result.json after each cycle."""
+    try:
+        summary = {
+            "project": str(project_root),
+            "completed": False,
+            "current_segment": session.state.current_segment.id if session.state.current_segment else None,
+            "locked_segment_ids": session.state.locked_segment_ids,
+            "elapsed_s": round(time.time() - started_at, 1),
+            "failed_segment": failed_segment or (session.state.current_segment.id if session.state.current_segment else None),
+            "records": records,
+        }
+        (project_root / "stability_result.json").write_text(
+            json.dumps({"summary": summary}, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
+    except Exception:
+        pass
+
 def _parse_args(argv: list[str] | None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("project", nargs="?", help="Existing project path.")
@@ -348,6 +384,8 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
     parser.add_argument("--max-cycles-per-segment", type=int, default=DEFAULT_MAX_CYCLES_PER_SEGMENT)
     parser.add_argument("--max-attempts-per-cycle", type=int, default=DEFAULT_MAX_ATTEMPTS_PER_CYCLE)
     parser.add_argument("--no-planning-pass", action="store_true")
+    parser.add_argument("--retry-sleep-s", type=int, default=30)
+    parser.add_argument("--max-api-exceptions-per-segment", type=int, default=5)
     return parser.parse_args(argv)
 
 
