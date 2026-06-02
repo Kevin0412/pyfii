@@ -140,6 +140,31 @@ S01 推进到 LAND，并通过 `dist=0 / act=0 / minD=70.7cm` 的最终回放检
 - 失败必须归因：API/网络、preflight、碰撞、动作未完成、低活动/悬停、退化重复、LAND 协议错误、docstring/state 不一致。
 - 多次失败才改系统提示或验证器；不要用手工编辑 `design.py` 代替 agent 能力。
 
+# 11.3 Prompt 冻结与缓存成本约束
+
+System prompt / context packs / `prompt_builder.py` 会影响 LLM 输入缓存命中。稳定性实测期间，非硬阻断不要调整这些内容；一轮 full-flow 测试中途改 prompt 会使该轮结果作废。
+
+当前计费用于估算 prompt 改动成本：
+
+- 缓存命中输入：0.025 元 / 1M tokens。
+- 缓存未命中输入：3 元 / 1M tokens。
+- 输出：6 元 / 1M tokens。
+
+因此 prompt 变更主要风险是把可命中的长 system prompt 变成未命中输入；成本差额按 `(未命中输入tokens - 原本命中输入tokens) / 1M * (3 - 0.025)` 估算，输出另按 6 元 / 1M tokens 估算。
+
+修改 prompt 前必须先给出证据：
+
+- 哪个失败日志证明当前 prompt 缺少必要规则。
+- 为什么不能通过 validator、preflight、`function.py` 工具、runner 流程或 per-run feedback 解决。
+- 改动会增加或减少多少 prompt 字符。
+- 是否会导致缓存未命中，按上面单价估算预计额外输入/输出成本。
+
+优先级：
+
+- 小问题优先改本地工具、验证器反馈或单轮 user feedback。
+- API 慢、首包慢、timeout 不是削弱或清空 system prompt 的理由；应记录 stream/heartbeat/首包/timeout 状态。
+- 禁止为了让某个模型临时通过而删除 S01、S02+、LAND、动态 S07/S08、高度层、短窗口 `far_assign` 等核心契约。
+
 # 12-13. Token预算
 
 - MVP: 300-600万 tokens

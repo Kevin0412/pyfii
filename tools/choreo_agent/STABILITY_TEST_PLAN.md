@@ -15,12 +15,23 @@
 - 工作区使用最新提交后的代码。
 - `project_template` 只能包含 `S01-S06 + LAND`，不得静态预置 `S07/S08`。
 - 使用 `tools/choreo_agent/run_pipeline.py` 创建 fresh project 并跑完整流程。
+- 测试期间冻结 system prompt / context packs / `prompt_builder.py`；非硬阻断不得改 prompt。
 - 每次测试必须保留：
   - `agent_interaction.log`
   - `state.json`
   - `scripts/design.py`
   - `stability_result.json`
   - 如完整 LAND，导出 `output/*.fii` 和验收视频
+
+## Prompt 与缓存约束
+
+- Prompt 改动会造成输入缓存未命中；一轮 full-flow 测试中途改 prompt，该轮结果作废并必须重新 fresh run。
+- 当前成本估算单价：缓存命中输入 0.025 元 / 1M tokens，缓存未命中输入 3 元 / 1M tokens，输出 6 元 / 1M tokens。
+- Prompt 变更成本按命中变未命中的输入差额估算：`tokens / 1M * (3 - 0.025)`；输出另按 `tokens / 1M * 6` 估算。
+- 只有同类硬失败多次复现，且日志证明当前 prompt 缺少必要规则时，才允许改 system prompt、context packs 或 `prompt_builder.py`。
+- 改 prompt 前必须记录：失败日志、替代方案为何不够、字符数变化、缓存/输入成本影响。
+- API timeout、首包慢、stream 卡顿不是清空或弱化 prompt 的理由；应记录为 `api_network` 或基础设施问题。
+- 不得为了单模型临时通过而删除 S01 `wait_until`、S02+ `auto_init`、LAND 协议、动态 S07/S08、高度层、短窗口 `far_assign` 等核心契约。
 
 ## 推荐命令
 
