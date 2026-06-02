@@ -29,3 +29,4 @@ apps/pyfii-gui/backend/.runtime/
 apps/pyfii-gui/frontend/dist/
 apps/pyfii-gui/frontend/node_modules/
 tools/tmp*/
+tools/choreo_agent/tmp*/
