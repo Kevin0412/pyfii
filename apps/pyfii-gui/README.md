@@ -1,6 +1,6 @@
-# Pyfii GUI MVP
+# Pyfii GUI
 
-`pyfii-gui` 是 Pyfii 的独立 GUI 原型项目，放在 `apps/pyfii-gui/` 下，不属于 `src/pyfii/` core 包。
+`pyfii-gui` 是 Pyfii 的独立 GUI 项目，放在 `apps/pyfii-gui/` 下，不属于 `src/pyfii/` core 包。
 
 Pyfii core 仍然保持独立 PyPI 库定位。GUI 的依赖方向只允许是：
 
@@ -86,6 +86,13 @@ VITE_API_PROXY_TARGET=http://localhost:8000
 
 ## 服务器部署建议
 
+启动后端（生产环境**不要加 `--reload`**，否则上传项目后 WatchFiles 检测 `.runtime/` 下的文件变化会触发重载，内存缓存清空导致 tracks/safety/music 全部 404）：
+
+```bash
+cd apps/pyfii-gui/backend
+PYTHONPATH=src:../../../src uvicorn pyfii_gui_api.main:app --host 0.0.0.0 --port 8000
+```
+
 推荐同源反向代理：
 
 ```text
@@ -98,7 +105,7 @@ https://gui.example.com/api/  -> FastAPI backend
 - 前端：`VITE_API_BASE_URL=https://api.example.com`
 - 后端：`PYFII_GUI_CORS_ORIGINS=https://gui.example.com`
 
-## 当前 MVP 支持
+## 当前支持
 
 - 上传 Fii 项目 zip。
 - 默认中文界面，支持中文/英文切换。
