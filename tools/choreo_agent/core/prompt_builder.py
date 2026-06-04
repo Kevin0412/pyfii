@@ -97,6 +97,8 @@ def build_segment_prompt(
 - 不要写 keyframe，不要 move2，不要用 LAND 继续凑正式动作"""
     elif is_s01:
         segment_start_rule = f"""- 首段必须先设计 `start_positions`，设置 `drone.X = drone.x` 与 `drone.Y = drone.y`，再 `drone.takeoff(1, 110)`
+- `start_positions` 自身必须安全分散：7个XY点最小间距≥180cm，不要中心聚团，不要把多数点放在 200-360cm 的中心小区域
+- 起飞布局可用“六边形+中心/宽V/双层扇形”等分散结构；首个正式 keyframe 路径通常控制在 180-360cm，不要从中心直接硬飞到全场边界
 - 起飞后调用 `wait_until(drones, {start_time})` 对齐正式编舞窗口；不要直接写 `inittime()`
 - 然后写 `prev = [(d.x, d.y, d.z) for d in drones]` 并开始正式 move2 动作"""
     else:
@@ -111,13 +113,13 @@ def build_segment_prompt(
     segment_duration = float(end_time - start_time)
     if segment_duration <= 5.0:
         keyframe_rule = (
-            "本段很短：只写 1 个强 keyframe，move2 用 3200-3800ms；"
+            "本段很短：只写 1 个强 keyframe，move2 用 2800-3600ms；"
             "目标几何必须靠近场地边界/角点并明显远离 prev，让多数无人机路径约 240cm 或更长，"
             "用 `targets = far_assign(prev, geo, min_path_cm=220)`，不要把点挤在中心，也不要只做 70-120cm 小挪动"
         )
         prev_update_rule = "段尾更新 prev = [(t[0],t[1],t[2]) for t in targets]"
     else:
-        keyframe_rule = "2个 keyframe，非对称几何（XY间距≥200cm）"
+        keyframe_rule = "2-4个利落 keyframe，非对称几何（XY间距≥200cm），用短促推进/交换/高度切层制造节奏"
         prev_update_rule = "段尾更新 prev = [(t[0],t[1],t[2]) for t in targets]"
 
     if is_land:
@@ -142,16 +144,18 @@ def build_segment_prompt(
 {segment_start_rule}
 - {keyframe_rule}
 - {assign_rule}
-- 每次移动必须在同一个 per-drone loop 内完成：move2 → apply_light → drone.delay(flying_ms-ticks*100+100)
+- 每次移动必须在同一个 per-drone loop 内对当前无人机对象完成：move2(drone, target, flying_ms) → apply_light(drone, color, ticks) → drone.delay(flying_ms-ticks*100+100)
 - 禁止只给 `drones[0]` 或单架无人机 delay/light；每架机都要给本次 move2 留执行时间
-- 主体 move2 通常用 3000-5000ms；不要用 7000ms+ 超慢移动凑时长，段尾由 auto_init 压缩
+- 主体 move2 通常用 2600-3600ms；不要用 4500ms+ 超慢移动凑时长，段尾由 auto_init 压缩
+- 快节奏必须可完成：单个 2600-3200ms keyframe 的 3D 路径通常控制在约 180-360cm；不要用 2000-2400ms 硬飞 500cm 跨场路径
+- 如果段长需要覆盖，不要拉长单个 move2；用多个可完成的快 keyframe、分组错峰或高度切层承接，保持每 1 秒窗口都有群体运动
 - 高度层必须真实混合：每个主体 keyframe 至少 3 个 Z 层，整段 Z range ≥90cm；不要全队同一高度平面
 - LAND 前如果整体真实动作还没超过 60s，系统会追加 S07/S08 等正式段继续编舞；不要靠当前段硬等待
 - {prev_update_rule}
 - ## 时间预算
 段长: {end_time - start_time}s。所有 move2 的 flying_ms 之和必须≥ {(end_time - start_time - 1) * 1000:.0f}ms（留1s灯光余量）
-示例: 3个move2，各3000ms → 总9000ms，覆盖9s → 最后动作在 {start_time + 9}s 结束 ✓
-反例: 2个move2，各2500ms → 总5000ms，覆盖5s → 动作在 {start_time + 5}s 结束 ✗（收束过早）
+示例: 3个move2，各3000ms → 总9000ms，覆盖9s → 快节奏且不会过早收束 ✓
+反例: 1个move2，8000ms → 虽覆盖时间但视觉拖沓 ✗；2个move2，各2500ms → 总5000ms，动作在 {start_time + 5}s 结束 ✗（收束过早）
 - 禁止inittime/VelXY/drone.x=tx/import
 - 只输出代码片段（4空格缩进）"""
 

@@ -25,6 +25,7 @@ TOOL_ROOT = REPO_ROOT / "tools" / "choreo_agent"
 sys.path.insert(0, str(TOOL_ROOT))
 
 from core import Session
+from core.token_usage import summarize_usage
 
 
 DEFAULT_MAX_CYCLES_PER_SEGMENT = 3
@@ -196,7 +197,7 @@ def run_full_flow(
                 segment_record["failure_category"] = category
                 feedback = feedback + "\n\n继续修复 validator 反馈，目标是本段 passed=True。"
                 if last_validation is not None:
-                    feedback += "\n" + last_validation.repair_feedback()
+                    feedback += "\n" + _compact_runner_validation_feedback(last_validation)
 
         if not locked:
             _append(log_path, f"\n# STOP {seg.id} not locked\n")
@@ -211,6 +212,7 @@ def run_full_flow(
         "locked_segment_ids": session.state.locked_segment_ids,
         "elapsed_s": round(time.time() - started_at, 1),
         "failed_segment": None if completed else session.state.current_segment.id,
+        "token_usage": _token_usage_summary(records),
         "records": records,
     }
     result = {"summary": summary}
@@ -259,10 +261,45 @@ def _round_summary(round_item) -> dict:
     return {
         "round": round_item.index,
         "model": response.model if response else None,
+        "input_tokens": _optional_int(getattr(response, "input_tokens", None)) if response else None,
+        "output_tokens": _optional_int(getattr(response, "output_tokens", None)) if response else None,
+        "prompt_cache_hit_tokens": _optional_int(getattr(response, "prompt_cache_hit_tokens", None)) if response else None,
+        "prompt_cache_miss_tokens": _optional_int(getattr(response, "prompt_cache_miss_tokens", None)) if response else None,
+        "total_tokens": _optional_int(getattr(response, "total_tokens", None)) if response else None,
+        "estimated_input_tokens": _optional_int(getattr(response, "estimated_input_tokens", None)) if response else None,
+        "estimated_output_tokens": _optional_int(getattr(response, "estimated_output_tokens", None)) if response else None,
+        "system_prompt_chars": _optional_int(getattr(response, "system_prompt_chars", None)) if response else None,
+        "user_prompt_chars": _optional_int(getattr(response, "user_prompt_chars", None)) if response else None,
+        "prompt_chars": _optional_int(getattr(response, "prompt_chars", None)) if response else None,
         "response_chars": len(response.text or "") if response else 0,
         "reasoning_chars": len(response.reasoning_text or "") if response else 0,
+        "raw_usage": _optional_dict(getattr(response, "raw_usage", None)) if response else None,
         "validation": _validation_summary(validation),
     }
+
+
+def _token_usage_summary(records: list[dict]) -> dict:
+    items = []
+    for segment_record in records:
+        for cycle_record in segment_record.get("cycles", []):
+            for round_record in cycle_record.get("rounds", []):
+                if round_record.get("model") or round_record.get("response_chars") or round_record.get("reasoning_chars"):
+                    items.append(round_record)
+    return summarize_usage(items)
+
+
+def _optional_int(value) -> int | None:
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, int):
+        return value
+    if isinstance(value, float):
+        return int(value)
+    return None
+
+
+def _optional_dict(value) -> dict | None:
+    return value if isinstance(value, dict) else None
 
 
 def _validation_summary(validation) -> dict | None:
@@ -292,6 +329,21 @@ def _validation_summary(validation) -> dict | None:
             "error": validation.error_message[-300:],
         },
     }
+
+
+def _compact_runner_validation_feedback(validation) -> str:
+    summary = _validation_summary(validation) or {}
+    payload = {
+        "passed": summary.get("passed"),
+        "dist": summary.get("dist"),
+        "act": summary.get("act"),
+        "minD": summary.get("minD"),
+        "dense_minD": summary.get("dense_minD"),
+        "motion": summary.get("motion"),
+        "effective": summary.get("effective"),
+        "errors": summary.get("errors"),
+    }
+    return json.dumps(payload, ensure_ascii=False)[:2400]
 
 
 def _failure_category_from_exception(exc: Exception) -> str:
@@ -336,7 +388,7 @@ def _segment_feedback(segment_id: str) -> str:
         return (
             f"继续 {sid}。这是 LAND 前自动追加的正式编舞段，用来让整首作品真实动作超过 60s。"
             "用 1 个强 keyframe，目标靠近场地边界/角点，far_assign(prev, geo, min_path_cm=220)，"
-            "move2 3200-3800ms，并保持高度层。不要原地硬等。"
+            "move2 2400-3200ms，并保持高度层。不要原地硬等。"
         )
     return (
         f"继续 {sid}。只重写当前未锁定段，保持安全、连贯、非退化、有高度层。"
@@ -391,6 +443,7 @@ def _write_partial_result(project_root: Path, records: list, session, started_at
             "failed_segment": failed_segment or (session.state.current_segment.id if session.state.current_segment else None),
             "last_failure_category": last_failure_category,
             "last_exception": last_exception,
+            "token_usage": _token_usage_summary(records),
             "records": records,
         }
         _write_json_atomic(project_root / "stability_result.json", {"summary": summary})

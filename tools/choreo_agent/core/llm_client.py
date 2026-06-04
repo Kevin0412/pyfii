@@ -1,11 +1,12 @@
 """LLM Client — 统一调用接口"""
 import json
+import math
 import signal
 import time
 import httpx
 from pathlib import Path
 from dataclasses import dataclass
-from typing import Callable
+from typing import Any, Callable
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 CONFIG_PATH = REPO_ROOT / "ai_providers.local.json"
@@ -22,6 +23,15 @@ class LlmResponse:
     input_tokens: int | None = None
     output_tokens: int | None = None
     reasoning_text: str = ""
+    system_prompt_chars: int | None = None
+    user_prompt_chars: int | None = None
+    prompt_chars: int | None = None
+    estimated_input_tokens: int | None = None
+    estimated_output_tokens: int | None = None
+    prompt_cache_hit_tokens: int | None = None
+    prompt_cache_miss_tokens: int | None = None
+    total_tokens: int | None = None
+    raw_usage: dict[str, Any] | None = None
 
 
 class LlmTimeoutError(TimeoutError):
@@ -69,8 +79,11 @@ def chat(
     use_stream = bool(cfg.get("stream", True) or on_delta or on_reasoning_delta or on_heartbeat)
     if use_stream:
         payload["stream"] = True
-        if "stream_options" in cfg:
-            payload["stream_options"] = cfg["stream_options"]
+        stream_options = cfg.get("stream_options")
+        if stream_options is None and _should_request_stream_usage(cfg):
+            stream_options = {"include_usage": True}
+        if stream_options:
+            payload["stream_options"] = stream_options
 
     headers = {
         "Authorization": f"Bearer {cfg['api_key']}",
@@ -104,7 +117,7 @@ def chat(
         for attempt in range(1, attempts + 1):
             try:
                 if use_stream:
-                    return _chat_stream(
+                    response = _chat_stream(
                         url=url,
                         payload=payload,
                         headers=headers,
@@ -115,12 +128,14 @@ def chat(
                         on_heartbeat=on_heartbeat,
                         no_content_timeout_s=no_content_timeout_s,
                     )
-                return _chat_once(
-                    url=url,
-                    payload=payload,
-                    headers=headers,
-                    timeout=timeout,
-                )
+                else:
+                    response = _chat_once(
+                        url=url,
+                        payload=payload,
+                        headers=headers,
+                        timeout=timeout,
+                    )
+                return _attach_prompt_usage(response, system, user)
             except Exception as exc:
                 last_exc = exc
                 if attempt >= attempts or not _is_retryable_exception(exc):
@@ -164,6 +179,10 @@ def _chat_once(
         model=data.get("model", ""),
         input_tokens=usage.get("prompt_tokens"),
         output_tokens=usage.get("completion_tokens"),
+        prompt_cache_hit_tokens=usage.get("prompt_cache_hit_tokens"),
+        prompt_cache_miss_tokens=usage.get("prompt_cache_miss_tokens"),
+        total_tokens=usage.get("total_tokens"),
+        raw_usage=dict(usage) if usage else None,
         reasoning_text=_as_text(message.get("reasoning_content") or message.get("reasoning") or message.get("thinking")),
     )
 
@@ -246,6 +265,10 @@ def _chat_stream(
         model=model,
         input_tokens=usage.get("prompt_tokens"),
         output_tokens=usage.get("completion_tokens"),
+        prompt_cache_hit_tokens=usage.get("prompt_cache_hit_tokens"),
+        prompt_cache_miss_tokens=usage.get("prompt_cache_miss_tokens"),
+        total_tokens=usage.get("total_tokens"),
+        raw_usage=dict(usage) if usage else None,
         reasoning_text="".join(reasoning_chunks),
     )
 
@@ -260,6 +283,37 @@ def _as_text(value) -> str:
             if key in value:
                 return _as_text(value[key])
     return str(value)
+
+
+def _should_request_stream_usage(cfg: dict) -> bool:
+    """DeepSeek stream usage requires stream_options.include_usage."""
+    base_url = str(cfg.get("base_url", "")).lower()
+    if cfg.get("include_stream_usage") is False:
+        return False
+    return "deepseek" in base_url
+
+
+def _attach_prompt_usage(response: LlmResponse, system: str, user: str) -> LlmResponse:
+    system_chars = len(system or "")
+    user_chars = len(user or "")
+    prompt_chars = system_chars + user_chars
+    response.system_prompt_chars = system_chars
+    response.user_prompt_chars = user_chars
+    response.prompt_chars = prompt_chars
+    response.estimated_input_tokens = (
+        response.input_tokens if response.input_tokens is not None
+        else _estimate_tokens_from_chars(prompt_chars)
+    )
+    output_chars = len(response.text or "") + len(response.reasoning_text or "")
+    response.estimated_output_tokens = (
+        response.output_tokens if response.output_tokens is not None
+        else _estimate_tokens_from_chars(output_chars)
+    )
+    return response
+
+
+def _estimate_tokens_from_chars(chars: int) -> int:
+    return int(math.ceil(max(0, chars) / 2.0))
 
 
 def _raise_if_no_semantic_delta(last_semantic_at: float, no_content_timeout_s: float) -> None:
@@ -356,6 +410,10 @@ def chat_prefix(
         model=body.get("model", cfg["model"]),
         input_tokens=usage.get("prompt_tokens"),
         output_tokens=usage.get("completion_tokens"),
+        prompt_cache_hit_tokens=usage.get("prompt_cache_hit_tokens"),
+        prompt_cache_miss_tokens=usage.get("prompt_cache_miss_tokens"),
+        total_tokens=usage.get("total_tokens"),
+        raw_usage=dict(usage) if usage else None,
     )
 
 
@@ -509,6 +567,10 @@ def chat_with_tools(
             model=body.get("model", cfg["model"]),
             input_tokens=usage.get("prompt_tokens"),
             output_tokens=usage.get("completion_tokens"),
+            prompt_cache_hit_tokens=usage.get("prompt_cache_hit_tokens"),
+            prompt_cache_miss_tokens=usage.get("prompt_cache_miss_tokens"),
+            total_tokens=usage.get("total_tokens"),
+            raw_usage=dict(usage) if usage else None,
         )
 
     return LlmResponse(text="", model=cfg["model"])

@@ -253,9 +253,9 @@ class Session:
             if result.passed:
                 break
 
-            raw_output = result.raw_stderr[:2000] if hasattr(result, 'raw_stderr') else ""
+            raw_output = _limit_text(result.raw_stderr if hasattr(result, 'raw_stderr') else "", 800)
             repair_parts = [
-                f"上一轮自动验证反馈（第 {index} 轮）：\n{result.repair_feedback()}",
+                f"上一轮自动验证反馈（第 {index} 轮）：\n{_compact_validation_feedback(result)}",
                 f"pyfii 原始输出：\n{raw_output}" if raw_output else "",
                 _conservative_safety_feedback(index, result),
             ]
@@ -662,10 +662,17 @@ def {function_name}(drones: list):
             "model": response.model,
             "input_tokens": response.input_tokens,
             "output_tokens": response.output_tokens,
+            "prompt_cache_hit_tokens": response.prompt_cache_hit_tokens,
+            "prompt_cache_miss_tokens": response.prompt_cache_miss_tokens,
+            "total_tokens": response.total_tokens,
             "system_prompt_chars": system_chars,
             "user_prompt_chars": user_chars,
+            "prompt_chars": system_chars + user_chars,
+            "estimated_input_tokens": response.estimated_input_tokens,
+            "estimated_output_tokens": response.estimated_output_tokens,
             "response_chars": len(response.text or ""),
             "reasoning_chars": len(response.reasoning_text or ""),
+            "raw_usage": response.raw_usage,
         })
         self.state.save(self.project_root)
 
@@ -838,9 +845,59 @@ def _append_attempt_event(seg: SegmentState, event: dict) -> None:
 
 
 def _join_feedback(initial: str, repair: str) -> str:
-    if initial.strip():
-        return initial.strip() + "\n\n" + repair
+    initial = _limit_text(initial.strip(), 1200)
+    repair = _limit_text(repair.strip(), 3200)
+    if initial:
+        return initial + "\n\n" + repair
     return repair
+
+
+def _limit_text(text: str, max_chars: int) -> str:
+    text = text or ""
+    if len(text) <= max_chars:
+        return text
+    return text[:max_chars] + f"\n... <truncated {len(text) - max_chars} chars>"
+
+
+def _compact_validation_feedback(result: ValidationResult) -> str:
+    lines = [
+        f"passed={result.passed}",
+        (
+            "compile/run/read="
+            f"{result.compile_ok}/{result.run_ok}/{result.read_fii_ok}"
+        ),
+        (
+            "distance/action="
+            f"{result.distance_warnings}/{result.action_warnings}; "
+            f"minD={result.min_distance_cm}; dense_minD={result.dense_min_distance_cm}"
+        ),
+        (
+            "motion="
+            f"{result.motion_start_s}-{result.motion_end_s}; "
+            f"effective={result.effective_motion_start_s}-{result.effective_motion_end_s}; "
+            f"window={result.quality_window}"
+        ),
+    ]
+    groups = [
+        ("action", result.action_details),
+        ("collision", [str(item) for item in result.collision_intervals]),
+        ("motion", result.motion_envelope_errors),
+        ("effective", result.effective_motion_errors),
+        ("quality", result.motion_quality_errors),
+        ("degradation", result.degradation_errors),
+        ("code", result.code_quality_errors),
+    ]
+    for name, values in groups:
+        compact = [_limit_text(str(value), 240) for value in (values or [])[:5]]
+        if compact:
+            lines.append(f"{name}: " + " | ".join(compact))
+    if result.error_message:
+        lines.append("error: " + _limit_text(result.error_message, 400))
+    lines.append(
+        "修复目标：distance_warnings=0, action_warnings=0, dense_minD>51, "
+        "无长悬停/低活动；优先改目标几何、飞行预算和 per-drone delay，不要输出解释。"
+    )
+    return _limit_text("\n".join(lines), 2400)
 
 
 def _preflight_repair_feedback(result, code: str) -> str:
