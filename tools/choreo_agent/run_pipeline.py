@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import shutil
 import sys
 import time
@@ -64,6 +65,8 @@ def run_full_flow(
 
     records: list[dict] = []
     started_at = time.time()
+    session = Session(project_root)
+    _write_partial_result(project_root, records, session, started_at, provider=provider or session.state.provider)
 
     while True:
         session = Session(project_root)
@@ -90,10 +93,12 @@ def run_full_flow(
                 f"# FEEDBACK\n{feedback}\n"
             ),
         )
+        _write_partial_result(project_root, records, session, started_at, provider=run_provider)
 
         locked = False
         for cycle in range(1, max_cycles_per_segment + 1):
             _append(log_path, f"\n# {seg.id} CYCLE {cycle} START\n")
+            _write_partial_result(project_root, records, session, started_at, provider=run_provider)
             stream = _StreamLog(log_path, seg.id, cycle)
             try:
                 rounds = session.generate_until_safe_with_llm(
@@ -123,7 +128,15 @@ def run_full_flow(
                         f"{traceback.format_exc()}\n"
                     ),
                 )
-                _write_partial_result(project_root, records, session, started_at)
+                _write_partial_result(
+                    project_root,
+                    records,
+                    session,
+                    started_at,
+                    provider=run_provider,
+                    last_failure_category=category,
+                    last_exception=cycle_record["exception"],
+                )
                 # Count API exceptions per segment
                 api_exc_count = sum(1 for c in segment_record["cycles"] if c.get("failure_category") == "api_network")
                 if category == "api_network" and api_exc_count >= max_api_exceptions_per_segment:
@@ -139,7 +152,7 @@ def run_full_flow(
                 "rounds": [_round_summary(round_item) for round_item in rounds],
             }
             segment_record["cycles"].append(cycle_record)
-            _write_partial_result(project_root, records, session, started_at)
+            _write_partial_result(project_root, records, session, started_at, provider=run_provider)
             _append(
                 log_path,
                 f"\n# {seg.id} CYCLE {cycle} SUMMARY\n"
@@ -160,11 +173,20 @@ def run_full_flow(
                     + json.dumps(lock_summary, ensure_ascii=False, indent=2)
                     + "\n",
                 )
+                _write_partial_result(
+                    project_root,
+                    records,
+                    session,
+                    started_at,
+                    provider=run_provider,
+                    last_failure_category=None if approval.locked else "lock_failed",
+                    last_exception=None if approval.locked else (approval.reason or "lock failed"),
+                )
                 if approval.locked:
                     segment_record["locked"] = True
                     segment_record["final_validation"] = lock_summary["validation"]
                     locked = True
-                    _write_partial_result(project_root, records, session, started_at)
+                    _write_partial_result(project_root, records, session, started_at, provider=run_provider)
                     break
                 segment_record["failure_category"] = "lock_failed"
                 feedback = feedback + "\n\n验证通过但锁定失败：" + (approval.reason or "unknown")
@@ -192,10 +214,7 @@ def run_full_flow(
         "records": records,
     }
     result = {"summary": summary}
-    (project_root / "stability_result.json").write_text(
-        json.dumps(result, ensure_ascii=False, indent=2),
-        encoding="utf-8",
-    )
+    _write_json_atomic(project_root / "stability_result.json", result)
     _append(
         log_path,
         "\n# FULL FLOW RESULT\n" + json.dumps(summary, ensure_ascii=False, indent=2) + "\n",
@@ -356,24 +375,34 @@ def _append(path: Path, text: str) -> None:
 
 
 def _write_partial_result(project_root: Path, records: list, session, started_at: float,
-                          failed_segment: str | None = None) -> None:
+                          failed_segment: str | None = None,
+                          provider: str | None = None,
+                          last_failure_category: str | None = None,
+                          last_exception: str | None = None) -> None:
     """Write intermediate stability_result.json after each cycle."""
     try:
         summary = {
             "project": str(project_root),
+            "provider": provider or session.state.provider,
             "completed": False,
             "current_segment": session.state.current_segment.id if session.state.current_segment else None,
             "locked_segment_ids": session.state.locked_segment_ids,
             "elapsed_s": round(time.time() - started_at, 1),
             "failed_segment": failed_segment or (session.state.current_segment.id if session.state.current_segment else None),
+            "last_failure_category": last_failure_category,
+            "last_exception": last_exception,
             "records": records,
         }
-        (project_root / "stability_result.json").write_text(
-            json.dumps({"summary": summary}, ensure_ascii=False, indent=2),
-            encoding="utf-8",
-        )
+        _write_json_atomic(project_root / "stability_result.json", {"summary": summary})
     except Exception:
         pass
+
+
+def _write_json_atomic(path: Path, data: dict) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_name(f".{path.name}.{os.getpid()}.tmp")
+    tmp.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+    tmp.replace(path)
 
 def _parse_args(argv: list[str] | None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)

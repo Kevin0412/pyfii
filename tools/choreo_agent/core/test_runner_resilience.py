@@ -7,6 +7,7 @@ from unittest.mock import patch, MagicMock
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from run_pipeline import run_full_flow, _failure_category_from_exception
+from core.script_editor import lock_segment
 
 
 def _fresh_project() -> Path:
@@ -66,8 +67,13 @@ def test_api_exception_writes_partial_result():
     """API exception → stability_result.json written, completed=false."""
     proj = _fresh_project()
     try:
-        with patch('core.session.Session.generate_until_safe_with_llm',
-                   side_effect=RuntimeError("mock timeout")):
+        def fail_after_cycle_start(self, *args, **kwargs):
+            result_path = proj / "stability_result.json"
+            assert result_path.exists(), "partial result should exist before API call"
+            json.loads(result_path.read_text())
+            raise RuntimeError("mock timeout")
+
+        with patch('core.session.Session.generate_until_safe_with_llm', fail_after_cycle_start):
             result = run_full_flow(proj, provider="mock", max_cycles_per_segment=1,
                                    max_attempts_per_cycle=1, use_planning_pass=False,
                                    retry_sleep_s=0, max_api_exceptions_per_segment=1)
@@ -98,10 +104,20 @@ def test_exception_then_pass_continues():
                 raise RuntimeError("mock timeout")
             return [_fake_round(passed=True, min_d=200)]
 
+        def mock_approve(self, allow_human_override=False):
+            script_path = self.project_root / "scripts" / "design.py"
+            for seg in self.state.segments:
+                lock_segment(script_path, seg.id)
+                seg.locked = True
+                seg.exit_state = [[100, 100, 150]] * 7
+            self.state.locked_segment_ids = [seg.id for seg in self.state.segments]
+            self.state.current_segment_index = len(self.state.segments)
+            self.state.save(self.project_root)
+            return MagicMock(locked=True, reason="", validation=_fake_round().validation)
+
         with patch('core.session.Session.generate_until_safe_with_llm', mock_generate):
             # Also mock approve_and_lock to return success
-            with patch('core.session.Session.approve_and_lock',
-                       return_value=MagicMock(locked=True, reason="", validation=_fake_round().validation)):
+            with patch('core.session.Session.approve_and_lock', mock_approve):
                 result = run_full_flow(proj, provider="mock", max_cycles_per_segment=2,
                                        max_attempts_per_cycle=1, use_planning_pass=False,
                                        retry_sleep_s=0, max_api_exceptions_per_segment=5)
