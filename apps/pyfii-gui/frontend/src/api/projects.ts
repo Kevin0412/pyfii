@@ -17,6 +17,20 @@ export async function uploadProjectZip(file: File, fps: number, ignoreAcc: boole
   });
 }
 
+export async function importLocalProject(path: string, fps: number, ignoreAcc: boolean): Promise<ProjectCreateResponse> {
+  return requestJson<ProjectCreateResponse>("/api/projects/local-path", {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+    },
+    body: JSON.stringify({
+      path,
+      fps,
+      ignore_acc: ignoreAcc,
+    }),
+  });
+}
+
 export async function fetchProject(projectId: string): Promise<ProjectMeta> {
   return requestJson<ProjectMeta>(`/api/projects/${projectId}`);
 }

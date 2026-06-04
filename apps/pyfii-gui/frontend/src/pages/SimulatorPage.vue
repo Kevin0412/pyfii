@@ -81,10 +81,22 @@
     </main>
 
     <SafetyLogPanel />
+    <footer v-if="ui.complianceLinks.length" class="compliance-footer">
+      <a
+        v-for="link in ui.complianceLinks"
+        :key="link.label"
+        :href="link.url"
+        target="_blank"
+        rel="noopener noreferrer"
+      >
+        {{ link.label }}
+      </a>
+    </footer>
   </div>
 </template>
 
 <script setup lang="ts">
+import { fetchAppConfig } from "../api/config";
 import ProjectInfoPanel from "../components/ProjectInfoPanel.vue";
 import ProjectUpload from "../components/ProjectUpload.vue";
 import SafetyLogPanel from "../components/SafetyLogPanel.vue";
@@ -124,6 +136,11 @@ watch(() => player.fullscreen, async (v) => {
 
 onMounted(() => {
   document.addEventListener("fullscreenchange", onFullscreenChange);
+  fetchAppConfig()
+    .then((config) => ui.setAppConfig(config))
+    .catch(() => {
+      /* Config is optional for local static previews. */
+    });
 });
 
 onUnmounted(() => {
@@ -159,7 +176,7 @@ onUnmounted(() => {
   --shadow: rgba(0, 0, 0, 0.45);
   min-height: 100vh;
   display: grid;
-  grid-template-rows: auto minmax(0, 1fr) minmax(180px, 28vh);
+  grid-template-rows: auto minmax(0, 1fr) minmax(180px, 28vh) auto;
   background: var(--app-bg);
   color: var(--text);
 }
@@ -275,6 +292,29 @@ onUnmounted(() => {
   min-height: 0;
   display: grid;
   grid-template-columns: 280px minmax(0, 1fr);
+}
+
+.compliance-footer {
+  min-height: 28px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 16px;
+  padding: 6px 12px;
+  border-top: 1px solid var(--border-soft);
+  color: var(--text-muted);
+  background: var(--panel-bg-alt);
+  font-size: 11px;
+}
+
+.compliance-footer a {
+  color: inherit;
+  text-decoration: none;
+}
+
+.compliance-footer a:hover {
+  color: var(--text);
+  text-decoration: underline;
 }
 
 .project-column {

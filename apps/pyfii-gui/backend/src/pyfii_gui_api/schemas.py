@@ -39,6 +39,29 @@ class ProjectCreateResponse(ProjectMeta):
     warnings: List[str] = Field(default_factory=list)
 
 
+class LocalProjectCreateRequest(BaseModel):
+    path: str
+    fps: int = 60
+    ignore_acc: bool = False
+
+
+class FeatureFlags(BaseModel):
+    local_project_import: bool
+
+
+class DeploymentInfo(BaseModel):
+    icp_beian: str = ""
+    icp_url: str = ""
+    gongan_beian: str = ""
+    gongan_url: str = ""
+
+
+class AppConfigResponse(BaseModel):
+    title: str
+    features: FeatureFlags
+    deployment: DeploymentInfo
+
+
 class DroneTrackResponse(BaseModel):
     id: int
     samples: List[List[JsonNumber]]

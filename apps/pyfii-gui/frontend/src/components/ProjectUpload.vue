@@ -25,6 +25,15 @@
     </button>
 
     <span v-if="selectedFile" class="selected-file">{{ selectedFile.name }}</span>
+    <template v-if="ui.localProjectImportEnabled">
+      <label class="local-path-control">
+        <span>{{ tt("localProjectPath") }}</span>
+        <input v-model.trim="localPath" type="text" :placeholder="tt('localProjectPlaceholder')" />
+      </label>
+      <button type="button" :disabled="!localPath || project.loading" @click="submitLocal">
+        {{ project.loading ? tt("parsing") : tt("openLocal") }}
+      </button>
+    </template>
     <span v-if="project.error" class="upload-error">{{ project.error }}</span>
   </form>
 </template>
@@ -33,7 +42,7 @@
 import { ref } from "vue";
 
 import { ApiError } from "../api/client";
-import { fetchProjectSafety, fetchProjectTracks, uploadProjectZip } from "../api/projects";
+import { fetchProjectSafety, fetchProjectTracks, importLocalProject, uploadProjectZip, type ProjectCreateResponse } from "../api/projects";
 import { text, type MessageKey } from "../i18n";
 import { usePlayerStore } from "../stores/player";
 import { useProjectStore } from "../stores/project";
@@ -46,6 +55,7 @@ const safety = useSafetyStore();
 const ui = useUiStore();
 
 const selectedFile = ref<File | null>(null);
+const localPath = ref("");
 const fps = ref(60);
 const ignoreAcc = ref(false);
 
@@ -73,13 +83,25 @@ async function submit(): Promise<void> {
     return;
   }
 
+  await loadProject(() => uploadProjectZip(selectedFile.value as File, fps.value, ignoreAcc.value));
+}
+
+async function submitLocal(): Promise<void> {
+  if (!localPath.value) {
+    return;
+  }
+
+  await loadProject(() => importLocalProject(localPath.value, fps.value, ignoreAcc.value));
+}
+
+async function loadProject(loader: () => Promise<ProjectCreateResponse>): Promise<void> {
   project.beginLoading();
   safety.clear();
   player.pause();
   player.setCurrentTime(0);
 
   try {
-    const meta = await uploadProjectZip(selectedFile.value, fps.value, ignoreAcc.value);
+    const meta = await loader();
     project.setMeta(meta, meta.warnings);
 
     const [tracksResponse, safetyResponse] = await Promise.all([
@@ -123,6 +145,17 @@ async function submit(): Promise<void> {
 .file-control input {
   width: 178px;
   max-width: 178px;
+  font-size: 11px;
+}
+
+.local-path-control input {
+  width: 260px;
+  max-width: 32vw;
+  min-width: 180px;
+  border: 1px solid var(--border-control);
+  background: var(--control-bg);
+  color: var(--text);
+  padding: 4px 6px;
   font-size: 11px;
 }
 

@@ -10,6 +10,7 @@ from ..config import settings
 from ..errors import AppError
 from ..schemas import (
     DeleteResponse,
+    LocalProjectCreateRequest,
     ProjectCreateResponse,
     ProjectMeta,
     SafetyResponse,
@@ -84,6 +85,97 @@ def _find_music_file(record: ProjectRecord) -> Optional[Path]:
     return None
 
 
+def _register_project_record(
+    *,
+    project_id: str,
+    name: str,
+    workspace_dir: Path,
+    upload_path: Path,
+    extract_dir: Path,
+    project_dir: Path,
+    fps: int,
+    ignore_acc: bool,
+) -> ProjectRecord:
+    parsed = parse_fii_project(project_dir, fps=fps, ignore_acc=ignore_acc)
+    duration_ms = compute_duration_ms(parsed.data)
+    frame_count = compute_frame_count(parsed.data)
+    safety = analyze_safety(
+        parsed.data,
+        warnings=parsed.warnings,
+        source_fps=fps,
+        field=parsed.field,
+        device=parsed.device,
+    )
+    meta = serialize_project_meta(
+        project_id=project_id,
+        name=name,
+        data=parsed.data,
+        music=parsed.music,
+        field=parsed.field,
+        device=parsed.device,
+        source_fps=fps,
+        duration_ms=duration_ms,
+        frame_count=frame_count,
+        safety_summary=safety["summary"],
+    )
+
+    record = ProjectRecord(
+        project_id=project_id,
+        name=meta["name"],
+        workspace_dir=workspace_dir,
+        upload_path=upload_path,
+        extract_dir=extract_dir,
+        project_dir=project_dir,
+        data=parsed.data,
+        t0=parsed.t0,
+        music=parsed.music,
+        field=parsed.field,
+        device=parsed.device,
+        warnings=parsed.warnings,
+        stdout=parsed.stdout,
+        source_fps=fps,
+        duration_ms=duration_ms,
+        frame_count=frame_count,
+        meta=meta,
+        safety_summary=safety["summary"],
+        safety_events=safety["events"],
+    )
+    project_cache.set(record)
+    return record
+
+
+def _resolve_local_project_dir(raw_path: str) -> Path:
+    if not settings.enable_local_project_import:
+        raise AppError(403, "local_import_disabled", "Local project import is disabled.")
+
+    if not raw_path.strip():
+        raise AppError(400, "invalid_local_path", "path is required.")
+
+    source = Path(raw_path).expanduser()
+    if not source.is_absolute():
+        source = settings.repo_root / source
+    source = source.resolve()
+
+    if not any(_is_relative_to(source, root) for root in settings.local_project_roots):
+        raise AppError(
+            403,
+            "local_path_not_allowed",
+            "Local project path is outside configured import roots.",
+            {"allowed_roots": [str(root) for root in settings.local_project_roots]},
+        )
+
+    project_dir = source / "output" if (source / "output").is_dir() else source
+    if not project_dir.is_dir():
+        raise AppError(404, "local_project_not_found", "Local project directory was not found.")
+    if not (project_dir / "output.fii").exists() and not (project_dir / "动作组").is_dir():
+        raise AppError(
+            400,
+            "invalid_local_project",
+            "Path must point to a Fii output directory or an agent project containing output/.",
+        )
+    return project_dir
+
+
 @router.post("", response_model=ProjectCreateResponse)
 async def create_project(
     file: UploadFile = File(...),
@@ -117,52 +209,17 @@ async def create_project(
                 target.write(chunk)
 
         project_dir = safe_extract_zip(upload_path, extract_dir)
-        parsed = parse_fii_project(project_dir, fps=fps, ignore_acc=ignore_acc)
-        duration_ms = compute_duration_ms(parsed.data)
-        frame_count = compute_frame_count(parsed.data)
-        safety = analyze_safety(
-            parsed.data,
-            warnings=parsed.warnings,
-            source_fps=fps,
-            field=parsed.field,
-            device=parsed.device,
-        )
-        meta = serialize_project_meta(
+        record = _register_project_record(
             project_id=project_id,
             name=Path(file.filename).stem,
-            data=parsed.data,
-            music=parsed.music,
-            field=parsed.field,
-            device=parsed.device,
-            source_fps=fps,
-            duration_ms=duration_ms,
-            frame_count=frame_count,
-            safety_summary=safety["summary"],
-        )
-
-        record = ProjectRecord(
-            project_id=project_id,
-            name=meta["name"],
             workspace_dir=workspace.root,
             upload_path=upload_path,
             extract_dir=extract_dir,
             project_dir=project_dir,
-            data=parsed.data,
-            t0=parsed.t0,
-            music=parsed.music,
-            field=parsed.field,
-            device=parsed.device,
-            warnings=parsed.warnings,
-            stdout=parsed.stdout,
-            source_fps=fps,
-            duration_ms=duration_ms,
-            frame_count=frame_count,
-            meta=meta,
-            safety_summary=safety["summary"],
-            safety_events=safety["events"],
+            fps=fps,
+            ignore_acc=ignore_acc,
         )
-        project_cache.set(record)
-        return ProjectCreateResponse(**meta, warnings=parsed.warnings)
+        return ProjectCreateResponse(**record.meta, warnings=record.warnings)
     except AppError:
         cleanup_project(project_id)
         raise
@@ -171,6 +228,33 @@ async def create_project(
         raise AppError(500, "project_import_failed", str(exc)) from exc
     finally:
         await file.close()
+
+
+@router.post("/local-path", response_model=ProjectCreateResponse)
+async def create_local_project(request: LocalProjectCreateRequest) -> ProjectCreateResponse:
+    if request.fps <= 0:
+        raise AppError(400, "invalid_fps", "fps must be a positive integer.")
+
+    project_dir = _resolve_local_project_dir(request.path)
+    project_id = "local_" + uuid.uuid4().hex
+    display_name = project_dir.parent.name if project_dir.name == "output" else project_dir.name
+
+    try:
+        record = _register_project_record(
+            project_id=project_id,
+            name=display_name,
+            workspace_dir=project_dir,
+            upload_path=project_dir,
+            extract_dir=project_dir,
+            project_dir=project_dir,
+            fps=request.fps,
+            ignore_acc=request.ignore_acc,
+        )
+        return ProjectCreateResponse(**record.meta, warnings=record.warnings)
+    except AppError:
+        raise
+    except Exception as exc:
+        raise AppError(500, "local_project_import_failed", str(exc)) from exc
 
 
 @router.get("/{project_id}", response_model=ProjectMeta)

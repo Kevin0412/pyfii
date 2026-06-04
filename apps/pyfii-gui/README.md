@@ -62,6 +62,9 @@ PYFII_GUI_DEFAULT_IMPORT_FPS=60
 PYFII_GUI_MAX_UPLOAD_BYTES=104857600
 PYFII_GUI_MAX_UNCOMPRESSED_BYTES=524288000
 PYFII_GUI_MAX_ZIP_FILES=5000
+PYFII_GUI_ENABLE_LOCAL_PROJECT_IMPORT=false
+PYFII_GUI_LOCAL_PROJECT_ROOTS=/path/to/pyfii/tools/choreo_agent/agent_projects
+PYFII_GUI_DEPLOY_CONFIG=/path/to/deploy.local.json
 ```
 
 默认 CORS 允许 `http://localhost:5173` 和常见私有局域网 IP 的 `:5173` 开发源；生产部署建议显式设置 `PYFII_GUI_CORS_ORIGINS`。
@@ -82,6 +85,57 @@ Vite dev server 也可配置：
 VITE_DEV_HOST=0.0.0.0
 VITE_DEV_PORT=5173
 VITE_API_PROXY_TARGET=http://localhost:8000
+```
+
+## 本地 Agent 项目导入
+
+云端部署默认只允许浏览器上传 zip。后端本地路径导入默认关闭，避免公网实例暴露服务器文件读取能力。
+
+在本机联调 `tools/choreo_agent` 时，可以显式开启：
+
+```bash
+cd apps/pyfii-gui/backend
+PYTHONPATH=src:../../../src \
+PYFII_GUI_ENABLE_LOCAL_PROJECT_IMPORT=true \
+PYFII_GUI_LOCAL_PROJECT_ROOTS=/media/kevin0412/Data/pyfii1.5.0/pyfii/tools/choreo_agent/agent_projects \
+uvicorn pyfii_gui_api.main:app --reload --host 0.0.0.0 --port 8000
+```
+
+开启后，前端会显示“本地路径”输入框，可填 agent project 目录或其 `output/` 目录，例如：
+
+```text
+tools/choreo_agent/agent_projects/stability_flash_3
+tools/choreo_agent/agent_projects/stability_flash_3/output
+```
+
+生产环境不要开启 `PYFII_GUI_ENABLE_LOCAL_PROJECT_IMPORT`。
+
+## 部署备案配置
+
+备案号属于部署实例配置，不提交到 git。复制示例文件：
+
+```bash
+cp apps/pyfii-gui/deploy.example.json apps/pyfii-gui/deploy.local.json
+```
+
+填写：
+
+```json
+{
+  "icp_beian": "ICP备案号",
+  "icp_url": "https://beian.miit.gov.cn/",
+  "gongan_beian": "公安备案号",
+  "gongan_url": "公安备案链接"
+}
+```
+
+`deploy.local.json` 已被 `.gitignore` 忽略。也可以通过环境变量覆盖：
+
+```bash
+PYFII_GUI_ICP_BEIAN=
+PYFII_GUI_ICP_URL=
+PYFII_GUI_GONGAN_BEIAN=
+PYFII_GUI_GONGAN_URL=
 ```
 
 ## 服务器部署建议
