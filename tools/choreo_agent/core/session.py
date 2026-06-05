@@ -64,6 +64,7 @@ class Session:
             intent=seg.intent or "",
             prev_state=self._previous_exit_state(),
             feedback=feedback,
+            drone_count=self.state.drone_count,
         )
         return self._chat_stage(
             seg=seg,
@@ -104,13 +105,14 @@ class Session:
             previous_exit_state = self._previous_exit_state()
             
             # Planning pass (first round only)
-            if use_planning_pass and index == 1 and len(previous_exit_state) == 7:
+            if use_planning_pass and index == 1 and len(previous_exit_state) == self.state.drone_count:
                 seg = self.state.current_segment
                 try:
                     # Stage 1: LLM → JSON plan
                     plan_prompt = build_planning_prompt(
                         seg.id, seg.start_time, seg.end_time,
                         seg.intent or "", previous_exit_state,
+                        drone_count=self.state.drone_count,
                     )
                     plan_resp = self._chat_stage(
                         seg=seg,
@@ -128,10 +130,20 @@ class Session:
                     if plan:
                         self._record_attempt_update({"planning_parse_ok": True})
                         # Stage 2: JSON → budget table (local math)
-                        budget = plan_to_budget_table(plan, previous_exit_state)
+                        budget = plan_to_budget_table(
+                            plan,
+                            previous_exit_state,
+                            drone_count=self.state.drone_count,
+                        )
                         self._record_attempt_update({"budget_chars": len(budget)})
                         # Stage 3: budget → code
-                        code_prompt = build_coding_prompt(budget, seg.id, seg.start_time, seg.end_time)
+                        code_prompt = build_coding_prompt(
+                            budget,
+                            seg.id,
+                            seg.start_time,
+                            seg.end_time,
+                            drone_count=self.state.drone_count,
+                        )
                         code_resp = self._chat_stage(
                             seg=seg,
                             provider=provider,
@@ -275,7 +287,12 @@ class Session:
         quality_window = None
         if seg is not None and not seg.locked and _requires_continuity_gate(seg):
             quality_window = (seg.start_time, seg.end_time)
-        result = validate(script_path, output_dir, quality_window=quality_window)
+        result = validate(
+            script_path,
+            output_dir,
+            quality_window=quality_window,
+            expected_drone_count=self.state.drone_count,
+        )
         if seg is not None and quality_window is not None:
             dynamic = self._retry_compressed_quality_window(script_path, output_dir, seg, result)
             if dynamic is not None:
@@ -315,7 +332,12 @@ class Session:
             if abs(candidate_start - seg.start_time) < 1e-9:
                 continue
             candidate_window = (float(candidate_start), float(candidate_start + duration))
-            candidate = validate(script_path, output_dir, quality_window=candidate_window)
+            candidate = validate(
+                script_path,
+                output_dir,
+                quality_window=candidate_window,
+                expected_drone_count=self.state.drone_count,
+            )
             if candidate.passed:
                 seg.start_time = candidate_window[0]
                 seg.end_time = candidate_window[1]
@@ -431,8 +453,12 @@ def {function_name}(drones: list):
         script_path = self.project_root / "scripts" / "design.py"
         if lock_segment(script_path, seg.id):
             human_override = not result.passed
-            if not result.exit_state or len(result.exit_state) != 7:
-                return ApprovalResult(False, result, reason="exit_state 为空，不允许锁定")
+            if not result.exit_state or len(result.exit_state) != self.state.drone_count:
+                return ApprovalResult(
+                    False,
+                    result,
+                    reason=f"exit_state 必须是 {self.state.drone_count} 个坐标，不允许锁定",
+                )
             seg.exit_state = result.exit_state
             seg.attempts.append({
                 "human_approval": True,
@@ -508,8 +534,12 @@ def {function_name}(drones: list):
 
         script_path = self.project_root / "scripts" / "design.py"
         if lock_segment(script_path, seg.id):
-            if not validation.exit_state or len(validation.exit_state) != 7:
-                return ApprovalResult(False, validation, reason="exit_state 为空，不允许锁定")
+            if not validation.exit_state or len(validation.exit_state) != self.state.drone_count:
+                return ApprovalResult(
+                    False,
+                    validation,
+                    reason=f"exit_state 必须是 {self.state.drone_count} 个坐标，不允许锁定",
+                )
             seg.exit_state = validation.exit_state
             seg.attempts.append({
                 "ai_approval": True,
@@ -993,6 +1023,8 @@ def _validation_snapshot(result: ValidationResult) -> dict:
         "code_quality_ok": result.code_quality_ok,
         "code_quality_errors": result.code_quality_errors,
         "exit_state": result.exit_state,
+        "expected_drone_count": result.expected_drone_count,
+        "actual_drone_count": result.actual_drone_count,
         "error_message": result.error_message[-500:],
         "continuity_error": result.continuity_error[-500:],
     }

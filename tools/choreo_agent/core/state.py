@@ -27,6 +27,7 @@ class ProjectState:
     music_confirmed: bool = False
     mode: str = "manual"  # manual | fast
     provider: str = "deepseek"
+    drone_count: int = 7
     segments: list[SegmentState] = field(default_factory=list)
     current_segment_index: int = 0
     locked_segment_ids: list[str] = field(default_factory=list)
@@ -45,6 +46,7 @@ class ProjectState:
             "music_confirmed": self.music_confirmed,
             "mode": self.mode,
             "provider": self.provider,
+            "drone_count": self.drone_count,
             "segments": [
                 {
                     "id": s.id,
@@ -94,6 +96,7 @@ class ProjectState:
             music_confirmed=data.get("music_confirmed", False),
             mode=_normalize_mode(data.get("mode", "manual")),
             provider=data.get("provider", "deepseek"),
+            drone_count=_normalize_drone_count(data.get("drone_count", 7)),
             segments=segments,
             current_segment_index=data.get("current_segment_index", 0),
             locked_segment_ids=data.get("locked_segment_ids", []),
@@ -105,3 +108,11 @@ def _normalize_mode(mode: str) -> str:
     if value in {"fast", "quick", "auto", "快速", "快速模式"}:
         return "fast"
     return "manual"
+
+
+def _normalize_drone_count(value) -> int:
+    try:
+        count = int(value)
+    except (TypeError, ValueError):
+        return 7
+    return max(1, count)

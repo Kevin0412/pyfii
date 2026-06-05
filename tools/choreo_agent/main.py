@@ -13,18 +13,19 @@ from core import Session
 def main():
     if len(sys.argv) < 2:
         print("Usage:")
-        print("  python tools/choreo_agent/main.py init agent_projects/<name> [provider] [manual|fast]")
+        print("  python tools/choreo_agent/main.py init agent_projects/<name> [provider] [manual|fast] [drone_count]")
         print("  python tools/choreo_agent/main.py agent_projects/<name>")
         return
 
     if sys.argv[1] == "init":
         if len(sys.argv) < 3:
-            print("Usage: python tools/choreo_agent/main.py init agent_projects/<name> [provider] [manual|fast]")
+            print("Usage: python tools/choreo_agent/main.py init agent_projects/<name> [provider] [manual|fast] [drone_count]")
             return
         provider = sys.argv[3] if len(sys.argv) > 3 else None
         mode = sys.argv[4] if len(sys.argv) > 4 else None
+        drone_count = _parse_drone_count(sys.argv[5]) if len(sys.argv) > 5 else None
         proj = _resolve_project_path(sys.argv[2])
-        _init_project_from_template(proj, provider=provider, mode=mode)
+        _init_project_from_template(proj, provider=provider, mode=mode, drone_count=drone_count)
         print(f"Initialized {proj}")
         return
 
@@ -40,6 +41,7 @@ def main():
     print(f"Music: {session.state.music_path} ({session.state.music_duration}s)")
     print(f"Mode: {session.state.mode}")
     print(f"Provider: {provider}")
+    print(f"Drones: {session.state.drone_count}")
     print(f"Locked: {session.state.locked_segment_ids}")
 
     while True:
@@ -213,7 +215,12 @@ def _resolve_project_path(value: str) -> Path:
     return proj.resolve()
 
 
-def _init_project_from_template(project_root: Path, provider: str | None = None, mode: str | None = None) -> None:
+def _init_project_from_template(
+    project_root: Path,
+    provider: str | None = None,
+    mode: str | None = None,
+    drone_count: int | None = None,
+) -> None:
     template_root = REPO_ROOT / "tools" / "choreo_agent" / "project_template"
     if not template_root.exists():
         raise FileNotFoundError(f"missing project template: {template_root}")
@@ -233,6 +240,8 @@ def _init_project_from_template(project_root: Path, provider: str | None = None,
         state["provider"] = provider
     if mode:
         state["mode"] = _normalize_mode(mode)
+    if drone_count is not None:
+        state["drone_count"] = drone_count
     state_path.write_text(json.dumps(state, indent=2, ensure_ascii=False), encoding="utf-8")
 
 
@@ -241,6 +250,13 @@ def _normalize_mode(mode: str) -> str:
     if value in {"fast", "quick", "auto", "快速", "快速模式"}:
         return "fast"
     return "manual"
+
+
+def _parse_drone_count(value: str) -> int:
+    count = int(value)
+    if count <= 0:
+        raise ValueError("drone_count must be positive")
+    return count
 
 
 def _compact_quality(quality: dict) -> dict:

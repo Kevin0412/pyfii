@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """PyFii choreography — function-based segments. LLM edits function bodies only."""
-import math, os, sys
+import json, math, os, sys
 from pathlib import Path
 
 HERE = Path(__file__).resolve()
@@ -20,9 +20,18 @@ import pyfii as pf
 import warnings
 from function import *
 
-N = 7
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+
+def load_drone_count(default=7):
+    try:
+        state = json.loads((PROJECT_ROOT / "state.json").read_text(encoding="utf-8"))
+        return max(1, int(state.get("drone_count", default)))
+    except Exception:
+        return default
+
+N = load_drone_count()
 MUSIC = str(REPO_ROOT / "cannon_in_D.mp3")
-OUT = Path(__file__).resolve().parents[1] / "output"
+OUT = PROJECT_ROOT / "output"
 
 drones = [pf.Drone(0, 0, pf.drone_config_6m, f"192.168.51.{51+i}") for i in range(N)]
 
@@ -123,7 +132,7 @@ for t in range(0, mf, 60):
             if 0 < dd < md:
                 md = dd
 if all_x and all_y:
-    print(f"7d F400 {t0/60:.1f}s XY({max(all_x)-min(all_x):.0f},{max(all_y)-min(all_y):.0f}) minD={md:.1f}cm")
+    print(f"{N}d F400 {t0/60:.1f}s XY({max(all_x)-min(all_x):.0f},{max(all_y)-min(all_y):.0f}) minD={md:.1f}cm")
 
 with warnings.catch_warnings(record=True) as c:
     warnings.simplefilter("always")

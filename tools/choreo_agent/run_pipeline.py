@@ -36,7 +36,12 @@ def main(argv: list[str] | None = None) -> int:
     args = _parse_args(argv)
     project_root = _resolve_project(args.project, args.fresh_name)
     if args.fresh_name:
-        _init_fresh_project(project_root, provider=args.provider, mode=args.mode)
+        _init_fresh_project(
+            project_root,
+            provider=args.provider,
+            mode=args.mode,
+            drone_count=args.drone_count,
+        )
 
     result = run_full_flow(
         project_root=project_root,
@@ -86,7 +91,7 @@ def run_full_flow(
             "failure_category": None,
         }
         records.append(segment_record)
-        feedback = _segment_feedback(seg.id)
+        feedback = _segment_feedback(seg.id, session.state.drone_count)
         _append(
             log_path,
             (
@@ -320,6 +325,8 @@ def _validation_summary(validation) -> dict | None:
         "motion_quality_ok": validation.motion_quality_ok,
         "degradation_ok": validation.degradation_ok,
         "code_quality_ok": validation.code_quality_ok,
+        "expected_drone_count": _optional_int(getattr(validation, "expected_drone_count", None)),
+        "actual_drone_count": _optional_int(getattr(validation, "actual_drone_count", None)),
         "errors": {
             "motion": validation.motion_envelope_errors[:3],
             "effective": validation.effective_motion_errors[:3],
@@ -377,12 +384,12 @@ def _failure_category_from_validation(validation) -> str:
     return "unknown_validation"
 
 
-def _segment_feedback(segment_id: str) -> str:
+def _segment_feedback(segment_id: str, drone_count: int = 7) -> str:
     sid = segment_id.upper()
     if sid == "LAND":
         return (
             "继续 LAND。LAND 是降落段，不是正式编舞段。先 auto_init(drones)，"
-            "然后对全部 7 架短灯光提示并 d.land()。不要 move2，不要 keyframe。"
+            f"然后对全部 {int(drone_count)} 架短灯光提示并 d.land()。不要 move2，不要 keyframe。"
         )
     if sid in {"S07", "S08", "S09", "S10", "S11", "S12"}:
         return (
@@ -405,7 +412,12 @@ def _resolve_project(project: str | None, fresh_name: str | None) -> Path:
     raise SystemExit("Provide --fresh-name or a project path.")
 
 
-def _init_fresh_project(project_root: Path, provider: str | None, mode: str) -> None:
+def _init_fresh_project(
+    project_root: Path,
+    provider: str | None,
+    mode: str,
+    drone_count: int,
+) -> None:
     template = TOOL_ROOT / "project_template"
     if project_root.exists():
         raise SystemExit(f"Refusing to overwrite existing project: {project_root}")
@@ -416,6 +428,7 @@ def _init_fresh_project(project_root: Path, provider: str | None, mode: str) -> 
     if provider:
         state["provider"] = provider
     state["mode"] = mode
+    state["drone_count"] = max(1, int(drone_count))
     state_path.write_text(json.dumps(state, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
@@ -463,6 +476,7 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
     parser.add_argument("--fresh-name", help="Create a fresh project under agent_projects/.")
     parser.add_argument("--provider", help="Provider name from ai_providers.local.json.")
     parser.add_argument("--mode", choices=["manual", "fast"], default="manual")
+    parser.add_argument("--drone-count", type=int, default=7)
     parser.add_argument("--max-cycles-per-segment", type=int, default=DEFAULT_MAX_CYCLES_PER_SEGMENT)
     parser.add_argument("--max-attempts-per-cycle", type=int, default=DEFAULT_MAX_ATTEMPTS_PER_CYCLE)
     parser.add_argument("--no-planning-pass", action="store_true")

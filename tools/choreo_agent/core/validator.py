@@ -80,6 +80,8 @@ class ValidationResult:
     code_quality_ok: bool = True
     code_quality_errors: list[str] = field(default_factory=list)
     exit_state: list[list[int]] | None = None
+    expected_drone_count: int = 7
+    actual_drone_count: int | None = None
     error_message: str = ""
     raw_stderr: str = ""
     hover_error: str = ""
@@ -87,8 +89,8 @@ class ValidationResult:
 
     @property
     def passed(self) -> bool:
-        """段安全通过。必须 exit_state 非空（7坐标）。"""
-        if not self.exit_state or len(self.exit_state) != 7:
+        """段安全通过。必须 exit_state 非空且坐标数量匹配项目无人机数。"""
+        if not self.exit_state or len(self.exit_state) != self.expected_drone_count:
             return False
         base = (
             self.compile_ok
@@ -223,8 +225,10 @@ def validate(
     script_path: Path,
     output_dir: Path,
     quality_window: tuple[float, float] | None = None,
+    expected_drone_count: int = 7,
 ) -> ValidationResult:
     result = ValidationResult()
+    result.expected_drone_count = max(1, int(expected_drone_count))
     result.quality_window = quality_window
     if quality_window:
         _traj_cache["seg_start"] = quality_window[0]
@@ -297,6 +301,13 @@ def validate(
                 output_dir,
                 time_s=quality_window[1] if quality_window is not None else None,
             )
+            if result.exit_state:
+                result.actual_drone_count = len(result.exit_state)
+                if result.actual_drone_count != result.expected_drone_count:
+                    result.error_message = (
+                        f"drone_count mismatch: expected {result.expected_drone_count}, "
+                        f"got {result.actual_drone_count}"
+                    )
 
         if result.continuity_required:
             try:
@@ -1220,20 +1231,18 @@ def _format_segment_trajectory() -> str:
         step = max(1, fps // 10)
         sf = max(0, int((seg_start - t0) * fps)); ef = min(len(data[0]) - 1, int((seg_end - t0) * fps))
         lines = [f"段 {seg_start:.0f}-{seg_end:.0f}s"]
+        drone_count = len(data)
         h = "   t   "
-        for d_i in range(7): h += f"  d{d_i}_x d{d_i}_y d{d_i}_z  d{d_i}_vx d{d_i}_vy d{d_i}_vz"
+        for d_i in range(drone_count):
+            h += f"  d{d_i}_x d{d_i}_y d{d_i}_z  d{d_i}_vx d{d_i}_vy d{d_i}_vz"
         lines.append(h)
         for f in range(sf, ef + 1, step):
             t = t0 + f / fps; row = f"{t:6.1f}"
-            for d_i in range(7):
+            for d_i in range(drone_count):
                 d = data[d_i][f]
                 vx,vy,vz = d[5] if isinstance(d[5],(tuple,list)) and len(d[5])==3 else (0,0,0)
                 row += f"  {d[1]:4.0f} {d[2]:4.0f} {d[3]:4.0f}  {vx:4.0f} {vy:4.0f} {vz:4.0f}"
             lines.append(row)
-        traj = _format_segment_trajectory()
-        if traj:
-            lines.append("轨迹数据（0.1s采样）：")
-            lines.append(traj)
         return chr(10).join(lines)
     except Exception as e:
         return f"(traj err: {e})"

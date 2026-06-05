@@ -73,9 +73,10 @@ def best_assign(starts, targets):
     n = len(starts)
     starts_xyz = [_xyz(p) for p in starts]
     targets_xyz = [_xyz(p) for p in targets]
+    target_items = list(targets)
     best_score, best = -1e9, targets
-    for perm in itertools.permutations(range(n)):
-        tt = [targets[i] for i in perm]
+
+    def evaluate(perm):
         tt_xyz = [targets_xyz[i] for i in perm]
         md = 1e9
         for ratio in [0.2, 0.4, 0.6, 0.8]:
@@ -88,10 +89,13 @@ def best_assign(starts, targets):
                     d = ((ai[0]-aj[0])**2 + (ai[1]-aj[1])**2)**0.5
                     if d < md:
                         md = d
-        score = md * 2000 - max(Distance(starts_xyz[i], tt_xyz[i]) for i in range(n)) * 0.01
+        return md * 2000 - max(Distance(starts_xyz[i], tt_xyz[i]) for i in range(n)) * 0.01
+
+    for perm in _assignment_permutations(n, starts_xyz, targets_xyz, evaluate):
+        score = evaluate(perm)
         if score > best_score:
             best_score = score
-            best = tt
+            best = [target_items[i] for i in perm]
     return best
 
 def far_assign(starts, targets, min_path_cm=90, min_spacing_cm=140):
@@ -104,9 +108,10 @@ def far_assign(starts, targets, min_path_cm=90, min_spacing_cm=140):
     n = len(starts)
     starts_xyz = [_xyz(p) for p in starts]
     targets_xyz = [_xyz(p) for p in targets]
+    target_items = list(targets)
     best_score, best = -1e18, targets
-    for perm in itertools.permutations(range(n)):
-        tt = [targets[i] for i in perm]
+
+    def evaluate(perm):
         tt_xyz = [targets_xyz[i] for i in perm]
         min_path_spacing = 1e9
         for step in range(1, 50):
@@ -137,10 +142,93 @@ def far_assign(starts, targets, min_path_cm=90, min_spacing_cm=140):
             - short_penalty * 1000
             - spacing_penalty * 12000
         )
+        return score
+
+    for perm in _assignment_permutations(n, starts_xyz, targets_xyz, evaluate):
+        score = evaluate(perm)
         if score > best_score:
             best_score = score
-            best = tt
+            best = [target_items[i] for i in perm]
     return best
+
+
+def _assignment_permutations(n, starts_xyz, targets_xyz, evaluate):
+    """Full search for small N; deterministic local search for 9+ drones."""
+    if n <= 8:
+        yield from itertools.permutations(range(n))
+        return
+
+    seen = set()
+    seeds = _assignment_seeds(n, starts_xyz, targets_xyz)
+    for seed in seeds:
+        best = _improve_assignment(seed, evaluate)
+        if best not in seen:
+            seen.add(best)
+            yield best
+
+
+def _assignment_seeds(n, starts_xyz, targets_xyz):
+    base = tuple(range(n))
+    seeds = [base, tuple(reversed(base))]
+    seeds.extend(base[k:] + base[:k] for k in range(1, n))
+
+    start_order = _angle_order(starts_xyz)
+    target_order = _angle_order(targets_xyz)
+    for shift in range(n):
+        perm = [0] * n
+        for pos, start_i in enumerate(start_order):
+            perm[start_i] = target_order[(pos + shift) % n]
+        seeds.append(tuple(perm))
+
+    seeds.append(_greedy_assignment(starts_xyz, targets_xyz, prefer_far=False))
+    seeds.append(_greedy_assignment(starts_xyz, targets_xyz, prefer_far=True))
+    return seeds
+
+
+def _improve_assignment(seed, evaluate, max_passes=4):
+    best = tuple(seed)
+    best_score = evaluate(best)
+    n = len(best)
+    for _ in range(max_passes):
+        improved = False
+        for i in range(n):
+            for j in range(i + 1, n):
+                candidate = list(best)
+                candidate[i], candidate[j] = candidate[j], candidate[i]
+                candidate = tuple(candidate)
+                score = evaluate(candidate)
+                if score > best_score:
+                    best = candidate
+                    best_score = score
+                    improved = True
+        if not improved:
+            break
+    return best
+
+
+def _angle_order(points):
+    cx = sum(p[0] for p in points) / len(points)
+    cy = sum(p[1] for p in points) / len(points)
+    return [
+        i for i, _ in sorted(
+            enumerate(points),
+            key=lambda item: math.atan2(item[1][1] - cy, item[1][0] - cx),
+        )
+    ]
+
+
+def _greedy_assignment(starts_xyz, targets_xyz, prefer_far=False):
+    remaining = set(range(len(targets_xyz)))
+    perm = []
+    for start in starts_xyz:
+        chooser = max if prefer_far else min
+        target_i = chooser(
+            remaining,
+            key=lambda idx: Distance(start, targets_xyz[idx]),
+        )
+        remaining.remove(target_i)
+        perm.append(target_i)
+    return tuple(perm)
 
 # ---------- 灯光 ----------
 def apply_light(drone, color_hex: str, ticks: int, interval_ms: int = 100):

@@ -18,7 +18,7 @@ def best_assign(starts, targets):
     best_max_move = 1e9
     best_perm = None
 
-    for perm in itertools.permutations(range(N)):
+    for perm in _candidate_permutations(N, starts, targets):
         tt = [targets[i] for i in perm]
         md = _path_min_distance(starts, tt)
         max_move = max(_distance(starts[i], tt[i]) for i in range(N))
@@ -28,6 +28,90 @@ def best_assign(starts, targets):
             best_perm = perm
 
     return best_perm, best_md
+
+
+def _candidate_permutations(n, starts, targets):
+    """Exhaustive for small N; deterministic local search for 9+ drones."""
+    if n <= 8:
+        yield from itertools.permutations(range(n))
+        return
+
+    def evaluate(perm):
+        tt = [targets[i] for i in perm]
+        md = _path_min_distance(starts, tt)
+        max_move = max(_distance(starts[i], tt[i]) for i in range(n))
+        return md * 100000 - max_move
+
+    seen = set()
+    for seed in _seed_permutations(n, starts, targets):
+        perm = _improve_permutation(seed, evaluate)
+        if perm not in seen:
+            seen.add(perm)
+            yield perm
+
+
+def _seed_permutations(n, starts, targets):
+    base = tuple(range(n))
+    seeds = [base, tuple(reversed(base))]
+    seeds.extend(base[k:] + base[:k] for k in range(1, n))
+
+    start_order = _angle_order(starts)
+    target_order = _angle_order(targets)
+    for shift in range(n):
+        perm = [0] * n
+        for pos, start_i in enumerate(start_order):
+            perm[start_i] = target_order[(pos + shift) % n]
+        seeds.append(tuple(perm))
+
+    seeds.append(_greedy_permutation(starts, targets, prefer_far=False))
+    seeds.append(_greedy_permutation(starts, targets, prefer_far=True))
+    return seeds
+
+
+def _improve_permutation(seed, evaluate, max_passes=4):
+    best = tuple(seed)
+    best_score = evaluate(best)
+    n = len(best)
+    for _ in range(max_passes):
+        improved = False
+        for i in range(n):
+            for j in range(i + 1, n):
+                candidate = list(best)
+                candidate[i], candidate[j] = candidate[j], candidate[i]
+                candidate = tuple(candidate)
+                score = evaluate(candidate)
+                if score > best_score:
+                    best = candidate
+                    best_score = score
+                    improved = True
+        if not improved:
+            break
+    return best
+
+
+def _angle_order(points):
+    cx = sum(_xy(p)[0] for p in points) / len(points)
+    cy = sum(_xy(p)[1] for p in points) / len(points)
+    return [
+        i for i, _ in sorted(
+            enumerate(points),
+            key=lambda item: math.atan2(_xy(item[1])[1] - cy, _xy(item[1])[0] - cx),
+        )
+    ]
+
+
+def _greedy_permutation(starts, targets, prefer_far=False):
+    remaining = set(range(len(targets)))
+    perm = []
+    chooser = max if prefer_far else min
+    for start in starts:
+        target_i = chooser(
+            remaining,
+            key=lambda idx: _distance(start, targets[idx]),
+        )
+        remaining.remove(target_i)
+        perm.append(target_i)
+    return tuple(perm)
 
 
 def _path_min_distance(starts, targets):

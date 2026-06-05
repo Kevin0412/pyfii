@@ -5,6 +5,7 @@
   "music_confirmed": true,
   "mode": "manual",
   "provider": "deepseek",
+  "drone_count": 7,
   "segments": [
     {
       "id": "S01",

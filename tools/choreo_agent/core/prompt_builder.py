@@ -41,13 +41,18 @@ budget_layer(prev, targets, cue, feel='balanced') -> MovePlan
 ```"""
 
 
-def build_system_prompt() -> str:
+def build_system_prompt(drone_count: int = 7) -> str:
     """组装完整 system prompt：全部 context packs + 动态工具摘要。"""
     parts = []
     for name in PACK_ORDER:
         content = _load_context_pack(name)
         if content:
             parts.append(content)
+    parts.append(f"""
+## 项目无人机数量
+本项目 `len(drones) == {int(drone_count)}`。所有几何表、start_positions、targets、prev/exit_state 都必须使用 {int(drone_count)} 个 `(x,y,z)`。
+如果示例或旧文档里写“7机/7个/7架”，按本项目数量 {int(drone_count)} 覆盖。
+""")
     pass  # motion_math summary removed
     pass  # planning_tools summary removed
     parts.append("""
@@ -66,15 +71,17 @@ def build_segment_prompt(
     intent: str,
     prev_state: Sequence[Sequence[float]] | None,
     feedback: str,
+    drone_count: int = 7,
 ) -> tuple[str, str]:
     """Build system + user prompt for the current segment."""
 
-    system = build_system_prompt()
+    drone_count = int(drone_count)
+    system = build_system_prompt(drone_count=drone_count)
 
     # 描述 prev 分布
     prev_lines = []
-    if prev_state and len(prev_state) == 7 and any(float(p[2]) > 0 for p in prev_state):
-        prev_lines.append(f"上一段出口7机坐标（{segment_id}起始）：")
+    if prev_state and len(prev_state) == drone_count and any(float(p[2]) > 0 for p in prev_state):
+        prev_lines.append(f"上一段出口{drone_count}机坐标（{segment_id}起始）：")
         for i, p in enumerate(prev_state):
             prev_lines.append(f"  d{i}: ({float(p[0]):.0f}, {float(p[1]):.0f}, {float(p[2]):.0f})")
         xs = [float(p[0]) for p in prev_state]
@@ -97,7 +104,7 @@ def build_segment_prompt(
 - 不要写 keyframe，不要 move2，不要用 LAND 继续凑正式动作"""
     elif is_s01:
         segment_start_rule = f"""- 首段必须先设计 `start_positions`，设置 `drone.X = drone.x` 与 `drone.Y = drone.y`，再 `drone.takeoff(1, 110)`
-- `start_positions` 自身必须安全分散：7个XY点最小间距≥180cm，不要中心聚团，不要把多数点放在 200-360cm 的中心小区域
+- `start_positions` 自身必须安全分散：{drone_count}个XY点最小间距≥180cm，不要中心聚团，不要把多数点放在 200-360cm 的中心小区域
 - 起飞布局可用“六边形+中心/宽V/双层扇形”等分散结构；首个正式 keyframe 路径通常控制在 180-360cm，不要从中心直接硬飞到全场边界
 - 起飞后调用 `wait_until(drones, {start_time})` 对齐正式编舞窗口；不要直接写 `inittime()`
 - 然后写 `prev = [(d.x, d.y, d.z) for d in drones]` 并开始正式 move2 动作"""
@@ -130,7 +137,7 @@ def build_segment_prompt(
 
 ## 要求
 {segment_start_rule}
-- 对 7 架无人机全部执行；可以统一白光/暖光闪烁 2-5 ticks 后 `d.land()`
+- 对 {drone_count} 架无人机全部执行；可以统一白光/暖光闪烁 2-5 ticks 后 `d.land()`
 - 不要只给单架 `drones[i]` 操作；使用 `for d in drones:` 或等价 per-drone loop
 - 禁止inittime/VelXY/drone.x=tx/import
 - 只输出代码片段（4空格缩进）"""
