@@ -45,7 +45,7 @@ def video_add_audio(video_path: str, audio_path: str,output_path:str):
     pass'''
 
 def color(n,m=0):
-    n=180-n*180/7
+    n=180-n*180/9
     if m>0:
         n=(-abs(n))%180
         h,s,v=int(n),int(255-m),255
@@ -193,7 +193,7 @@ def drone3d(aixs,x,y,z,c,a,led=(-1,-1,-1),acceleration=(0,0,0),g=np.array([0,0,-
 
 
 '''def color(n):
-    n=n*180/7
+    n=n*180/9
     x=255
     if int((n%765)/255)==0:
         return(255-n%255,n%255,x)
@@ -224,17 +224,19 @@ def getGui(field,size):
         if x%5==0:
             cv2.line(img,(600*size,(x*10+20)*size),(640*size,(x*10+20)*size),(255,255,255),size)
             cv2.line(img,(600*size,(x*10+290)*size),(640*size,(x*10+290)*size),(255,255,255),size)
-    for a in range(7):
-        if a<4:
-            for x in range(150):
-                cv2.line(img,((600+a*150+x)*size,540*size),((600+a*150+x)*size,570*size),color(a,(x-75)/75*125),size)
+    legend_cols = 5
+    legend_cell_w = 120
+    for a in range(9):
+        if a<legend_cols:
+            for x in range(legend_cell_w):
+                cv2.line(img,((600+a*legend_cell_w+x)*size,540*size),((600+a*legend_cell_w+x)*size,570*size),color(a,(x-legend_cell_w/2)/(legend_cell_w/2)*125),size)
         else:
-            for x in range(150):
-                cv2.line(img,((600+(a-4)*150+x)*size,570*size),((600+(a-4)*150+x)*size,600*size),color(a,(x-75)/75*125),size)
-    for x in range(4):
-        cv2.rectangle(img,((600+x*150)*size,540*size),((750+x*150)*size,570*size),(255,255,255),size)
-        cv2.rectangle(img,((600+x*150)*size,570*size),((750+x*150)*size,600*size),(255,255,255),size)
-    cv2.rectangle(img,(1120*size,570*size),(1200*size,600*size),(255,255,255),size)
+            for x in range(legend_cell_w):
+                cv2.line(img,((600+(a-legend_cols)*legend_cell_w+x)*size,570*size),((600+(a-legend_cols)*legend_cell_w+x)*size,600*size),color(a,(x-legend_cell_w/2)/(legend_cell_w/2)*125),size)
+    for x in range(legend_cols):
+        cv2.rectangle(img,((600+x*legend_cell_w)*size,540*size),((600+(x+1)*legend_cell_w)*size,570*size),(255,255,255),size)
+        cv2.rectangle(img,((600+x*legend_cell_w)*size,570*size),((600+(x+1)*legend_cell_w)*size,600*size),(255,255,255),size)
+    cv2.rectangle(img,((600+4*legend_cell_w+56)*size,570*size),((600+5*legend_cell_w)*size,600*size),(255,255,255),size)
     if field==4:
         cv2.rectangle(img,(20*size,580*size),(380*size,220*size),(255,255,255),size)
         cv2.rectangle(img,(1000*size,0),(1000*size,540*size),(255,255,255),size)
@@ -372,11 +374,15 @@ def show(data,t0,music,field=6,device="F400",show=True,save="",FPS=200,max_fps=2
                 cv2.rectangle(img2,(560+x-15,250-z+5),(560+x+15,250-z-5),color(a),-1)
                 cv2.rectangle(img2,(560+y-15,500-z+5),(560+y+15,500-z-5),color(a),-1)'''
                 if (show or len(save)>0) and not ThreeD:
-                    if a<4:
-                        cv2.putText(img2,str(a+1)+' ('+str(int(x*1+0.5))+','+str(int(y*1+0.5))+','+str(int(z*1+0.5))+')',((600+a*150)*size,560*size), font, 0.5*size,(255,255,255),size)
+                    legend_cols = 5
+                    legend_cell_w = 120
+                    coord_font_scale = 0.4 * size
+                    coord_text = str(a+1)+' ('+str(int(x*1+0.5))+','+str(int(y*1+0.5))+','+str(int(z*1+0.5))+')'
+                    if a<legend_cols:
+                        cv2.putText(img2,coord_text,((600+a*legend_cell_w)*size,560*size), font, coord_font_scale,(255,255,255),size)
                     else:
                         #在img2上画出无人机的位置并显示坐标
-                        cv2.putText(img2,str(a+1)+' ('+str(int(x*1+0.5))+','+str(int(y*1+0.5))+','+str(int(z*1+0.5))+')',(a*150*size,590*size), font, 0.5*size,(255,255,255),size)
+                        cv2.putText(img2,coord_text,((600+(a-legend_cols)*legend_cell_w)*size,590*size), font, coord_font_scale,(255,255,255),size)
                 aixs.append((x,y,z,angle,led,a))
         if (show or len(save)>0) and not ThreeD:
             Xs=sorted(aixs,key=lambda x:x[0])
@@ -421,7 +427,7 @@ def show(data,t0,music,field=6,device="F400",show=True,save="",FPS=200,max_fps=2
                                 cv2.circle(img2,(int((620+aixs[n][0])*size),int((270-aixs[n][2])*size)),12*size,(0,0,255),2*size)
                                 cv2.circle(img2,(int((620+aixs[n][1])*size),int((540-aixs[n][2])*size)),12*size,(0,0,255),2*size)#错误红点标记
         if (show or len(save)>0) and not ThreeD:
-            cv2.putText(img2,str(int(t*1000)/1000),(1050*size,590*size),font,0.5*size,(255,255,255),size)#在img2上显示时间
+            cv2.putText(img2,str(int(t*1000)/1000),(1082*size,590*size),font,0.36*size,(255,255,255),size)#在img2上显示时间
         time_fps=time.time()
         if len(save)==0 and show or (ThreeD and len(save)==0):
             k=int((time_fps-time_read)*max_fps)
@@ -443,7 +449,7 @@ def show(data,t0,music,field=6,device="F400",show=True,save="",FPS=200,max_fps=2
         if len(save)>0:
             fps=str(int(FPS*10+0.5)/10)
         if (show or len(save)>0) and not ThreeD:
-            cv2.putText(img2,'fps:'+fps,(1120*size,590*size),font,0.5*size,(255,255,255),size)
+            cv2.putText(img2,'fps:'+fps,(1138*size,590*size),font,0.36*size,(255,255,255),size)
         if show and not ThreeD:
             #cv2.destroyAllWindows()
             #cv2.namedWindow('img')
