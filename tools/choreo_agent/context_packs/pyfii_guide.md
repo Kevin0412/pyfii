@@ -36,6 +36,11 @@ far_assign(prev, geo, min_path_cm=90)
 # 安全但鼓励远距离交换的分配。S04/S05、高潮、回卷、分组交换、或验证反馈
 # “路径太短/小范围抖动”时使用；不要继续用相似几何 + best_assign 生成小挪动。
 
+active_min_path_cm(flying_ms)
+# 按 keyframe 名义时长估算最低路径长度。3s 以上 keyframe 如果路径太短，真实
+# 飞行会提前完成，后半段只是在 delay，容易被低活动打回。长 keyframe 写：
+# `targets = far_assign(prev, geo, min_path_cm=active_min_path_cm(3400))`。
+
 clamp_xy(v)  # [0, 560]
 clamp_z(v)   # [80, 250]
 ```
@@ -57,7 +62,7 @@ targets = best_assign(prev, geo)
 prev = move_group(drones, targets, 3000, "#88ccff", 4)
 
 geo = geo_arrow(len(drones), z_layers=(100, 170, 230), reverse=True, spread=1.2)
-targets = far_assign(prev, geo, min_path_cm=140)
+targets = far_assign(prev, geo, min_path_cm=active_min_path_cm(3000))
 prev = move_group_staggered(drones, targets, 3000, "#ffcc44", 4, group_mod=3, stagger_ms=120)
 ```
 

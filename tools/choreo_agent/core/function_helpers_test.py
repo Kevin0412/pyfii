@@ -97,6 +97,42 @@ def test_far_assign_encourages_large_safe_paths():
     print("PASSED: far_assign encourages larger paths")
 
 
+def test_far_assign_penalizes_crossing_collisions():
+    module = _load_template_function_module()
+    starts = [
+        (80, 80, 120),
+        (80, 480, 120),
+        (480, 80, 120),
+        (480, 480, 120),
+    ]
+    targets = [
+        (480, 80, 120),
+        (480, 480, 120),
+        (80, 480, 120),
+        (80, 80, 120),
+    ]
+
+    assigned = module.far_assign(starts, targets, min_path_cm=250, min_spacing_cm=120)
+    min_path_spacing = 1e9
+    for step in range(0, 51):
+        ratio = step / 50
+        for i in range(len(starts)):
+            for j in range(i + 1, len(starts)):
+                ai = tuple(starts[i][k] * (1 - ratio) + assigned[i][k] * ratio for k in range(3))
+                aj = tuple(starts[j][k] * (1 - ratio) + assigned[j][k] * ratio for k in range(3))
+                min_path_spacing = min(min_path_spacing, module.Distance(ai, aj))
+
+    assert min_path_spacing >= 58
+
+
+def test_active_min_path_cm_scales_with_flying_ms():
+    module = _load_template_function_module()
+
+    assert module.active_min_path_cm(2000) < module.active_min_path_cm(3600)
+    assert module.active_min_path_cm(3600) >= 150
+    assert module.active_min_path_cm(9000) <= 280
+
+
 def test_wait_until_uses_delay_not_inittime():
     module = _load_template_function_module()
     drones = [FakeDrone(1000), FakeDrone(2500)]
@@ -201,6 +237,8 @@ if __name__ == "__main__":
     test_auto_init_waits_for_last_move_without_delay()
     test_best_assign_accepts_2d_and_returns_targets()
     test_far_assign_encourages_large_safe_paths()
+    test_far_assign_penalizes_crossing_collisions()
+    test_active_min_path_cm_scales_with_flying_ms()
     test_wait_until_uses_delay_not_inittime()
     test_move_group_returns_targets_and_records_motion_end()
     test_move_group_staggered_adds_group_delay_and_color_cycle()

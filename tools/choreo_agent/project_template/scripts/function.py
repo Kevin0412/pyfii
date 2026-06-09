@@ -130,6 +130,20 @@ def _color_at(color, index):
         return color[index % len(color)]
     return color
 
+
+def active_min_path_cm(flying_ms):
+    """按 move2 名义时长估算最低路径长度，减少早停后靠 delay 的低活动。
+
+    function.py 的 move2 会选择能完成该路径的速度；如果路径太短，底层最低
+    速度仍会让真实飞行提前结束。长 keyframe 搭配 far_assign 时，用这个值
+    作为 min_path_cm，可以让动作更接近名义 flying_ms。
+    """
+    try:
+        seconds = float(flying_ms) / 1000.0
+    except (TypeError, ValueError):
+        seconds = 3.0
+    return int(max(90, min(280, round((seconds - 0.4) * 50))))
+
 # ---------- 坐标裁剪 ----------
 def clamp_xy(v):
     return max(0, min(560, int(round(v))))
@@ -355,37 +369,48 @@ def far_assign(starts, targets, min_path_cm=90, min_spacing_cm=140):
     targets_xyz = [_xyz(p) for p in targets]
     target_items = list(targets)
     best_score, best = -1e18, targets
+    min_path_cm = max(0.0, float(min_path_cm))
+    min_spacing_cm = max(0.0, float(min_spacing_cm))
+    collision_floor_cm = min(58.0, max(45.0, min_spacing_cm * 0.45))
 
     def evaluate(perm):
         tt_xyz = [targets_xyz[i] for i in perm]
         min_path_spacing = 1e9
-        for step in range(1, 50):
+        for step in range(0, 51):
             ratio = step / 50
             for i in range(n):
                 for j in range(i + 1, n):
                     ai = (
                         starts_xyz[i][0] * (1 - ratio) + tt_xyz[i][0] * ratio,
                         starts_xyz[i][1] * (1 - ratio) + tt_xyz[i][1] * ratio,
+                        starts_xyz[i][2] * (1 - ratio) + tt_xyz[i][2] * ratio,
                     )
                     aj = (
                         starts_xyz[j][0] * (1 - ratio) + tt_xyz[j][0] * ratio,
                         starts_xyz[j][1] * (1 - ratio) + tt_xyz[j][1] * ratio,
+                        starts_xyz[j][2] * (1 - ratio) + tt_xyz[j][2] * ratio,
                     )
-                    d = ((ai[0] - aj[0]) ** 2 + (ai[1] - aj[1]) ** 2) ** 0.5
+                    d = (
+                        (ai[0] - aj[0]) ** 2
+                        + (ai[1] - aj[1]) ** 2
+                        + (ai[2] - aj[2]) ** 2
+                    ) ** 0.5
                     if d < min_path_spacing:
                         min_path_spacing = d
         path_lengths = [Distance(starts_xyz[i], tt_xyz[i]) for i in range(n)]
         median_path = sorted(path_lengths)[n // 2]
         max_path = max(path_lengths)
-        short_penalty = sum(max(0, float(min_path_cm) - d) for d in path_lengths)
-        spacing_penalty = max(0, float(min_spacing_cm) - min_path_spacing)
+        short_penalty = sum(max(0, min_path_cm - d) ** 2 for d in path_lengths)
+        spacing_penalty = max(0, min_spacing_cm - min_path_spacing) ** 2
+        collision_penalty = max(0, collision_floor_cm - min_path_spacing) ** 3
         safe_spacing = min(min_path_spacing, 120)
         score = (
-            safe_spacing * 1200
+            safe_spacing * 1800
             + median_path * 900
             + max_path * 80
-            - short_penalty * 1000
-            - spacing_penalty * 12000
+            - short_penalty * 25
+            - spacing_penalty * 350
+            - collision_penalty * 50000
         )
         return score
 
