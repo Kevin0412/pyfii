@@ -116,9 +116,9 @@ def build_segment_prompt(
 - 不要直接写 `inittime()`；跨段对齐由 `auto_init` 处理"""
 
     if segment_upper in {"S04", "S05"}:
-        assign_rule = "- S04/S05 需要大动作或反馈出现路径太短时，用 `targets = far_assign(prev, geo, min_path_cm=90)`；其他承接/收束可用 `best_assign(prev, geo)`。返回值都是 targets 列表，不要拆 `perm/min_d`"
+        assign_rule = "- S04/S05 需要大动作或反馈出现路径太短时，用 `targets = far_assign(prev, geo, min_path_cm=active_min_path_cm(flying_ms))`；其他承接/收束可用 `best_assign(prev, geo)`。返回值都是 targets 列表，不要拆 `perm/min_d`"
     else:
-        assign_rule = "- `targets = best_assign(prev, geo)`；若反馈说路径太短/小范围抖动，可改用 `far_assign(prev, geo, min_path_cm=90)`。prev/geo 用完整 `(x,y,z)`，返回值就是重排后的 targets 列表，不要拆 `perm/min_d`"
+        assign_rule = "- `targets = best_assign(prev, geo)`；若反馈说路径太短/小范围抖动，可改用 `far_assign(prev, geo, min_path_cm=active_min_path_cm(flying_ms))`。prev/geo 用完整 `(x,y,z)`，返回值就是重排后的 targets 列表，不要拆 `perm/min_d`"
 
     segment_duration = float(end_time - start_time)
     if segment_duration <= 5.0:
@@ -165,13 +165,15 @@ def build_segment_prompt(
   `# lighting: ...`
 - {keyframe_rule}
 - {assign_rule}
-- 几何首选本地原语：`geo_wide_v(len(drones))`, `geo_arrow(len(drones))`, `geo_box(len(drones))`, `geo_diagonal(len(drones))`, `geo_wave(len(drones))`, `geo_grid(len(drones))`；优先选/组合原语再 assign，少手写大量坐标
+- 几何首选本地原语：`geo_wide_v(len(drones))`, `geo_arrow(len(drones))`, `geo_box(len(drones))`, `geo_diagonal(len(drones))`, `geo_wave(len(drones))`, `geo_grid(len(drones))`；常用修饰只用 `reverse=True` / `spread=1.2` / `z_layers=(...)`，`geo_box` 还可用 `center=(280,280), width=420, height=420`；优先选/组合原语再 assign，少手写大量坐标
 - 首选动作原语：`prev = move_group(drones, targets, flying_ms, color, ticks)`；卡农/错峰段用 `prev = move_group_staggered(drones, targets, flying_ms, color, ticks, group_mod=3, stagger_ms=120)`
 - 如果不用 helper，才展开 per-drone loop：move2(drone, target, flying_ms) → apply_light(drone, color, ticks) → drone.delay(flying_ms-ticks*100+100)
 - 禁止只给 `drones[0]` 或单架无人机 delay/light；每架机都要通过 move_group 或 per-drone loop 获得本次 move2 执行时间
 - 主体 move2 通常用 2600-3600ms；不要用 4500ms+ 超慢移动凑时长，段尾由 auto_init 压缩
 - 快节奏必须可完成：单个 2600-3200ms keyframe 的 3D 路径通常控制在约 180-360cm；不要用 2000-2400ms 硬飞 500cm 跨场路径
 - 如果段长需要覆盖，不要拉长单个 move2；用多个可完成的快 keyframe、分组错峰或高度切层承接，保持每 1 秒窗口都有群体运动
+- 3s 以上 keyframe 不要写 `min_path_cm=90/100`；用 `flying_ms = 3000` 后 `targets = far_assign(prev, geo, min_path_cm=active_min_path_cm(flying_ms))`
+- 安全距离按 XY 看：不要把同一 XY 的不同 Z 当成安全分离；每个 keyframe 的 XY 点间距尽量 ≥100cm，复杂交换交给 `far_assign`
 - 高度层必须真实混合：每个主体 keyframe 至少 3 个 Z 层，整段 Z range ≥90cm；不要全队同一高度平面
 - LAND 前如果整体真实动作还没超过 60s，系统会追加 S07/S08 等正式段继续编舞；不要靠当前段硬等待
 - {prev_update_rule}

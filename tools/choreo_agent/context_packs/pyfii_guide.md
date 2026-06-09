@@ -22,6 +22,7 @@ geo_wide_v(n), geo_arrow(n), geo_box(n), geo_diagonal(n), geo_wave(n), geo_grid(
 # 不要让模型每段手算大量坐标。
 # 常用安全修饰参数：reverse=True 做方向反转；spread=0.8..1.5 调整展开幅度。
 # 例：geo_wide_v(len(drones), z_layers=(100,170,240), reverse=True, spread=1.3)
+# geo_box 可额外使用 center=(280,280), width=420, height=420。
 
 apply_light(d, "#RRGGBB", ticks)
 # ticks次TurnOnAll，每次delay 100ms。推进 cursor: ticks*100ms。
@@ -90,6 +91,7 @@ keyframe，并让多数无人机移动 240cm 左右或更长；通常写
 正式编舞段不能把一个 keyframe 写成全队同一高度。每个主体 keyframe 至少混合
 3 个高度层（例如 100/160/220），整段 Z range 建议 ≥90cm。坏例子：
 `geo = [(x1,y1,200), ..., (x7,y7,200)]`；这会被视为固定高度平面退化。
+安全距离主要看 XY 平面；不要把同一 XY 上不同 Z 的多架无人机当成安全分离。
 
 最后一个 move2 后面如果没有显式 delay，下一段开始前必须调用 `auto_init(drones)`，
 它会按 `Drone.time` 和 helper 记录的未完成移动时间，把下一段推迟到动作完成之后。

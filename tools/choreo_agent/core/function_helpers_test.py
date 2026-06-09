@@ -118,9 +118,12 @@ def test_far_assign_penalizes_crossing_collisions():
         ratio = step / 50
         for i in range(len(starts)):
             for j in range(i + 1, len(starts)):
-                ai = tuple(starts[i][k] * (1 - ratio) + assigned[i][k] * ratio for k in range(3))
-                aj = tuple(starts[j][k] * (1 - ratio) + assigned[j][k] * ratio for k in range(3))
-                min_path_spacing = min(min_path_spacing, module.Distance(ai, aj))
+                ai = tuple(starts[i][k] * (1 - ratio) + assigned[i][k] * ratio for k in range(2))
+                aj = tuple(starts[j][k] * (1 - ratio) + assigned[j][k] * ratio for k in range(2))
+                min_path_spacing = min(
+                    min_path_spacing,
+                    ((ai[0] - aj[0]) ** 2 + (ai[1] - aj[1]) ** 2) ** 0.5,
+                )
 
     assert min_path_spacing >= 58
 
@@ -158,7 +161,7 @@ def test_move_group_returns_targets_and_records_motion_end():
     assert [d.moves[-1] for d in drones] == targets
     assert [d.lights for d in drones] == [["#44aaff"] * 4] * 3
     assert [d._agent_motion_end_ms for d in drones] == [7000, 7000, 7000]
-    assert all(("delay", 2700) in d.called for d in drones)
+    assert all(("delay", 2600) in d.called for d in drones)
 
 
 def test_move_group_staggered_adds_group_delay_and_color_cycle():
@@ -205,7 +208,7 @@ def test_geometry_primitives_return_safe_points_for_7_and_9():
                 assert 0 <= y <= 560
                 assert 80 <= z <= 250
             min_d = min(
-                module.Distance(points[i], points[j])
+                ((points[i][0] - points[j][0]) ** 2 + (points[i][1] - points[j][1]) ** 2) ** 0.5
                 for i in range(n)
                 for j in range(i + 1, n)
             )
@@ -232,6 +235,24 @@ def test_geometry_primitives_accept_reverse_and_spread_modifiers():
             assert 80 <= z <= 250
 
 
+def test_geo_box_accepts_common_size_modifiers():
+    module = _load_template_function_module()
+
+    points = module.geo_box(9, center=(280, 280), width=420, height=420, spread=1.1)
+
+    assert len(points) == 9
+    for x, y, z in points:
+        assert 0 <= x <= 560
+        assert 0 <= y <= 560
+        assert 80 <= z <= 250
+    min_xy = min(
+        ((points[i][0] - points[j][0]) ** 2 + (points[i][1] - points[j][1]) ** 2) ** 0.5
+        for i in range(9)
+        for j in range(i + 1, 9)
+    )
+    assert min_xy >= 100
+
+
 if __name__ == "__main__":
     test_auto_init_uses_time_cursor_not_missing_init_time()
     test_auto_init_waits_for_last_move_without_delay()
@@ -244,4 +265,5 @@ if __name__ == "__main__":
     test_move_group_staggered_adds_group_delay_and_color_cycle()
     test_geometry_primitives_return_safe_points_for_7_and_9()
     test_geometry_primitives_accept_reverse_and_spread_modifiers()
+    test_geo_box_accepts_common_size_modifiers()
     print("OK")

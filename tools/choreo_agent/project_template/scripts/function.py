@@ -56,7 +56,7 @@ def move2(d, p, t_ms, T=100):
     d._agent_motion_end_ms = max(int(getattr(d, "_agent_motion_end_ms", 0)), end_ms)
 
 
-def move_group(drones, targets, flying_ms, color="#ffffff", ticks=4, tail_ms=100):
+def move_group(drones, targets, flying_ms, color="#ffffff", ticks=4, tail_ms=0):
     """同步 keyframe：每架机 move2 + 短灯光 + 执行等待。
 
     这是 agent 生成代码的首选动作原语。它把常见的 per-drone
@@ -83,7 +83,7 @@ def move_group_staggered(
     ticks=4,
     group_mod=3,
     stagger_ms=120,
-    tail_ms=100,
+    tail_ms=0,
 ):
     """卡农/错峰 keyframe：按 i % group_mod 给每架机轻微错峰后移动。
 
@@ -192,8 +192,17 @@ def geo_arrow(
     return _shape_points(norms, n, center, _spread_scale(scale, spread), z_layers)
 
 
-def geo_box(n, margin=60, z_layers=(100, 160, 220), reverse=False, spread=1.0):
-    """边界框线/署名姿态。spread>1 更靠边界，reverse=True 反向取点。"""
+def geo_box(
+    n,
+    margin=60,
+    z_layers=(100, 160, 220),
+    reverse=False,
+    spread=1.0,
+    center=None,
+    width=None,
+    height=None,
+):
+    """边界框线/署名姿态。可用 center/width/height 指定安全矩形。"""
     norms = [
         (0.0, 0.0), (0.5, 0.0), (1.0, 0.0),
         (1.0, 0.5), (1.0, 1.0), (0.5, 1.0),
@@ -201,6 +210,18 @@ def geo_box(n, margin=60, z_layers=(100, 160, 220), reverse=False, spread=1.0):
     ]
     if reverse:
         norms = list(reversed(norms))
+    if center is not None or width is not None or height is not None:
+        cx, cy = center if center is not None else (280, 280)
+        value = _safe_spread(spread)
+        w = max(220, min(520, float(width if width is not None else 440) * value))
+        h = max(220, min(520, float(height if height is not None else 440) * value))
+        points = []
+        for idx, (nx, ny) in enumerate(_pick_norms(norms, n)):
+            z = z_layers[idx % len(z_layers)]
+            x = float(cx) + (nx - 0.5) * w
+            y = float(cy) + (ny - 0.5) * h
+            points.append((clamp_xy(x), clamp_xy(y), clamp_z(z)))
+        return points
     margin = _spread_margin(margin, spread)
     span = 560 - 2 * int(margin)
     points = []
@@ -383,17 +404,14 @@ def far_assign(starts, targets, min_path_cm=90, min_spacing_cm=140):
                     ai = (
                         starts_xyz[i][0] * (1 - ratio) + tt_xyz[i][0] * ratio,
                         starts_xyz[i][1] * (1 - ratio) + tt_xyz[i][1] * ratio,
-                        starts_xyz[i][2] * (1 - ratio) + tt_xyz[i][2] * ratio,
                     )
                     aj = (
                         starts_xyz[j][0] * (1 - ratio) + tt_xyz[j][0] * ratio,
                         starts_xyz[j][1] * (1 - ratio) + tt_xyz[j][1] * ratio,
-                        starts_xyz[j][2] * (1 - ratio) + tt_xyz[j][2] * ratio,
                     )
                     d = (
                         (ai[0] - aj[0]) ** 2
                         + (ai[1] - aj[1]) ** 2
-                        + (ai[2] - aj[2]) ** 2
                     ) ** 0.5
                     if d < min_path_spacing:
                         min_path_spacing = d
