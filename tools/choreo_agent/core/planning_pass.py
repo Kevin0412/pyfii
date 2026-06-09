@@ -2,7 +2,8 @@
 
 import json
 import re
-from typing import Sequence
+from collections.abc import Mapping, Sequence
+from typing import Any
 
 
 def build_planning_prompt(
@@ -12,6 +13,7 @@ def build_planning_prompt(
     intent: str,
     prev_state: Sequence[Sequence[float]] | None,
     drone_count: int = 7,
+    composition_plan: Mapping[str, Any] | None = None,
 ) -> str:
     """Prompt for first pass: output structured JSON plan."""
     prev_lines = []
@@ -21,9 +23,12 @@ def build_planning_prompt(
             prev_lines.append(f"  d{i}: [{float(p[0]):.0f}, {float(p[1]):.0f}, {float(p[2]):.0f}]")
     prev_text = "\n".join(prev_lines) if prev_lines else "无"
     target_example = ", ".join(f"[x{i},y{i},z{i}]" for i in range(drone_count))
+    composition_text = _format_planning_composition_plan(composition_plan, segment_id)
 
     return f"""## 规划 {segment_id} ({start_time}-{end_time}s, 时长{end_time-start_time}s)
 意图: {intent}
+
+{composition_text}
 
 上一段出口:
 {prev_text}
@@ -61,8 +66,54 @@ def build_planning_prompt(
 节奏目标: 动作更利落，不要用单个慢 move 拖满段落；优先用 2-4 个 2.6-3.6s 的可完成强 keyframe 或分组错峰承接。
 可完成性: 单个 2.6-3.2s keyframe 的 3D 路径通常控制在约 180-360cm；不要规划 500cm 级跨场短飞。
 约束: XY间距≥200cm, Z 100-250cm, targets总数={drone_count}, 速度20-200, 加速度50-400, 推荐速度150-200、加速度260-400，灯光ticks 3-5, 段长{end_time-start_time}s。
+章法约束: JSON 里的 feel/targets/light_color 必须服务全局章法；不要随机换题，不要连续重复同一种退化队形。
 
 只输出 JSON，不解释。"""
+
+
+def _format_planning_composition_plan(
+    plan: Mapping[str, Any] | None,
+    segment_id: str,
+) -> str:
+    if not isinstance(plan, Mapping) or not plan:
+        return ""
+
+    lines = ["全局章法:"]
+    theme = _text(plan.get("theme"))
+    if theme:
+        lines.append(f"- theme: {theme}")
+    motifs = _items(plan.get("movement_motifs") or plan.get("motifs"))
+    if motifs:
+        lines.append(f"- motifs: {'; '.join(motifs[:8])}")
+    roles = plan.get("segment_roles")
+    role = roles.get(str(segment_id).upper()) if isinstance(roles, Mapping) else None
+    if isinstance(role, Mapping):
+        role_text = _text(role.get("role") or role.get("intent"))
+        if role_text:
+            lines.append(f"- current role: {role_text}")
+        role_motifs = _items(role.get("motifs"))
+        if role_motifs:
+            lines.append(f"- current motifs: {'; '.join(role_motifs[:6])}")
+        avoid = _items(role.get("avoid"))
+        if avoid:
+            lines.append(f"- avoid: {'; '.join(avoid[:6])}")
+    return "\n".join(lines)
+
+
+def _text(value: Any) -> str:
+    if value is None:
+        return ""
+    if isinstance(value, str):
+        return value.strip()
+    return str(value).strip()
+
+
+def _items(value: Any) -> list[str]:
+    if isinstance(value, str):
+        return [value.strip()] if value.strip() else []
+    if isinstance(value, Sequence) and not isinstance(value, (str, bytes, bytearray)):
+        return [_text(item) for item in value if _text(item)]
+    return []
 
 
 def parse_plan_json(text: str) -> dict | None:
@@ -132,15 +183,24 @@ def build_coding_prompt(
     start_time: float,
     end_time: float,
     drone_count: int = 7,
+    composition_plan: Mapping[str, Any] | None = None,
 ) -> str:
     """Second pass: budget table → Python code."""
+    composition_text = _format_planning_composition_plan(composition_plan, segment_id)
     return f"""## 编码 {segment_id} ({start_time}-{end_time}s)
 
 {budget_table}
 
+{composition_text}
+
 ## 规则
 - `drones` 是 {int(drone_count)} 架无人机对象列表；循环写 `for i, drone in enumerate(drones):`
-- 每 keyframe：`move2(drone, (x,y,z), flying_ms)` → `apply_light(drone, color, ticks)` → `drone.delay(delay_ms)`
+- 代码开头必须写 5 行设计卡注释：`# role: ...`, `# motifs: ...`, `# beat: ...`, `# formation: ...`, `# lighting: ...`
+- 设计卡必须承接全局章法，尤其是 current role/current motifs；不要写随机队形说明
+- 几何尽量使用本地原语生成：`geo_wide_v/geo_arrow/geo_box/geo_diagonal/geo_wave/geo_grid`，再 `best_assign` 或 `far_assign`
+- 首选每个 keyframe 直接写：`prev = move_group(drones, targets, flying_ms, color, ticks)`
+- 卡农/错峰 keyframe 写：`prev = move_group_staggered(drones, targets, flying_ms, color, ticks, group_mod=3, stagger_ms=120)`
+- 只有需要非常细的 per-drone 控制时，才展开：`move2(drone, (x,y,z), flying_ms)` → `apply_light(drone, color, ticks)` → `drone.delay(delay_ms)`
 - `planning_speed/planning_accel` 只用于预算 fly_ms；final 代码不要写 set_speed/set_accel/VelXY/VelZ，也不要写 `drone[d]`
 - 如需错峰，只能在同一个 per-drone loop 里对当前 `drone.delay(i * 60)`，但不要改变表格里的 fly_ms/delay_ms
 - 段尾：prev = [(t[0],t[1],t[2]) for t in targets_last]

@@ -307,6 +307,14 @@ def _optional_dict(value) -> dict | None:
     return value if isinstance(value, dict) else None
 
 
+def _optional_bool(value) -> bool | None:
+    return value if isinstance(value, bool) else None
+
+
+def _optional_list(value) -> list:
+    return value if isinstance(value, list) else []
+
+
 def _validation_summary(validation) -> dict | None:
     if validation is None:
         return None
@@ -324,6 +332,7 @@ def _validation_summary(validation) -> dict | None:
         "effective": [validation.effective_motion_start_s, validation.effective_motion_end_s],
         "motion_quality_ok": validation.motion_quality_ok,
         "degradation_ok": validation.degradation_ok,
+        "composition_ok": _optional_bool(getattr(validation, "composition_ok", True)),
         "code_quality_ok": validation.code_quality_ok,
         "expected_drone_count": _optional_int(getattr(validation, "expected_drone_count", None)),
         "actual_drone_count": _optional_int(getattr(validation, "actual_drone_count", None)),
@@ -332,6 +341,7 @@ def _validation_summary(validation) -> dict | None:
             "effective": validation.effective_motion_errors[:3],
             "quality": validation.motion_quality_errors[:3],
             "degradation": validation.degradation_errors[:3],
+            "composition": _optional_list(getattr(validation, "composition_errors", []))[:3],
             "code": validation.code_quality_errors[:3],
             "error": validation.error_message[-300:],
         },
@@ -379,6 +389,8 @@ def _failure_category_from_validation(validation) -> str:
         return "hover_or_low_activity"
     if validation.motion_quality_errors:
         return "motion_quality"
+    if getattr(validation, "composition_errors", []):
+        return "composition"
     if validation.degradation_errors:
         return "degradation"
     return "unknown_validation"

@@ -65,6 +65,7 @@ class Session:
             prev_state=self._previous_exit_state(),
             feedback=feedback,
             drone_count=self.state.drone_count,
+            composition_plan=self.state.composition_plan,
         )
         return self._chat_stage(
             seg=seg,
@@ -113,6 +114,7 @@ class Session:
                         seg.id, seg.start_time, seg.end_time,
                         seg.intent or "", previous_exit_state,
                         drone_count=self.state.drone_count,
+                        composition_plan=self.state.composition_plan,
                     )
                     plan_resp = self._chat_stage(
                         seg=seg,
@@ -143,6 +145,7 @@ class Session:
                             seg.start_time,
                             seg.end_time,
                             drone_count=self.state.drone_count,
+                            composition_plan=self.state.composition_plan,
                         )
                         code_resp = self._chat_stage(
                             seg=seg,
@@ -292,6 +295,8 @@ class Session:
             output_dir,
             quality_window=quality_window,
             expected_drone_count=self.state.drone_count,
+            composition_plan=self.state.composition_plan,
+            segment_id=seg.id if seg else None,
         )
         if seg is not None and quality_window is not None:
             dynamic = self._retry_compressed_quality_window(script_path, output_dir, seg, result)
@@ -337,6 +342,8 @@ class Session:
                 output_dir,
                 quality_window=candidate_window,
                 expected_drone_count=self.state.drone_count,
+                composition_plan=self.state.composition_plan,
+                segment_id=seg.id,
             )
             if candidate.passed:
                 seg.start_time = candidate_window[0]
@@ -915,6 +922,7 @@ def _compact_validation_feedback(result: ValidationResult) -> str:
         ("effective", result.effective_motion_errors),
         ("quality", result.motion_quality_errors),
         ("degradation", result.degradation_errors),
+        ("composition", result.composition_errors),
         ("code", result.code_quality_errors),
     ]
     for name, values in groups:
@@ -1020,6 +1028,9 @@ def _validation_snapshot(result: ValidationResult) -> dict:
         "degradation_ok": result.degradation_ok,
         "degradation": result.degradation,
         "degradation_errors": result.degradation_errors,
+        "composition_ok": result.composition_ok,
+        "composition": result.composition,
+        "composition_errors": result.composition_errors,
         "code_quality_ok": result.code_quality_ok,
         "code_quality_errors": result.code_quality_errors,
         "exit_state": result.exit_state,

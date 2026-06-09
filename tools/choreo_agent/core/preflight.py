@@ -49,6 +49,8 @@ def preflight_check(code: str) -> PreflightResult:
     _check_no_inittime(code, r)
     # 8. Single-drone timing after group move
     _check_no_single_drone_timing(code, r)
+    # 9. Cheap coordinate literal range guard
+    _check_coordinate_literals(code, r)
 
     return r
 
@@ -113,6 +115,42 @@ def _check_no_single_drone_timing(code, r):
         r.add("只给单架 drones[i].delay() 推进时间 — 每个 move2 后必须在同一个 per-drone loop 内给每架机留执行时间")
     if re.search(r'\bapply_light\s*\(\s*(?:drones|ds)\s*\[[^\]]+\]', code):
         r.add("只给单架 apply_light(drones[i]) — 正式段灯光/等待应在 per-drone loop 内作用到每架机或明确分组")
+
+
+def _check_coordinate_literals(code, r):
+    try:
+        tree = ast.parse(code)
+    except SyntaxError:
+        return
+    for node in ast.walk(tree):
+        if not isinstance(node, (ast.Tuple, ast.List)) or len(node.elts) != 3:
+            continue
+        values = [_literal_number(elt) for elt in node.elts]
+        if any(value is None for value in values):
+            continue
+        x, y, z = values
+        errors = []
+        if not 0 <= x <= 560:
+            errors.append(f"x={x:g}")
+        if not 0 <= y <= 560:
+            errors.append(f"y={y:g}")
+        if not 80 <= z <= 250:
+            errors.append(f"z={z:g}")
+        if errors:
+            r.add(
+                f"坐标常量超出 pyfii 场地范围(line {getattr(node, 'lineno', '?')}): "
+                + ", ".join(errors)
+                + "；XY 必须在 0-560，Z 必须在 80-250，或显式使用 clamp_xy/clamp_z。"
+            )
+
+
+def _literal_number(node):
+    if isinstance(node, ast.Constant) and isinstance(node.value, (int, float)):
+        return float(node.value)
+    if isinstance(node, ast.UnaryOp) and isinstance(node.op, ast.USub):
+        value = _literal_number(node.operand)
+        return -value if value is not None else None
+    return None
 
 
 def preflight_feedback(result: PreflightResult) -> str:

@@ -76,6 +76,18 @@ drones[0].delay(3200)
     print("PASSED: preflight blocks single-drone timing")
 
 
+def test_preflight_blocks_out_of_range_coordinate_literals():
+    r = preflight_check("""
+geo = [(100, 120, 260), (200, 180, 160)]
+targets = best_assign(prev, geo)
+prev = move_group(drones, targets, 3000, "#4488ff", 4)
+""")
+    assert not r
+    assert "坐标常量超出" in " ".join(r.errors)
+    assert "z=260" in " ".join(r.errors)
+    print("PASSED: preflight blocks out-of-range coordinate literals")
+
+
 def test_preflight_accepts_clean():
     r = preflight_check("""prev = [(d.x,d.y,d.z) for d in drones]
 geo1 = [(100,120,150),(200,180,160),(300,240,140),(400,200,170),(500,160,130),(350,400,150),(150,380,140)]
@@ -119,7 +131,8 @@ if __name__ == "__main__":
     test_preflight_blocks_bare_api()
     test_preflight_blocks_inittime()
     test_preflight_blocks_single_drone_timing()
+    test_preflight_blocks_out_of_range_coordinate_literals()
     test_preflight_accepts_clean()
     test_planning_pass_importable()
     test_degradation_signature_in_state()
-    print("\nALL 11 TESTS PASSED")
+    print("\nALL 12 TESTS PASSED")

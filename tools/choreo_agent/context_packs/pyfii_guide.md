@@ -6,6 +6,21 @@ move2(d, (x,y,z), t_ms, T=100)
 # 反算速度 → VelXY(v,2v)+VelZ(v,2v) → d.move2(x,y,z)。
 # 不推进时间游标；但记录预计飞行结束时间，供 auto_init 防止下一段提前开始。
 
+move_group(drones, targets, flying_ms, color="#ffffff", ticks=4)
+# 同步 keyframe 首选原语：内部对每架机执行 move2 + apply_light + delay，
+# 返回标准化后的 targets，可直接 `prev = move_group(...)`。
+
+move_group_staggered(drones, targets, flying_ms, color="#ffffff", ticks=4, group_mod=3, stagger_ms=120)
+# 卡农/分组错峰首选原语：按 i % group_mod 轻微错峰后移动。
+# 用于 S03 或设计卡含“卡农/错峰/分组”的段落。
+
+pulse_group(drones, color="#ffffff", ticks=3)
+# 全队短灯光脉冲；不能用它凑长时间。
+
+geo_wide_v(n), geo_arrow(n), geo_box(n), geo_diagonal(n), geo_wave(n), geo_grid(n)
+# 安全几何原语，返回 n 个 (x,y,z)。优先选原语再用 best_assign/far_assign，
+# 不要让模型每段手算大量坐标。
+
 apply_light(d, "#RRGGBB", ticks)
 # ticks次TurnOnAll，每次delay 100ms。推进 cursor: ticks*100ms。
 
@@ -24,6 +39,27 @@ clamp_z(v)   # [80, 250]
 ```
 
 ## 时序模型（每次移动）
+优先使用封装原语，减少时间语义错误：
+```python
+targets = best_assign(prev, geo)
+prev = move_group(drones, targets, 3000, "#44aaff", 4)
+
+targets = far_assign(prev, geo2, min_path_cm=140)
+prev = move_group_staggered(drones, targets, 3000, "#ffaa44", 4, group_mod=3, stagger_ms=120)
+```
+
+几何优先使用本地原语：
+```python
+geo = geo_wide_v(len(drones), z_layers=(100, 160, 220))
+targets = best_assign(prev, geo)
+prev = move_group(drones, targets, 3000, "#88ccff", 4)
+
+geo = geo_arrow(len(drones), z_layers=(100, 170, 230))
+targets = far_assign(prev, geo, min_path_cm=140)
+prev = move_group_staggered(drones, targets, 3000, "#ffcc44", 4, group_mod=3, stagger_ms=120)
+```
+
+只有需要非常细的 per-drone 控制时才展开：
 ```python
 move2(drone, (tx, ty, tz), flying_ms)           # 1. 发起飞行
 apply_light(drone, '#color', ticks)              # 2. 灯光 (推进 ticks*100ms)
@@ -73,6 +109,18 @@ drone.Y = drone.y = y
 drone.takeoff(1, height_cm)
 wait_until(drones, 4)
 ```
+
+## 设计卡
+正式段代码开头必须包含 5 行设计卡注释，用于把当前段绑定到全局章法：
+```python
+# role: 当前段在作品里的功能
+# motifs: 使用/变奏的母题
+# beat: 节奏和启动方式
+# formation: 队形/空间结构
+# lighting: 灯光弧线
+```
+如果设计卡写“卡农/错峰/分组”，代码必须使用 `move_group_staggered(...)` 或明确的
+按 i/group 分批 delay；如果写“高潮/爆发”，实际动作幅度和灯光变化必须跟得上。
 
 ## 禁止
 - d.VelXY / d.VelZ 裸调

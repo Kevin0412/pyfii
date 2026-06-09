@@ -1,0 +1,181 @@
+"""Composition gate tests."""
+
+from core.composition import evaluate_composition, extract_design_card, extract_code_features
+from core.validator import ValidationResult
+
+
+PLAN = {
+    "segment_roles": {
+        "S03": {
+            "role": "卡农变奏：分组先后启动，形成交错呼应。",
+            "motifs": ["分组卡农", "交叉换位"],
+            "avoid": ["全队同步单调平移", "无高度差"],
+        },
+        "S05": {
+            "role": "明亮高潮：全场尺度爆发。",
+            "motifs": ["中心爆点", "边界扩张"],
+            "avoid": ["保守小动作"],
+        },
+    }
+}
+
+
+def test_extract_design_card_from_leading_comments():
+    card = extract_design_card(
+        """
+# role: 卡农变奏
+# motifs: 分组卡农; 交叉换位
+# beat: 两组错峰推进
+# formation: 斜线到宽V
+# lighting: 蓝白追光
+auto_init(drones)
+"""
+    )
+
+    assert card["role"] == "卡农变奏"
+    assert "分组卡农" in card["motifs"]
+
+
+def test_composition_gate_requires_design_card():
+    _features, errors = evaluate_composition(
+        "auto_init(drones)\nprev = []\n",
+        PLAN,
+        "S03",
+    )
+
+    assert errors
+    assert "缺少设计卡" in errors[0]
+
+
+def test_composition_gate_requires_stagger_for_canon_role():
+    code = """
+# role: 卡农变奏
+# motifs: 分组卡农; 交叉换位
+# beat: 两组错峰推进
+# formation: 斜线到宽V
+# lighting: 蓝白追光
+auto_init(drones)
+for i, drone in enumerate(drones):
+    move2(drone, (100, 120, 150), 3000)
+    apply_light(drone, "#44aaff", 4)
+    drone.delay(2900)
+"""
+
+    _features, errors = evaluate_composition(code, PLAN, "S03")
+
+    assert errors
+    assert any("错峰" in item for item in errors)
+
+
+def test_composition_gate_accepts_card_with_stagger_and_motif():
+    code = """
+# role: 卡农变奏
+# motifs: 分组卡农; 交叉换位
+# beat: 两组错峰推进
+# formation: 斜线到宽V
+# lighting: 蓝白追光
+auto_init(drones)
+for i, drone in enumerate(drones):
+    drone.delay((i % 3) * 120)
+    move2(drone, (100 + i * 40, 120, 120 + (i % 3) * 45), 3000)
+    apply_light(drone, "#44aaff", 4)
+    drone.delay(2900)
+"""
+
+    features, errors = evaluate_composition(
+        code,
+        PLAN,
+        "S03",
+        degradation={"window_z_range_cm": 120},
+    )
+
+    assert errors == []
+    assert features["features"]["has_indexed_stagger"]
+
+
+def test_composition_gate_accepts_move_group_staggered_helper():
+    code = """
+# role: 卡农变奏
+# motifs: 分组卡农; 交叉换位
+# beat: 三组错峰推进
+# formation: 斜线到宽V
+# lighting: 蓝白追光
+auto_init(drones)
+targets = best_assign(prev, geo)
+prev = move_group_staggered(drones, targets, 3000, "#44aaff", 4, group_mod=3, stagger_ms=120)
+"""
+
+    features, errors = evaluate_composition(
+        code,
+        PLAN,
+        "S03",
+        degradation={"window_z_range_cm": 120},
+    )
+
+    assert errors == []
+    assert features["features"]["move_group_staggered_calls"] == 1
+    assert features["features"]["apply_light_calls"] == 1
+
+
+def test_composition_gate_blocks_underpowered_climax():
+    code = """
+# role: 明亮高潮
+# motifs: 中心爆点; 边界扩张
+# beat: 爆发后回卷
+# formation: 中心爆点到边界框线
+# lighting: 暖金白爆闪
+auto_init(drones)
+for i, drone in enumerate(drones):
+    move2(drone, (100 + i * 40, 120, 160), 3000)
+    apply_light(drone, "#ffffff", 4)
+    drone.delay(2900)
+"""
+
+    _features, errors = evaluate_composition(
+        code,
+        PLAN,
+        "S05",
+        motion_quality={"max_excursion_cm": 80},
+    )
+
+    assert any("高潮段动作幅度不足" in item for item in errors)
+
+
+def test_validation_result_passed_requires_composition_ok_for_formal_segments():
+    result = ValidationResult()
+    result.expected_drone_count = 7
+    result.exit_state = [[100, 100, 150]] * 7
+    result.compile_ok = True
+    result.run_ok = True
+    result.read_fii_ok = True
+    result.distance_warnings = 0
+    result.action_warnings = 0
+    result.dense_min_distance_cm = 120
+    result.code_quality_ok = True
+    result.continuity_required = True
+    result.hover_check_ok = True
+    result.motion_envelope_ok = True
+    result.effective_motion_ok = True
+    result.motion_quality_ok = True
+    result.composition_ok = False
+    result.composition_errors = ["缺少设计卡"]
+
+    assert not result.passed
+    assert "章法失败" in result.repair_feedback()
+
+
+def test_extract_code_features_detects_colors_and_stagger():
+    features = extract_code_features(
+        """
+for i, drone in enumerate(drones):
+    drone.delay((i % 2) * 100)
+    move2(drone, (100, 120, 150), 3000)
+    apply_light(drone, "#ffffff", 4)
+    apply_light(drone, "#ffcc44", 2)
+"""
+    )
+
+    assert features["has_indexed_stagger"]
+    assert features["move2_calls"] == 1
+    assert features["apply_light_calls"] == 2
+    assert features["color_literals"] == ["#ffcc44", "#ffffff"]

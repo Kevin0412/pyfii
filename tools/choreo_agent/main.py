@@ -75,6 +75,7 @@ def main():
             print(f"effective_motion={result.effective_motion_start_s}-{result.effective_motion_end_s}s ok={result.effective_motion_ok} low_activity={result.low_activity_segments[:3]}")
             print(f"motion_quality_ok={result.motion_quality_ok} quality={_compact_quality(result.motion_quality)}")
             print(f"degradation_ok={result.degradation_ok} degradation={_compact_degradation(result.degradation)}")
+            print(f"composition_ok={result.composition_ok} composition={_compact_composition(result.composition)}")
             print(f"code_quality_ok={result.code_quality_ok}")
             if result.exit_state:
                 print(f"exit_state={result.exit_state}")
@@ -86,6 +87,8 @@ def main():
                 print(f"quality_errors={result.motion_quality_errors[:3]}")
             if result.degradation_errors:
                 print(f"degradation_errors={result.degradation_errors[:3]}")
+            if result.composition_errors:
+                print(f"composition_errors={result.composition_errors[:3]}")
             if result.code_quality_errors:
                 print(f"code_quality_errors={result.code_quality_errors[:3]}")
             if result.collision_intervals:
@@ -146,6 +149,7 @@ def main():
                     print(f"  effective_motion={validation.effective_motion_start_s}-{validation.effective_motion_end_s}s ok={validation.effective_motion_ok} low_activity={validation.low_activity_segments[:3]}")
                     print(f"  motion_quality_ok={validation.motion_quality_ok} quality={_compact_quality(validation.motion_quality)}")
                     print(f"  degradation_ok={validation.degradation_ok} degradation={_compact_degradation(validation.degradation)}")
+                    print(f"  composition_ok={validation.composition_ok} composition={_compact_composition(validation.composition)}")
                     print(f"  code_quality_ok={validation.code_quality_ok}")
                     if validation.exit_state:
                         print(f"  exit_state={validation.exit_state}")
@@ -157,6 +161,8 @@ def main():
                         print(f"  quality_errors={validation.motion_quality_errors[:3]}")
                     if validation.degradation_errors:
                         print(f"  degradation_errors={validation.degradation_errors[:3]}")
+                    if validation.composition_errors:
+                        print(f"  composition_errors={validation.composition_errors[:3]}")
                     if validation.code_quality_errors:
                         print(f"  code_quality_errors={validation.code_quality_errors[:3]}")
                     if validation.collision_intervals:
@@ -283,6 +289,28 @@ def _compact_degradation(degradation: dict) -> dict:
         "radius_range_cm",
     )
     return {key: degradation.get(key) for key in keys if key in degradation}
+
+
+def _compact_composition(composition: dict) -> dict:
+    if not isinstance(composition, dict):
+        return {}
+    card = composition.get("design_card")
+    features = composition.get("features")
+    if not isinstance(card, dict):
+        card = {}
+    if not isinstance(features, dict):
+        features = {}
+    return {
+        "role": str(composition.get("role", ""))[:80],
+        "motifs": str(card.get("motifs", ""))[:80],
+        "formation": str(card.get("formation", ""))[:80],
+        "move2": features.get("move2_calls"),
+        "group": features.get("move_group_calls"),
+        "stagger_group": features.get("move_group_staggered_calls"),
+        "lights": features.get("apply_light_calls"),
+        "stagger": features.get("has_indexed_stagger"),
+        "colors": features.get("color_literals", [])[:4],
+    }
 
 
 class _StreamPrinter:

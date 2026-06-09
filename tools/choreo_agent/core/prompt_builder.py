@@ -1,7 +1,8 @@
 """Prompt Builder — loads context packs for system prompt, builds user prompt."""
 
 from pathlib import Path
-from typing import Sequence
+from collections.abc import Mapping, Sequence
+from typing import Any
 
 CONTEXT_DIR = Path(__file__).resolve().parent.parent / "context_packs"
 
@@ -72,6 +73,7 @@ def build_segment_prompt(
     prev_state: Sequence[Sequence[float]] | None,
     feedback: str,
     drone_count: int = 7,
+    composition_plan: Mapping[str, Any] | None = None,
 ) -> tuple[str, str]:
     """Build system + user prompt for the current segment."""
 
@@ -96,6 +98,7 @@ def build_segment_prompt(
         prev_text = "无上一段坐标（首段）"
 
     segment_upper = segment_id.upper()
+    composition_text = _format_composition_plan(composition_plan, segment_upper)
     is_s01 = segment_upper == "S01"
     is_land = segment_upper in {"LAND", "LANDING"}
     if is_land:
@@ -133,10 +136,13 @@ def build_segment_prompt(
         user = f"""## {segment_id} ({start_time}-{end_time}s, 时长{end_time - start_time}s)
 意图：{intent or segment_id}
 
+{composition_text}
+
 {prev_text}
 
 ## 要求
 {segment_start_rule}
+- 代码开头写设计卡注释：`# role: ...`, `# motifs: ...`, `# beat: ...`, `# formation: ...`, `# lighting: ...`
 - 对 {drone_count} 架无人机全部执行；可以统一白光/暖光闪烁 2-5 ticks 后 `d.land()`
 - 不要只给单架 `drones[i]` 操作；使用 `for d in drones:` 或等价 per-drone loop
 - 禁止inittime/VelXY/drone.x=tx/import
@@ -145,14 +151,24 @@ def build_segment_prompt(
         user = f"""## {segment_id} ({start_time}-{end_time}s, 时长{end_time - start_time}s)
 意图：{intent or segment_id}
 
+{composition_text}
+
 {prev_text}
 
 ## 要求
 {segment_start_rule}
+- 代码开头必须写 5 行设计卡注释，且必须承接“全局章法计划”的当前段角色：
+  `# role: ...`
+  `# motifs: ...`
+  `# beat: ...`
+  `# formation: ...`
+  `# lighting: ...`
 - {keyframe_rule}
 - {assign_rule}
-- 每次移动必须在同一个 per-drone loop 内对当前无人机对象完成：move2(drone, target, flying_ms) → apply_light(drone, color, ticks) → drone.delay(flying_ms-ticks*100+100)
-- 禁止只给 `drones[0]` 或单架无人机 delay/light；每架机都要给本次 move2 留执行时间
+- 几何首选本地原语：`geo_wide_v(len(drones))`, `geo_arrow(len(drones))`, `geo_box(len(drones))`, `geo_diagonal(len(drones))`, `geo_wave(len(drones))`, `geo_grid(len(drones))`；优先选/组合原语再 assign，少手写大量坐标
+- 首选动作原语：`prev = move_group(drones, targets, flying_ms, color, ticks)`；卡农/错峰段用 `prev = move_group_staggered(drones, targets, flying_ms, color, ticks, group_mod=3, stagger_ms=120)`
+- 如果不用 helper，才展开 per-drone loop：move2(drone, target, flying_ms) → apply_light(drone, color, ticks) → drone.delay(flying_ms-ticks*100+100)
+- 禁止只给 `drones[0]` 或单架无人机 delay/light；每架机都要通过 move_group 或 per-drone loop 获得本次 move2 执行时间
 - 主体 move2 通常用 2600-3600ms；不要用 4500ms+ 超慢移动凑时长，段尾由 auto_init 压缩
 - 快节奏必须可完成：单个 2600-3200ms keyframe 的 3D 路径通常控制在约 180-360cm；不要用 2000-2400ms 硬飞 500cm 跨场路径
 - 如果段长需要覆盖，不要拉长单个 move2；用多个可完成的快 keyframe、分组错峰或高度切层承接，保持每 1 秒窗口都有群体运动
@@ -170,3 +186,70 @@ def build_segment_prompt(
         user += f"\n\n## 上一轮反馈\n{feedback}\n根据反馈修正。"
 
     return system, user
+
+
+def _format_composition_plan(
+    plan: Mapping[str, Any] | None,
+    segment_id: str,
+) -> str:
+    """Keep global dramaturgy in the user prompt without bloating system cache."""
+    if not isinstance(plan, Mapping) or not plan:
+        return ""
+
+    lines = ["## 全局章法计划（必须服从，减少随机续写）"]
+    theme = _stringish(plan.get("theme"))
+    if theme:
+        lines.append(f"- 作品主题：{theme}")
+
+    arc = _stringish(plan.get("dramaturgy") or plan.get("arc"))
+    if arc:
+        lines.append(f"- 段落推进：{arc}")
+
+    motifs = _listish(plan.get("movement_motifs") or plan.get("motifs"))
+    if motifs:
+        lines.append(f"- 动作母题：{'; '.join(motifs[:8])}")
+
+    light_arc = _stringish(plan.get("light_arc"))
+    if light_arc:
+        lines.append(f"- 灯光弧线：{light_arc}")
+
+    continuity = _listish(plan.get("continuity_rules"))
+    if continuity:
+        lines.append(f"- 跨段规则：{'; '.join(continuity[:6])}")
+
+    roles = plan.get("segment_roles")
+    role = roles.get(segment_id) if isinstance(roles, Mapping) else None
+    if isinstance(role, Mapping):
+        role_text = _stringish(role.get("role") or role.get("intent"))
+        if role_text:
+            lines.append(f"- 当前段角色：{role_text}")
+        role_motifs = _listish(role.get("motifs"))
+        if role_motifs:
+            lines.append(f"- 当前段要使用/变奏的母题：{'; '.join(role_motifs[:6])}")
+        relationship = _stringish(role.get("relationship"))
+        if relationship:
+            lines.append(f"- 与前后段关系：{relationship}")
+        avoid = _listish(role.get("avoid"))
+        if avoid:
+            lines.append(f"- 当前段避免：{'; '.join(avoid[:6])}")
+    elif isinstance(role, str) and role.strip():
+        lines.append(f"- 当前段角色：{role.strip()}")
+
+    lines.append("- 执行方式：先满足本段安全/连续性硬门，再让队形、速度、灯光服务上述主题；复现母题时必须做方向、高度或节奏变奏，不要随机换题。")
+    return "\n".join(lines)
+
+
+def _stringish(value: Any) -> str:
+    if value is None:
+        return ""
+    if isinstance(value, str):
+        return value.strip()
+    return str(value).strip()
+
+
+def _listish(value: Any) -> list[str]:
+    if isinstance(value, str):
+        return [value.strip()] if value.strip() else []
+    if isinstance(value, Sequence) and not isinstance(value, (str, bytes, bytearray)):
+        return [_stringish(item) for item in value if _stringish(item)]
+    return []

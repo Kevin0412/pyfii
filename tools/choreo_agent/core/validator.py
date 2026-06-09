@@ -11,6 +11,11 @@ from statistics import median
 from pathlib import Path
 from dataclasses import dataclass, field
 
+try:
+    from .composition import evaluate_composition
+except ImportError:
+    from composition import evaluate_composition
+
 REPO_ROOT = Path(__file__).resolve().parents[3]
 SRC_ROOT = REPO_ROOT / "src"
 if str(SRC_ROOT) not in sys.path:
@@ -77,6 +82,9 @@ class ValidationResult:
     degradation_ok: bool = True
     degradation: dict = field(default_factory=dict)
     degradation_errors: list[str] = field(default_factory=list)
+    composition_ok: bool = True
+    composition: dict = field(default_factory=dict)
+    composition_errors: list[str] = field(default_factory=list)
     code_quality_ok: bool = True
     code_quality_errors: list[str] = field(default_factory=list)
     exit_state: list[list[int]] | None = None
@@ -111,6 +119,7 @@ class ValidationResult:
                     and self.effective_motion_ok
                     and not self.low_activity_segments
                     and self.motion_quality_ok
+                    and self.composition_ok
                     # degradation_ok is advisory only for single segment
                     # (hard fail only on consecutive same signature — see session.py)
                 )
@@ -207,6 +216,9 @@ class ValidationResult:
         if self.degradation_errors:
             lines.append("退化失败：")
             lines.extend(f"- {item}" for item in self.degradation_errors)
+        if self.composition_errors:
+            lines.append("章法失败：")
+            lines.extend(f"- {item}" for item in self.composition_errors)
         traj = _format_segment_trajectory()
         if traj:
             lines.append("轨迹数据（0.1s采样）：")
@@ -226,6 +238,8 @@ def validate(
     output_dir: Path,
     quality_window: tuple[float, float] | None = None,
     expected_drone_count: int = 7,
+    composition_plan: dict | None = None,
+    segment_id: str | None = None,
 ) -> ValidationResult:
     result = ValidationResult()
     result.expected_drone_count = max(1, int(expected_drone_count))
@@ -365,11 +379,20 @@ def validate(
                     result.degradation,
                 )
                 result.degradation_ok = not result.degradation_errors
+                result.composition, result.composition_errors = evaluate_composition(
+                    active_code,
+                    composition_plan,
+                    segment_id,
+                    motion_quality=result.motion_quality,
+                    degradation=result.degradation,
+                )
+                result.composition_ok = not result.composition_errors
             except Exception as e:
                 result.motion_envelope_ok = False
                 result.effective_motion_ok = False
                 result.motion_quality_ok = False
                 result.degradation_ok = False
+                result.composition_ok = False
                 result.continuity_error = str(e)
         else:
             result.hover_check_ok = True
