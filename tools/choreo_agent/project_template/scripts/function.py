@@ -138,18 +138,34 @@ def clamp_z(v):
     return max(80, min(250, int(round(v))))
 
 # ---------- 安全几何原语 ----------
-def geo_wide_v(n, center=(280, 280), scale=(230, 230), z_layers=(100, 160, 220)):
-    """宽 V / 扇形母题。适合 S01/S02/S06 的主题引入和回忆。"""
+def geo_wide_v(
+    n,
+    center=(280, 280),
+    scale=(230, 230),
+    z_layers=(100, 160, 220),
+    reverse=False,
+    spread=1.0,
+):
+    """宽 V / 扇形母题。reverse=True 时倒 V；spread 调整展开幅度。"""
     norms = [
         (-1.0, 0.95), (-0.72, 0.45), (-0.45, 0.02), (-0.18, -0.38),
         (0.0, -0.72),
         (0.18, -0.38), (0.45, 0.02), (0.72, 0.45), (1.0, 0.95),
     ]
-    return _shape_points(norms, n, center, scale, z_layers)
+    if reverse:
+        norms = [(nx, -ny) for nx, ny in norms]
+    return _shape_points(norms, n, center, _spread_scale(scale, spread), z_layers)
 
 
-def geo_arrow(n, center=(280, 280), scale=(230, 230), z_layers=(100, 160, 220)):
-    """斜线推进/箭头母题。适合方向性推进和高潮前蓄力。"""
+def geo_arrow(
+    n,
+    center=(280, 280),
+    scale=(230, 230),
+    z_layers=(100, 160, 220),
+    reverse=False,
+    spread=1.0,
+):
+    """斜线推进/箭头母题。reverse=True 时箭头反向；spread 调整展开幅度。"""
     norms = [
         (0.0, -1.0),
         (-0.28, -0.58), (0.28, -0.58),
@@ -157,16 +173,21 @@ def geo_arrow(n, center=(280, 280), scale=(230, 230), z_layers=(100, 160, 220)):
         (-0.84, 0.26), (0.84, 0.26),
         (-0.22, 0.82), (0.22, 0.82),
     ]
-    return _shape_points(norms, n, center, scale, z_layers)
+    if reverse:
+        norms = [(nx, -ny) for nx, ny in norms]
+    return _shape_points(norms, n, center, _spread_scale(scale, spread), z_layers)
 
 
-def geo_box(n, margin=60, z_layers=(100, 160, 220)):
-    """边界框线/署名姿态。适合展开、回收、尾声。"""
+def geo_box(n, margin=60, z_layers=(100, 160, 220), reverse=False, spread=1.0):
+    """边界框线/署名姿态。spread>1 更靠边界，reverse=True 反向取点。"""
     norms = [
         (0.0, 0.0), (0.5, 0.0), (1.0, 0.0),
         (1.0, 0.5), (1.0, 1.0), (0.5, 1.0),
         (0.0, 1.0), (0.0, 0.5), (0.5, 0.5),
     ]
+    if reverse:
+        norms = list(reversed(norms))
+    margin = _spread_margin(margin, spread)
     span = 560 - 2 * int(margin)
     points = []
     for idx, (nx, ny) in enumerate(_pick_norms(norms, n)):
@@ -175,9 +196,10 @@ def geo_box(n, margin=60, z_layers=(100, 160, 220)):
     return points
 
 
-def geo_diagonal(n, reverse=False, margin=55, z_layers=(100, 160, 220)):
-    """斜线推进母题。reverse=True 时反向回卷。"""
+def geo_diagonal(n, reverse=False, margin=55, z_layers=(100, 160, 220), spread=1.0):
+    """斜线推进母题。reverse=True 时反向回卷，spread>1 更靠边界。"""
     points = []
+    margin = _spread_margin(margin, spread)
     if n <= 1:
         return [(280, 280, clamp_z(z_layers[0]))]
     for i in range(n):
@@ -191,13 +213,25 @@ def geo_diagonal(n, reverse=False, margin=55, z_layers=(100, 160, 220)):
     return points
 
 
-def geo_wave(n, center_y=280, amplitude=170, margin=55, z_layers=(100, 160, 220)):
-    """波浪/呼吸母题。适合抒情中段和高度层变化。"""
+def geo_wave(
+    n,
+    center_y=280,
+    amplitude=170,
+    margin=55,
+    z_layers=(100, 160, 220),
+    reverse=False,
+    spread=1.0,
+):
+    """波浪/呼吸母题。reverse=True 反向流动；spread 调整振幅和边界。"""
     points = []
+    margin = _spread_margin(margin, spread)
+    amplitude = float(amplitude) * _safe_spread(spread)
     if n <= 1:
         return [(280, clamp_xy(center_y), clamp_z(z_layers[0]))]
     for i in range(n):
         ratio = i / (n - 1)
+        if reverse:
+            ratio = 1 - ratio
         x = margin + ratio * (560 - 2 * margin)
         y = center_y + math.sin(ratio * math.pi * 2) * amplitude
         z = z_layers[(i * 2) % len(z_layers)]
@@ -205,20 +239,45 @@ def geo_wave(n, center_y=280, amplitude=170, margin=55, z_layers=(100, 160, 220)
     return points
 
 
-def geo_grid(n, margin=65, z_layers=(100, 160, 220)):
-    """安全分散网格。适合起飞布局或失败修复时重建大间距。"""
+def geo_grid(n, margin=65, z_layers=(100, 160, 220), reverse=False, spread=1.0):
+    """安全分散网格。spread>1 更靠边界，reverse=True 反向取点。"""
     cols = max(1, math.ceil(math.sqrt(n)))
     rows = max(1, math.ceil(n / cols))
+    margin = _spread_margin(margin, spread)
     span = 560 - 2 * int(margin)
     points = []
     for i in range(n):
-        col = i % cols
-        row = i // cols
+        idx = n - 1 - i if reverse else i
+        col = idx % cols
+        row = idx // cols
         x = margin + (span * col / max(1, cols - 1))
         y = margin + (span * row / max(1, rows - 1))
         z = z_layers[i % len(z_layers)]
         points.append((clamp_xy(x), clamp_xy(y), clamp_z(z)))
     return points
+
+
+def _safe_spread(spread):
+    try:
+        value = float(spread)
+    except (TypeError, ValueError):
+        value = 1.0
+    return max(0.45, min(1.6, value))
+
+
+def _spread_scale(scale, spread):
+    value = _safe_spread(spread)
+    if isinstance(scale, (int, float)):
+        return (float(scale) * value, float(scale) * value)
+    sx, sy = scale
+    return (float(sx) * value, float(sy) * value)
+
+
+def _spread_margin(margin, spread):
+    value = _safe_spread(spread)
+    if value >= 1:
+        return max(35, int(round(float(margin) / value)))
+    return min(180, int(round(float(margin) / value)))
 
 
 def _shape_points(norms, n, center, scale, z_layers):

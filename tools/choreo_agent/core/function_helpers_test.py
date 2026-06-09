@@ -176,6 +176,26 @@ def test_geometry_primitives_return_safe_points_for_7_and_9():
             assert min_d >= 45, f"{builder.__name__}({n}) minD={min_d}"
 
 
+def test_geometry_primitives_accept_reverse_and_spread_modifiers():
+    module = _load_template_function_module()
+    builders = [
+        module.geo_wide_v,
+        module.geo_arrow,
+        module.geo_box,
+        module.geo_diagonal,
+        module.geo_wave,
+        module.geo_grid,
+    ]
+
+    for builder in builders:
+        points = builder(9, reverse=True, spread=1.5)
+        assert len(points) == 9
+        for x, y, z in points:
+            assert 0 <= x <= 560
+            assert 0 <= y <= 560
+            assert 80 <= z <= 250
+
+
 if __name__ == "__main__":
     test_auto_init_uses_time_cursor_not_missing_init_time()
     test_auto_init_waits_for_last_move_without_delay()
@@ -185,4 +205,5 @@ if __name__ == "__main__":
     test_move_group_returns_targets_and_records_motion_end()
     test_move_group_staggered_adds_group_delay_and_color_cycle()
     test_geometry_primitives_return_safe_points_for_7_and_9()
+    test_geometry_primitives_accept_reverse_and_spread_modifiers()
     print("OK")

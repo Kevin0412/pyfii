@@ -20,6 +20,8 @@ pulse_group(drones, color="#ffffff", ticks=3)
 geo_wide_v(n), geo_arrow(n), geo_box(n), geo_diagonal(n), geo_wave(n), geo_grid(n)
 # 安全几何原语，返回 n 个 (x,y,z)。优先选原语再用 best_assign/far_assign，
 # 不要让模型每段手算大量坐标。
+# 常用安全修饰参数：reverse=True 做方向反转；spread=0.8..1.5 调整展开幅度。
+# 例：geo_wide_v(len(drones), z_layers=(100,170,240), reverse=True, spread=1.3)
 
 apply_light(d, "#RRGGBB", ticks)
 # ticks次TurnOnAll，每次delay 100ms。推进 cursor: ticks*100ms。
@@ -54,7 +56,7 @@ geo = geo_wide_v(len(drones), z_layers=(100, 160, 220))
 targets = best_assign(prev, geo)
 prev = move_group(drones, targets, 3000, "#88ccff", 4)
 
-geo = geo_arrow(len(drones), z_layers=(100, 170, 230))
+geo = geo_arrow(len(drones), z_layers=(100, 170, 230), reverse=True, spread=1.2)
 targets = far_assign(prev, geo, min_path_cm=140)
 prev = move_group_staggered(drones, targets, 3000, "#ffcc44", 4, group_mod=3, stagger_ms=120)
 ```
