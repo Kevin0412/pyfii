@@ -128,6 +128,13 @@ def build_segment_prompt(
             "用 `targets = far_assign(prev, geo, min_path_cm=220)`，不要把点挤在中心，也不要只做 70-120cm 小挪动"
         )
         prev_update_rule = "段尾更新 prev = [(t[0],t[1],t[2]) for t in targets]"
+    elif segment_duration <= 8.5:
+        keyframe_rule = (
+            "本段是 6-8s 中短窗口：只写 2 个强 keyframe，不要写第三个 keyframe；"
+            "每个 keyframe 用 3300-3500ms，若卡农/错峰则 stagger_ms=60-90，避免段尾动作未完成；"
+            "两个 keyframe 都优先 `far_assign(prev, geo, min_path_cm=active_min_path_cm(flying_ms))`，不要第二拍改回 best_assign 导致交叉"
+        )
+        prev_update_rule = "段尾更新 prev = [(t[0],t[1],t[2]) for t in targets]"
     else:
         keyframe_rule = "2-4个利落 keyframe，非对称几何（XY间距≥200cm），用短促推进/交换/高度切层制造节奏"
         prev_update_rule = "段尾更新 prev = [(t[0],t[1],t[2]) for t in targets]"
