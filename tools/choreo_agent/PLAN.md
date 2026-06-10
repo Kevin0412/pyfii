@@ -301,3 +301,4 @@ System prompt / context packs / `prompt_builder.py` 会影响 LLM 输入缓存�
 output/太空电梯/动作组/阿鲲-太空电梯.mp3 (70.7s/86BPM)、output/无人区/动作组/无人区.mp3 (70.1s/103BPM)、output/开启新征程 加速版715/动作组/蜂群耶_缩混.mp3 (67.8s/118BPM)；
 另有备选：output/校园作品A/动作组/周深-向光而行.mp3、output/1/动作组/TRIP_01.mp3、output/d/2021比赛/Positive Outlook。
 注：cjxq.mp3 即 output/大闹天宫已摆烂/ 的音乐——一个被放弃的 dntg 项目，无高潮段可能正是当年难做的原因，反而是好测试。
+（2026-06-11：以上音乐已全部复制到仓库根目录，music workstream 直接用根路径即可：阿鲲-太空电梯.mp3 / 无人区.mp3 / 蜂群耶_缩混.mp3 / 周深 - 向光而行 （赵-孟）2.mp3 / TRIP_01.mp3 / Diavid Hoffner - Positive Outlook [mqms].mp3；mp3 按 .gitignore 策略不入库。）
