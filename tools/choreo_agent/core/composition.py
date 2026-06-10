@@ -85,8 +85,8 @@ def evaluate_composition(
     if needs_stagger and not features["has_time_stagger"]:
         errors.append(
             "当前段章法要求卡农/错峰/分组，但代码只有颜色分组、没有真正的时间错峰；"
-            "请加入起飞波次 `drone.delay(i * 120)`（move2 前）或到达波次 "
-            "`move2(drone, t, flying_ms + (i % 3) * 250)`，段尾 `drone.delay(max(0, base_wait - i * 120))` 拉回对齐。"
+            "请加入起飞波次 `drone.delay(i * 120)`（move2 前，等待期间灯保持亮即可）或到达波次 "
+            "`move2(drone, t, flying_ms + (i % 3) * 250)`。"
         )
 
     needs_climax = _needs_climax_gate(segment_id, role_text, role_motifs)
@@ -160,9 +160,9 @@ def evaluate_composition(
     ):
         errors.append(
             f"{segment_id} 全段所有无人机同起同停 — 至少一个 keyframe 要打破时间同步："
-            "起飞波次 `drone.delay(i * 120)`（写在 move2 之前），或到达波次 "
-            "`move2(drone, t, flying_ms + (i % 3) * 250)`（每架机不同时长）；"
-            "段尾用 `drone.delay(max(0, base_wait - i * 120))` 把时间线拉回对齐，避免动作未完成。"
+            "起飞波次 `drone.delay(i * 120)`（写在 move2 之前，等待期间灯保持亮即可，不需要复杂回正算术），"
+            "或到达波次 `move2(drone, t, flying_ms + (i % 3) * 250)`；"
+            "灯光时钟型写法 `apply_light(drone, color, (flying_ms - i*120) // 100)` 一个表达式同时完成灯光和对齐。"
         )
 
     if segment_id == "S04" and features["estimated_keyframe_count"] < 4:

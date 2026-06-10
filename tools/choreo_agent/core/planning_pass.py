@@ -79,7 +79,7 @@ def build_planning_prompt(
 
 节奏目标: 动作更利落，不要用单个慢 move 拖满段落；按上面的 keyframe 数量填表，允许段尾保留 0.3-0.8s 收束，不要反复讨论“是否覆盖整段”。
 可完成性: 单个 keyframe 的 3D 路径通常控制在约 120-380cm；不要规划 500cm 级跨场短飞。
-约束: targets总数={drone_count}, shape=[{target_example}], XY 0-560cm, Z 80-250cm, target 点表 XY 间距硬下限 51cm（pyfii core 碰撞线，检查器精确验证）；密度是构图自由，不要为了凑大间距放弃造型。速度20-200, 加速度50-400, 推荐速度150-200、加速度260-400，灯光ticks 3-5。
+约束: targets总数={drone_count}, shape=[{target_example}], XY 0-560cm, Z 80-250cm, target 点表 XY 间距硬下限 51cm（pyfii core 碰撞线，检查器精确验证）；密度是构图自由，不要为了凑大间距放弃造型。速度20-200, 加速度50-400, 推荐速度150-200、加速度260-400；light_ticks 两种语体：3-5（运动驱动型短提示）或 duration_s*10（灯光时钟型，灯光占满飞行窗口）。
 章法约束: JSON 里的 feel/targets/light_color 必须服务全局章法；不要随机换题，不要连续重复同一种退化队形。
 输出纪律: 直接给 JSON；不要写距离证明、不要手算两两间距、不要自问自答。规划检查器会回报精确间距/路径/时长数字，如有违规你会收到报告再修正。
 
@@ -434,7 +434,9 @@ def build_coding_prompt(
 - 设计卡必须承接全局章法，尤其是 current role/current motifs；不要写随机队形说明
 - 几何主路径：整数坐标表或 math 表达式都必须包进 custom_points：`geo = custom_points([(280+170*cos(2*pi*i/len(drones)), 280+170*sin(2*pi*i/len(drones)), 160+25*sin(i)) for i in range(len(drones))], n=len(drones), min_xy_cm=90)`（sin/cos/pi 已导出，不要写 π；comprehension 直接传给 best_assign/move2 会被打回；9 机圆形 R≥150 弦距≈116cm），再 `best_assign` 或 `far_assign`；S02-S05 禁止调用 `geo_wide_v/geo_arrow/geo_box/geo_diagonal/geo_wave/geo_grid`
 - 正式段默认展开 per-drone loop：`move2(drone, target, flying_ms)` → `apply_light(drone, color, ticks)` → `drone.delay(delay_ms)`，让每架机保留自己的灯光/等待细节
-- S02-S05 每段至少一个 keyframe 必须打破时间同步（同起同停会被节奏门打回）：起飞波次 `drone.delay(i * 120)`（move2 前，段尾 `max(0, delay_ms - i*120)` 回正）或到达波次 `move2(drone, t, fly_ms + (i % 3) * 250)`
+- S02-S05 每段至少一个 keyframe 必须打破时间同步（同起同停会被节奏门打回）：起飞波次 `drone.delay(i * 120)`（move2 前）或到达波次 `move2(drone, t, fly_ms + (i % 3) * 250)`
+- 灯光时钟型写法可免时间算术：`apply_light(drone, color, fly_ms // 100)` 占满飞行窗口不写尾部 delay；错峰时 `(fly_ms - i*120) // 100` 自然回正
+- 定格 pose 合法（静止展示造型可超 1s），但定格期间必须灯亮；黑灯静止会被判低活动
 - `move_group/move_group_staggered` 只作为 smoke/兜底工具；S01-S06 纯 helper 执行会被 composition gate 打回。卡农/错峰请在 per-drone loop 内按 `i % group_mod` 写小 delay
 - 3s 以上 keyframe 若用 `far_assign`，写 `min_path_cm=active_min_path_cm(flying_ms)`；不要写 90/100cm 导致真实运动过早结束
 - 安全距离按 XY 看，不要把同一 XY 不同 Z 当成安全分离

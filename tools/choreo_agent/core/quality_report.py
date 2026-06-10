@@ -149,6 +149,52 @@ def score_project(project_root: str | Path) -> dict:
         "per_segment": per_segment,
         "comparison_vs_deepseek_cannon": comparison,
         "stability": stability,
+        "centroid": centroid_drift(root / "output"),
+    }
+
+
+def centroid_drift(output_dir: str | Path) -> dict:
+    """质心轨迹叙事指纹（PLAN 11.9）：最大/净漂移。
+
+    语料库参照：开启新征程 max 153 / net 74（左→右启程）、
+    无人区 max 96 / net 0（出走-回归）、太空电梯 max 37（垂直主题钉死）。
+    """
+    try:
+        import sys as _sys
+        repo_src = str(Path(__file__).resolve().parents[3] / "src")
+        if repo_src not in _sys.path:
+            _sys.path.insert(0, repo_src)
+        import warnings as _warnings
+
+        with _warnings.catch_warnings():
+            _warnings.simplefilter("ignore")
+            import pyfii as pf
+
+            data, _t0, *_ = pf.read_fii(str(output_dir), fps=30, ignore_acc=True)
+    except Exception as exc:
+        return {"error": f"{type(exc).__name__}"}
+    if not data:
+        return {"error": "empty"}
+    min_len = min(len(d) for d in data)
+    if min_len < 2:
+        return {"error": "too short"}
+    n = len(data)
+    start = None
+    max_drift = 0.0
+    cx0 = cy0 = cx = cy = 0.0
+    for frame in range(0, min_len, 15):  # 0.5s 采样
+        cx = sum(d[frame][1] for d in data) / n
+        cy = sum(d[frame][2] for d in data) / n
+        if start is None:
+            start = (cx, cy)
+            cx0, cy0 = cx, cy
+        drift = ((cx - cx0) ** 2 + (cy - cy0) ** 2) ** 0.5
+        max_drift = max(max_drift, drift)
+    net = ((cx - cx0) ** 2 + (cy - cy0) ** 2) ** 0.5
+    return {
+        "start": (round(cx0), round(cy0)),
+        "max_drift_cm": round(max_drift),
+        "net_drift_cm": round(net),
     }
 
 

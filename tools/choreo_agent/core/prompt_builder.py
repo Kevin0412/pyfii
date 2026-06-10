@@ -198,8 +198,11 @@ def build_segment_prompt(
 - 几何主路径：整数坐标表或 math 表达式都必须包进 custom_points：`geo = custom_points([(280+170*cos(2*pi*i/len(drones)), 280+170*sin(2*pi*i/len(drones)), 160+25*sin(i)) for i in range(len(drones))], n=len(drones), min_xy_cm=90)`（sin/cos/pi 已导出；custom_points 负责裁剪+间距校验，comprehension 直接传给 best_assign/move2 会被打回），再 `best_assign/far_assign`；9 机圆形 R≥150（弦距≈116cm），R<150 间距必小于 90 会被拒；S02-S05 必须至少一个主体 keyframe 使用手写坐标表或 math 几何，禁止调用 `geo_wide_v/geo_arrow/geo_box/geo_diagonal/geo_wave/geo_grid`
 - 正式段默认展开 per-drone loop，不要用 `move_group` 作为整段主结构：`move2(drone, target, flying_ms)` → `apply_light(drone, color, ticks)` → `drone.delay(flying_ms-ticks*100+100)`
 - S02-S05 每段至少一个 keyframe 必须打破时间同步（同起同停会被节奏门打回），二选一：
-  起飞波次 `drone.delay(i * 120)` 写在 move2 之前，段尾 `drone.delay(max(0, flying_ms - ticks*100 + 100 - i*120))` 拉回对齐；
-  或到达波次 `move2(drone, target, flying_ms + (i % 3) * 250)`，段尾等待同样按本机时长计算
+  起飞波次 `drone.delay(i * 120)` 写在 move2 之前；或到达波次 `move2(drone, target, flying_ms + (i % 3) * 250)`
+- 灯光两种语体，按段落角色选一（也可混用）：
+  (a) 运动驱动型：`apply_light(drone, color, 3-5)` 短提示 + `drone.delay(余量)` —— 灯光稀疏、动作主导；
+  (b) 灯光时钟型（dntg 式，免时间算术）：`apply_light(drone, color, flying_ms // 100)` 灯光循环本身占满飞行窗口，**不写尾部 delay**；错峰时 `apply_light(drone, color, (flying_ms - i*120) // 100)` 自然回正。渐变/呼吸归这一型
+- 定格 pose 合法：飞到造型后保持静止展示（如署名/符号阵）可以超过 1s，**但定格期间必须灯亮**（apply_light 或 TurnOnAll 持续覆盖）；黑灯静止才会被判低活动
 - 不要重新质疑 `move2/apply_light/delay` 的语义，也不要在回答中推导 API；按上述顺序写代码即可，验证器会负责轨迹检查
 - `move_group/move_group_staggered` 只作为 smoke/兜底工具；S01-S06 纯 helper 执行会被打回。卡农/错峰请在 per-drone loop 内按 `i % group_mod` 写小 delay，并保留每架机自己的灯光/等待
 - 禁止只给单架 `drones[i]` 操作；使用 `for d in drones:` 或等价 per-drone loop。但可以在 loop 内做差异化：如 `d.delay(i * stagger_ms)` 交错启动, `if i == 0: apply_light(d, special_color, t)` 焦点机, `move2(d, (tx, ty, tz + dz*sin(i)), t)` Z 个性——区别对待不等于跳过

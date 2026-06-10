@@ -32,7 +32,11 @@ EFFECTIVE_MOVE_THRESHOLD_CM_PER_FRAME = 0.35
 MIN_EFFECTIVE_TOTAL_MOVE_CM_PER_FRAME = 1.0
 MIN_EFFECTIVE_ACTIVE_DRONES = 2
 MAX_GLOBAL_HOVER_S = 1.0
-SEGMENT_EDGE_BUFFER_S = 1.0
+# 错峰启动是 sanctioned 词汇（delay(i*120) 最多 ~960ms），起步缓冲给足余量。
+SEGMENT_EDGE_BUFFER_S = 1.3
+# 定格合法化（语料库铁证，PLAN 11.9）：全队静止但灯亮 ≥ 该占比 = 合法定格/留白；
+# 黑灯静止才是真空洞。dntg 24% 片长是亮灯定格。
+LIT_HOLD_MIN_ON_RATIO = 0.5
 MIN_EFFECTIVE_MOTION_DURATION_S = 2.5
 MIN_MEANINGFUL_EXCURSION_CM = 30.0
 MIN_MOVING_DRONE_FRACTION = 0.7
@@ -624,7 +628,40 @@ def _detect_hover(
     if hover_start is not None and (end_frame - hover_start) >= min_frames:
         hover_segments.append((hover_start / fps, end_frame / fps))
 
-    return hover_segments
+    # 亮灯定格是合法编舞设备（符号展示/留白）；只有黑灯静止才算悬停。
+    return _filter_unlit_intervals(data, hover_segments, fps)
+
+
+def _lights_on_ratio(data, start_frame: int, end_frame: int) -> float:
+    """Interval 内灯亮（live RGB 非负且非全零）无人机的平均占比。"""
+    samples = range(start_frame, max(start_frame + 1, end_frame), 6)  # ~10Hz 采样
+    total, count = 0.0, 0
+    for fr in samples:
+        on, n = 0, 0
+        for drone in data:
+            if fr >= len(drone) or len(drone[fr]) < 6:
+                continue
+            n += 1
+            rgb = drone[fr][5]
+            try:
+                if rgb[0] >= 0 and (rgb[0] + rgb[1] + rgb[2]) > 0:
+                    on += 1
+            except (TypeError, IndexError):
+                continue
+        if n:
+            total += on / n
+            count += 1
+    return total / count if count else 0.0
+
+
+def _filter_unlit_intervals(data, segments, fps: int):
+    """保留黑灯静止区间（真违规），剔除亮灯定格（合法）。"""
+    kept = []
+    for start_s, end_s in segments:
+        ratio = _lights_on_ratio(data, int(start_s * fps), int(end_s * fps))
+        if ratio < LIT_HOLD_MIN_ON_RATIO:
+            kept.append((start_s, end_s))
+    return kept
 
 
 def _measure_motion_envelope(
@@ -757,7 +794,7 @@ def _measure_effective_motion(
     return (
         round(first_effective, 3) if first_effective is not None else None,
         round(last_effective, 3) if last_effective is not None else None,
-        low_segments,
+        _filter_unlit_intervals(data, low_segments, fps),
     )
 
 
