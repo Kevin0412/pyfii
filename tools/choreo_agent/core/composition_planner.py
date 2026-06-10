@@ -1,0 +1,222 @@
+"""Composition planner — 从音乐生成全局章法与段窗，取代模板里的手写 dramaturgy。
+
+硬编码消除的核心（PLAN 11.11）：换音乐零手工编辑，产出连贯且彼此不同的演出。
+计划由 LLM 根据 music_brief 生成，结构由确定性 validator 把关；
+输出兼容现有 composition_plan 消费方（prompt_builder/_format_*），
+另带 segments 窗口数组供 state.json 重写段窗。
+
+约束哲学：只给音乐证据和结构硬约束，不给任何队形/主题建议——
+渐强映射到队形复杂度/灯光密度/角色交换，而非位移幅度；
+音乐没有高能段时不得伪造爆发段（cjxq 测试）。
+"""
+
+from __future__ import annotations
+
+import json
+import re
+from collections.abc import Mapping
+from typing import Any, Callable
+
+FORMAL_SEGMENT_IDS = ["S01", "S02", "S03", "S04", "S05", "S06"]
+MIN_SHOW_S = 55.0
+MAX_SHOW_S = 75.0
+MIN_SEGMENT_S = 4.0
+MAX_SEGMENT_S = 17.0
+LAND_MIN_S = 4.0
+LAND_MAX_S = 6.0
+TAKEOFF_S = 4.0
+
+
+def build_planner_prompt(brief: Mapping[str, Any], drone_count: int) -> str:
+    duration = float(brief.get("duration_s") or 0)
+    show_end_hint = min(duration, MAX_SHOW_S)
+    sections = brief.get("sections") or []
+    section_lines = "\n".join(
+        f"  {s['time_range'][0]:.0f}-{s['time_range'][1]:.0f}s: 能量 {s['energy_label']}({s['energy']:.2f}), onset {s['onset_per_s']}/s"
+        for s in sections
+        if s["time_range"][0] < show_end_hint
+    )
+    cues = ", ".join(
+        f"{c:.1f}" for c in (brief.get("hard_cues") or []) if c <= show_end_hint
+    )
+    has_high = any(s.get("energy_label") == "high" for s in sections)
+    energy_note = (
+        ""
+        if has_high
+        else "\n注意：这首音乐没有 high 能量段——不要伪造爆发/高潮段；强度变化用队形复杂度、灯光密度、角色交换表达。"
+    )
+
+    return f"""## 为这首音乐设计无人机灯光秀全局章法（{int(drone_count)} 机）
+
+音乐证据（librosa 分析，节选至 {show_end_hint:.0f}s）：
+- 总长 {duration:.1f}s，tempo {brief.get('tempo_bpm')} BPM（1 beat ≈ {brief.get('beat_interval_s')}s）
+- 结构边界 (hard cues): {cues}
+- 能量曲线:
+{section_lines}{energy_note}
+
+设计原则（语料库蒸馏）：
+- 主题、母题、灯光弧线、空间叙事完全由你根据音乐气质决定；不要套用任何过往演出的主题。
+- 强度映射到队形复杂度/灯光密度/角色交换，不映射到位移幅度。
+- 段边界尽量贴 hard cues（±1.5s 容差）；大动作按 phrase 走，灯光按 beat 走。
+- 质心可以迁移（启程/回归/钉守），是空间叙事工具。
+- 每段给出灯光语体：motion（稀疏短提示）/ light_clock（灯光占满飞行窗，渐变呼吸）/ identity（每机独立色相）。
+- 音乐比演出长时，演出用开头部分即可（结构上收束在你选的 show_end_s）。
+
+硬约束：
+- 正式段固定 6 个：S01-S06；之后 LAND {LAND_MIN_S:.0f}-{LAND_MAX_S:.0f}s。
+- S01 从 {TAKEOFF_S:.0f}s 开始（前 {TAKEOFF_S:.0f}s 起飞）；每段 {MIN_SEGMENT_S:.0f}-{MAX_SEGMENT_S:.0f}s；窗口连续不重叠。
+- show_end_s（LAND 结束）在 {MIN_SHOW_S:.0f}-{min(duration, MAX_SHOW_S):.0f}s 内。
+
+只输出 JSON（不解释）：
+{{
+  "theme": "...",
+  "dramaturgy": "...",
+  "light_arc": "...",
+  "centroid_arc": "...",
+  "movement_motifs": ["...", "..."],
+  "continuity_rules": ["...", "..."],
+  "segments": [
+    {{"id": "S01", "start_s": {TAKEOFF_S:.1f}, "end_s": 13.0, "role": "...", "motifs": ["..."], "avoid": ["..."], "lighting_register": "motion|light_clock|identity", "music_cue": "对应哪个音乐事件/能量"}},
+    ... S02-S06 ...,
+    {{"id": "LAND", "start_s": 63.0, "end_s": 68.0}}
+  ]
+}}"""
+
+
+def parse_planner_json(text: str) -> dict | None:
+    match = re.search(r"\{.*\}", text, re.DOTALL)
+    if not match:
+        return None
+    try:
+        plan = json.loads(match.group())
+    except json.JSONDecodeError:
+        return None
+    return plan if isinstance(plan, dict) else None
+
+
+def validate_music_plan(plan: Mapping[str, Any], brief: Mapping[str, Any]) -> tuple[bool, str]:
+    """结构确定性校验；返回 (ok, 中文报告/修正指令)。"""
+    duration = float(brief.get("duration_s") or 0)
+    problems: list[str] = []
+    segments = plan.get("segments")
+    if not isinstance(segments, list) or not segments:
+        return False, "缺少 segments 数组"
+
+    by_id = {str(s.get("id", "")).upper(): s for s in segments if isinstance(s, Mapping)}
+    expected = FORMAL_SEGMENT_IDS + ["LAND"]
+    missing = [sid for sid in expected if sid not in by_id]
+    if missing:
+        problems.append(f"缺少段: {', '.join(missing)}（必须正好 S01-S06 + LAND）")
+    extra = [sid for sid in by_id if sid not in expected]
+    if extra:
+        problems.append(f"多余段: {', '.join(extra)}")
+
+    if not problems:
+        prev_end = None
+        for sid in expected:
+            seg = by_id[sid]
+            try:
+                start = float(seg["start_s"])
+                end = float(seg["end_s"])
+            except (KeyError, TypeError, ValueError):
+                problems.append(f"{sid}: start_s/end_s 必须是数字")
+                continue
+            length = end - start
+            if sid == "S01" and abs(start - TAKEOFF_S) > 0.51:
+                problems.append(f"S01 必须从 {TAKEOFF_S:.0f}s 开始（实际 {start:.1f}）")
+            if prev_end is not None and abs(start - prev_end) > 0.01:
+                problems.append(f"{sid} 起点 {start:.1f} 与上一段终点 {prev_end:.1f} 不连续")
+            if sid == "LAND":
+                if not (LAND_MIN_S - 0.01 <= length <= LAND_MAX_S + 0.01):
+                    problems.append(f"LAND 时长 {length:.1f}s，应在 {LAND_MIN_S:.0f}-{LAND_MAX_S:.0f}s")
+                if end > duration + 0.01:
+                    problems.append(f"show_end {end:.1f}s 超出音乐 {duration:.1f}s")
+                if not (MIN_SHOW_S - 0.01 <= end <= min(duration, MAX_SHOW_S) + 0.01):
+                    problems.append(
+                        f"show_end {end:.1f}s 应在 {MIN_SHOW_S:.0f}-{min(duration, MAX_SHOW_S):.0f}s"
+                    )
+            elif not (MIN_SEGMENT_S - 0.01 <= length <= MAX_SEGMENT_S + 0.01):
+                problems.append(f"{sid} 时长 {length:.1f}s，应在 {MIN_SEGMENT_S:.0f}-{MAX_SEGMENT_S:.0f}s")
+            prev_end = end
+
+        for sid in FORMAL_SEGMENT_IDS:
+            seg = by_id.get(sid, {})
+            if not str(seg.get("role", "")).strip():
+                problems.append(f"{sid} 缺少 role")
+
+    if problems:
+        return False, "结构修正（只改下列问题，其余保持）：\n- " + "\n- ".join(problems)
+    return True, "PASS"
+
+
+def to_legacy_plan(plan: Mapping[str, Any]) -> dict:
+    """转换为 prompt_builder/_format_* 兼容的 composition_plan 形状。"""
+    segment_roles = {}
+    for seg in plan.get("segments", []):
+        sid = str(seg.get("id", "")).upper()
+        if sid == "LAND":
+            continue
+        segment_roles[sid] = {
+            "role": seg.get("role", ""),
+            "motifs": seg.get("motifs", []),
+            "avoid": seg.get("avoid", []),
+            "relationship": seg.get("music_cue", ""),
+            "lighting_register": seg.get("lighting_register", ""),
+        }
+    legacy = {
+        "theme": plan.get("theme", ""),
+        "dramaturgy": plan.get("dramaturgy", ""),
+        "light_arc": plan.get("light_arc", ""),
+        "centroid_arc": plan.get("centroid_arc", ""),
+        "movement_motifs": plan.get("movement_motifs", []),
+        "continuity_rules": plan.get("continuity_rules", []),
+        "segment_roles": segment_roles,
+    }
+    return legacy
+
+
+def generate_composition_plan(
+    music_path: str,
+    provider: str,
+    drone_count: int,
+    chat_fn: Callable[..., Any] | None = None,
+    max_revisions: int = 2,
+) -> dict:
+    """音乐 → brief → LLM 章法 → 确定性校验（最多 2 轮修正）。
+
+    返回 {"plan": 原始计划(含 segments 窗口), "legacy": 兼容形状, "brief": music_brief}
+    校验最终失败时抛 ValueError —— 调用方决定是否回退模板。
+    """
+    from .music_brief import generate_music_brief
+
+    brief = generate_music_brief(music_path)
+    if not brief:
+        raise ValueError(f"music analysis failed: {music_path}")
+
+    if chat_fn is None:
+        from .llm_client import chat
+
+        def chat_fn(prompt: str) -> str:  # type: ignore[misc]
+            return chat(system="", user=prompt, provider=provider, temperature=0.4).text
+
+    prompt = build_planner_prompt(brief, drone_count)
+    text = chat_fn(prompt)
+    plan = parse_planner_json(text)
+    ok, report = (False, "JSON 解析失败，只输出 JSON") if plan is None else validate_music_plan(plan, brief)
+
+    revision = 0
+    while not ok and revision < max_revisions:
+        revision += 1
+        retry_prompt = (
+            prompt
+            + "\n\n## 上一版输出的问题\n"
+            + report
+            + ("\n上一版 JSON:\n" + json.dumps(plan, ensure_ascii=False) if plan else "")
+        )
+        text = chat_fn(retry_prompt)
+        plan = parse_planner_json(text)
+        ok, report = (False, "JSON 解析失败，只输出 JSON") if plan is None else validate_music_plan(plan, brief)
+
+    if not ok:
+        raise ValueError(f"composition plan validation failed: {report}")
+    return {"plan": plan, "legacy": to_legacy_plan(plan), "brief": brief}

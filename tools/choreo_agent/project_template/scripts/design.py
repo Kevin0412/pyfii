@@ -30,7 +30,21 @@ def load_drone_count(default=7):
         return default
 
 N = load_drone_count()
-MUSIC = str(REPO_ROOT / "cannon_in_D.mp3")
+
+def load_music(default=str(REPO_ROOT / "cannon_in_D.mp3")):
+    """音乐路径来自 state.json（音乐工作流写入）；缺失时回退 cannon。"""
+    try:
+        state = json.loads((PROJECT_ROOT / "state.json").read_text(encoding="utf-8"))
+        mp = state.get("music_path")
+        if mp:
+            p = (PROJECT_ROOT / mp).resolve()
+            if p.exists():
+                return str(p)
+    except Exception:
+        pass
+    return default
+
+MUSIC = load_music()
 OUT = PROJECT_ROOT / "output"
 
 drones = [pf.Drone(0, 0, pf.drone_config_6m, f"192.168.51.{51+i}") for i in range(N)]
