@@ -59,6 +59,7 @@ def score_project(project_root: str | Path) -> dict:
         "per_drone_vel": 0,
         "distinct_colors": 0,
         "math_geometry_segments": 0,
+        "circle_formula_segments": 0,
         "staggered_segments": 0,
         "per_drone_individuality_segments": 0,
         "lighting_tick_estimate": 0,
@@ -84,6 +85,11 @@ def score_project(project_root: str | Path) -> dict:
                 re.findall(r"sin\s*\(\s*i\s*\)\s*|cos\s*\(\s*i\s*\)\s*", body)
             ),
             "per_drone_vel": len(re.findall(r"VelXY\s*\(", body)),
+            # reflection 文档预言的退化：全程绕圈（每段都是 2*pi*i/N 同心圆）
+            "uses_circle_formula": bool(
+                re.search(r"cos\s*\(\s*2\s*\*\s*pi", body)
+                and re.search(r"sin\s*\(\s*2\s*\*\s*pi", body)
+            ),
             "colors": len(feat["color_literals"]),
             "estimated_keyframes": feat["estimated_keyframe_count"],
             "lighting_ticks": feat["lighting_tick_estimate"],
@@ -102,6 +108,8 @@ def score_project(project_root: str | Path) -> dict:
 
         if seg["has_math"]:
             totals["math_geometry_segments"] += 1
+        if seg["uses_circle_formula"]:
+            totals["circle_formula_segments"] += 1
         if seg["has_stagger"]:
             totals["staggered_segments"] += 1
         if seg["stagger_start"] or seg["z_offsets"] or seg["has_stagger"]:
