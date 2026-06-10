@@ -251,3 +251,8 @@ System prompt / context packs / `prompt_builder.py` 会影响 LLM 输入缓存�
 4. **刚体旋转 keyframe 天然安全**（11 处旋转向量移动）：旋转保持两两距离，无需 assignment 搜索。validator 的刚性圆退化检测正是防它被滥用——定位为"单场 1-2 段的合法设备"。
 5. **修正旧蒸馏的误读**：human_choreography_distillation.md 称 dntg"速度范围 50-400"——v3 生成脚本全程走 move2 helper（Vel 上限 200），XML 里的 400 是 `VelXY(v, 2v)` 的加速度。我们的 clamp(20-200 / 50-400) 与 dntg 实际完全一致。
 6. **intime() 锚定 vs auto_init 取整**：dntg 每段每机绝对时间重锚（消除漂移+支持异步入场）；我们禁 inittime 用 auto_init 向上取整（漂移累积+异步被锁死）。架构级，配合 11.7 异步时间线条目。
+
+11.8 补充（蒸馏范围扩展）：
+- 命令流地面真值：`output/大闹天宫/动作组/动作组1/pyfiiCode.py`（shipped 流水）每机 302 TurnOnAll + 295 delay(100) vs 仅 28 move2——约 11:1 灯光:移动指令比，"灯光就是时钟"是工件的字面结构；VelXY 最大 (200,400) 确认 400 是加速度。
+- `output/大闹天宫/大闹天宫.py` 是回放 loader（逐机重放 pyfiiCode.py），`tests/dntg20220730_v3.py` 是生成器——两层工件链。
+- 2023 编程挑战赛两份参赛作品（王圣茗/王子昱）首次扫描：均为 2 机 20-24s 学生练习（XY 跨度 ~300，minD 40-60cm），编舞蒸馏价值低，存档即可。
