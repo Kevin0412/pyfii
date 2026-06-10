@@ -140,17 +140,19 @@ def build_segment_prompt(
         )
         prev_update_rule = "每个 keyframe 后更新 prev；段尾更新 prev = [(t[0],t[1],t[2]) for t in targets]"
     elif segment_duration <= 5.0:
+        budget_ms = int((segment_duration - 0.4) * 1000)
         keyframe_rule = (
-            "本段很短：只写 1 个强 keyframe，move2 用 2800-3600ms；"
-            "目标几何必须靠近场地边界/角点并明显远离 prev，让多数无人机路径约 240cm 或更长，"
-            "用 `targets = far_assign(prev, geo, min_path_cm=220)`，不要把点挤在中心，也不要只做 70-120cm 小挪动"
+            f"本段很短（{segment_duration:g}s）：时间预算 — 所有动作（move2 飞行 + 灯光）总时长 ≈{budget_ms - 400}-{budget_ms}ms，"
+            "keyframe 数量自定（1 个长 move 或 2 个短 move 都行），关键是不留 >1s 的静止空窗；"
+            "`min_path_cm=active_min_path_cm(flying_ms)` 让路径长度匹配飞行时长，不要只做 70-120cm 小挪动"
         )
         prev_update_rule = "段尾更新 prev = [(t[0],t[1],t[2]) for t in targets]"
     elif segment_duration <= 8.5:
+        budget_ms = int((segment_duration - 0.6) * 1000)
         keyframe_rule = (
-            "本段是 6-8s 中短窗口：只写 2 个强 keyframe，不要写第三个 keyframe；"
-            "每个 keyframe 用 3300-3500ms，若卡农/错峰则 stagger_ms=60-90，避免段尾动作未完成；"
-            "两个 keyframe 都优先 `far_assign(prev, geo, min_path_cm=active_min_path_cm(flying_ms))`，不要第二拍改回 best_assign 导致交叉"
+            f"本段是 {segment_duration:g}s 中短窗口：时间预算 — 动作总时长 ≈{budget_ms}ms，keyframe 数量自定，"
+            "每个 keyframe 的 flying_ms 必须能装进预算（含灯光/错峰），避免段尾动作未完成；"
+            "`far_assign(prev, geo, min_path_cm=active_min_path_cm(flying_ms))` 让真实运动贴满飞行时长"
         )
         prev_update_rule = "段尾更新 prev = [(t[0],t[1],t[2]) for t in targets]"
     else:

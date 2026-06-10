@@ -20,7 +20,6 @@ __all__ = [
     "move_group_staggered",
     "pulse_group",
     "custom_points",
-    "jitter_points",
     "active_min_path_cm",
     "clamp_xy",
     "clamp_z",

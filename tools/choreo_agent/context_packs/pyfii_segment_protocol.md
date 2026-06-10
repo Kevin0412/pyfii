@@ -26,7 +26,7 @@
 ## 首段起飞布局
 
 首段 `S01` 的代码拥有起飞布局和正式编舞两部分。agent 必须自己设计起飞位置，不要依赖 template 或 `state.json` 预设点位。
-起飞位置本身也必须安全分散：7 个 XY 点最小间距至少约 180cm，不要把多数点堆在中心小区域；可以使用六边形+中心、宽 V、双层扇形等非退化布局。
+起飞队形是整场演出的第一个视觉语句，完全由 agent 设计并播种全局母题；唯一硬约束：XY 0-560，起飞点最小 XY 间距 ≥51cm（pyfii core 碰撞线，preflight 检查器会静态验算并回报精确数字）。密集或分散是构图决定；起飞高度可各机不同。
 
 推荐结构：
 
@@ -39,7 +39,7 @@ start_positions = [
 for i, drone in enumerate(drones):
     drone.X = drone.x = clamp_xy(start_positions[i][0])
     drone.Y = drone.y = clamp_xy(start_positions[i][1])
-    drone.takeoff(1, 110)
+    drone.takeoff(1, z_i)  # 高度可各机不同，建立视觉层次
 
 # 正式编舞从 4s 后开始调度；final segment 不直接写 inittime
 wait_until(drones, 4)

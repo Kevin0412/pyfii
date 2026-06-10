@@ -525,11 +525,51 @@ def _check_no_inittime(code, r):
 
 
 def _check_no_single_drone_timing(code, r):
-    """Block common bad repair where only drones[0] gets light/delay after group moves."""
-    if re.search(r'\b(?:drones|ds)\s*\[[^\]]+\]\s*\.\s*delay\s*\(', code):
-        r.add("只给单架 drones[i].delay() 推进时间 — 每个 move2 后必须在同一个 per-drone loop 内给每架机留执行时间")
-    if re.search(r'\bapply_light\s*\(\s*(?:drones|ds)\s*\[[^\]]+\]', code):
-        r.add("只给单架 apply_light(drones[i]) — 正式段灯光/等待应在 per-drone loop 内作用到每架机或明确分组")
+    """Block the bad-repair pattern where only drones[0] gets light/delay after group moves.
+
+    `for i in range(...): drones[i].delay(...)` 是合法的 per-drone 写法（循环覆盖全队），
+    只有 *循环外* 的下标式 delay/apply_light 才是给单架机开小灶。
+    """
+    try:
+        tree = ast.parse(code)
+    except SyntaxError:
+        return
+
+    loop_nodes: set[int] = set()
+    for node in ast.walk(tree):
+        if isinstance(node, (ast.For, ast.While)):
+            for sub in ast.walk(node):
+                loop_nodes.add(id(sub))
+
+    def _is_drones_subscript(node):
+        return (
+            isinstance(node, ast.Subscript)
+            and isinstance(node.value, ast.Name)
+            and node.value.id in ("drones", "ds")
+        )
+
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Call) or id(node) in loop_nodes:
+            continue
+        if (
+            isinstance(node.func, ast.Attribute)
+            and node.func.attr == "delay"
+            and _is_drones_subscript(node.func.value)
+        ):
+            r.add(
+                "循环外只给单架 drones[i].delay() 推进时间 — "
+                "每个 move2 后必须在同一个 per-drone loop 内给每架机留执行时间"
+            )
+        if (
+            isinstance(node.func, ast.Name)
+            and node.func.id == "apply_light"
+            and node.args
+            and _is_drones_subscript(node.args[0])
+        ):
+            r.add(
+                "循环外只给单架 apply_light(drones[i]) — "
+                "正式段灯光/等待应在 per-drone loop 内作用到每架机或明确分组"
+            )
 
 
 def _check_coordinate_literals(code, r):

@@ -21,9 +21,6 @@ custom_points(points, n=None, min_xy_cm=90)
 # 手写目标点表的标准化和安全检查。正式编舞主路径：
 # 先写有叙事意图的 n 个 (x,y,z)，再 best_assign/far_assign。
 
-jitter_points(points, xy=18, z=12, seed=0, min_xy_cm=70)
-# 对已经安全的手写点表做确定性微扰，打破过度对称；不能替代手写构图。
-
 apply_light(d, "#RRGGBB", ticks)
 # ticks次TurnOnAll，每次delay 100ms。推进 cursor: ticks*100ms。
 
@@ -92,7 +89,6 @@ geo = custom_points([
     (250, 70, 210), (330, 240, 120), (500, 90, 180),
     (530, 330, 240), (390, 500, 140), (220, 430, 200),
 ], n=len(drones), min_xy_cm=90)
-geo = jitter_points(geo, xy=12, z=8, seed=3)
 targets = far_assign(prev, geo, min_path_cm=active_min_path_cm(3000))
 flying_ms = 3000
 ticks = 4

@@ -75,7 +75,7 @@ def score_project(project_root: str | Path) -> dict:
                 re.findall(r"\bsin\s*\(|\bcos\s*\(", body)
             ),
             "geo_comprehensions": len(
-                re.findall(r"for\s+i\s+in\s+range\s*\(N\)\]", body)
+                re.findall(r"for\s+\w+\s+in\s+range\s*\([^)]*\)\s*\]", body)
             ),
             "stagger_start": 1
             if re.search(r"delay\s*\(\s*i\s*\*", body)

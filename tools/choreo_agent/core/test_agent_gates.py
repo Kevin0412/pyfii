@@ -178,7 +178,15 @@ drones[0].delay(3200)
     assert not r
     joined = " ".join(r.errors)
     assert "drones[i].delay" in joined or "apply_light(drones[i])" in joined
-    print("PASSED: preflight blocks single-drone timing")
+    # 循环内的下标式 per-drone 写法是全队覆盖，必须放行
+    looped = preflight_check("""for i in range(9):
+    drones[i].delay(i * 120)
+    move2(drones[i], (100 + i * 55, 120, 120), 3000)
+    apply_light(drones[i], "#44aaff", 4)
+    drones[i].delay(max(0, 2700 - i * 120))
+""")
+    assert looped, looped.errors
+    print("PASSED: preflight blocks single-drone timing (loop-aware)")
 
 
 def test_preflight_blocks_out_of_range_coordinate_literals():

@@ -406,8 +406,9 @@ def _segment_feedback(segment_id: str, drone_count: int = 7) -> str:
     if sid in {"S07", "S08", "S09", "S10", "S11", "S12"}:
         return (
             f"继续 {sid}。这是 LAND 前自动追加的正式编舞段，用来让整首作品真实动作超过 60s。"
-            "用 1 个强 keyframe，目标靠近场地边界/角点，far_assign(prev, geo, min_path_cm=220)，"
-            "move2 2400-3200ms，并保持高度层。不要原地硬等。"
+            "时间预算：动作（move2 飞行 + 灯光）要贴满整个段窗口，不留 >1s 的静止空窗；"
+            "keyframe 数量自定，`min_path_cm=active_min_path_cm(flying_ms)` 让路径匹配时长。"
+            "保持高度层，不要原地硬等。"
         )
     return (
         f"继续 {sid}。只重写当前未锁定段，保持安全、连贯、非退化、有高度层。"
