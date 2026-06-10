@@ -129,6 +129,19 @@ def test_planning_prompt_has_no_seeds():
     assert "检查器" in prompt
 
 
+def test_overclaimed_speed_is_clamped_in_feasibility():
+    # 700cm 路径 1.5s：模型声称 speed=500 也必须按物理上限 200 收紧 → 不可行
+    prev = [[0, 100, 120], [0, 300, 120]]
+    targets = [[540, 500, 250], [540, 80, 250]]
+    ok, report = evaluate_plan_safety(
+        {"keyframes": [_kf(targets, duration_s=1.5, speed=500, accel=900)]},
+        prev,
+        drone_count=2,
+    )
+    assert not ok
+    assert "最长飞行" in report
+
+
 if __name__ == "__main__":
     for name, fn in sorted(globals().items()):
         if name.startswith("test_") and callable(fn):

@@ -76,6 +76,19 @@ geo = jitter_points(geo, xy=10, seed=7)
     print("PASSED: preflight blocks jitter_points + nonstandard min_xy")
 
 
+def test_preflight_blocks_position_writes_outside_s01():
+    teleport = "drones[3].x = 400\nfor d in drones:\n    move2(d, (100, 100, 120), 3000)\n    d.delay(3000)\n"
+    r = preflight_check(teleport, segment_id="S02")
+    assert not r
+    assert any("位置属性" in e for e in r.errors)
+    # S01 起飞前设置初始位置是协议要求，必须放行
+    s01 = "drone.X = drone.x = 80\ndrone.Y = drone.y = 80\ndrone.takeoff(1, 110)\n"
+    assert preflight_check(s01, segment_id="S01")
+    # 未传 segment_id（旧调用方/离线测试）保持旧行为不拦截
+    assert preflight_check(teleport)
+    print("PASSED: preflight blocks position writes outside S01")
+
+
 def test_preflight_blocks_bare_api():
     r = preflight_check("drone.VelXY(120,200)")
     assert not r
@@ -157,6 +170,7 @@ if __name__ == "__main__":
     test_preflight_blocks_tool_leak()
     test_preflight_blocks_geo_templates()
     test_preflight_blocks_jitter_points_and_nonstandard_min_xy()
+    test_preflight_blocks_position_writes_outside_s01()
     test_preflight_blocks_bare_api()
     test_preflight_blocks_inittime()
     test_preflight_blocks_single_drone_timing()
@@ -164,4 +178,4 @@ if __name__ == "__main__":
     test_preflight_accepts_clean()
     test_planning_pass_importable()
     test_degradation_signature_in_state()
-    print("\nALL 13 TESTS PASSED")
+    print("\nALL 14 TESTS PASSED")

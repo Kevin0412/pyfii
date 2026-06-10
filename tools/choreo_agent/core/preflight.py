@@ -30,12 +30,17 @@ class PreflightResult:
         return self.passed
 
 
-def preflight_check(code: str) -> PreflightResult:
+def preflight_check(code: str, segment_id: str | None = None) -> PreflightResult:
     """Run all cheap checks on agent-generated code. Returns result with errors."""
     r = PreflightResult()
     if not code.strip():
         r.add("空代码")
         return r
+
+    # 12. Position-attribute writes (teleport cheat) — S01 起飞前的
+    #     `drone.X = drone.x = ...` 是合法协议，其他段直接改坐标属性
+    #     会破坏 move2 的速度反算。
+    _check_no_position_writes(code, r, segment_id)
 
     # 1. Markdown / 中文解释残留
     _check_no_markdown(code, r)
@@ -61,6 +66,18 @@ def preflight_check(code: str) -> PreflightResult:
     _check_coordinate_literals(code, r)
 
     return r
+
+
+def _check_no_position_writes(code, r, segment_id):
+    """Ban assignment to drone position attributes outside S01 (teleport cheat)."""
+    if segment_id is None or str(segment_id).upper() == "S01":
+        return
+    match = re.search(r"\.\s*[xyzXYZ]\s*=(?!=)", code)
+    if match:
+        r.add(
+            "禁止直接赋值 drone.x/y/z/X/Y/Z 位置属性 — 瞬移会破坏 move2 的速度反算；"
+            "位置变化只能通过 move2/takeoff/land（起飞前设置初始位置只允许出现在 S01）"
+        )
 
 
 def _check_no_markdown(code, r):

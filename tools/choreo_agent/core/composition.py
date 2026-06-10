@@ -97,10 +97,16 @@ def evaluate_composition(
             )
 
     colors = features["color_literals"]
-    if _text(card.get("lighting")) and features["apply_light_calls"] == 0:
-        errors.append("设计卡声明了灯光弧线，但代码没有 apply_light(...)。")
-    if needs_climax and len(colors) < 2:
-        errors.append("高潮/爆发段灯光过单一：至少使用两种颜色或一次明显亮度/色彩变化。")
+    color_count = features["color_count"]
+    has_dynamic_lighting = features["has_dynamic_lighting"]
+    if (
+        _text(card.get("lighting"))
+        and features["apply_light_calls"] == 0
+        and features["raw_turnonall_calls"] == 0
+    ):
+        errors.append("设计卡声明了灯光弧线，但代码没有 apply_light(...) 或 TurnOnAll(...)。")
+    if needs_climax and color_count < 2 and not has_dynamic_lighting:
+        errors.append("高潮/爆发段灯光过单一：至少使用两种颜色或一次明显亮度/色彩变化（渐变呼吸也算）。")
 
     if degradation:
         z_range = _float(degradation.get("window_z_range_cm"))
@@ -133,7 +139,8 @@ def evaluate_composition(
         segment_id in MONOTONE_PACING_SEGMENTS
         and features["estimated_keyframe_count"] >= 2
         and features["uniform_move2_duration"]
-        and len(colors) <= 1
+        and color_count <= 1
+        and not has_dynamic_lighting
         and not features["has_indexed_stagger"]
     ):
         errors.append(
@@ -147,8 +154,8 @@ def evaluate_composition(
             "S04 是抒情展开段，至少需要 4 个明确 keyframe 或 4 组目标点，"
             "不要退化成少量同步大块移动。"
         )
-    if segment_id == "S04" and len(colors) < 3:
-        errors.append("S04 灯光过单一：抒情展开段至少需要 3 种颜色或三段明显色彩变化。")
+    if segment_id == "S04" and color_count < 3 and not has_dynamic_lighting:
+        errors.append("S04 灯光过单一：抒情展开段至少需要 3 种颜色或三段明显色彩变化（渐变呼吸也算）。")
 
     if segment_id == "S06" and features["estimated_keyframe_count"] < 2:
         errors.append(
@@ -217,6 +224,15 @@ def extract_code_features(code: str) -> dict:
     move_group_calls = len(re.findall(r"\bmove_group\s*\(", code))
     staggered_group_calls = len(re.findall(r"\bmove_group_staggered\s*\(", code))
     raw_apply_light_calls = len(re.findall(r"\bapply_light\s*\(", code))
+    raw_turnonall_calls = len(re.findall(r"\.TurnOnAll\s*\(", code))
+    # RGB 三元组字面量颜色：d.TurnOnAll((255, 200, 40))
+    rgb_tuple_colors = sorted(
+        set(re.findall(r"TurnOnAll\s*\(\s*\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*\)", code))
+    )
+    # 计算式灯光（渐变/呼吸）：TurnOnAll 参数含 int()/sin()/cos()
+    has_dynamic_lighting = bool(
+        re.search(r"TurnOnAll\s*\([^)]*(?:int\s*\(|sin\s*\(|cos\s*\()", code)
+    )
     geo_template_calls = {
         name: len(re.findall(rf"\b{name}\s*\(", code))
         for name in GEO_TEMPLATE_NAMES
@@ -231,7 +247,9 @@ def extract_code_features(code: str) -> dict:
         "move_group_calls": move_group_calls,
         "move_group_staggered_calls": staggered_group_calls,
         "raw_apply_light_calls": raw_apply_light_calls,
+        "raw_turnonall_calls": raw_turnonall_calls,
         "apply_light_calls": raw_apply_light_calls + move_group_calls + staggered_group_calls,
+        "has_dynamic_lighting": has_dynamic_lighting,
         "delay_calls": delay_calls,
         "uses_group_only_execution": (move_group_calls + staggered_group_calls) > 0 and move2_calls == 0,
         "uses_best_assign": "best_assign(" in code,
@@ -247,6 +265,8 @@ def extract_code_features(code: str) -> dict:
         "has_indexed_stagger": has_indexed_stagger,
         "has_math_geometry": _has_math_geometry(code),
         "color_literals": colors,
+        "rgb_tuple_color_count": len(rgb_tuple_colors),
+        "color_count": len(colors) + len(rgb_tuple_colors),
         "move2_duration_values": move2_durations,
         "uniform_move2_duration": len(move2_durations) == 1,
         "lighting_tick_estimate": _estimate_lighting_ticks(code),
@@ -353,24 +373,23 @@ def _has_math_geometry(code: str) -> bool:
 
 
 def _estimate_lighting_ticks(code: str) -> int:
-    """Estimate total lighting ticks from apply_light calls and for-loop ranges.
+    """Estimate total lighting ticks.
 
-    apply_light(d, color, ticks) → ticks
-    range(N) after TurnOnAll or apply_light → N (heuristic)
+    apply_light(d, color, ticks) → ticks（直接计入）
+    `for a in range(N):` 循环体（同行或后 4 行）内含 TurnOnAll/TurnOffAll → 计 N 一次；
+    apply_light 循环不重复计（其 ticks 参数已计入）。
     """
     ticks = 0
     for match in re.finditer(r"\bapply_light\s*\([^,]+,\s*[^,]+,\s*(\d+)\s*\)", code):
         ticks += int(match.group(1))
-    for match in re.finditer(
-        r"for\s+\w+\s+in\s+range\s*\(\s*(\d+)\s*\).*?(?:TurnOnAll|TurnOffAll|apply_light)",
-        code,
-    ):
-        ticks += int(match.group(1))
-    for match in re.finditer(
-        r"for\s+\w+\s+in\s+range\s*\(\s*(\d+)\s*\).*?delay\(100",
-        code,
-    ):
-        ticks += int(match.group(1))
+    lines = code.splitlines()
+    for idx, line in enumerate(lines):
+        match = re.search(r"for\s+\w+\s+in\s+range\s*\(\s*(\d+)\s*\)", line)
+        if not match:
+            continue
+        window = " ".join(lines[idx : idx + 5])
+        if re.search(r"TurnOnAll|TurnOffAll", window) and "apply_light" not in window:
+            ticks += int(match.group(1))
     return ticks
 
 

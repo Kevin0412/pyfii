@@ -35,7 +35,10 @@ def score_project(project_root: str | Path) -> dict:
     code = design_path.read_text(encoding="utf-8")
 
     # Extract segment bodies between markers
-    from .composition import extract_code_features
+    try:
+        from .composition import extract_code_features
+    except ImportError:  # direct script run: python3 core/quality_report.py
+        from composition import extract_code_features
 
     segments: dict[str, str] = {}
     for match in re.finditer(
@@ -46,18 +49,20 @@ def score_project(project_root: str | Path) -> dict:
         segments[match.group(1)] = match.group(2).strip()
 
     per_segment: dict[str, dict] = {}
+    all_colors: set[str] = set()
+    rgb_tuple_color_total = 0
     totals = {
         "math_sin_cos_calls": 0,
         "per_drone_geo_comprehensions": 0,
         "staggered_starts": 0,
         "per_drone_z_offsets": 0,
         "per_drone_vel": 0,
+        "distinct_colors": 0,
         "math_geometry_segments": 0,
         "staggered_segments": 0,
         "per_drone_individuality_segments": 0,
         "lighting_tick_estimate": 0,
         "keyframe_count": 0,
-        "has_recommendations": 0,
     }
 
     for seg_id, body in sorted(segments.items()):
@@ -92,6 +97,8 @@ def score_project(project_root: str | Path) -> dict:
         totals["per_drone_vel"] += seg["per_drone_vel"]
         totals["lighting_tick_estimate"] += seg["lighting_ticks"]
         totals["keyframe_count"] += seg["estimated_keyframes"]
+        all_colors |= set(feat["color_literals"])
+        rgb_tuple_color_total += feat.get("rgb_tuple_color_count", 0)
 
         if seg["has_math"]:
             totals["math_geometry_segments"] += 1
@@ -99,6 +106,8 @@ def score_project(project_root: str | Path) -> dict:
             totals["staggered_segments"] += 1
         if seg["stagger_start"] or seg["z_offsets"] or seg["has_stagger"]:
             totals["per_drone_individuality_segments"] += 1
+
+    totals["distinct_colors"] = len(all_colors) + rgb_tuple_color_total
 
     # Compare against baseline
     comparison = {}

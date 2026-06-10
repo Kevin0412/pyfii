@@ -379,3 +379,85 @@ for i, drone in enumerate(drones):
     )
     assert features["move2_duration_values"] == [2000.0, 2900.0]
     assert not features["uniform_move2_duration"]
+
+
+def test_lighting_gate_accepts_turnonall_loops():
+    code = """
+# role: 高潮
+# motifs: 中心爆点
+# beat: 渐变呼吸
+# formation: 大环
+# lighting: 金色呼吸渐变
+auto_init(drones)
+prev = [(d.x, d.y, d.z) for d in drones]
+geo = [(100, 100, 120), (300, 100, 180)]
+targets = best_assign(prev, geo)
+for i, d in enumerate(drones):
+    move2(d, targets[i], 3000)
+    for a in range(15):
+        d.TurnOnAll((int(128 + 127 * sin(a * pi / 15)), 80, 20))
+        d.delay(100)
+    d.delay(1500)
+"""
+    features, errors = evaluate_composition(code, {}, "S03")
+    assert not any("没有 apply_light" in e for e in errors), errors
+    assert features["features"]["has_dynamic_lighting"]
+    assert features["features"]["raw_turnonall_calls"] == 1
+
+
+def test_monotone_gate_not_fired_with_dynamic_lighting():
+    code = """
+# role: 展开
+# motifs: 扇形展开
+# beat: 呼吸
+# formation: 宽阵
+# lighting: 渐变
+auto_init(drones)
+prev = [(d.x, d.y, d.z) for d in drones]
+geo1 = [(100, 100, 120), (300, 100, 180)]
+targets = best_assign(prev, geo1)
+for d, t in zip(drones, targets):
+    move2(d, t, 3000)
+    for a in range(10):
+        d.TurnOnAll((int(100 + 100 * sin(a * pi / 10)), 50, 50))
+        d.delay(100)
+geo2 = [(100, 300, 120), (300, 300, 180)]
+targets = best_assign(prev, geo2)
+for d, t in zip(drones, targets):
+    move2(d, t, 3000)
+    for a in range(10):
+        d.TurnOnAll((int(100 + 100 * sin(a * pi / 10)), 50, 50))
+        d.delay(100)
+"""
+    _features, errors = evaluate_composition(code, {}, "S02")
+    assert not any("节奏完全单调" in e for e in errors), errors
+
+
+def test_rgb_tuple_literals_count_as_colors():
+    features = extract_code_features(
+        """
+for i, d in enumerate(drones):
+    move2(d, (100, 120, 150), 3000)
+    d.TurnOnAll((255, 0, 0))
+    d.delay(100)
+    d.TurnOnAll((0, 0, 255))
+    d.delay(100)
+"""
+    )
+    assert features["rgb_tuple_color_count"] == 2
+    assert features["color_count"] == 2
+
+
+def test_lighting_tick_estimate_multiline_loop():
+    features = extract_code_features(
+        """
+for i, d in enumerate(drones):
+    move2(d, (100, 120, 150), 3000)
+    apply_light(d, "#ffffff", 4)
+    for a in range(20):
+        d.TurnOnAll((200, 100, 50))
+        d.delay(100)
+"""
+    )
+    # apply_light 4 ticks + range(20) TurnOnAll loop = 24
+    assert features["lighting_tick_estimate"] == 24

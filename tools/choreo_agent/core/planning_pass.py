@@ -133,10 +133,10 @@ def _format_keyframe_contract(segment_id: str, start_time: float, end_time: floa
 
 
 def _format_safe_coordinate_seeds(drone_count: int) -> str:
-    return f"""坐标纪律（{int(drone_count)} 机手写点表）:
-- 每个 targets 必须是 {int(drone_count)} 个 numeric triples，禁止省略号(...)。变量和公式可用（如 `geo = [(cx+R*cos(2πi/N), cy+R*sin(2πi/N), z+dz*sin(i)) for i in range(N)]` 完全合法）。
-- 两种写法都可：(a) 整数坐标表，粗网格（20/50 倍数），XY 0-560, Z 在 80-250 内至少 3 层；(b) math 表达式，用 sin/cos/pi 构造圆形、弧线、波浪。
-- 不要手算两两距离——系统会用确定性检查器回报每个 keyframe 的精确间距/路径数字，按数字修正即可。
+    return f"""坐标纪律（{int(drone_count)} 机点表）:
+- JSON 里的每个 targets 必须是 {int(drone_count)} 个算好的数字三元组；JSON 不能包含公式/变量/省略号。
+- 队形可以按数学概念设计（圆形/弧线/斜线/波浪——半径、相位、Z 起伏自定），取整后填入数字即可；公式写法留到编码阶段（final 代码里 sin/cos/pi 可直接用）。
+- 不要手算两两间距——系统会用确定性检查器回报每个 keyframe 的精确间距/路径数字，按数字修正即可。
 - 把注意力放在编舞：中心偏移、稀疏/密集呼吸、Z 层关系、左右/前后交换、灯光渐变；不要连续 keyframe 复制同一队形。"""
 
 
@@ -221,7 +221,7 @@ def evaluate_plan_safety(
     Returns (ok, report); report 同时用作修正反馈和编码阶段参考。
     """
     from .best_assign import best_assign as _assign
-    from .motion_math import dist3, flight_time_ms
+    from .motion_math import clamp_accel, clamp_speed, dist3, flight_time_ms
 
     drone_count = int(drone_count)
     violations: list[str] = []
@@ -303,8 +303,9 @@ def evaluate_plan_safety(
                 f"- 最优分配后路径最小间距 {path_md:.0f}cm OK；路径长度 中位 {median_path:.0f}cm / 最长 {max_path:.0f}cm"
             )
 
-        speed = _positive_float(kf.get("speed_cm_s"), 170.0)
-        accel = _positive_float(kf.get("accel_cm_s2"), 320.0)
+        # 物理上限 20-200 / 50-400：计划里超限的 speed/accel 按真实能力收紧后再算可行性
+        speed = float(clamp_speed(_positive_float(kf.get("speed_cm_s"), 170.0)))
+        accel = float(clamp_accel(_positive_float(kf.get("accel_cm_s2"), 320.0)))
         duration_ms = _positive_float(kf.get("duration_s"), 3.0) * 1000.0
         max_ft = max(
             flight_time_ms(dist3(current_prev[i], assigned[i]), speed, accel)
@@ -435,7 +436,7 @@ def build_coding_prompt(
 - `drones` 是 {int(drone_count)} 架无人机对象列表；循环写 `for i, drone in enumerate(drones):`
 - 代码开头必须写 5 行设计卡注释：`# role: ...`, `# motifs: ...`, `# beat: ...`, `# formation: ...`, `# lighting: ...`
 - 设计卡必须承接全局章法，尤其是 current role/current motifs；不要写随机队形说明
-- 几何主路径：整数坐标表 `geo = custom_points([...], n=len(drones), min_xy_cm=90)` 或 math 表达式 `[(cx+R*cos(2πi/N), cy+R*sin(2πi/N), z+dz*sin(i)) for i in range(N)]`，再 `best_assign` 或 `far_assign`；S02-S05 禁止调用 `geo_wide_v/geo_arrow/geo_box/geo_diagonal/geo_wave/geo_grid`
+- 几何主路径：整数坐标表 `geo = custom_points([...], n=len(drones), min_xy_cm=90)` 或 math 表达式 `geo = [(280+170*cos(2*pi*i/len(drones)), 280+170*sin(2*pi*i/len(drones)), 160+25*sin(i)) for i in range(len(drones))]`（sin/cos/pi 已导出，不要写 π），再 `best_assign` 或 `far_assign`；S02-S05 禁止调用 `geo_wide_v/geo_arrow/geo_box/geo_diagonal/geo_wave/geo_grid`
 - 正式段默认展开 per-drone loop：`move2(drone, target, flying_ms)` → `apply_light(drone, color, ticks)` → `drone.delay(delay_ms)`，让每架机保留自己的灯光/等待细节
 - `move_group/move_group_staggered` 只作为 smoke/兜底工具；S01-S06 纯 helper 执行会被 composition gate 打回。卡农/错峰请在 per-drone loop 内按 `i % group_mod` 写小 delay
 - 3s 以上 keyframe 若用 `far_assign`，写 `min_path_cm=active_min_path_cm(flying_ms)`；不要写 90/100cm 导致真实运动过早结束

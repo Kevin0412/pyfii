@@ -193,7 +193,7 @@ def build_segment_prompt(
 - {keyframe_rule}
 - {coordinate_hint}
 - {assign_rule}
-- 几何主路径：整数坐标表 `geo = custom_points([...], n=len(drones), min_xy_cm=90)` 或 math 表达式 `[(cx+R*cos(2πi/N), cy+R*sin(2πi/N), z+dz*sin(i)) for i in range(N)]`，再 `best_assign/far_assign`；S02-S05 必须至少一个主体 keyframe 使用手写坐标表或 math 几何，禁止调用 `geo_wide_v/geo_arrow/geo_box/geo_diagonal/geo_wave/geo_grid`
+- 几何主路径：整数坐标表 `geo = custom_points([...], n=len(drones), min_xy_cm=90)` 或 math 表达式 `geo = [(280+170*cos(2*pi*i/len(drones)), 280+170*sin(2*pi*i/len(drones)), 160+25*sin(i)) for i in range(len(drones))]`（sin/cos/pi 已由 function 导出，直接用），再 `best_assign/far_assign`；S02-S05 必须至少一个主体 keyframe 使用手写坐标表或 math 几何，禁止调用 `geo_wide_v/geo_arrow/geo_box/geo_diagonal/geo_wave/geo_grid`
 - 正式段默认展开 per-drone loop，不要用 `move_group` 作为整段主结构：`move2(drone, target, flying_ms)` → `apply_light(drone, color, ticks)` → `drone.delay(flying_ms-ticks*100+100)`
 - 不要重新质疑 `move2/apply_light/delay` 的语义，也不要在回答中推导 API；按上述顺序写代码即可，验证器会负责轨迹检查
 - `move_group/move_group_staggered` 只作为 smoke/兜底工具；S01-S06 纯 helper 执行会被打回。卡农/错峰请在 per-drone loop 内按 `i % group_mod` 写小 delay，并保留每架机自己的灯光/等待
@@ -205,7 +205,7 @@ def build_segment_prompt(
 - 安全距离按 XY 看：不要把同一 XY 的不同 Z 当成安全分离；开阔段每个 keyframe 的 XY 点间距尽量 ≥100cm，刻意密集造型可压到 55-75cm（硬下限 51cm，需配合短路径慢速），复杂交换交给 `far_assign`
 - 高度层必须真实混合：每个主体 keyframe 至少 3 个 Z 层，整段 Z range ≥90cm；不要全队同一高度平面
 - 编舞词汇（每段至少用一种，并在 #beat/#formation 标明）：交错启动 (delay(i*ms)), Z 个性 (move2 内 +dz*sin(i)), 分组对比 (两组不同几何/灯光), 焦点机 (1-2 架独立轨迹), 中心迁移, 密度呼吸, 灯光渐变 (同 keyframe 内多次 apply_light 或 range()+TurnOnAll((r,g,b)) 呼吸)；全段匀速单色无差异会被节奏门打回
-- `TurnOnAll((r,g,b))` 直接接受 RGB 三元组 (0-255)：`d.TurnOnAll((255,255,255))`=白色。可在 per-drone loop 内做灯光渐变呼吸: `for a in range(30): d.TurnOnAll((int(128+127*sin(a*π/16)), ...)); d.delay(100)` — 30 ticks = 3秒渐变
+- `d.TurnOnAll((r,g,b))` 直接接受 RGB 三元组 (0-255)：`d.TurnOnAll((255,255,255))`=白色。可在 per-drone loop 内做灯光渐变呼吸: `for a in range(30): d.TurnOnAll((int(128+127*sin(a*pi/15)), int(60+50*sin(a*pi/10)), 40)); d.delay(100)` — 30 ticks = 3秒渐变（pi 已导出，不要写 π）
 - LAND 前如果整体真实动作还没超过 60s，系统会追加 S07/S08 等正式段继续编舞；不要靠当前段硬等待
 - {prev_update_rule}
 - ## 时间预算
@@ -223,7 +223,7 @@ def build_segment_prompt(
 
 def _format_coordinate_hint(drone_count: int, segment_id: str) -> str:
     if int(drone_count) != 9:
-        return "坐标写数字三元组或 math 表达式（如 [(cx+R*cos(2πi/N), cy+R*sin(2πi/N), z) for i in range(N)]）；不要写省略号(...)"
+        return "坐标写数字三元组或 math 表达式（如 [(280+170*cos(2*pi*i/len(drones)), 280+170*sin(2*pi*i/len(drones)), 160) for i in range(len(drones))]）；不要写省略号(...)"
 
     start_hint = ""
     if segment_id == "S01":
