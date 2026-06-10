@@ -89,6 +89,46 @@ def test_preflight_blocks_position_writes_outside_s01():
     print("PASSED: preflight blocks position writes outside S01")
 
 
+def test_preflight_evaluates_math_geometry():
+    # R=170 九机圆：弦距 ~116cm ≥ 90 → 放行
+    good = (
+        "geo = custom_points([(280+170*cos(2*pi*i/len(drones)), "
+        "280+170*sin(2*pi*i/len(drones)), 160+25*sin(i)) "
+        "for i in range(len(drones))], n=len(drones), min_xy_cm=90)\n"
+    )
+    assert preflight_check(good, segment_id="S02", drone_count=9)
+    # R=100：弦距 ~68cm < 90 → preflight 直接报精确数字，省一轮运行期 ValueError
+    bad = good.replace("170", "100")
+    r = preflight_check(bad, segment_id="S02", drone_count=9)
+    assert not r
+    assert any("68cm" in e for e in r.errors), r.errors
+    # 变量半径同样能静态求值
+    var = (
+        "R = 100\n"
+        "geo = custom_points([(280+R*cos(2*pi*i/9), 280+R*sin(2*pi*i/9), 160) "
+        "for i in range(9)], n=9, min_xy_cm=90)\n"
+    )
+    assert not preflight_check(var, segment_id="S02", drone_count=9)
+    print("PASSED: preflight evaluates math geometry statically")
+
+
+def test_preflight_requires_custom_points_wrap_for_comprehensions():
+    raw = (
+        "geo = [(280+170*cos(2*pi*i/9), 280+170*sin(2*pi*i/9), 160) for i in range(9)]\n"
+        "targets = best_assign(prev, geo)\n"
+    )
+    r = preflight_check(raw, segment_id="S02", drone_count=9)
+    assert not r
+    assert any("custom_points 包裹" in e for e in r.errors), r.errors
+    # 先赋值再包进 custom_points 是合法的
+    named = (
+        "pts = [(280+170*cos(2*pi*i/9), 280+170*sin(2*pi*i/9), 160+25*sin(i)) for i in range(9)]\n"
+        "geo = custom_points(pts, n=9, min_xy_cm=90)\n"
+    )
+    assert preflight_check(named, segment_id="S02", drone_count=9)
+    print("PASSED: preflight requires custom_points wrap for comprehensions")
+
+
 def test_preflight_blocks_bare_api():
     r = preflight_check("drone.VelXY(120,200)")
     assert not r
@@ -171,6 +211,8 @@ if __name__ == "__main__":
     test_preflight_blocks_geo_templates()
     test_preflight_blocks_jitter_points_and_nonstandard_min_xy()
     test_preflight_blocks_position_writes_outside_s01()
+    test_preflight_evaluates_math_geometry()
+    test_preflight_requires_custom_points_wrap_for_comprehensions()
     test_preflight_blocks_bare_api()
     test_preflight_blocks_inittime()
     test_preflight_blocks_single_drone_timing()
@@ -178,4 +220,4 @@ if __name__ == "__main__":
     test_preflight_accepts_clean()
     test_planning_pass_importable()
     test_degradation_signature_in_state()
-    print("\nALL 14 TESTS PASSED")
+    print("\nALL 16 TESTS PASSED")

@@ -1,6 +1,7 @@
 """Preflight cheap gates — deterministic checks before expensive validator."""
 
 import ast
+import math
 import re
 
 
@@ -30,7 +31,11 @@ class PreflightResult:
         return self.passed
 
 
-def preflight_check(code: str, segment_id: str | None = None) -> PreflightResult:
+def preflight_check(
+    code: str,
+    segment_id: str | None = None,
+    drone_count: int | None = None,
+) -> PreflightResult:
     """Run all cheap checks on agent-generated code. Returns result with errors."""
     r = PreflightResult()
     if not code.strip():
@@ -41,6 +46,10 @@ def preflight_check(code: str, segment_id: str | None = None) -> PreflightResult
     #     `drone.X = drone.x = ...` 是合法协议，其他段直接改坐标属性
     #     会破坏 move2 的速度反算。
     _check_no_position_writes(code, r, segment_id)
+    # 13. Math-geometry static evaluation — comprehension 算出的点表
+    #     在 preflight 就按 custom_points 同样的裁剪+间距规则验一遍，
+    #     违规直接回报精确数字，省掉一轮运行期 ValueError。
+    _check_computed_geometry(code, r, drone_count)
 
     # 1. Markdown / 中文解释残留
     _check_no_markdown(code, r)
@@ -66,6 +75,304 @@ def preflight_check(code: str, segment_id: str | None = None) -> PreflightResult
     _check_coordinate_literals(code, r)
 
     return r
+
+
+# ---------- Math-geometry static evaluation (calculator for computed point tables) ----------
+
+_SAFE_FUNCS = {
+    "sin": math.sin,
+    "cos": math.cos,
+    "sqrt": math.sqrt,
+    "int": int,
+    "round": round,
+    "float": float,
+    "abs": abs,
+    "min": min,
+    "max": max,
+    "len": len,
+}
+_SAFE_MATH_ATTRS = {"sin", "cos", "pi", "tau", "sqrt"}
+_MAX_RANGE = 64
+
+
+class _UnsafeExpression(Exception):
+    pass
+
+
+def _safe_eval(node, env, depth=0):
+    """Whitelist AST evaluator for geometry expressions. Raises _UnsafeExpression."""
+    if depth > 24:
+        raise _UnsafeExpression("depth")
+    if isinstance(node, ast.Constant):
+        if isinstance(node.value, (int, float)):
+            return node.value
+        raise _UnsafeExpression("non-numeric constant")
+    if isinstance(node, ast.Name):
+        if node.id in env:
+            return env[node.id]
+        raise _UnsafeExpression(f"unknown name {node.id}")
+    if isinstance(node, ast.Attribute):
+        if (
+            isinstance(node.value, ast.Name)
+            and node.value.id == "math"
+            and node.attr in _SAFE_MATH_ATTRS
+        ):
+            return getattr(math, node.attr)
+        raise _UnsafeExpression("attribute")
+    if isinstance(node, ast.BinOp) and isinstance(
+        node.op, (ast.Add, ast.Sub, ast.Mult, ast.Div, ast.FloorDiv, ast.Mod, ast.Pow)
+    ):
+        left = _safe_eval(node.left, env, depth + 1)
+        right = _safe_eval(node.right, env, depth + 1)
+        ops = {
+            ast.Add: lambda a, b: a + b,
+            ast.Sub: lambda a, b: a - b,
+            ast.Mult: lambda a, b: a * b,
+            ast.Div: lambda a, b: a / b,
+            ast.FloorDiv: lambda a, b: a // b,
+            ast.Mod: lambda a, b: a % b,
+            ast.Pow: lambda a, b: a ** b if abs(b) <= 8 else _raise_unsafe(),
+        }
+        return ops[type(node.op)](left, right)
+    if isinstance(node, ast.UnaryOp) and isinstance(node.op, (ast.USub, ast.UAdd)):
+        value = _safe_eval(node.operand, env, depth + 1)
+        return -value if isinstance(node.op, ast.USub) else value
+    if isinstance(node, ast.Call):
+        func = node.func
+        if isinstance(func, ast.Name) and func.id == "range":
+            args = [int(_safe_eval(a, env, depth + 1)) for a in node.args]
+            result = range(*args)
+            if len(result) > _MAX_RANGE:
+                raise _UnsafeExpression("range too large")
+            return result
+        if isinstance(func, ast.Name) and func.id in _SAFE_FUNCS:
+            args = [_safe_eval(a, env, depth + 1) for a in node.args]
+            return _SAFE_FUNCS[func.id](*args)
+        if isinstance(func, ast.Attribute):
+            target = _safe_eval(func, env, depth + 1)
+            args = [_safe_eval(a, env, depth + 1) for a in node.args]
+            return target(*args)
+        raise _UnsafeExpression("call")
+    if isinstance(node, (ast.Tuple, ast.List)):
+        return [_safe_eval(elt, env, depth + 1) for elt in node.elts]
+    if isinstance(node, (ast.ListComp, ast.GeneratorExp)):
+        if len(node.generators) != 1:
+            raise _UnsafeExpression("multi-generator")
+        gen = node.generators[0]
+        if not isinstance(gen.target, ast.Name):
+            raise _UnsafeExpression("tuple target")
+        iterable = _safe_eval(gen.iter, env, depth + 1)
+        items = list(iterable)
+        if len(items) > _MAX_RANGE:
+            raise _UnsafeExpression("iterable too large")
+        out = []
+        for item in items:
+            local_env = dict(env)
+            local_env[gen.target.id] = item
+            keep = all(
+                _safe_eval(cond, local_env, depth + 1) for cond in gen.ifs
+            )
+            if keep:
+                out.append(_safe_eval(node.elt, local_env, depth + 1))
+        return out
+    raise _UnsafeExpression(type(node).__name__)
+
+
+def _raise_unsafe():
+    raise _UnsafeExpression("pow exponent")
+
+
+def _build_geometry_env(tree, drone_count):
+    """Collect simple numeric/list assignments in source order so comprehensions can use them."""
+    env = {"pi": math.pi, "PI": math.pi}
+    if drone_count:
+        env["drones"] = [None] * int(drone_count)
+        env["N"] = int(drone_count)
+    assigns = [
+        node
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Assign)
+        and len(node.targets) == 1
+        and isinstance(node.targets[0], ast.Name)
+    ]
+    for node in sorted(assigns, key=lambda n: n.lineno):
+        try:
+            env[node.targets[0].id] = _safe_eval(node.value, env)
+        except _UnsafeExpression:
+            continue
+    return env
+
+
+def evaluate_static_points(node_or_code, env=None, drone_count=None):
+    """Evaluate a geometry expression to a list of (x,y,z). Returns None if not evaluable."""
+    if isinstance(node_or_code, str):
+        try:
+            tree = ast.parse(node_or_code, mode="eval")
+        except SyntaxError:
+            return None
+        node = tree.body
+        env = env or _build_geometry_env(tree, drone_count)
+    else:
+        node = node_or_code
+        env = env or {}
+    try:
+        points = _safe_eval(node, env)
+    except (_UnsafeExpression, ValueError, TypeError, ZeroDivisionError, OverflowError):
+        return None
+    if not isinstance(points, list) or not points:
+        return None
+    normalized = []
+    for point in points:
+        if not isinstance(point, (list, tuple)) or len(point) != 3:
+            return None
+        try:
+            normalized.append(tuple(float(v) for v in point))
+        except (TypeError, ValueError):
+            return None
+    return normalized
+
+
+def _clamp_point(point):
+    """Mirror function.py _target3: round + clamp XY 0-560, Z 80-250."""
+    x, y, z = point
+    return (
+        max(0, min(560, int(round(x)))),
+        max(0, min(560, int(round(y)))),
+        max(80, min(250, int(round(z)))),
+    )
+
+
+def _is_xyz_listcomp(node):
+    return isinstance(node, (ast.ListComp, ast.GeneratorExp)) and isinstance(
+        node.elt, (ast.Tuple, ast.List)
+    ) and len(node.elt.elts) == 3
+
+
+def _is_computed_xyz_listcomp(node):
+    """True only for comprehensions that *generate* geometry (contain arithmetic/calls).
+
+    状态读取类 comprehension（`[(d.x, d.y, d.z) for d in drones]`、
+    `[(t[0], t[1], t[2]) for t in targets]`）是段协议的标准写法，不算生成几何。
+    """
+    if not _is_xyz_listcomp(node):
+        return False
+    return any(
+        isinstance(sub, (ast.BinOp, ast.Call))
+        for elt in node.elt.elts
+        for sub in ast.walk(elt)
+    )
+
+
+def _check_computed_geometry(code, r, drone_count):
+    try:
+        tree = ast.parse(code)
+    except SyntaxError:
+        return
+    env = _build_geometry_env(tree, drone_count)
+
+    # 1. custom_points(...) 的点表（直接 comprehension 或先赋值再传名字）静态验算
+    wrapped_nodes: set[int] = set()
+    wrapped_names: set[str] = set()
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Call):
+            continue
+        if not isinstance(node.func, ast.Name) or node.func.id != "custom_points":
+            continue
+        if not node.args:
+            continue
+        arg = node.args[0]
+        wrapped_nodes.add(id(arg))
+        if isinstance(arg, ast.Name):
+            wrapped_names.add(arg.id)
+        min_xy_cm = 90.0
+        for keyword in node.keywords:
+            if keyword.arg == "min_xy_cm":
+                value = _literal_number(keyword.value)
+                if value is not None:
+                    min_xy_cm = value
+        if isinstance(arg, ast.Name):
+            raw = env.get(arg.id)
+        else:
+            try:
+                raw = _safe_eval(arg, env)
+            except _UnsafeExpression:
+                raw = None
+        points = _coerce_points(raw)
+        if not points:
+            continue  # 静态算不出来就交给运行期 custom_points 兜底
+        clamped = [_clamp_point(p) for p in points]
+        if drone_count and len(clamped) != int(drone_count):
+            r.add(
+                f"custom_points 点表实际算出 {len(clamped)} 个点 != 机数 {int(drone_count)}"
+                f"(line {getattr(node, 'lineno', '?')})"
+            )
+            continue
+        if len(clamped) >= 2:
+            md, pair = _static_min_xy(clamped)
+            if md < float(min_xy_cm):
+                r.add(
+                    f"计算几何点表(line {getattr(node, 'lineno', '?')})裁剪后最小 XY 间距 "
+                    f"{md:.0f}cm (点{pair[0]}-点{pair[1]}) < min_xy_cm={min_xy_cm:g}，"
+                    "运行期 custom_points 会直接抛错 — 增大半径/间距后再提交"
+                    "（9 机圆形建议 R≥150，弦距≈116cm）"
+                )
+
+    # 2. 没包 custom_points 的 computed 3 元组 comprehension 直接拒绝：
+    #    raw comprehension 跳过裁剪和间距校验，等于裸坐标。
+    assigned_comp_names = {
+        node.targets[0].id: node.value
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Assign)
+        and len(node.targets) == 1
+        and isinstance(node.targets[0], ast.Name)
+        and _is_computed_xyz_listcomp(node.value)
+    }
+    for node in ast.walk(tree):
+        if not _is_computed_xyz_listcomp(node):
+            continue
+        if id(node) in wrapped_nodes:
+            continue
+        owner = next(
+            (name for name, value in assigned_comp_names.items() if value is node),
+            None,
+        )
+        if owner is not None and owner in wrapped_names:
+            continue
+        r.add(
+            f"computed 点表(line {getattr(node, 'lineno', '?')})没有经过 custom_points 包裹 — "
+            "math 几何必须写 `geo = custom_points([...公式...], n=len(drones), min_xy_cm=90)`，"
+            "由它统一裁剪坐标并校验间距；不要把 comprehension 直接传给 best_assign/far_assign/move2"
+        )
+
+
+def _coerce_points(raw):
+    """Normalize an evaluated value to [(x,y,z), ...] floats, or None."""
+    if not isinstance(raw, list) or not raw:
+        return None
+    points = []
+    for p in raw:
+        if not isinstance(p, (list, tuple)) or len(p) != 3:
+            return None
+        try:
+            points.append(tuple(float(v) for v in p))
+        except (TypeError, ValueError):
+            return None
+    return points
+
+
+def _static_min_xy(points):
+    md = 1e9
+    pair = (0, 0)
+    for i in range(len(points)):
+        for j in range(i + 1, len(points)):
+            d = (
+                (points[i][0] - points[j][0]) ** 2
+                + (points[i][1] - points[j][1]) ** 2
+            ) ** 0.5
+            if d < md:
+                md = d
+                pair = (i, j)
+    return md, pair
 
 
 def _check_no_position_writes(code, r, segment_id):

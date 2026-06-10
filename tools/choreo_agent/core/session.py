@@ -250,7 +250,9 @@ class Session:
             })
             
             # Preflight BEFORE writing to design.py
-            pf = preflight_check(code, segment_id=seg.id)
+            pf = preflight_check(
+                code, segment_id=seg.id, drone_count=self.state.drone_count
+            )
             self._record_preflight_result(pf)
             if not pf:
                 # Internal repair loop (max 5 rounds)
@@ -273,7 +275,9 @@ class Session:
                         "candidate_code_chars": len(code),
                         "candidate_empty": not bool(code.strip()),
                     })
-                    pf = preflight_check(code, segment_id=seg.id)
+                    pf = preflight_check(
+                        code, segment_id=seg.id, drone_count=self.state.drone_count
+                    )
                     self._record_preflight_result(pf)
                     if pf:
                         repair_ok = True
