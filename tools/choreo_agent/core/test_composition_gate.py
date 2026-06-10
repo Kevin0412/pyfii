@@ -311,3 +311,71 @@ for i, drone in enumerate(drones):
     assert features["move2_calls"] == 1
     assert features["apply_light_calls"] == 2
     assert features["color_literals"] == ["#ffcc44", "#ffffff"]
+
+
+def test_composition_gate_blocks_fully_monotone_pacing():
+    code = """
+# role: 展开
+# motifs: 扇形展开
+# beat: 推进
+# formation: 宽阵
+# lighting: 白光
+auto_init(drones)
+prev = [(d.x, d.y, d.z) for d in drones]
+geo1 = [(100, 100, 120), (300, 100, 180)]
+targets = best_assign(prev, geo1)
+for d, t in zip(drones, targets):
+    move2(d, t, 3000)
+    apply_light(d, "#ffffff", 3)
+    d.delay(2800)
+geo2 = [(100, 300, 120), (300, 300, 180)]
+targets = best_assign(prev, geo2)
+for d, t in zip(drones, targets):
+    move2(d, t, 3000)
+    apply_light(d, "#ffffff", 3)
+    d.delay(2800)
+"""
+    _features, errors = evaluate_composition(code, {}, "S02")
+    assert any("节奏完全单调" in e for e in errors), errors
+
+
+def test_composition_gate_accepts_varied_duration_or_color():
+    varied_color = """
+# role: 展开
+# motifs: 扇形展开
+# beat: 推进
+# formation: 宽阵
+# lighting: 蓝转金
+auto_init(drones)
+prev = [(d.x, d.y, d.z) for d in drones]
+geo1 = [(100, 100, 120), (300, 100, 180)]
+targets = best_assign(prev, geo1)
+for d, t in zip(drones, targets):
+    move2(d, t, 3000)
+    apply_light(d, "#44aaff", 3)
+    d.delay(2800)
+geo2 = [(100, 300, 120), (300, 300, 180)]
+targets = best_assign(prev, geo2)
+for d, t in zip(drones, targets):
+    move2(d, t, 3000)
+    apply_light(d, "#ffcc00", 3)
+    d.delay(2800)
+"""
+    _features, errors = evaluate_composition(varied_color, {}, "S02")
+    assert not any("节奏完全单调" in e for e in errors), errors
+
+
+def test_extract_move2_duration_features():
+    features = extract_code_features(
+        """
+flying_ms = 2900
+for i, drone in enumerate(drones):
+    move2(drone, (100, 120, 150), flying_ms)
+    drone.delay(2800)
+for i, drone in enumerate(drones):
+    move2(drone, (200, 220, 180), 2000)
+    drone.delay(1900)
+"""
+    )
+    assert features["move2_duration_values"] == [2000.0, 2900.0]
+    assert not features["uniform_move2_duration"]

@@ -202,3 +202,22 @@ System prompt / context packs / `prompt_builder.py` 会影响 LLM 输入缓存�
 2. scripts/design.py: marker清晰, 禁止极限压缩, 人类可读
 
 详见 context_packs/agent_coding_style.md
+
+# 11.5 计算器路线：去 seed、确定性规划检查、音乐证据与节奏层 (2026-06-10)
+
+实测约束修正（来自人工确认，旧文档数字过保守）：XY 0-560，Z 80-250，XY 间距硬下限 51cm（低于 51 触发 pyfii core 碰撞警告）；90 只是开阔队形默认值。preflight 的 `custom_points(min_xy_cm=...)` 门从“固定 90”放宽为“51-90 字面量”，支持密度呼吸（宽阵 ↔ 密集簇）。
+
+方向调整：coordinate seeds（seed_box/slant/asym）下线。`codex_9drone_flash_full_20260605_1` 证明 DeepSeek 手写粗网格点表 + best_assign/far_assign 即可成段；S02 长推理失败是点表自检压力诱导的。正确做法是给模型计算器，不是给模板：
+
+- `planning_pass.evaluate_plan_safety()`：对 JSON plan 逐 keyframe 确定性计算——点表 min_xy（<51 违规，51-90 标记刻意密集）、坐标越界、best_assign 最优分配后的转场路径最小间距（<55 违规）、speed/accel 下最长飞行时间 vs keyframe 时长。
+- `Session._refine_plan_with_checker()`：违规时用小轮次（旧 JSON + 数字报告）让模型只改违规项，最多 2 轮；检查报告同时附在预算表后进入编码阶段。
+- 规划/编码 prompt 明确“不要手算两两间距/三角函数，检查器回报精确数字”。
+
+节奏与结构层（蒸馏自 doc/human_choreography_distillation.md）：
+
+- keyframe 合同从均匀切片改为短长对比 phrase（accent 短促 / phrase 延展）。
+- `core/music_brief.py`：librosa 分析 tempo/beat/能量曲线/onset 密度/结构边界，项目内缓存 music_brief.json；规划 prompt 注入当前窗口的音乐证据（含 beat ≈ N 个 100ms 灯光 tick 换算）。
+- composition gate 新增节奏单调门（S01-S05）：全部 keyframe 同 flying_ms + 整段单色 + 无错峰 = 打回；S06 允许平静署名收束。
+- prompt 增加编舞词汇：分组错峰、焦点机对比、中心迁移、密度呼吸、灯光渐变。
+
+门校准锚点：`core/test_gold_run_regression.py` 保证 0605 金标准 run 的全部段落通过 preflight 与结构门；任何拒绝金标准的门都是误校准。

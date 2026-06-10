@@ -38,7 +38,27 @@ class Session:
         self.state = ProjectState.load(self.project_root)
         self._pending_code: str | None = None
         self._skip_continuity: bool = True  # 单段生成不检查连续性
+        self._music_brief: dict | None = None
         self.sync_state_with_markers(save=False)
+
+    @property
+    def music_brief(self) -> dict:
+        """项目音乐 brief（librosa 分析，项目内缓存为 music_brief.json）。"""
+        if self._music_brief is None:
+            try:
+                from .music_brief import load_or_create_music_brief
+
+                music_path = (self.project_root / self.state.music_path).resolve() \
+                    if self.state.music_path else None
+                self._music_brief = (
+                    load_or_create_music_brief(self.project_root, music_path)
+                    if music_path and music_path.exists()
+                    else {}
+                )
+            except Exception:
+                # 音乐分析失败不阻塞编舞流程
+                self._music_brief = {}
+        return self._music_brief
 
     # ---- 生成 ----
 
@@ -115,6 +135,7 @@ class Session:
                         seg.intent or "", previous_exit_state,
                         drone_count=self.state.drone_count,
                         composition_plan=self.state.composition_plan,
+                        music_brief=self.music_brief,
                     )
                     plan_resp = self._chat_stage(
                         seg=seg,
@@ -131,12 +152,24 @@ class Session:
                     plan = parse_plan_json(plan_resp.text)
                     if plan:
                         self._record_attempt_update({"planning_parse_ok": True})
+                        # Stage 1.5: deterministic checker + cheap revision rounds
+                        plan, check_report = self._refine_plan_with_checker(
+                            seg=seg,
+                            provider=provider,
+                            plan=plan,
+                            prev_state=previous_exit_state,
+                            feedback=repair_feedback,
+                            on_delta=on_delta,
+                            on_reasoning_delta=on_reasoning_delta,
+                            on_heartbeat=on_heartbeat,
+                        )
                         # Stage 2: JSON → budget table (local math)
                         budget = plan_to_budget_table(
                             plan,
                             previous_exit_state,
                             drone_count=self.state.drone_count,
                         )
+                        budget = f"{budget}\n\n{check_report}"
                         self._record_attempt_update({"budget_chars": len(budget)})
                         # Stage 3: budget → code
                         code_prompt = build_coding_prompt(
@@ -636,6 +669,63 @@ def {function_name}(drones: list):
 
     def save(self) -> None:
         self.state.save(self.project_root)
+
+    def _refine_plan_with_checker(
+        self,
+        seg: SegmentState,
+        provider: str,
+        plan: dict,
+        prev_state: list,
+        feedback: str,
+        on_delta: Callable[[str], None] | None = None,
+        on_reasoning_delta: Callable[[str], None] | None = None,
+        on_heartbeat: Callable[[], None] | None = None,
+        max_revisions: int = 2,
+    ) -> tuple[dict, str]:
+        """确定性检查器闭环：报告精确间距/路径/时长数字，违规则用小轮次让模型只改违规项。
+
+        检查器代替模型做全部距离数学；修正轮 prompt 很短（旧 JSON + 报告），
+        不重发完整规划 prompt。修正失败时带着最后的报告继续，让编码阶段和
+        validator 兜底。
+        """
+        from .planning_pass import (
+            build_plan_revision_prompt,
+            evaluate_plan_safety,
+            parse_plan_json,
+        )
+
+        ok, report = evaluate_plan_safety(
+            plan, prev_state, drone_count=self.state.drone_count
+        )
+        self._record_attempt_update({"plan_check_ok": ok})
+        revision = 0
+        while not ok and revision < max_revisions:
+            revision += 1
+            prompt = build_plan_revision_prompt(plan, report, seg.id)
+            response = self._chat_stage(
+                seg=seg,
+                provider=provider,
+                stage=f"planning_check_revision_{revision}",
+                system="",
+                user=prompt,
+                temperature=0.2,
+                feedback=feedback,
+                on_delta=on_delta,
+                on_reasoning_delta=on_reasoning_delta,
+                on_heartbeat=on_heartbeat,
+            )
+            revised = parse_plan_json(response.text)
+            if not revised:
+                self._record_attempt_update(
+                    {f"plan_check_rev{revision}": "parse_failed"}
+                )
+                break
+            plan = revised
+            ok, report = evaluate_plan_safety(
+                plan, prev_state, drone_count=self.state.drone_count
+            )
+            self._record_attempt_update({f"plan_check_rev{revision}_ok": ok})
+        return plan, report
 
     def _chat_stage(
         self,

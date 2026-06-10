@@ -154,7 +154,7 @@ def build_segment_prompt(
         )
         prev_update_rule = "段尾更新 prev = [(t[0],t[1],t[2]) for t in targets]"
     else:
-        keyframe_rule = "2-4个利落 keyframe，非对称几何（点表 min_xy_cm≥90cm，优先 120-260cm），用短促推进/交换/高度切层制造节奏"
+        keyframe_rule = "2-4个利落 keyframe，非对称几何（点表 XY 间距默认 ≥90cm，开阔段优先 120-260cm；刻意密集造型可降到 55-75cm，硬下限 51cm），用短促推进/交换/高度切层制造节奏"
         prev_update_rule = "段尾更新 prev = [(t[0],t[1],t[2]) for t in targets]"
 
     coordinate_hint = _format_coordinate_hint(drone_count, segment_upper)
@@ -193,7 +193,7 @@ def build_segment_prompt(
 - {keyframe_rule}
 - {coordinate_hint}
 - {assign_rule}
-- 几何主路径是手写目标点表：`geo = custom_points([...], n=len(drones), min_xy_cm=90)`，再 `best_assign/far_assign`；S02-S05 必须至少一个主体 keyframe 使用手写坐标表，禁止调用 `geo_wide_v/geo_arrow/geo_box/geo_diagonal/geo_wave/geo_grid`
+- 几何主路径是手写目标点表：`geo = custom_points([...], n=len(drones), min_xy_cm=90)`（开阔队形默认 90；刻意密集造型可用 51-90 的字面量，51 以下 pyfii core 会报碰撞），再 `best_assign/far_assign`；S02-S05 必须至少一个主体 keyframe 使用手写坐标表，禁止调用 `geo_wide_v/geo_arrow/geo_box/geo_diagonal/geo_wave/geo_grid`
 - 正式段默认展开 per-drone loop，不要用 `move_group` 作为整段主结构：`move2(drone, target, flying_ms)` → `apply_light(drone, color, ticks)` → `drone.delay(flying_ms-ticks*100+100)`
 - 不要重新质疑 `move2/apply_light/delay` 的语义，也不要在回答中推导 API；按上述顺序写代码即可，验证器会负责轨迹检查
 - `move_group/move_group_staggered` 只作为 smoke/兜底工具；S01-S06 纯 helper 执行会被打回。卡农/错峰请在 per-drone loop 内按 `i % group_mod` 写小 delay，并保留每架机自己的灯光/等待
@@ -202,8 +202,9 @@ def build_segment_prompt(
 - 快节奏必须可完成：单个 2600-3200ms keyframe 的 3D 路径通常控制在约 180-360cm；不要用 2000-2400ms 硬飞 500cm 跨场路径
 - 如果段长需要覆盖，不要拉长单个 move2；用多个可完成的快 keyframe、分组错峰或高度切层承接，保持每 1 秒窗口都有群体运动
 - 3s 以上 keyframe 不要写 `min_path_cm=90/100`；用 `flying_ms = 3000` 后 `targets = far_assign(prev, geo, min_path_cm=active_min_path_cm(flying_ms))`
-- 安全距离按 XY 看：不要把同一 XY 的不同 Z 当成安全分离；每个 keyframe 的 XY 点间距尽量 ≥100cm，复杂交换交给 `far_assign`
+- 安全距离按 XY 看：不要把同一 XY 的不同 Z 当成安全分离；开阔段每个 keyframe 的 XY 点间距尽量 ≥100cm，刻意密集造型可压到 55-75cm（硬下限 51cm，需配合短路径慢速），复杂交换交给 `far_assign`
 - 高度层必须真实混合：每个主体 keyframe 至少 3 个 Z 层，整段 Z range ≥90cm；不要全队同一高度平面
+- 编舞词汇（每段至少用一种，并在 #beat/#formation 标明）：分组错峰启动（per-drone loop 内 i % group_mod 小 delay）、焦点机对比（1-2 架走独立高度/路径）、中心迁移（整段重心向一侧推进或回收）、密度呼吸（宽阵与 51-90cm 密集簇交替）、灯光渐变（同 keyframe 连续两次 apply_light 换色）；全段匀速单色同步会被节奏门打回
 - LAND 前如果整体真实动作还没超过 60s，系统会追加 S07/S08 等正式段继续编舞；不要靠当前段硬等待
 - {prev_update_rule}
 - ## 时间预算
@@ -231,19 +232,14 @@ def _format_coordinate_hint(drone_count: int, segment_id: str) -> str:
             "不要把起飞点挤成中心团"
         )
 
-    seeds = (
-        "9机手写坐标可从这些安全低层点表变奏，避免临场手算失败；每个 keyframe 选一个 seed 后只做 ±20-35cm 小变奏，"
-        "不要写 60cm 步长密集斜线，不要现场三角函数算圆弧；禁止 jitter_points，custom_points 固定写 min_xy_cm=90。"
-        " seed_box="
-        "`[(60,60,120),(280,60,210),(500,60,120),(60,280,180),(280,280,240),(500,280,180),(60,500,120),(280,500,210),(500,500,120)]`;"
-        " seed_slant="
-        "`[(80,80,220),(300,100,140),(520,120,200),(40,300,160),(260,300,240),(480,300,130),(80,520,190),(300,500,150),(520,480,230)]`;"
-        " seed_asym="
-        "`[(40,80,180),(250,50,240),(500,100,130),(120,260,120),(350,240,210),(540,310,160),(60,500,230),(290,520,150),(510,470,200)]`"
+    discipline = (
+        "9机手写坐标表：用粗网格整数坐标（建议 20/50 的倍数），XY 0-560，Z 在 80-250 内至少 3 层；"
+        "不要现场计算两两距离或三角函数推导圆弧——间距/路径安全由规划检查器和 validator 用精确数字回报；"
+        "禁止 jitter_points；custom_points 默认 min_xy_cm=90，刻意密集造型可用 51-90 的字面量"
     )
     if start_hint:
-        return f"{start_hint}；{seeds}"
-    return seeds
+        return f"{start_hint}；{discipline}"
+    return discipline
 
 
 def _format_composition_plan(

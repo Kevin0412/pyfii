@@ -19,6 +19,7 @@ CLIMAX_WORDS = ("高潮", "爆发", "爆点", "climax", "burst")
 GEO_TEMPLATE_NAMES = ("geo_wide_v", "geo_arrow", "geo_box", "geo_diagonal", "geo_wave", "geo_grid")
 HANDWRITTEN_REQUIRED_SEGMENTS = {"S02", "S03", "S04", "S05"}
 PER_DRONE_REQUIRED_SEGMENTS = {"S01", "S02", "S03", "S04", "S05", "S06"}
+MONOTONE_PACING_SEGMENTS = {"S01", "S02", "S03", "S04", "S05"}
 
 
 def evaluate_composition(
@@ -126,6 +127,20 @@ def evaluate_composition(
             "move_group 只作为 smoke/兜底工具，不能替代编舞执行细节。"
         )
 
+    # S06/尾声允许刻意的平静收束，所以单调节奏门只看 S01-S05。
+    if (
+        segment_id in MONOTONE_PACING_SEGMENTS
+        and features["estimated_keyframe_count"] >= 2
+        and features["uniform_move2_duration"]
+        and len(colors) <= 1
+        and not features["has_indexed_stagger"]
+    ):
+        errors.append(
+            "节奏完全单调：所有 keyframe 同一 flying_ms、整段只有一种灯光颜色、无任何错峰。"
+            "至少做一项：让一个 keyframe 明显短促或延展、换灯光颜色/做颜色渐变、"
+            "或在 per-drone loop 内按 i % group_mod 加小错峰。"
+        )
+
     if segment_id == "S04" and features["estimated_keyframe_count"] < 4:
         errors.append(
             "S04 是抒情展开段，至少需要 4 个明确 keyframe 或 4 组目标点，"
@@ -187,6 +202,7 @@ def extract_code_features(code: str) -> dict:
     move2_calls = len(re.findall(r"\bmove2\s*\(", code))
     delay_calls = len(re.findall(r"\.delay\s*\(", code))
     custom_points_calls = len(re.findall(r"\bcustom_points\s*\(", code))
+    move2_durations = _extract_move2_durations(code)
     features = {
         "move2_calls": move2_calls,
         "move_group_calls": move_group_calls,
@@ -207,12 +223,47 @@ def extract_code_features(code: str) -> dict:
         "has_handwritten_geometry": "custom_points(" in code or xyz_literal_count >= 6,
         "has_indexed_stagger": has_indexed_stagger,
         "color_literals": colors,
+        "move2_duration_values": move2_durations,
+        "uniform_move2_duration": len(move2_durations) == 1,
         "z_literal_range_cm": None,
     }
     z_values = _extract_target_z_literals(code)
     if z_values:
         features["z_literal_range_cm"] = round(max(z_values) - min(z_values), 1)
     return features
+
+
+def _extract_move2_durations(code: str) -> list[float]:
+    """Distinct flying_ms values: move2 3rd-arg literals + *_ms name assignments used in move2."""
+    try:
+        tree = ast.parse(code)
+    except SyntaxError:
+        return []
+
+    ms_assignments: dict[str, float] = {}
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Assign) or len(node.targets) != 1:
+            continue
+        target = node.targets[0]
+        value = _numeric_literal(node.value)
+        if isinstance(target, ast.Name) and "ms" in target.id.lower() and value is not None:
+            ms_assignments[target.id] = value
+
+    durations: set[float] = set()
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Call):
+            continue
+        if not isinstance(node.func, ast.Name) or node.func.id != "move2":
+            continue
+        if len(node.args) < 3:
+            continue
+        arg = node.args[2]
+        value = _numeric_literal(arg)
+        if value is not None:
+            durations.add(value)
+        elif isinstance(arg, ast.Name) and arg.id in ms_assignments:
+            durations.add(ms_assignments[arg.id])
+    return sorted(durations)
 
 
 def _extract_target_z_literals(code: str) -> list[float]:

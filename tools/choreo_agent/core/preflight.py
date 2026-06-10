@@ -104,7 +104,7 @@ def _check_no_geo_templates(code, r):
     if "jitter_points(" in code:
         r.add(
             "禁止 jitter_points() 出现在 final segment — 它会在 custom_points 校验后再次扰动坐标，"
-            "可能绕过安全点表检查；请直接手写最终 numeric targets，并使用 custom_points(..., min_xy_cm=90)"
+            "可能绕过安全点表检查；请直接手写最终 numeric targets，并使用 custom_points(..., min_xy_cm=90 或刻意密集时 51-90 字面量)"
         )
 
 
@@ -124,13 +124,13 @@ def _check_custom_points_contract(code, r):
             value = _literal_number(keyword.value)
             if value is None:
                 r.add(
-                    "custom_points 的 min_xy_cm 必须是字面量 90；不要写变量或表达式，"
-                    "也不要临时提高到 110/120 导致可用点表被拒"
+                    "custom_points 的 min_xy_cm 必须是 51-90 之间的字面量；不要写变量或表达式"
                 )
-            elif abs(value - 90.0) > 1e-9:
+            elif not (51.0 <= value <= 90.0):
                 r.add(
-                    f"custom_points min_xy_cm={value:g} — final segment 固定使用 min_xy_cm=90，"
-                    "不要自行调高/调低；碰撞安全由完整 validator 负责"
+                    f"custom_points min_xy_cm={value:g} — 必须是 51-90 之间的字面量："
+                    "90 是开阔队形默认值，51 是 pyfii core 碰撞警告硬下限；"
+                    "刻意密集造型可用 55-75，不要调高到 90 以上导致可用点表被拒"
                 )
 
 
