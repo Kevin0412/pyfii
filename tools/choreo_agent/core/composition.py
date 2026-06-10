@@ -20,6 +20,7 @@ GEO_TEMPLATE_NAMES = ("geo_wide_v", "geo_arrow", "geo_box", "geo_diagonal", "geo
 HANDWRITTEN_REQUIRED_SEGMENTS = {"S02", "S03", "S04", "S05"}
 PER_DRONE_REQUIRED_SEGMENTS = {"S01", "S02", "S03", "S04", "S05", "S06"}
 MONOTONE_PACING_SEGMENTS = {"S01", "S02", "S03", "S04", "S05"}
+TIME_STAGGER_REQUIRED_SEGMENTS = {"S02", "S03", "S04", "S05"}
 
 
 def evaluate_composition(
@@ -81,10 +82,11 @@ def evaluate_composition(
         )
 
     needs_stagger = _mentions_any(full_reference_text, STAGGER_WORDS)
-    if needs_stagger and not features["has_indexed_stagger"]:
+    if needs_stagger and not features["has_time_stagger"]:
         errors.append(
-            "当前段章法要求卡农/错峰/分组，但代码没有明显按 i/group 分批 delay 或分组推进；"
-            "请在 per-drone loop 内加入安全的分组错峰，而不是全队完全同步。"
+            "当前段章法要求卡农/错峰/分组，但代码只有颜色分组、没有真正的时间错峰；"
+            "请加入起飞波次 `drone.delay(i * 120)`（move2 前）或到达波次 "
+            "`move2(drone, t, flying_ms + (i % 3) * 250)`，段尾 `drone.delay(max(0, base_wait - i * 120))` 拉回对齐。"
         )
 
     needs_climax = _needs_climax_gate(segment_id, role_text, role_motifs)
@@ -147,6 +149,20 @@ def evaluate_composition(
             "节奏完全单调：所有 keyframe 同一 flying_ms、整段只有一种灯光颜色、无任何错峰。"
             "至少做一项：让一个 keyframe 明显短促或延展、换灯光颜色/做颜色渐变、"
             "或在 per-drone loop 内按 i % group_mod 加小错峰。"
+        )
+
+    # 同起同停门：正式编舞段(S02-S05)必须有真正的时间错峰，
+    # 颜色分组(i % 3 选色)不算 — 观感上全队仍然同起同停。
+    if (
+        segment_id in TIME_STAGGER_REQUIRED_SEGMENTS
+        and features["estimated_keyframe_count"] >= 1
+        and not features["has_time_stagger"]
+    ):
+        errors.append(
+            f"{segment_id} 全段所有无人机同起同停 — 至少一个 keyframe 要打破时间同步："
+            "起飞波次 `drone.delay(i * 120)`（写在 move2 之前），或到达波次 "
+            "`move2(drone, t, flying_ms + (i % 3) * 250)`（每架机不同时长）；"
+            "段尾用 `drone.delay(max(0, base_wait - i * 120))` 把时间线拉回对齐，避免动作未完成。"
         )
 
     if segment_id == "S04" and features["estimated_keyframe_count"] < 4:
@@ -263,6 +279,7 @@ def extract_code_features(code: str) -> dict:
         "estimated_keyframe_count": max(move2_calls, custom_points_calls),
         "has_handwritten_geometry": "custom_points(" in code or xyz_literal_count >= 6,
         "has_indexed_stagger": has_indexed_stagger,
+        "has_time_stagger": _has_time_stagger(code),
         "has_math_geometry": _has_math_geometry(code),
         "color_literals": colors,
         "rgb_tuple_color_count": len(rgb_tuple_colors),
@@ -360,6 +377,48 @@ def _attach_parents(tree: ast.AST) -> None:
     for parent in ast.walk(tree):
         for child in ast.iter_child_nodes(parent):
             child.parent = parent  # type: ignore[attr-defined]
+
+
+_LOOP_VAR_NAMES = {"i", "j", "k", "idx", "gi"}
+
+
+def _has_time_stagger(code: str) -> bool:
+    """True if drones genuinely desynchronize in time, not just in color/grouping.
+
+    认定为时间错峰的两种写法：
+    - `drone.delay(<含循环变量的表达式>)`：起飞波次 / 尾部回正
+    - `move2(drone, target, <含循环变量的时长>)`：到达波次（每架机不同 flying_ms）
+    `targets[i]` 这种下标用法不算 — 那只是取目标点，时间仍然同步。
+    """
+    try:
+        tree = ast.parse(code)
+    except SyntaxError:
+        return False
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Call):
+            continue
+        if (
+            isinstance(node.func, ast.Attribute)
+            and node.func.attr == "delay"
+            and node.args
+            and _contains_loop_var(node.args[0])
+        ):
+            return True
+        if (
+            isinstance(node.func, ast.Name)
+            and node.func.id in ("move2", "move2autoz")
+            and len(node.args) >= 3
+            and _contains_loop_var(node.args[2])
+        ):
+            return True
+    return False
+
+
+def _contains_loop_var(node: ast.AST) -> bool:
+    return any(
+        isinstance(sub, ast.Name) and sub.id in _LOOP_VAR_NAMES
+        for sub in ast.walk(node)
+    )
 
 
 def _has_math_geometry(code: str) -> bool:

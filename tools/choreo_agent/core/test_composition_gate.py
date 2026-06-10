@@ -461,3 +461,64 @@ for i, d in enumerate(drones):
     )
     # apply_light 4 ticks + range(20) TurnOnAll loop = 24
     assert features["lighting_tick_estimate"] == 24
+
+
+def test_time_stagger_feature_distinguishes_color_grouping():
+    # 只有 i%3 选色，没有时间错峰 → has_time_stagger False
+    color_only = """
+for i, d in enumerate(drones):
+    move2(d, targets[i], 3000)
+    apply_light(d, ["#ff0000", "#00ff00", "#0000ff"][i % 3], 4)
+    d.delay(2700)
+"""
+    features = extract_code_features(color_only)
+    assert features["has_indexed_stagger"]  # 旧特征会误判
+    assert not features["has_time_stagger"]  # 新特征看得出全队同步
+
+    wave_start = """
+for i, d in enumerate(drones):
+    d.delay(i * 120)
+    move2(d, targets[i], 3000)
+    apply_light(d, "#44aaff", 4)
+    d.delay(max(0, 2700 - i * 120))
+"""
+    assert extract_code_features(wave_start)["has_time_stagger"]
+
+    wave_arrival = """
+for i, d in enumerate(drones):
+    move2(d, targets[i], 2600 + (i % 3) * 250)
+    apply_light(d, "#44aaff", 4)
+    d.delay(2600 + (i % 3) * 250 - 300)
+"""
+    assert extract_code_features(wave_arrival)["has_time_stagger"]
+
+
+def test_sync_gate_rejects_uniform_start_stop_in_s02_s05():
+    code = """
+# role: 展开
+# motifs: 扇形展开
+# beat: 推进
+# formation: 宽阵
+# lighting: 蓝转金
+auto_init(drones)
+prev = [(d.x, d.y, d.z) for d in drones]
+geo = [(100, 100, 120), (300, 100, 180)]
+targets = best_assign(prev, geo)
+for i, d in enumerate(drones):
+    move2(d, targets[i], 3000)
+    apply_light(d, ["#44aaff", "#ffcc00"][i % 2], 4)
+    d.delay(2700)
+"""
+    _f, errors = evaluate_composition(code, {}, "S03")
+    assert any("同起同停" in e for e in errors), errors
+
+    staggered = code.replace(
+        "    move2(d, targets[i], 3000)",
+        "    d.delay(i * 120)\n    move2(d, targets[i], 3000)",
+    )
+    _f2, errors2 = evaluate_composition(staggered, {}, "S03")
+    assert not any("同起同停" in e for e in errors2), errors2
+
+    # S06 平静收束不强制错峰
+    _f3, errors3 = evaluate_composition(code, {}, "S06")
+    assert not any("同起同停" in e for e in errors3), errors3
