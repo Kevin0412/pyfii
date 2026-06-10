@@ -240,3 +240,14 @@ System prompt / context packs / `prompt_builder.py` 会影响 LLM 输入缓存�
 旁证：reflection 文档早已写明"不要预设固定安全距离（如>100cm）——这是枷锁"与"不额外加安全常量"，与今日 51cm 唯一硬下限的清理方向一致。
 
 音乐对齐量化：模板段窗 vs librosa hard cues，5/7 边界在 1.5s 内（大闹天宫人类标准 8/11）。13.0s 边界偏 1.9s 最差。P1（music_brief 驱动段窗+章法生成）仍是头号工程。
+
+# 11.8 蒸馏复盘 III：带着 agent 失败模式重读原始作品 (2026-06-10 深夜)
+
+旧蒸馏问"作品好在哪"；这轮问"dntg 为什么从来不会犯 agent 烧轮次的那些错"。新发现：
+
+1. **灯光就是时钟（头号发现）**。dntg 每个 keyframe 都是 `move2(d, target, T)` + 恰好 T/100 个 tick 的灯光循环——灯光循环本身就是等待，全片没有一处"delay 补余数"的算术。逐条核对：1000ms↔10 ticks、1500↔15、1600↔16，全部精确吻合。我们的协议 `move2 → apply_light(3-5 ticks) → delay(flying_ms - ticks*100 + 100)` 是三步带算术——S07 日志里模型反复推演 cursor 数学烧掉的轮次，根源就是这个协议设计。dntg 的写法同时消灭算术错误并免费获得 10-16 ticks/keyframe 的灯光密度（2100 条灯光指令不是额外工作量，而是等待结构本身）。**提案**：canonical loop 改为 `move2(drone, target, flying_ms); apply_light(drone, color, flying_ms // 100)`，不写尾部 delay；错峰时 `ticks = (flying_ms - i*stagger_ms) // 100` 自然回正。
+2. **大 delay 都是戏剧性定格，不是填充**。仅有的 4000/5000/6000ms delay 全部是符号展示：飞到镰刀/锤子阵型(1000ms)后点亮定格 4-5s 让观众读出形状。**冲突**：我们的悬停硬检测（≥1s 静止即打回）使 dntg 的高潮设备在本系统内非法。需要"声明式定格"豁免方案（如尾段/署名段允许、或角色声明 hold 的段放宽阈值）——待人工决策。
+3. **从黑暗点亮**（12 处 `23+a*8` 接近黑场的渐亮坡）：起飞"点火"效果。一行词汇成本。
+4. **刚体旋转 keyframe 天然安全**（11 处旋转向量移动）：旋转保持两两距离，无需 assignment 搜索。validator 的刚性圆退化检测正是防它被滥用——定位为"单场 1-2 段的合法设备"。
+5. **修正旧蒸馏的误读**：human_choreography_distillation.md 称 dntg"速度范围 50-400"——v3 生成脚本全程走 move2 helper（Vel 上限 200），XML 里的 400 是 `VelXY(v, 2v)` 的加速度。我们的 clamp(20-200 / 50-400) 与 dntg 实际完全一致。
+6. **intime() 锚定 vs auto_init 取整**：dntg 每段每机绝对时间重锚（消除漂移+支持异步入场）；我们禁 inittime 用 auto_init 向上取整（漂移累积+异步被锁死）。架构级，配合 11.7 异步时间线条目。
