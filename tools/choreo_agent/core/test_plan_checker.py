@@ -53,14 +53,14 @@ def test_spacing_below_floor_violates():
 
 
 def test_tight_cluster_51_90_allowed_with_note():
-    # 65cm apart (51-90 band), paths stay collinear and 65cm separated.
+    # 65cm apart (51-90 band), paths stay collinear and 65cm separated — density is free.
     prev = [[100, 100, 120], [400, 100, 120]]
     targets = [[200, 100, 120], [265, 100, 120]]
     ok, report = evaluate_plan_safety(
         {"keyframes": [_kf(targets)]}, prev, drone_count=2
     )
     assert ok, report
-    assert "刻意密集" in report
+    assert "≥ 51cm OK" in report
 
 
 def test_out_of_bounds_violates():
@@ -82,10 +82,10 @@ def test_wrong_target_count_violates():
 
 
 def test_path_spacing_conflict_violates():
-    # Targets 52cm apart pass the 51cm point-table floor, but even the best
-    # assignment cannot keep transition paths 55cm apart.
-    prev = [[100, 100, 120], [400, 400, 120]]
-    targets = [[250, 250, 120], [302, 250, 120]]
+    # Targets 52cm apart pass the 51cm point-table floor, but the straight-line
+    # transitions converge mid-flight below 51cm under every assignment.
+    prev = [[100, 100, 120], [100, 200, 120]]
+    targets = [[400, 100, 120], [452, 100, 120]]
     ok, report = evaluate_plan_safety(
         {"keyframes": [_kf(targets)]}, prev, drone_count=2
     )

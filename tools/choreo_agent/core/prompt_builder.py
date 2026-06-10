@@ -107,8 +107,8 @@ def build_segment_prompt(
 - 不要写 keyframe，不要 move2，不要用 LAND 继续凑正式动作"""
     elif is_s01:
         segment_start_rule = f"""- 首段必须先设计 `start_positions`，设置 `drone.X = drone.x` 与 `drone.Y = drone.y`，再 `drone.takeoff(1, z)`（z 可各机不同——如中心锚点机更高、外围低一些，建立视觉层次）
-- `start_positions` 自身必须安全分散：{drone_count}个XY点最小间距≥180cm，不要中心聚团，不要把多数点放在 200-360cm 的中心小区域
-- 起飞布局可用“六边形+中心/宽V/双层扇形”等分散结构；首个正式 keyframe 路径通常控制在 180-360cm，不要从中心直接硬飞到全场边界
+- `start_positions`：{drone_count}个XY点，最小间距 ≥51cm（pyfii core 碰撞底线，检查器会精确验证）；密集或分散是你的构图决定
+- 首个正式 keyframe 路径通常控制在 180-360cm，不要从中心直接硬飞到全场边界
 - 起飞后调用 `wait_until(drones, {start_time})` 对齐正式编舞窗口；不要直接写 `inittime()`
 - 然后写 `prev = [(d.x, d.y, d.z) for d in drones]` 并开始正式 move2 动作"""
     else:
@@ -154,7 +154,7 @@ def build_segment_prompt(
         )
         prev_update_rule = "段尾更新 prev = [(t[0],t[1],t[2]) for t in targets]"
     else:
-        keyframe_rule = "2-4个利落 keyframe，非对称几何（点表 XY 间距默认 ≥90cm，开阔段优先 120-260cm；刻意密集造型可降到 55-75cm，硬下限 51cm），用短促推进/交换/高度切层制造节奏"
+        keyframe_rule = "2-4个利落 keyframe，非对称几何（点表 XY 间距硬下限 51cm，密度是构图自由），用短促推进/交换/高度切层制造节奏"
         prev_update_rule = "段尾更新 prev = [(t[0],t[1],t[2]) for t in targets]"
 
     coordinate_hint = _format_coordinate_hint(drone_count, segment_upper)
@@ -205,7 +205,7 @@ def build_segment_prompt(
 - 快节奏必须可完成：单个 2600-3200ms keyframe 的 3D 路径通常控制在约 180-360cm；不要用 2000-2400ms 硬飞 500cm 跨场路径
 - 如果段长需要覆盖，不要拉长单个 move2；用多个可完成的快 keyframe、分组错峰或高度切层承接，保持每 1 秒窗口都有群体运动
 - 3s 以上 keyframe 不要写 `min_path_cm=90/100`；用 `flying_ms = 3000` 后 `targets = far_assign(prev, geo, min_path_cm=active_min_path_cm(flying_ms))`
-- 安全距离按 XY 看：不要把同一 XY 的不同 Z 当成安全分离；开阔段每个 keyframe 的 XY 点间距尽量 ≥100cm，刻意密集造型可压到 55-75cm（硬下限 51cm，需配合短路径慢速），复杂交换交给 `far_assign`
+- 安全距离按 XY 看：不要把同一 XY 的不同 Z 当成安全分离；XY 间距硬下限 51cm（pyfii core 碰撞线，检查器精确验证），密集造型配合短路径慢速；复杂交换交给 `far_assign`
 - 高度层必须真实混合：每个主体 keyframe 至少 3 个 Z 层，整段 Z range ≥90cm；不要全队同一高度平面
 - 编舞词汇（每段至少用一种，并在 #beat/#formation 标明）：交错启动 (delay(i*ms)), Z 个性 (move2 内 +dz*sin(i)), 分组对比 (两组不同几何/灯光), 焦点机 (1-2 架独立轨迹), 中心迁移, 密度呼吸, 灯光渐变 (同 keyframe 内多次 apply_light 或 range()+TurnOnAll((r,g,b)) 呼吸)；全段匀速单色无差异会被节奏门打回
 - `d.TurnOnAll((r,g,b))` 直接接受 RGB 三元组 (0-255)：`d.TurnOnAll((255,255,255))`=白色。可在 per-drone loop 内做灯光渐变呼吸: `for a in range(30): d.TurnOnAll((int(128+127*sin(a*pi/15)), int(60+50*sin(a*pi/10)), 40)); d.delay(100)` — 30 ticks = 3秒渐变（pi 已导出，不要写 π）
@@ -232,9 +232,9 @@ def _format_coordinate_hint(drone_count: int, segment_id: str) -> str:
     start_hint = ""
     if segment_id == "S01":
         start_hint = (
-            "S01 的 start_positions 推荐直接用安全 3x3 起飞格："
-            "`[(80,80),(280,80),(480,80),(80,280),(280,280),(480,280),(80,480),(280,480),(480,480)]`；"
-            "不要把起飞点挤成中心团"
+            "起飞队形是整场演出的第一个视觉语句，完全由你设计，并播种全局母题（后续段落要承接它）；"
+            "不要套用任何固定网格或模板队形。硬约束只有：XY 0-560，起飞点最小 XY 间距 ≥51cm（检查器会精确验证）；"
+            "起飞高度可各机不同"
         )
 
     discipline = (

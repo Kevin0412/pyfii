@@ -79,7 +79,7 @@ def build_planning_prompt(
 
 节奏目标: 动作更利落，不要用单个慢 move 拖满段落；按上面的 keyframe 数量填表，允许段尾保留 0.3-0.8s 收束，不要反复讨论“是否覆盖整段”。
 可完成性: 单个 keyframe 的 3D 路径通常控制在约 120-380cm；不要规划 500cm 级跨场短飞。
-约束: targets总数={drone_count}, shape=[{target_example}], XY 0-560cm, Z 80-250cm, target 点表内部 XY 间距默认 ≥90cm（开阔段优先 120-260cm，刻意密集可 55-75cm，硬下限 51cm）；不要追求 200cm 以上导致 9 机场地放不下。速度20-200, 加速度50-400, 推荐速度150-200、加速度260-400，灯光ticks 3-5。
+约束: targets总数={drone_count}, shape=[{target_example}], XY 0-560cm, Z 80-250cm, target 点表 XY 间距硬下限 51cm（pyfii core 碰撞线，检查器精确验证）；密度是构图自由，不要为了凑大间距放弃造型。速度20-200, 加速度50-400, 推荐速度150-200、加速度260-400，灯光ticks 3-5。
 章法约束: JSON 里的 feel/targets/light_color 必须服务全局章法；不要随机换题，不要连续重复同一种退化队形。
 输出纪律: 直接给 JSON；不要写距离证明、不要手算两两间距、不要自问自答。规划检查器会回报精确间距/路径/时长数字，如有违规你会收到报告再修正。
 
@@ -201,9 +201,9 @@ def parse_plan_json(text: str) -> dict | None:
         return None
 
 
-# 安全阈值：51cm 是 pyfii core 碰撞警告硬下限；分配后路径间距留少量余量。
+# 安全阈值：51cm 是 pyfii core 碰撞警告硬下限，点表与转场路径同一条线。
 PLAN_MIN_XY_FLOOR_CM = 51.0
-PLAN_PATH_SPACING_FLOOR_CM = 55.0
+PLAN_PATH_SPACING_FLOOR_CM = 51.0
 
 
 def evaluate_plan_safety(
@@ -274,12 +274,8 @@ def evaluate_plan_safety(
             )
             violations.append(msg)
             lines.append(f"- 违规: {msg}")
-        elif min_xy < 90:
-            lines.append(
-                f"- 点表最小 XY 间距 {min_xy:.0f}cm (d{pair[0]}-d{pair[1]}) — 51-90 属刻意密集，确认是设计意图"
-            )
         else:
-            lines.append(f"- 点表最小 XY 间距 {min_xy:.0f}cm (d{pair[0]}-d{pair[1]}) OK")
+            lines.append(f"- 点表最小 XY 间距 {min_xy:.0f}cm (d{pair[0]}-d{pair[1]}) ≥ 51cm OK")
 
         perm, path_md = _assign(
             [(x, y) for x, y, _ in current_prev],

@@ -50,6 +50,8 @@ def preflight_check(
     #     在 preflight 就按 custom_points 同样的裁剪+间距规则验一遍，
     #     违规直接回报精确数字，省掉一轮运行期 ValueError。
     _check_computed_geometry(code, r, drone_count)
+    # 14. S01 起飞布局静态验算：任意构图都行，但 XY 间距必须 ≥180cm。
+    _check_start_positions(code, r, segment_id, drone_count)
 
     # 1. Markdown / 中文解释残留
     _check_no_markdown(code, r)
@@ -342,6 +344,46 @@ def _check_computed_geometry(code, r, drone_count):
             f"computed 点表(line {getattr(node, 'lineno', '?')})没有经过 custom_points 包裹 — "
             "math 几何必须写 `geo = custom_points([...公式...], n=len(drones), min_xy_cm=90)`，"
             "由它统一裁剪坐标并校验间距；不要把 comprehension 直接传给 best_assign/far_assign/move2"
+        )
+
+
+# 起飞间距硬下限与全场一致：51cm 以下 pyfii core 报碰撞。构图密度是设计自由。
+START_POSITION_MIN_XY_CM = 51.0
+
+
+def _check_start_positions(code, r, segment_id, drone_count):
+    """Statically verify takeoff layout spacing so any custom formation is safe."""
+    if segment_id is None or str(segment_id).upper() != "S01":
+        return
+    try:
+        tree = ast.parse(code)
+    except SyntaxError:
+        return
+    env = _build_geometry_env(tree, drone_count)
+    raw = env.get("start_positions")
+    if not isinstance(raw, list) or len(raw) < 2:
+        return
+    pairs = []
+    for p in raw:
+        if not isinstance(p, (list, tuple)) or len(p) < 2:
+            return  # 静态算不出来，交给运行期碰撞检测兜底
+        try:
+            pairs.append((float(p[0]), float(p[1])))
+        except (TypeError, ValueError):
+            return
+    if drone_count and len(pairs) != int(drone_count):
+        r.add(f"start_positions 有 {len(pairs)} 个点 != 机数 {int(drone_count)}")
+        return
+    oob = [
+        f"({x:g},{y:g})" for x, y in pairs if not (0 <= x <= 560 and 0 <= y <= 560)
+    ]
+    if oob:
+        r.add(f"start_positions 越界: {', '.join(oob[:3])} — XY 必须在 0-560")
+    md, pair = _static_min_xy([(x, y, 0.0) for x, y in pairs])
+    if md < START_POSITION_MIN_XY_CM:
+        r.add(
+            f"起飞布局最小 XY 间距 {md:.0f}cm (点{pair[0]}-点{pair[1]}) < 硬下限 51cm — "
+            "拉开这两个起飞点；构图形状和密度随意，51cm 是 pyfii core 碰撞底线"
         )
 
 

@@ -129,6 +129,31 @@ def test_preflight_requires_custom_points_wrap_for_comprehensions():
     print("PASSED: preflight requires custom_points wrap for comprehensions")
 
 
+def test_preflight_verifies_start_positions_spacing():
+    # 自由设计的环形起飞，R=240 弦距 ~184cm → 放行；密集环 R=100 弦距 ~77cm 也合法（≥51）
+    ring = (
+        "start_positions = [(280+240*cos(2*pi*k/8), 280+240*sin(2*pi*k/8)) "
+        "for k in range(8)] + [(280, 280)]\n"
+        "for i, drone in enumerate(drones):\n"
+        "    drone.X = drone.x = start_positions[i][0]\n"
+        "    drone.Y = drone.y = start_positions[i][1]\n"
+        "    drone.takeoff(1, 90 + (i % 3) * 15)\n"
+    )
+    assert preflight_check(ring, segment_id="S01", drone_count=9), \
+        preflight_check(ring, segment_id="S01", drone_count=9).errors
+    dense_but_legal = ring.replace("240", "100")  # 弦距 ~77cm ≥ 51 — 密集构图是设计自由
+    assert preflight_check(dense_but_legal, segment_id="S01", drone_count=9)
+    # R=60 弦距 ~46cm < 51cm 硬下限 → 报精确数字
+    tight = ring.replace("240", "60")
+    r = preflight_check(tight, segment_id="S01", drone_count=9)
+    assert not r
+    assert any("起飞布局最小 XY 间距" in e for e in r.errors), r.errors
+    r2 = preflight_check(tight.replace("start_positions", "sp"), segment_id="S01", drone_count=9)
+    # 改名后静态查不到，交运行期兜底 — 不应报起飞间距错误
+    assert not any("起飞布局" in e for e in r2.errors)
+    print("PASSED: preflight verifies start_positions spacing")
+
+
 def test_preflight_blocks_bare_api():
     r = preflight_check("drone.VelXY(120,200)")
     assert not r
@@ -213,6 +238,7 @@ if __name__ == "__main__":
     test_preflight_blocks_position_writes_outside_s01()
     test_preflight_evaluates_math_geometry()
     test_preflight_requires_custom_points_wrap_for_comprehensions()
+    test_preflight_verifies_start_positions_spacing()
     test_preflight_blocks_bare_api()
     test_preflight_blocks_inittime()
     test_preflight_blocks_single_drone_timing()
@@ -220,4 +246,4 @@ if __name__ == "__main__":
     test_preflight_accepts_clean()
     test_planning_pass_importable()
     test_degradation_signature_in_state()
-    print("\nALL 16 TESTS PASSED")
+    print("\nALL 17 TESTS PASSED")
