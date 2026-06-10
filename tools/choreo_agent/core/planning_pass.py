@@ -24,6 +24,8 @@ def build_planning_prompt(
     prev_text = "\n".join(prev_lines) if prev_lines else "无"
     target_example = ", ".join(f"[x{i},y{i},z{i}]" for i in range(drone_count))
     composition_text = _format_planning_composition_plan(composition_plan, segment_id)
+    keyframe_text = _format_keyframe_contract(segment_id, start_time, end_time)
+    coordinate_seeds = _format_safe_coordinate_seeds(drone_count)
 
     return f"""## 规划 {segment_id} ({start_time}-{end_time}s, 时长{end_time-start_time}s)
 意图: {intent}
@@ -32,6 +34,10 @@ def build_planning_prompt(
 
 上一段出口:
 {prev_text}
+
+{keyframe_text}
+
+{coordinate_seeds}
 
 输出 JSON 计划：
 ```json
@@ -63,12 +69,72 @@ def build_planning_prompt(
 }}
 ```
 
-节奏目标: 动作更利落，不要用单个慢 move 拖满段落；优先用 2-4 个 2.6-3.6s 的可完成强 keyframe 或分组错峰承接。
-可完成性: 单个 2.6-3.2s keyframe 的 3D 路径通常控制在约 180-360cm；不要规划 500cm 级跨场短飞。
-约束: XY间距≥200cm, Z 100-250cm, targets总数={drone_count}, 速度20-200, 加速度50-400, 推荐速度150-200、加速度260-400，灯光ticks 3-5, 段长{end_time-start_time}s。
+节奏目标: 动作更利落，不要用单个慢 move 拖满段落；按上面的 keyframe 数量填表，允许段尾保留 0.3-0.8s 收束，不要反复讨论“是否覆盖整段”。
+可完成性: 单个 keyframe 的 3D 路径通常控制在约 120-380cm；不要规划 500cm 级跨场短飞。
+约束: targets总数={drone_count}, shape=[{target_example}], Z 100-250cm, target 点表内部 min_xy_cm≥90cm，优先 120-260cm；不要追求 200cm 以上导致 9 机场地放不下。速度20-200, 加速度50-400, 推荐速度150-200、加速度260-400，灯光ticks 3-5。
 章法约束: JSON 里的 feel/targets/light_color 必须服务全局章法；不要随机换题，不要连续重复同一种退化队形。
+输出纪律: 直接给 JSON；不要写距离证明、不要手算两两间距、不要自问自答。安全骨架已经给出，复制后少量变奏即可。
 
 只输出 JSON，不解释。"""
+
+
+def _format_keyframe_contract(segment_id: str, start_time: float, end_time: float) -> str:
+    segment = str(segment_id).upper()
+    duration = max(0.0, float(end_time) - float(start_time))
+    if segment == "S04":
+        count = 4
+        note = "S04 是抒情展开/蓄力段，必须 4 个短 keyframes，至少 3 种 light_color。"
+    elif segment == "S06":
+        count = 2
+        note = "S06 是尾声收束，必须 2 个 keyframes：中继 echo pose + 最终 signature pose。"
+    elif duration >= 9.0:
+        count = 3
+        note = "长窗口用 3 个强 keyframes；不要把 10 秒压成两个 5 秒慢动作。"
+    elif duration >= 7.0:
+        count = 2
+        note = "中窗口用 2 个强 keyframes，段尾留少量收束。"
+    else:
+        count = 2
+        note = "短窗口只用 2 个可完成 keyframes。"
+
+    active = max(1.8, duration - 0.7)
+    step = active / count
+    starts = [float(start_time) + step * i for i in range(count)]
+    lines = [
+        "Keyframe 合同:",
+        f"- 必须输出 exactly {count} 个 keyframes；不要多也不要少。",
+        f"- {note}",
+        "- start_s 必须递增，duration_s 取 1.8-3.4s；段尾可以留 0.3-0.8s 视觉收束。",
+        "- 推荐时间表:",
+    ]
+    for i, start in enumerate(starts, start=1):
+        lines.append(f"  - k{i}: start_s={start:.1f}, duration_s={step:.1f}")
+    return "\n".join(lines)
+
+
+def _format_safe_coordinate_seeds(drone_count: int) -> str:
+    if int(drone_count) != 9:
+        return "坐标提示: 直接输出 numeric targets；不要写变量、表达式或省略号。"
+
+    return """9机安全坐标骨架（低层点表，不是高层队形模板）:
+- 这些 seed 只用来避免现场手算失败；每个 keyframe 选一个 seed 后可做 ±20-35cm 小变奏、换 z 层、换无人机顺序。
+- 不要连续 keyframe 原样复制同一 seed；至少改变中心偏移、稀疏/密集、Z 层或左右/前后关系。
+- 每个 targets 必须是 9 个 numeric triples，禁止变量/省略号/公式。
+
+seed_box:
+[[60,60,120],[280,60,210],[500,60,120],
+ [60,280,180],[280,280,240],[500,280,180],
+ [60,500,120],[280,500,210],[500,500,120]]
+
+seed_slant:
+[[80,80,220],[300,100,140],[520,120,200],
+ [40,300,160],[260,300,240],[480,300,130],
+ [80,520,190],[300,500,150],[520,480,230]]
+
+seed_asym:
+[[40,80,180],[250,50,240],[500,100,130],
+ [120,260,120],[350,240,210],[540,310,160],
+ [60,500,230],[290,520,150],[510,470,200]]"""
 
 
 def _format_planning_composition_plan(

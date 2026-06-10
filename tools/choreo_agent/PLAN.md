@@ -180,6 +180,14 @@ System prompt / context packs / `prompt_builder.py` 会影响 LLM 输入缓存�
 - 9机正式段默认写手写坐标表 + `best_assign/far_assign` + per-drone loop。
 - S04 可使用 4-5 个短 keyframe 做抒情展开；S05 保持高潮幅度和多色灯光；S06 建议两段式收尾（中继点 + 终点），不能单 keyframe 小挪动。
 
+2026-06-10 追加结论：
+
+- 去掉高层模板后，DeepSeek Flash 在 9 机 S01/S02 上会把“手写安全点表”变成超长现场数学推导，甚至重新质疑 `move2/apply_light/delay` 的 API 语义。
+- 这不是要恢复 `geo_*` 或 `move_group`。正确补法是在 user prompt / planning pass 提供低层安全坐标骨架：3x3 起飞格、`seed_box/seed_slant/seed_asym` 等 numeric point seeds，让模型少算间距、多做编舞变奏。
+- 低层 seed 的定位是“安全坐标脚手架”，不是可连续复用的队形模板。正式段仍要求每个 keyframe 改变中心偏移、Z 层、左右/前后关系、灯光或节奏；连续原样复制 seed 仍视为退化。
+- 本轮改动只调整 `prompt_builder.py` 的 user prompt 与 `planning_pass.py` 的规划提示，`build_system_prompt()` 与 context packs 未改，尽量避免大块 system prompt 缓存失效。
+- 实测中断记录：`codex_9d_perdrone_flash_20260610_120551` 在 S01 通过后卡在 S02 规划长推理；`codex_9d_seeded_flash_20260610_122132` 证明 per-drone + 3 keyframes 方向成立，但普通 S01 prompt 也需要同样的安全点表纪律。
+
 # 12-13. Token预算
 
 - MVP: 300-600万 tokens

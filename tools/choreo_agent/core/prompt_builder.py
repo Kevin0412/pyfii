@@ -154,8 +154,10 @@ def build_segment_prompt(
         )
         prev_update_rule = "段尾更新 prev = [(t[0],t[1],t[2]) for t in targets]"
     else:
-        keyframe_rule = "2-4个利落 keyframe，非对称几何（XY间距≥200cm），用短促推进/交换/高度切层制造节奏"
+        keyframe_rule = "2-4个利落 keyframe，非对称几何（点表 min_xy_cm≥90cm，优先 120-260cm），用短促推进/交换/高度切层制造节奏"
         prev_update_rule = "段尾更新 prev = [(t[0],t[1],t[2]) for t in targets]"
+
+    coordinate_hint = _format_coordinate_hint(drone_count, segment_upper)
 
     if is_land:
         user = f"""## {segment_id} ({start_time}-{end_time}s, 时长{end_time - start_time}s)
@@ -189,9 +191,11 @@ def build_segment_prompt(
   `# formation: ...`
   `# lighting: ...`
 - {keyframe_rule}
+- {coordinate_hint}
 - {assign_rule}
 - 几何主路径是手写目标点表：`geo = custom_points([...], n=len(drones), min_xy_cm=90)`，再 `best_assign/far_assign`；S02-S05 必须至少一个主体 keyframe 使用手写坐标表，禁止调用 `geo_wide_v/geo_arrow/geo_box/geo_diagonal/geo_wave/geo_grid`
 - 正式段默认展开 per-drone loop，不要用 `move_group` 作为整段主结构：`move2(drone, target, flying_ms)` → `apply_light(drone, color, ticks)` → `drone.delay(flying_ms-ticks*100+100)`
+- 不要重新质疑 `move2/apply_light/delay` 的语义，也不要在回答中推导 API；按上述顺序写代码即可，验证器会负责轨迹检查
 - `move_group/move_group_staggered` 只作为 smoke/兜底工具；S01-S06 纯 helper 执行会被打回。卡农/错峰请在 per-drone loop 内按 `i % group_mod` 写小 delay，并保留每架机自己的灯光/等待
 - 禁止只给 `drones[0]` 或单架无人机 delay/light；每架机都要在显式 per-drone loop 内获得本次 move2 的灯光和执行等待时间
 - 主体 move2 通常用 2600-3600ms；不要用 4500ms+ 超慢移动凑时长，段尾由 auto_init 压缩
@@ -213,6 +217,33 @@ def build_segment_prompt(
         user += f"\n\n## 上一轮反馈\n{feedback}\n根据反馈修正。"
 
     return system, user
+
+
+def _format_coordinate_hint(drone_count: int, segment_id: str) -> str:
+    if int(drone_count) != 9:
+        return "坐标点表必须全部写成数字三元组；不要写变量、公式或省略号"
+
+    start_hint = ""
+    if segment_id == "S01":
+        start_hint = (
+            "S01 的 start_positions 推荐直接用安全 3x3 起飞格："
+            "`[(80,80),(280,80),(480,80),(80,280),(280,280),(480,280),(80,480),(280,480),(480,480)]`；"
+            "不要把起飞点挤成中心团"
+        )
+
+    seeds = (
+        "9机手写坐标可从这些安全低层点表变奏，避免临场手算失败；每个 keyframe 选一个 seed 后只做 ±20-35cm 小变奏，"
+        "不要写 60cm 步长密集斜线，不要连续原样复制同一 seed。"
+        " seed_box="
+        "`[(60,60,120),(280,60,210),(500,60,120),(60,280,180),(280,280,240),(500,280,180),(60,500,120),(280,500,210),(500,500,120)]`;"
+        " seed_slant="
+        "`[(80,80,220),(300,100,140),(520,120,200),(40,300,160),(260,300,240),(480,300,130),(80,520,190),(300,500,150),(520,480,230)]`;"
+        " seed_asym="
+        "`[(40,80,180),(250,50,240),(500,100,130),(120,260,120),(350,240,210),(540,310,160),(60,500,230),(290,520,150),(510,470,200)]`"
+    )
+    if start_hint:
+        return f"{start_hint}；{seeds}"
+    return seeds
 
 
 def _format_composition_plan(
