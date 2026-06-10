@@ -220,9 +220,9 @@ def build_segment_prompt(
 - LAND 前如果整体真实动作还没超过 60s，系统会追加 S07/S08 等正式段继续编舞；不要靠当前段硬等待
 - {prev_update_rule}
 - ## 时间预算
-段长: {end_time - start_time}s。所有 move2 的 flying_ms 之和必须≥ {(end_time - start_time - 1) * 1000:.0f}ms（留1s灯光余量）
-示例: 3个move2，各3000ms → 总9000ms，覆盖9s → 快节奏且不会过早收束 ✓
-反例: 1个move2，8000ms → 虽覆盖时间但视觉拖沓 ✗；2个move2，各2500ms → 总5000ms，动作在 {start_time + 5}s 结束 ✗（收束过早）
+段长: {end_time - start_time}s。`move2 飞行 + 亮灯定格` 之和必须≥ {(end_time - start_time - 1) * 1000:.0f}ms——**亮灯定格是预算的一等公民**（dntg 全片 57% 时间是定格展示图形）
+示例: 2个move2各2800ms + 每次到位后亮灯定格1700ms → 9000ms，观众有时间读图 ✓；3个move2各3000ms 全程飞不停 → 覆盖但观众读不到任何图形 △
+反例: 1个move2 8000ms 超慢飘移 ✗；黑灯静止凑时长 ✗（低活动打回）
 - 禁止 inittime/VelXY/import
 - 只输出代码片段（4空格缩进）"""
 
