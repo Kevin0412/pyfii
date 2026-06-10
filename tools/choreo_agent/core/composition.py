@@ -84,7 +84,7 @@ def evaluate_composition(
             "请在 per-drone loop 内加入安全的分组错峰，而不是全队完全同步。"
         )
 
-    needs_climax = _mentions_any(full_reference_text, CLIMAX_WORDS)
+    needs_climax = _needs_climax_gate(segment_id, role_text, role_motifs)
     if needs_climax:
         max_excursion = _float((motion_quality or {}).get("max_excursion_cm"))
         if max_excursion is not None and max_excursion < 150.0:
@@ -276,6 +276,33 @@ def _role_avoid(role: Any) -> list[str]:
 def _mentions_any(text: str, needles: Sequence[str]) -> bool:
     lowered = text.lower()
     return any(needle and needle.lower() in lowered for needle in needles)
+
+
+def _needs_climax_gate(segment_id: str, role_text: str, role_motifs: Sequence[str]) -> bool:
+    """Return whether climax-specific amplitude/color rules apply.
+
+    A tail segment often says "从高潮回收" to describe its source. That should
+    not inherit S05's climax gate; otherwise S06 gets rejected for intentionally
+    calming down.
+    """
+    text = " ".join([role_text, " ".join(role_motifs)]).lower()
+    if segment_id == "S05":
+        return True
+    if _mentions_any(text, ("尾声", "收束", "署名", "降落", "安全落地", "回收", "回到")):
+        return False
+    return _mentions_any(
+        text,
+        (
+            "高潮段",
+            "明亮高潮",
+            "视觉峰值",
+            "全场尺度爆发",
+            "最强视觉",
+            "center burst",
+            "climax",
+            "burst",
+        ),
+    )
 
 
 def _text(value: Any) -> str:

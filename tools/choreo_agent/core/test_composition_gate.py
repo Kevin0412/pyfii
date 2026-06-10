@@ -16,6 +16,11 @@ PLAN = {
             "motifs": ["中心爆点", "边界扩张"],
             "avoid": ["保守小动作"],
         },
+        "S06": {
+            "role": "尾声署名：从高潮回收到清晰、优雅、可识别的结束姿态。",
+            "motifs": ["署名姿态", "温暖白光", "斜线/宽V母题回忆"],
+            "avoid": ["新增随机主题", "长时间悬停", "挤到中心"],
+        },
     }
 }
 
@@ -174,6 +179,34 @@ for i, drone in enumerate(drones):
     )
 
     assert any("高潮段动作幅度不足" in item for item in errors)
+
+
+def test_composition_gate_does_not_treat_tail_recovery_as_climax():
+    code = """
+# role: 尾声署名
+# motifs: 署名姿态; 温暖白光; 斜线/宽V母题回忆
+# beat: 收束到结束姿态
+# formation: 三列署名姿态
+# lighting: 温暖白光
+auto_init(drones)
+geo = custom_points([
+    (80,80,100),(80,280,160),(80,480,220),
+    (280,100,120),(280,300,180),(280,500,240),
+    (500,80,140),(500,280,200),(500,480,160),
+], n=len(drones), min_xy_cm=90)
+targets = far_assign(prev, geo, min_path_cm=active_min_path_cm(3200))
+prev = move_group(drones, targets, 3200, "#ffffff", 4)
+"""
+
+    _features, errors = evaluate_composition(
+        code,
+        PLAN,
+        "S06",
+        motion_quality={"max_excursion_cm": 80},
+    )
+
+    assert not any("高潮段动作幅度不足" in item for item in errors)
+    assert not any("高潮/爆发段灯光过单一" in item for item in errors)
 
 
 def test_validation_result_passed_requires_composition_ok_for_formal_segments():
