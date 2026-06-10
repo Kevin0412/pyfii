@@ -77,11 +77,11 @@ def move2(d, p, t_ms, T=100):
 
 
 def move_group(drones, targets, flying_ms, color="#ffffff", ticks=4, tail_ms=0):
-    """同步 keyframe：每架机 move2 + 短灯光 + 执行等待。
+    """同步 keyframe 兜底：每架机 move2 + 短灯光 + 执行等待。
 
-    这是 agent 生成代码的首选动作原语。它把常见的 per-drone
-    `move2 -> apply_light -> delay` 链封装在模板函数库里，减少模型在每段里
-    重新推导时间语义。返回标准化后的 targets，可直接赋给 prev。
+    它适合 smoke 或临时修复，但会隐藏 per-drone 节奏和灯光细节。
+    正式段应优先展开 `move2 -> apply_light -> delay` loop。
+    返回标准化后的 targets，可直接赋给 prev。
     """
     _assert_target_count(drones, targets)
     wait_ms = max(0, int(round(flying_ms)) - int(ticks) * 100 + int(tail_ms))
@@ -105,10 +105,10 @@ def move_group_staggered(
     stagger_ms=120,
     tail_ms=0,
 ):
-    """卡农/错峰 keyframe：按 i % group_mod 给每架机轻微错峰后移动。
+    """卡农/错峰 keyframe 兜底：按 i % group_mod 给每架机轻微错峰后移动。
 
-    用于 S03 这类分组先后启动的段落。错峰必须小而清晰，避免拖成等待：
-    推荐 group_mod=2/3, stagger_ms=80-180。
+    正式段更推荐在 per-drone loop 中显式写错峰、灯光和等待细节。
+    错峰必须小而清晰，避免拖成等待：推荐 group_mod=2/3, stagger_ms=80-180。
     """
     _assert_target_count(drones, targets)
     group_mod = max(1, int(group_mod))

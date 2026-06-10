@@ -198,12 +198,13 @@ def build_coding_prompt(
 - 代码开头必须写 5 行设计卡注释：`# role: ...`, `# motifs: ...`, `# beat: ...`, `# formation: ...`, `# lighting: ...`
 - 设计卡必须承接全局章法，尤其是 current role/current motifs；不要写随机队形说明
 - 几何主路径是手写目标点表：`geo = custom_points([...], n=len(drones), min_xy_cm=90)`，再 `best_assign` 或 `far_assign`；S02-S05 禁止调用 `geo_wide_v/geo_arrow/geo_box/geo_diagonal/geo_wave/geo_grid`
-- 首选每个 keyframe 直接写：`prev = move_group(drones, targets, flying_ms, color, ticks)`
-- 卡农/错峰 keyframe 写：`prev = move_group_staggered(drones, targets, flying_ms, color, ticks, group_mod=3, stagger_ms=120)`
+- 正式段默认展开 per-drone loop：`move2(drone, target, flying_ms)` → `apply_light(drone, color, ticks)` → `drone.delay(delay_ms)`，让每架机保留自己的灯光/等待细节
+- `move_group/move_group_staggered` 只作为 smoke/兜底工具；S01-S06 纯 helper 执行会被 composition gate 打回。卡农/错峰请在 per-drone loop 内按 `i % group_mod` 写小 delay
 - 3s 以上 keyframe 若用 `far_assign`，写 `min_path_cm=active_min_path_cm(flying_ms)`；不要写 90/100cm 导致真实运动过早结束
 - 安全距离按 XY 看，不要把同一 XY 不同 Z 当成安全分离
 - 6-8s 中短窗口只写 2 个强 keyframe；若错峰，stagger_ms=60-90，避免第三个 keyframe 把段尾动作拖成未完成
-- 只有需要非常细的 per-drone 控制时，才展开：`move2(drone, (x,y,z), flying_ms)` → `apply_light(drone, color, ticks)` → `drone.delay(delay_ms)`
+- S04 抒情展开段要写 4-5 个短 keyframe，至少 3 种颜色/灯光变化；S06 尾声要写两段式收尾（中继点 + 最终署名），不能单 keyframe 小挪动
+- 每个 keyframe 完成后更新 `prev = [(t[0], t[1], t[2]) for t in targets]`
 - `planning_speed/planning_accel` 只用于预算 fly_ms；final 代码不要写 set_speed/set_accel/VelXY/VelZ，也不要写 `drone[d]`
 - 如需错峰，只能在同一个 per-drone loop 里对当前 `drone.delay(i * 60)`，但不要改变表格里的 fly_ms/delay_ms
 - 段尾：prev = [(t[0],t[1],t[2]) for t in targets_last]

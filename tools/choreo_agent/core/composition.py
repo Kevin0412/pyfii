@@ -18,6 +18,7 @@ STAGGER_WORDS = ("卡农", "错峰", "分组", "canon", "stagger")
 CLIMAX_WORDS = ("高潮", "爆发", "爆点", "climax", "burst")
 GEO_TEMPLATE_NAMES = ("geo_wide_v", "geo_arrow", "geo_box", "geo_diagonal", "geo_wave", "geo_grid")
 HANDWRITTEN_REQUIRED_SEGMENTS = {"S02", "S03", "S04", "S05"}
+PER_DRONE_REQUIRED_SEGMENTS = {"S01", "S02", "S03", "S04", "S05", "S06"}
 
 
 def evaluate_composition(
@@ -117,6 +118,28 @@ def evaluate_composition(
             "不要用 geo_* 参数变体替代编舞构图。"
         )
 
+    if segment_id in PER_DRONE_REQUIRED_SEGMENTS and features["uses_group_only_execution"]:
+        errors.append(
+            f"{segment_id} 只使用 move_group/move_group_staggered 执行 keyframe。"
+            "正式段应展开 per-drone loop：move2(drone, target, flying_ms) → "
+            "apply_light(drone, color, ticks) → drone.delay(...)；"
+            "move_group 只作为 smoke/兜底工具，不能替代编舞执行细节。"
+        )
+
+    if segment_id == "S04" and features["estimated_keyframe_count"] < 4:
+        errors.append(
+            "S04 是抒情展开段，至少需要 4 个明确 keyframe 或 4 组目标点，"
+            "不要退化成少量同步大块移动。"
+        )
+    if segment_id == "S04" and len(colors) < 3:
+        errors.append("S04 灯光过单一：抒情展开段至少需要 3 种颜色或三段明显色彩变化。")
+
+    if segment_id == "S06" and features["estimated_keyframe_count"] < 2:
+        errors.append(
+            "S06 尾声应为两段式收尾：先到中继/呼应姿态，再到最终署名位置；"
+            "单 keyframe 容易变成小挪动或过早悬停。"
+        )
+
     return result, errors
 
 
@@ -155,25 +178,32 @@ def extract_code_features(code: str) -> dict:
     )
     move_group_calls = len(re.findall(r"\bmove_group\s*\(", code))
     staggered_group_calls = len(re.findall(r"\bmove_group_staggered\s*\(", code))
-    apply_light_calls = len(re.findall(r"\bapply_light\s*\(", code))
+    raw_apply_light_calls = len(re.findall(r"\bapply_light\s*\(", code))
     geo_template_calls = {
         name: len(re.findall(rf"\b{name}\s*\(", code))
         for name in GEO_TEMPLATE_NAMES
     }
     xyz_literal_count = _count_coordinate_literals(code)
+    move2_calls = len(re.findall(r"\bmove2\s*\(", code))
+    delay_calls = len(re.findall(r"\.delay\s*\(", code))
+    custom_points_calls = len(re.findall(r"\bcustom_points\s*\(", code))
     features = {
-        "move2_calls": len(re.findall(r"\bmove2\s*\(", code)),
+        "move2_calls": move2_calls,
         "move_group_calls": move_group_calls,
         "move_group_staggered_calls": staggered_group_calls,
-        "apply_light_calls": apply_light_calls + move_group_calls + staggered_group_calls,
-        "delay_calls": len(re.findall(r"\.delay\s*\(", code)),
+        "raw_apply_light_calls": raw_apply_light_calls,
+        "apply_light_calls": raw_apply_light_calls + move_group_calls + staggered_group_calls,
+        "delay_calls": delay_calls,
+        "uses_group_only_execution": (move_group_calls + staggered_group_calls) > 0 and move2_calls == 0,
         "uses_best_assign": "best_assign(" in code,
         "uses_far_assign": "far_assign(" in code,
-        "uses_custom_points": "custom_points(" in code,
+        "custom_points_calls": custom_points_calls,
+        "uses_custom_points": custom_points_calls > 0,
         "uses_jitter_points": "jitter_points(" in code,
         "geo_template_calls": geo_template_calls,
         "geo_template_call_count": sum(geo_template_calls.values()),
         "xyz_literal_count": xyz_literal_count,
+        "estimated_keyframe_count": max(move2_calls, custom_points_calls),
         "has_handwritten_geometry": "custom_points(" in code or xyz_literal_count >= 6,
         "has_indexed_stagger": has_indexed_stagger,
         "color_literals": colors,

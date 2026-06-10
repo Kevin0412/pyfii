@@ -7,12 +7,12 @@ move2(d, (x,y,z), t_ms, T=100)
 # 不推进时间游标；但记录预计飞行结束时间，供 auto_init 防止下一段提前开始。
 
 move_group(drones, targets, flying_ms, color="#ffffff", ticks=4)
-# 同步 keyframe 首选原语：内部对每架机执行 move2 + apply_light + delay，
-# 返回标准化后的 targets，可直接 `prev = move_group(...)`。
+# 同步 keyframe 兜底原语。它会隐藏每架机的灯光/等待细节，正式段不要把它
+# 当作主编舞结构；主要用于 smoke、极简单同步段或修复时临时落地。
 
 move_group_staggered(drones, targets, flying_ms, color="#ffffff", ticks=4, group_mod=3, stagger_ms=120)
-# 卡农/分组错峰首选原语：按 i % group_mod 轻微错峰后移动。
-# 用于 S03 或设计卡含“卡农/错峰/分组”的段落。
+# 卡农/分组错峰兜底原语。正式段更推荐展开 per-drone loop，自行写
+# `if i % group_mod: drone.delay(...)`，保留每架机灯光和等待细节。
 
 pulse_group(drones, color="#ffffff", ticks=3)
 # 全队短灯光脉冲；不能用它凑长时间。
@@ -47,13 +47,28 @@ clamp_z(v)   # [80, 250]
 ```
 
 ## 时序模型（每次移动）
-优先使用封装原语，减少时间语义错误：
+正式段默认展开 per-drone loop，保留每架机的动作、灯光和等待细节：
 ```python
 targets = best_assign(prev, geo)
-prev = move_group(drones, targets, 3000, "#44aaff", 4)
+flying_ms = 3000
+ticks = 4
+for i, drone in enumerate(drones):
+    move2(drone, targets[i], flying_ms)
+    apply_light(drone, "#44aaff", ticks)
+    drone.delay(max(0, flying_ms - ticks * 100 + 100))
+prev = [(t[0], t[1], t[2]) for t in targets]
 
 targets = far_assign(prev, geo2, min_path_cm=140)
-prev = move_group_staggered(drones, targets, 3000, "#ffaa44", 4, group_mod=3, stagger_ms=120)
+flying_ms = 3000
+ticks = 4
+for i, drone in enumerate(drones):
+    stagger = (i % 3) * 80
+    if stagger:
+        drone.delay(stagger)
+    move2(drone, targets[i], flying_ms)
+    apply_light(drone, "#ffaa44", ticks)
+    drone.delay(max(0, flying_ms - ticks * 100 + 100))
+prev = [(t[0], t[1], t[2]) for t in targets]
 ```
 
 几何主路径是手写目标点表：
@@ -64,7 +79,13 @@ geo = custom_points([
     (505, 275, 240), (150, 500, 120), (405, 485, 190),
 ], n=len(drones), min_xy_cm=90)
 targets = best_assign(prev, geo)
-prev = move_group(drones, targets, 3000, "#88ccff", 4)
+flying_ms = 3000
+ticks = 4
+for i, drone in enumerate(drones):
+    move2(drone, targets[i], flying_ms)
+    apply_light(drone, "#88ccff", ticks)
+    drone.delay(max(0, flying_ms - ticks * 100 + 100))
+prev = [(t[0], t[1], t[2]) for t in targets]
 
 geo = custom_points([
     (80, 500, 230), (120, 300, 150), (70, 110, 100),
@@ -73,14 +94,24 @@ geo = custom_points([
 ], n=len(drones), min_xy_cm=90)
 geo = jitter_points(geo, xy=12, z=8, seed=3)
 targets = far_assign(prev, geo, min_path_cm=active_min_path_cm(3000))
-prev = move_group_staggered(drones, targets, 3000, "#ffcc44", 4, group_mod=3, stagger_ms=120)
+flying_ms = 3000
+ticks = 4
+for i, drone in enumerate(drones):
+    if i % 3:
+        drone.delay((i % 3) * 80)
+    move2(drone, targets[i], flying_ms)
+    apply_light(drone, "#ffcc44", ticks)
+    drone.delay(max(0, flying_ms - ticks * 100 + 100))
+prev = [(t[0], t[1], t[2]) for t in targets]
 ```
 
 `geo_wide_v/geo_arrow/geo_box/geo_diagonal/geo_wave/geo_grid` 这类模板已从 agent
 导出面下线。S02-S05 不允许调用模板函数；模板参数变体不是编舞。assign 是安全
 路径分配层，坐标表才是构图层。
 
-只有需要非常细的 per-drone 控制时才展开：
+`move_group/move_group_staggered` 是比 assign 更低级的执行模板：它能快速保证时间链，
+但会让段落看起来像“坐标表堆叠”。S01-S06 纯 helper 执行会被 composition gate
+打回。正式段至少一个主体 keyframe 应展开：
 ```python
 move2(drone, (tx, ty, tz), flying_ms)           # 1. 发起飞行
 apply_light(drone, '#color', ticks)              # 2. 灯光 (推进 ticks*100ms)
@@ -141,8 +172,17 @@ wait_until(drones, 4)
 # formation: 队形/空间结构
 # lighting: 灯光弧线
 ```
-如果设计卡写“卡农/错峰/分组”，代码必须使用 `move_group_staggered(...)` 或明确的
-按 i/group 分批 delay；如果写“高潮/爆发”，实际动作幅度和灯光变化必须跟得上。
+如果设计卡写“卡农/错峰/分组”，代码必须在 per-drone loop 内明确按 i/group 分批
+delay；如果写“高潮/爆发”，实际动作幅度和灯光变化必须跟得上。
+
+## 9机旧版成功样例蒸馏
+`codex_9drone_flash_full_20260605_1` 的观感优于后续 V2，关键不在坐标本身，而在结构：
+
+- 0 次 `geo_*`，0 次 `move_group`，正式段全部展开 per-drone loop。
+- S02/S03/S05 每段 3 个 keyframe；S04 可用 5 个短 keyframe 形成抒情展开；S06 用“中继点 + 终点”两段式收尾。
+- 每个 keyframe 都有独立颜色或 tick 变化，S04/S05 尤其不能整段只用 1-2 种颜色。
+- `best_assign/far_assign` 只负责安全路径分配；坐标表负责构图；`move2/apply_light/delay` 链负责节奏和质感。
+- 不要复制旧坐标，但要复制这种章法：手写非同构几何、多色灯光、明确 per-drone 执行细节。
 
 ## 禁止
 - d.VelXY / d.VelZ 裸调

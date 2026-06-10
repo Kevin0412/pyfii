@@ -121,7 +121,25 @@ def build_segment_prompt(
         assign_rule = "- `targets = best_assign(prev, geo)`；若反馈说路径太短/小范围抖动，可改用 `far_assign(prev, geo, min_path_cm=active_min_path_cm(flying_ms))`。prev/geo 用完整 `(x,y,z)`，返回值就是重排后的 targets 列表，不要拆 `perm/min_d`"
 
     segment_duration = float(end_time - start_time)
-    if segment_duration <= 5.0:
+    if segment_upper == "S06":
+        keyframe_rule = (
+            "S06 尾声必须写 2 个明确 keyframe：先到中继/呼应姿态，再到最终署名位置；"
+            "每个 keyframe 用 2300-2600ms，展开 per-drone loop，不要用单个 move_group 小挪动收尾"
+        )
+        prev_update_rule = "每个 keyframe 后更新 prev；段尾更新 prev = [(t[0],t[1],t[2]) for t in targets]"
+    elif segment_upper == "S04":
+        keyframe_rule = (
+            "S04 是抒情展开段：写 4-5 个短 keyframe，每个 2800-3200ms，"
+            "至少 3 种颜色/灯光变化；使用手写非同构几何和 per-drone loop，避免同步大块移动"
+        )
+        prev_update_rule = "每个 keyframe 后更新 prev；段尾更新 prev = [(t[0],t[1],t[2]) for t in targets]"
+    elif segment_upper == "S05":
+        keyframe_rule = (
+            "S05 是高潮段：写 3 个强 keyframe，边界爆发→分组交换/回卷→有高度层的收束；"
+            "至少 3 种颜色或明显爆闪变化，主体使用 far_assign 和 per-drone loop"
+        )
+        prev_update_rule = "每个 keyframe 后更新 prev；段尾更新 prev = [(t[0],t[1],t[2]) for t in targets]"
+    elif segment_duration <= 5.0:
         keyframe_rule = (
             "本段很短：只写 1 个强 keyframe，move2 用 2800-3600ms；"
             "目标几何必须靠近场地边界/角点并明显远离 prev，让多数无人机路径约 240cm 或更长，"
@@ -173,9 +191,9 @@ def build_segment_prompt(
 - {keyframe_rule}
 - {assign_rule}
 - 几何主路径是手写目标点表：`geo = custom_points([...], n=len(drones), min_xy_cm=90)`，再 `best_assign/far_assign`；S02-S05 必须至少一个主体 keyframe 使用手写坐标表，禁止调用 `geo_wide_v/geo_arrow/geo_box/geo_diagonal/geo_wave/geo_grid`
-- 首选动作原语：`prev = move_group(drones, targets, flying_ms, color, ticks)`；卡农/错峰段用 `prev = move_group_staggered(drones, targets, flying_ms, color, ticks, group_mod=3, stagger_ms=120)`
-- 如果不用 helper，才展开 per-drone loop：move2(drone, target, flying_ms) → apply_light(drone, color, ticks) → drone.delay(flying_ms-ticks*100+100)
-- 禁止只给 `drones[0]` 或单架无人机 delay/light；每架机都要通过 move_group 或 per-drone loop 获得本次 move2 执行时间
+- 正式段默认展开 per-drone loop，不要用 `move_group` 作为整段主结构：`move2(drone, target, flying_ms)` → `apply_light(drone, color, ticks)` → `drone.delay(flying_ms-ticks*100+100)`
+- `move_group/move_group_staggered` 只作为 smoke/兜底工具；S01-S06 纯 helper 执行会被打回。卡农/错峰请在 per-drone loop 内按 `i % group_mod` 写小 delay，并保留每架机自己的灯光/等待
+- 禁止只给 `drones[0]` 或单架无人机 delay/light；每架机都要在显式 per-drone loop 内获得本次 move2 的灯光和执行等待时间
 - 主体 move2 通常用 2600-3600ms；不要用 4500ms+ 超慢移动凑时长，段尾由 auto_init 压缩
 - 快节奏必须可完成：单个 2600-3200ms keyframe 的 3D 路径通常控制在约 180-360cm；不要用 2000-2400ms 硬飞 500cm 跨场路径
 - 如果段长需要覆盖，不要拉长单个 move2；用多个可完成的快 keyframe、分组错峰或高度切层承接，保持每 1 秒窗口都有群体运动

@@ -16,6 +16,11 @@ PLAN = {
             "motifs": ["中心爆点", "边界扩张"],
             "avoid": ["保守小动作"],
         },
+        "S04": {
+            "role": "抒情中段：几何展开和高度层呼吸。",
+            "motifs": ["抒情几何", "高低三层"],
+            "avoid": ["同步大块移动"],
+        },
         "S06": {
             "role": "尾声署名：从高潮回收到清晰、优雅、可识别的结束姿态。",
             "motifs": ["署名姿态", "温暖白光", "斜线/宽V母题回忆"],
@@ -98,7 +103,7 @@ for i, drone in enumerate(drones):
     assert features["features"]["has_indexed_stagger"]
 
 
-def test_composition_gate_accepts_move_group_staggered_helper():
+def test_composition_gate_blocks_group_only_execution_for_formal_segments():
     code = """
 # role: 卡农变奏
 # motifs: 分组卡农; 交叉换位
@@ -117,9 +122,9 @@ prev = move_group_staggered(drones, targets, 3000, "#44aaff", 4, group_mod=3, st
         degradation={"window_z_range_cm": 120},
     )
 
-    assert errors == []
+    assert any("只使用 move_group" in item for item in errors)
+    assert features["features"]["uses_group_only_execution"]
     assert features["features"]["move_group_staggered_calls"] == 1
-    assert features["features"]["apply_light_calls"] == 1
 
 
 def test_composition_gate_blocks_geo_template_in_formal_body_segment():
@@ -153,8 +158,37 @@ geo = custom_points([
     )
 
     assert features["uses_custom_points"]
+    assert features["custom_points_calls"] == 1
     assert features["has_handwritten_geometry"]
+    assert features["estimated_keyframe_count"] == 1
     assert features["xyz_literal_count"] == 9
+
+
+def test_composition_gate_blocks_underdeveloped_s04():
+    code = """
+# role: 抒情中段
+# motifs: 抒情几何; 高低三层
+# beat: 两个同步大块
+# formation: 边界到中心
+# lighting: 蓝白
+auto_init(drones)
+geo = custom_points([
+    (80,80,100),(80,280,160),(80,480,220),
+    (280,100,120),(280,300,180),(280,500,240),
+    (500,80,140),(500,280,200),(500,480,160),
+], n=len(drones), min_xy_cm=90)
+targets = far_assign(prev, geo, min_path_cm=active_min_path_cm(3200))
+for i, drone in enumerate(drones):
+    move2(drone, targets[i], 3200)
+    apply_light(drone, "#ffffff", 4)
+    drone.delay(2900)
+prev = [(t[0], t[1], t[2]) for t in targets]
+"""
+
+    _features, errors = evaluate_composition(code, PLAN, "S04")
+
+    assert any("至少需要 4 个明确 keyframe" in item for item in errors)
+    assert any("至少需要 3 种颜色" in item for item in errors)
 
 
 def test_composition_gate_blocks_underpowered_climax():
@@ -195,7 +229,11 @@ geo = custom_points([
     (500,80,140),(500,280,200),(500,480,160),
 ], n=len(drones), min_xy_cm=90)
 targets = far_assign(prev, geo, min_path_cm=active_min_path_cm(3200))
-prev = move_group(drones, targets, 3200, "#ffffff", 4)
+for i, drone in enumerate(drones):
+    move2(drone, targets[i], 3200)
+    apply_light(drone, "#ffffff", 4)
+    drone.delay(2900)
+prev = [(t[0], t[1], t[2]) for t in targets]
 """
 
     _features, errors = evaluate_composition(
@@ -207,6 +245,32 @@ prev = move_group(drones, targets, 3200, "#ffffff", 4)
 
     assert not any("高潮段动作幅度不足" in item for item in errors)
     assert not any("高潮/爆发段灯光过单一" in item for item in errors)
+
+
+def test_composition_gate_requires_two_stage_s06_finish():
+    code = """
+# role: 尾声署名
+# motifs: 署名姿态; 温暖白光; 斜线/宽V母题回忆
+# beat: 单段收束
+# formation: 三列署名姿态
+# lighting: 温暖白光
+auto_init(drones)
+geo = custom_points([
+    (80,80,100),(80,280,160),(80,480,220),
+    (280,100,120),(280,300,180),(280,500,240),
+    (500,80,140),(500,280,200),(500,480,160),
+], n=len(drones), min_xy_cm=90)
+targets = far_assign(prev, geo, min_path_cm=active_min_path_cm(3200))
+for i, drone in enumerate(drones):
+    move2(drone, targets[i], 3200)
+    apply_light(drone, "#ffffff", 4)
+    drone.delay(2900)
+prev = [(t[0], t[1], t[2]) for t in targets]
+"""
+
+    _features, errors = evaluate_composition(code, PLAN, "S06")
+
+    assert any("两段式收尾" in item for item in errors)
 
 
 def test_validation_result_passed_requires_composition_ok_for_formal_segments():

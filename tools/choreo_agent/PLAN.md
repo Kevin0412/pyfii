@@ -165,6 +165,21 @@ System prompt / context packs / `prompt_builder.py` 会影响 LLM 输入缓存�
 - API 慢、首包慢、timeout 不是削弱或清空 system prompt 的理由；应记录 stream/heartbeat/首包/timeout 状态。
 - 禁止为了让某个模型临时通过而删除 S01、S02+、LAND、动态 S07/S08、高度层、短窗口 `far_assign` 等核心契约。
 
+# 11.4 9机编舞质量复盘：模板不是章法
+
+对比 `codex_9drone_flash_full_20260605_1` 与 `stability_flash_9d_v2`：
+
+- 旧版 `codex_9drone_flash_full_20260605_1` 完成 S01-S06+LAND，且观感更好；它没有使用 `geo_*`，也没有使用 `move_group`，而是手写坐标表后展开 per-drone `move2/apply_light/delay`。
+- V2 成功把 `geo_*` 降到 0，但大量使用 `move_group/move_group_staggered`，结果从“几何模板退化”变成“执行模板退化”：坐标安全，但节奏、灯光和每架机差异被抹平。
+- 结论：`assign` 是安全路径分配层，`custom_points` 是手写坐标安全检查层，`move_group` 只是低级执行兜底。正式编舞的章法必须来自手写非同构几何、多色灯光、per-drone 执行细节和段落角色。
+
+当前规则：
+
+- S01-S06 纯 `move_group/move_group_staggered` 执行会被 composition gate 打回。
+- S02-S05 继续禁止 `geo_wide_v/geo_arrow/geo_box/geo_diagonal/geo_wave/geo_grid`。
+- 9机正式段默认写手写坐标表 + `best_assign/far_assign` + per-drone loop。
+- S04 可使用 4-5 个短 keyframe 做抒情展开；S05 保持高潮幅度和多色灯光；S06 建议两段式收尾（中继点 + 终点），不能单 keyframe 小挪动。
+
 # 12-13. Token预算
 
 - MVP: 300-600万 tokens
