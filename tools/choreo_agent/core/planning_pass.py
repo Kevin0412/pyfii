@@ -120,7 +120,8 @@ def _format_keyframe_contract(segment_id: str, start_time: float, end_time: floa
         f"- 必须输出 exactly {count} 个 keyframes；不要多也不要少。",
         f"- {note}",
         "- start_s 必须递增；不要所有 keyframe 等长——按推荐时间表保持明显短长对比，"
-        "短的是 accent（利落推进/交换），长的是 phrase（大幅展开/换位）；段尾可留 0.3-0.8s 收束。",
+        "短的是 accent（利落推进/交换），长的是 phrase（大幅展开/换位）。",
+        "- 图形到位后留 0.8-2s 亮灯定格让观众读图（移动→定格→移动的节奏）；duration_s 里包含定格时间。",
         "- 灯光节奏与 feel 匹配：accent 用 2-3 ticks 强色，延展 phrase 用 5-8 ticks；"
         "final 代码可在同一 keyframe 内连续两次 apply_light 换色做渐变。",
         "- 推荐时间表（可 ±0.4s 微调，但保持短长对比）:",

@@ -209,7 +209,7 @@ def build_segment_prompt(
 - 禁止只给单架 `drones[i]` 操作；使用 `for d in drones:` 或等价 per-drone loop。但可以在 loop 内做差异化：如 `d.delay(i * stagger_ms)` 交错启动, `if i == 0: apply_light(d, special_color, t)` 焦点机, `move2(d, (tx, ty, tz + dz*sin(i)), t)` Z 个性——区别对待不等于跳过
 - 主体 move2 通常用 2600-3600ms；不要用 4500ms+ 超慢移动凑时长，段尾由 auto_init 压缩
 - 快节奏必须可完成：单个 2600-3200ms keyframe 的 3D 路径通常控制在约 180-360cm；不要用 2000-2400ms 硬飞 500cm 跨场路径
-- 如果段长需要覆盖，不要拉长单个 move2；用多个可完成的快 keyframe、分组错峰或高度切层承接，保持每 1 秒窗口都有群体运动
+- 如果段长需要覆盖，不要拉长单个 move2；用多个可完成的快 keyframe、分组错峰、高度切层，或**亮灯定格**承接——图形到位后保持灯亮定格 0.8-2s 让观众读图（dntg 节奏=移动→定格→移动，dntg 全片 57% 时间是定格展示）；黑灯静止才算低活动
 - 3s 以上 keyframe 不要写 `min_path_cm=90/100`；用 `flying_ms = 3000` 后 `targets = far_assign(prev, geo, min_path_cm=active_min_path_cm(flying_ms))`
 - 安全距离按 XY 看：不要把同一 XY 的不同 Z 当成安全分离；XY 间距硬下限 51cm（pyfii core 碰撞线，检查器精确验证），密集造型配合短路径慢速；复杂交换交给 `far_assign`
 - 高度层必须真实混合：每个主体 keyframe 至少 3 个 Z 层，整段 Z range ≥90cm；不要全队同一高度平面
