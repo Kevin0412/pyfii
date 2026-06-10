@@ -172,7 +172,7 @@ def build_segment_prompt(
   `# lighting: ...`
 - {keyframe_rule}
 - {assign_rule}
-- 几何首选本地原语：`geo_wide_v(len(drones))`, `geo_arrow(len(drones))`, `geo_box(len(drones))`, `geo_diagonal(len(drones))`, `geo_wave(len(drones))`, `geo_grid(len(drones))`；常用修饰只用 `reverse=True` / `spread=1.2` / `z_layers=(...)`，`geo_box` 还可用 `center=(280,280), width=420, height=420`；优先选/组合原语再 assign，少手写大量坐标
+- 几何主路径是手写目标点表：`geo = custom_points([...], n=len(drones), min_xy_cm=90)`，再 `best_assign/far_assign`；S02-S05 必须至少一个主体 keyframe 使用手写坐标表，禁止调用 `geo_wide_v/geo_arrow/geo_box/geo_diagonal/geo_wave/geo_grid`
 - 首选动作原语：`prev = move_group(drones, targets, flying_ms, color, ticks)`；卡农/错峰段用 `prev = move_group_staggered(drones, targets, flying_ms, color, ticks, group_mod=3, stagger_ms=120)`
 - 如果不用 helper，才展开 per-drone loop：move2(drone, target, flying_ms) → apply_light(drone, color, ticks) → drone.delay(flying_ms-ticks*100+100)
 - 禁止只给 `drones[0]` 或单架无人机 delay/light；每架机都要通过 move_group 或 per-drone loop 获得本次 move2 执行时间

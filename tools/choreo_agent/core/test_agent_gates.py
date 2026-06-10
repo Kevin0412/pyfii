@@ -49,6 +49,19 @@ def test_preflight_blocks_tool_leak():
     print("PASSED: preflight blocks tool leakage")
 
 
+def test_preflight_blocks_geo_templates():
+    r = preflight_check("""
+geo = geo_wide_v(len(drones), z_layers=(100, 160, 220))
+targets = best_assign(prev, geo)
+prev = move_group(drones, targets, 3000, "#4488ff", 4)
+""")
+    assert not r
+    joined = " ".join(r.errors)
+    assert "几何模板已下线" in joined
+    assert "custom_points" in joined
+    print("PASSED: preflight blocks deprecated geo templates")
+
+
 def test_preflight_blocks_bare_api():
     r = preflight_check("drone.VelXY(120,200)")
     assert not r
@@ -128,6 +141,7 @@ if __name__ == "__main__":
     test_preflight_blocks_import()
     test_preflight_blocks_def()
     test_preflight_blocks_tool_leak()
+    test_preflight_blocks_geo_templates()
     test_preflight_blocks_bare_api()
     test_preflight_blocks_inittime()
     test_preflight_blocks_single_drone_timing()

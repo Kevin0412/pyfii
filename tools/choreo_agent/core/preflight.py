@@ -12,6 +12,10 @@ FORBIDDEN_TOOLS = {
     "generate_safe_geo", "check_min_spacing", "predict_crossings",
 }
 
+FORBIDDEN_GEO_TEMPLATES = {
+    "geo_wide_v", "geo_arrow", "geo_box", "geo_diagonal", "geo_wave", "geo_grid",
+}
+
 
 class PreflightResult:
     def __init__(self):
@@ -41,15 +45,17 @@ def preflight_check(code: str) -> PreflightResult:
     _check_no_definitions(code, r)
     # 4. Agent tool leakage
     _check_no_tool_leakage(code, r)
-    # 5. Syntax / indentation
+    # 5. Deprecated geometry templates
+    _check_no_geo_templates(code, r)
+    # 6. Syntax / indentation
     _check_syntax(code, r)
-    # 6. Bare API calls (d.move2 / d.VelXY)
+    # 7. Bare API calls (d.move2 / d.VelXY)
     _check_no_bare_api(code, r)
-    # 7. inittime calls
+    # 8. inittime calls
     _check_no_inittime(code, r)
-    # 8. Single-drone timing after group move
+    # 9. Single-drone timing after group move
     _check_no_single_drone_timing(code, r)
-    # 9. Cheap coordinate literal range guard
+    # 10. Cheap coordinate literal range guard
     _check_coordinate_literals(code, r)
 
     return r
@@ -83,6 +89,16 @@ def _check_no_tool_leakage(code, r):
     leaked = tokens & FORBIDDEN_TOOLS
     for name in sorted(leaked):
         r.add(f"agent 侧工具泄漏: {name} — 替换为具体数值")
+
+
+def _check_no_geo_templates(code, r):
+    tokens = set(re.findall(r'\b([a-zA-Z_]\w*)\s*\(', code))
+    leaked = tokens & FORBIDDEN_GEO_TEMPLATES
+    for name in sorted(leaked):
+        r.add(
+            f"几何模板已下线: {name}() — 改用 custom_points([...], n=len(drones), min_xy_cm=90) "
+            "手写目标点表，再用 best_assign/far_assign 做路径分配"
+        )
 
 
 def _check_syntax(code, r):

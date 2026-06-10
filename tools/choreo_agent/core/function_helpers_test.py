@@ -47,6 +47,18 @@ def _load_template_function_module():
     return module
 
 
+def test_star_import_surface_excludes_geo_templates():
+    module = _load_template_function_module()
+    public = set(module.__all__)
+
+    assert "custom_points" in public
+    assert "best_assign" in public
+    assert "far_assign" in public
+    assert "move_group" in public
+    assert all(not name.startswith("geo_") for name in public)
+    print("PASSED: agent import surface excludes geo templates")
+
+
 def test_auto_init_uses_time_cursor_not_missing_init_time():
     module = _load_template_function_module()
     drones = [FakeDrone(1200), FakeDrone(6400), FakeDrone(6000)]
@@ -148,6 +160,61 @@ def test_wait_until_uses_delay_not_inittime():
     assert drones[0].called == [("delay", 3000)]
     assert drones[1].called == [("delay", 1500)]
     print("PASSED: wait_until aligns by delay, not inittime")
+
+
+def test_custom_points_normalizes_and_checks_count():
+    module = _load_template_function_module()
+
+    points = module.custom_points(
+        [
+            (45, 65, 100),
+            (185, 45, 160),
+            (340, 75, 220),
+            (505, 55, 120),
+            (75, 260, 180),
+            (280, 230, 240),
+            (505, 275, 140),
+            (150, 500, 200),
+            (405, 485, 160),
+        ],
+        n=9,
+        min_xy_cm=90,
+    )
+
+    assert len(points) == 9
+    assert all(isinstance(value, int) for point in points for value in point)
+    assert all(0 <= x <= 560 and 0 <= y <= 560 and 80 <= z <= 250 for x, y, z in points)
+
+
+def test_custom_points_rejects_too_close_xy():
+    module = _load_template_function_module()
+
+    try:
+        module.custom_points([(100, 100, 120), (130, 120, 180)], n=2, min_xy_cm=90)
+    except ValueError as exc:
+        assert "min_xy" in str(exc)
+    else:
+        raise AssertionError("custom_points should reject unsafe XY spacing")
+
+
+def test_jitter_points_preserves_count_and_bounds():
+    module = _load_template_function_module()
+    base = [
+        (45, 65, 100),
+        (185, 45, 160),
+        (340, 75, 220),
+        (505, 55, 120),
+        (75, 260, 180),
+        (280, 230, 240),
+        (505, 275, 140),
+        (150, 500, 200),
+        (405, 485, 160),
+    ]
+
+    points = module.jitter_points(base, xy=12, z=8, seed=2, min_xy_cm=70)
+
+    assert len(points) == 9
+    assert all(0 <= x <= 560 and 0 <= y <= 560 and 80 <= z <= 250 for x, y, z in points)
 
 
 def test_move_group_returns_targets_and_records_motion_end():
@@ -254,6 +321,7 @@ def test_geo_box_accepts_common_size_modifiers():
 
 
 if __name__ == "__main__":
+    test_star_import_surface_excludes_geo_templates()
     test_auto_init_uses_time_cursor_not_missing_init_time()
     test_auto_init_waits_for_last_move_without_delay()
     test_best_assign_accepts_2d_and_returns_targets()
@@ -261,6 +329,9 @@ if __name__ == "__main__":
     test_far_assign_penalizes_crossing_collisions()
     test_active_min_path_cm_scales_with_flying_ms()
     test_wait_until_uses_delay_not_inittime()
+    test_custom_points_normalizes_and_checks_count()
+    test_custom_points_rejects_too_close_xy()
+    test_jitter_points_preserves_count_and_bounds()
     test_move_group_returns_targets_and_records_motion_end()
     test_move_group_staggered_adds_group_delay_and_color_cycle()
     test_geometry_primitives_return_safe_points_for_7_and_9()

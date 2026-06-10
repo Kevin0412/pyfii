@@ -17,12 +17,12 @@ move_group_staggered(drones, targets, flying_ms, color="#ffffff", ticks=4, group
 pulse_group(drones, color="#ffffff", ticks=3)
 # 全队短灯光脉冲；不能用它凑长时间。
 
-geo_wide_v(n), geo_arrow(n), geo_box(n), geo_diagonal(n), geo_wave(n), geo_grid(n)
-# 安全几何原语，返回 n 个 (x,y,z)。优先选原语再用 best_assign/far_assign，
-# 不要让模型每段手算大量坐标。
-# 常用安全修饰参数：reverse=True 做方向反转；spread=0.8..1.5 调整展开幅度。
-# 例：geo_wide_v(len(drones), z_layers=(100,170,240), reverse=True, spread=1.3)
-# geo_box 可额外使用 center=(280,280), width=420, height=420。
+custom_points(points, n=None, min_xy_cm=90)
+# 手写目标点表的标准化和安全检查。正式编舞主路径：
+# 先写有叙事意图的 n 个 (x,y,z)，再 best_assign/far_assign。
+
+jitter_points(points, xy=18, z=12, seed=0, min_xy_cm=70)
+# 对已经安全的手写点表做确定性微扰，打破过度对称；不能替代手写构图。
 
 apply_light(d, "#RRGGBB", ticks)
 # ticks次TurnOnAll，每次delay 100ms。推进 cursor: ticks*100ms。
@@ -56,16 +56,29 @@ targets = far_assign(prev, geo2, min_path_cm=140)
 prev = move_group_staggered(drones, targets, 3000, "#ffaa44", 4, group_mod=3, stagger_ms=120)
 ```
 
-几何优先使用本地原语：
+几何主路径是手写目标点表：
 ```python
-geo = geo_wide_v(len(drones), z_layers=(100, 160, 220))
+geo = custom_points([
+    (45, 65, 100), (185, 45, 170), (340, 75, 230),
+    (505, 55, 130), (75, 260, 210), (280, 230, 150),
+    (505, 275, 240), (150, 500, 120), (405, 485, 190),
+], n=len(drones), min_xy_cm=90)
 targets = best_assign(prev, geo)
 prev = move_group(drones, targets, 3000, "#88ccff", 4)
 
-geo = geo_arrow(len(drones), z_layers=(100, 170, 230), reverse=True, spread=1.2)
+geo = custom_points([
+    (80, 500, 230), (120, 300, 150), (70, 110, 100),
+    (250, 70, 210), (330, 240, 120), (500, 90, 180),
+    (530, 330, 240), (390, 500, 140), (220, 430, 200),
+], n=len(drones), min_xy_cm=90)
+geo = jitter_points(geo, xy=12, z=8, seed=3)
 targets = far_assign(prev, geo, min_path_cm=active_min_path_cm(3000))
 prev = move_group_staggered(drones, targets, 3000, "#ffcc44", 4, group_mod=3, stagger_ms=120)
 ```
+
+`geo_wide_v/geo_arrow/geo_box/geo_diagonal/geo_wave/geo_grid` 这类模板已从 agent
+导出面下线。S02-S05 不允许调用模板函数；模板参数变体不是编舞。assign 是安全
+路径分配层，坐标表才是构图层。
 
 只有需要非常细的 per-drone 控制时才展开：
 ```python

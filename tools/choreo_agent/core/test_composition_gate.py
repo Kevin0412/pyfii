@@ -117,6 +117,41 @@ prev = move_group_staggered(drones, targets, 3000, "#44aaff", 4, group_mod=3, st
     assert features["features"]["apply_light_calls"] == 1
 
 
+def test_composition_gate_blocks_geo_template_in_formal_body_segment():
+    code = """
+# role: 明亮高潮
+# motifs: 中心爆点; 边界扩张
+# beat: 爆发后回卷
+# formation: geo模板箭头到宽V
+# lighting: 暖金白爆闪
+auto_init(drones)
+geo = geo_arrow(len(drones), z_layers=(100, 160, 220), spread=1.2)
+targets = far_assign(prev, geo, min_path_cm=active_min_path_cm(3000))
+prev = move_group(drones, targets, 3000, "#ffffff", 4)
+"""
+
+    features, errors = evaluate_composition(code, PLAN, "S05")
+
+    assert features["features"]["geo_template_calls"]["geo_arrow"] == 1
+    assert any("已下线几何模板" in item for item in errors)
+
+
+def test_extract_code_features_detects_custom_points_as_handwritten_geometry():
+    features = extract_code_features(
+        """
+geo = custom_points([
+    (60,60,100),(180,60,160),(300,60,220),
+    (420,60,120),(540,60,180),(120,240,240),
+    (280,280,140),(440,240,200),(280,500,160),
+], n=len(drones), min_xy_cm=90)
+"""
+    )
+
+    assert features["uses_custom_points"]
+    assert features["has_handwritten_geometry"]
+    assert features["xyz_literal_count"] == 9
+
+
 def test_composition_gate_blocks_underpowered_climax():
     code = """
 # role: 明亮高潮

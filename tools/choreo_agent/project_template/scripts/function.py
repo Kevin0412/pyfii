@@ -6,6 +6,26 @@
 import math
 import itertools
 
+__all__ = [
+    "Distance",
+    "Time",
+    "Vel",
+    "move2",
+    "move_group",
+    "move_group_staggered",
+    "pulse_group",
+    "custom_points",
+    "jitter_points",
+    "active_min_path_cm",
+    "clamp_xy",
+    "clamp_z",
+    "best_assign",
+    "far_assign",
+    "apply_light",
+    "auto_init",
+    "wait_until",
+]
+
 # ---------- 几何 ----------
 def Distance(p1, p2):
     """2D/3D 距离 (cm)。缺省 z=0，避免 best_assign 误传 XY 时崩溃。"""
@@ -151,7 +171,57 @@ def clamp_xy(v):
 def clamp_z(v):
     return max(80, min(250, int(round(v))))
 
-# ---------- 安全几何原语 ----------
+# ---------- 手写几何辅助 ----------
+def custom_points(points, n=None, min_xy_cm=90):
+    """标准化手写坐标表，并在运行时检查 keyframe 内 XY 间距。
+
+    这是正式编舞的主路径：agent 应先写出有叙事意图的坐标表，再用
+    `best_assign(prev, geo)` 或 `far_assign(prev, geo, ...)` 做安全路径分配。
+    """
+    normalized = [_target3(point) for point in points]
+    if n is not None and len(normalized) != int(n):
+        raise ValueError(f"custom_points count {len(normalized)} != expected {int(n)}")
+    if len(normalized) >= 2:
+        min_xy = _min_xy_spacing(normalized)
+        if min_xy < float(min_xy_cm):
+            raise ValueError(f"custom_points min_xy {min_xy:.1f}cm < {float(min_xy_cm):.1f}cm")
+    return normalized
+
+
+def jitter_points(points, xy=18, z=12, seed=0, min_xy_cm=70):
+    """给一组已安全的手写点加入确定性微扰，避免过于机械的对称。
+
+    如果微扰后破坏间距，则返回原始标准化点表。不要用它替代手写构图；
+    它只负责把已经设计好的几何稍微打散。
+    """
+    base = [_target3(point) for point in points]
+    jittered = []
+    for i, (x, y, z_value) in enumerate(base):
+        phase = (i + 1) * (float(seed) + 3.17)
+        dx = math.sin(phase * 1.618) * float(xy)
+        dy = math.cos(phase * 2.414) * float(xy)
+        dz = math.sin(phase * 0.917) * float(z)
+        jittered.append((clamp_xy(x + dx), clamp_xy(y + dy), clamp_z(z_value + dz)))
+    try:
+        return custom_points(jittered, n=len(base), min_xy_cm=min_xy_cm)
+    except ValueError:
+        return base
+
+
+def _min_xy_spacing(points):
+    md = 1e9
+    for i in range(len(points)):
+        for j in range(i + 1, len(points)):
+            d = ((points[i][0] - points[j][0]) ** 2 + (points[i][1] - points[j][1]) ** 2) ** 0.5
+            if d < md:
+                md = d
+    return md
+
+
+# ---------- 已下线几何模板 ----------
+# geo_* 模板曾用于快速生成安全队形，但 9 机测试证明它们会诱导模型退化成
+# 重复套模板。它们保留在文件中仅作历史参考/对照，不通过 `from function import *`
+# 导出；preflight 也会拒绝 final segment 直接调用 geo_*。
 def geo_wide_v(
     n,
     center=(280, 280),

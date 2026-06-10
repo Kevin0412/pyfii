@@ -197,7 +197,7 @@ def build_coding_prompt(
 - `drones` 是 {int(drone_count)} 架无人机对象列表；循环写 `for i, drone in enumerate(drones):`
 - 代码开头必须写 5 行设计卡注释：`# role: ...`, `# motifs: ...`, `# beat: ...`, `# formation: ...`, `# lighting: ...`
 - 设计卡必须承接全局章法，尤其是 current role/current motifs；不要写随机队形说明
-- 几何尽量使用本地原语生成：`geo_wide_v/geo_arrow/geo_box/geo_diagonal/geo_wave/geo_grid`，再 `best_assign` 或 `far_assign`；常用修饰限 `reverse/spread/z_layers`，`geo_box` 可用 `center/width/height`
+- 几何主路径是手写目标点表：`geo = custom_points([...], n=len(drones), min_xy_cm=90)`，再 `best_assign` 或 `far_assign`；S02-S05 禁止调用 `geo_wide_v/geo_arrow/geo_box/geo_diagonal/geo_wave/geo_grid`
 - 首选每个 keyframe 直接写：`prev = move_group(drones, targets, flying_ms, color, ticks)`
 - 卡农/错峰 keyframe 写：`prev = move_group_staggered(drones, targets, flying_ms, color, ticks, group_mod=3, stagger_ms=120)`
 - 3s 以上 keyframe 若用 `far_assign`，写 `min_path_cm=active_min_path_cm(flying_ms)`；不要写 90/100cm 导致真实运动过早结束

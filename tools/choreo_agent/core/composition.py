@@ -16,6 +16,8 @@ from typing import Any
 CARD_FIELDS = ("role", "motifs", "beat", "formation", "lighting")
 STAGGER_WORDS = ("卡农", "错峰", "分组", "canon", "stagger")
 CLIMAX_WORDS = ("高潮", "爆发", "爆点", "climax", "burst")
+GEO_TEMPLATE_NAMES = ("geo_wide_v", "geo_arrow", "geo_box", "geo_diagonal", "geo_wave", "geo_grid")
+HANDWRITTEN_REQUIRED_SEGMENTS = {"S02", "S03", "S04", "S05"}
 
 
 def evaluate_composition(
@@ -105,6 +107,16 @@ def evaluate_composition(
                 "需要真实 low/mid/high 变化，不要只写在设计卡里。"
             )
 
+    if segment_id in HANDWRITTEN_REQUIRED_SEGMENTS and features["geo_template_call_count"] > 0:
+        used = ", ".join(
+            f"{name} x{count}" for name, count in features["geo_template_calls"].items() if count
+        )
+        errors.append(
+            f"{segment_id} 使用了已下线几何模板（{used}）。"
+            "正式主体段必须写 custom_points([...]) 或明确坐标表，再交给 best_assign/far_assign；"
+            "不要用 geo_* 参数变体替代编舞构图。"
+        )
+
     return result, errors
 
 
@@ -144,6 +156,11 @@ def extract_code_features(code: str) -> dict:
     move_group_calls = len(re.findall(r"\bmove_group\s*\(", code))
     staggered_group_calls = len(re.findall(r"\bmove_group_staggered\s*\(", code))
     apply_light_calls = len(re.findall(r"\bapply_light\s*\(", code))
+    geo_template_calls = {
+        name: len(re.findall(rf"\b{name}\s*\(", code))
+        for name in GEO_TEMPLATE_NAMES
+    }
+    xyz_literal_count = _count_coordinate_literals(code)
     features = {
         "move2_calls": len(re.findall(r"\bmove2\s*\(", code)),
         "move_group_calls": move_group_calls,
@@ -152,6 +169,12 @@ def extract_code_features(code: str) -> dict:
         "delay_calls": len(re.findall(r"\.delay\s*\(", code)),
         "uses_best_assign": "best_assign(" in code,
         "uses_far_assign": "far_assign(" in code,
+        "uses_custom_points": "custom_points(" in code,
+        "uses_jitter_points": "jitter_points(" in code,
+        "geo_template_calls": geo_template_calls,
+        "geo_template_call_count": sum(geo_template_calls.values()),
+        "xyz_literal_count": xyz_literal_count,
+        "has_handwritten_geometry": "custom_points(" in code or xyz_literal_count >= 6,
         "has_indexed_stagger": has_indexed_stagger,
         "color_literals": colors,
         "z_literal_range_cm": None,
@@ -167,15 +190,51 @@ def _extract_target_z_literals(code: str) -> list[float]:
         tree = ast.parse(code)
     except SyntaxError:
         return []
+    _attach_parents(tree)
 
     values: list[float] = []
     for node in ast.walk(tree):
         if not isinstance(node, (ast.Tuple, ast.List)) or len(node.elts) != 3:
             continue
+        if _is_z_layers_literal(node):
+            continue
         z = _numeric_literal(node.elts[2])
         if z is not None:
             values.append(z)
     return values
+
+
+def _count_coordinate_literals(code: str) -> int:
+    try:
+        tree = ast.parse(code)
+    except SyntaxError:
+        return 0
+    _attach_parents(tree)
+
+    count = 0
+    for node in ast.walk(tree):
+        if not isinstance(node, (ast.Tuple, ast.List)) or len(node.elts) != 3:
+            continue
+        if _is_z_layers_literal(node):
+            continue
+        values = [_numeric_literal(elt) for elt in node.elts]
+        if any(value is None for value in values):
+            continue
+        x, y, z = values
+        if 0 <= x <= 560 and 0 <= y <= 560 and 80 <= z <= 250:
+            count += 1
+    return count
+
+
+def _attach_parents(tree: ast.AST) -> None:
+    for parent in ast.walk(tree):
+        for child in ast.iter_child_nodes(parent):
+            child.parent = parent  # type: ignore[attr-defined]
+
+
+def _is_z_layers_literal(node: ast.AST) -> bool:
+    parent = getattr(node, "parent", None)
+    return isinstance(parent, ast.keyword) and parent.arg == "z_layers"
 
 
 def _numeric_literal(node: ast.AST) -> float | None:
