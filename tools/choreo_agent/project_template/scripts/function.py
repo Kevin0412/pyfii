@@ -6,6 +6,11 @@
 import math
 import itertools
 
+# math 函数导出，支持 from function import * 后直接写 sin/cos/pi
+sin = math.sin
+cos = math.cos
+pi = math.pi
+
 __all__ = [
     "Distance",
     "Time",
@@ -24,6 +29,9 @@ __all__ = [
     "apply_light",
     "auto_init",
     "wait_until",
+    "sin",
+    "cos",
+    "pi",
 ]
 
 # ---------- 几何 ----------

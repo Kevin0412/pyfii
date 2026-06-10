@@ -134,10 +134,10 @@ def _format_keyframe_contract(segment_id: str, start_time: float, end_time: floa
 
 def _format_safe_coordinate_seeds(drone_count: int) -> str:
     return f"""坐标纪律（{int(drone_count)} 机手写点表）:
-- 每个 targets 必须是 {int(drone_count)} 个 numeric triples，禁止变量/省略号/公式。
-- 用粗网格整数坐标（建议 20/50 的倍数），XY 0-560，Z 在 80-250 内至少 3 层；这样间距自然安全。
-- 不要现场计算两两距离、不要三角函数推导圆弧——系统会用确定性检查器回报每个 keyframe 的精确间距/路径数字，按数字修正即可。
-- 把注意力放在编舞：中心偏移、稀疏/密集呼吸、Z 层关系、左右/前后交换、灯光颜色变化；不要连续 keyframe 复制同一队形。"""
+- 每个 targets 必须是 {int(drone_count)} 个 numeric triples，禁止省略号(...)。变量和公式可用（如 `geo = [(cx+R*cos(2πi/N), cy+R*sin(2πi/N), z+dz*sin(i)) for i in range(N)]` 完全合法）。
+- 两种写法都可：(a) 整数坐标表，粗网格（20/50 倍数），XY 0-560, Z 在 80-250 内至少 3 层；(b) math 表达式，用 sin/cos/pi 构造圆形、弧线、波浪。
+- 不要手算两两距离——系统会用确定性检查器回报每个 keyframe 的精确间距/路径数字，按数字修正即可。
+- 把注意力放在编舞：中心偏移、稀疏/密集呼吸、Z 层关系、左右/前后交换、灯光渐变；不要连续 keyframe 复制同一队形。"""
 
 
 def _format_planning_composition_plan(
@@ -435,14 +435,14 @@ def build_coding_prompt(
 - `drones` 是 {int(drone_count)} 架无人机对象列表；循环写 `for i, drone in enumerate(drones):`
 - 代码开头必须写 5 行设计卡注释：`# role: ...`, `# motifs: ...`, `# beat: ...`, `# formation: ...`, `# lighting: ...`
 - 设计卡必须承接全局章法，尤其是 current role/current motifs；不要写随机队形说明
-- 几何主路径是手写目标点表：`geo = custom_points([...], n=len(drones), min_xy_cm=90)`，再 `best_assign` 或 `far_assign`；S02-S05 禁止调用 `geo_wide_v/geo_arrow/geo_box/geo_diagonal/geo_wave/geo_grid`
+- 几何主路径：整数坐标表 `geo = custom_points([...], n=len(drones), min_xy_cm=90)` 或 math 表达式 `[(cx+R*cos(2πi/N), cy+R*sin(2πi/N), z+dz*sin(i)) for i in range(N)]`，再 `best_assign` 或 `far_assign`；S02-S05 禁止调用 `geo_wide_v/geo_arrow/geo_box/geo_diagonal/geo_wave/geo_grid`
 - 正式段默认展开 per-drone loop：`move2(drone, target, flying_ms)` → `apply_light(drone, color, ticks)` → `drone.delay(delay_ms)`，让每架机保留自己的灯光/等待细节
 - `move_group/move_group_staggered` 只作为 smoke/兜底工具；S01-S06 纯 helper 执行会被 composition gate 打回。卡农/错峰请在 per-drone loop 内按 `i % group_mod` 写小 delay
 - 3s 以上 keyframe 若用 `far_assign`，写 `min_path_cm=active_min_path_cm(flying_ms)`；不要写 90/100cm 导致真实运动过早结束
 - 安全距离按 XY 看，不要把同一 XY 不同 Z 当成安全分离
 - 6-8s 中短窗口只写 2 个强 keyframe；若错峰，stagger_ms=60-90，避免第三个 keyframe 把段尾动作拖成未完成
 - S04 抒情展开段要写 4-5 个短 keyframe，至少 3 种颜色/灯光变化；S06 尾声要写两段式收尾（中继点 + 最终署名），不能单 keyframe 小挪动
-- 编舞词汇（每段至少用一种）：分组错峰启动、焦点机对比、中心迁移、密度呼吸、灯光渐变（同 keyframe 两次 apply_light 换色）；S01-S05 全段匀速单色同步会被节奏门打回
+- 编舞词汇（每段至少用一种）：交错启动 (delay(i*ms)), Z 个性 (move2 内 +dz*sin(i)), 分组对比, 焦点机, 中心迁移, 密度呼吸, 灯光渐变 (range()+TurnOnAll((r,g,b)))；S01-S05 全段匀速单色无差异会被节奏门打回
 - 每个 keyframe 完成后更新 `prev = [(t[0], t[1], t[2]) for t in targets]`
 - `planning_speed/planning_accel` 只用于预算 fly_ms；final 代码不要写 set_speed/set_accel/VelXY/VelZ，也不要写 `drone[d]`
 - 如需错峰，只能在同一个 per-drone loop 里对当前 `drone.delay(i * 60)`，但不要改变表格里的 fly_ms/delay_ms

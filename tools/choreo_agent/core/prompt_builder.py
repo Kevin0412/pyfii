@@ -106,7 +106,7 @@ def build_segment_prompt(
 - 段首调用 `auto_init(drones)`，再对每架机执行短灯光提示和 `d.land()`
 - 不要写 keyframe，不要 move2，不要用 LAND 继续凑正式动作"""
     elif is_s01:
-        segment_start_rule = f"""- 首段必须先设计 `start_positions`，设置 `drone.X = drone.x` 与 `drone.Y = drone.y`，再 `drone.takeoff(1, 110)`
+        segment_start_rule = f"""- 首段必须先设计 `start_positions`，设置 `drone.X = drone.x` 与 `drone.Y = drone.y`，再 `drone.takeoff(1, z)`（z 可各机不同——如中心锚点机更高、外围低一些，建立视觉层次）
 - `start_positions` 自身必须安全分散：{drone_count}个XY点最小间距≥180cm，不要中心聚团，不要把多数点放在 200-360cm 的中心小区域
 - 起飞布局可用“六边形+中心/宽V/双层扇形”等分散结构；首个正式 keyframe 路径通常控制在 180-360cm，不要从中心直接硬飞到全场边界
 - 起飞后调用 `wait_until(drones, {start_time})` 对齐正式编舞窗口；不要直接写 `inittime()`
@@ -171,8 +171,8 @@ def build_segment_prompt(
 {segment_start_rule}
 - 代码开头写设计卡注释：`# role: ...`, `# motifs: ...`, `# beat: ...`, `# formation: ...`, `# lighting: ...`
 - 对 {drone_count} 架无人机全部执行；可以统一白光/暖光闪烁 2-5 ticks 后 `d.land()`
-- 不要只给单架 `drones[i]` 操作；使用 `for d in drones:` 或等价 per-drone loop
-- 禁止inittime/VelXY/drone.x=tx/import
+- 不要只给单架 `drones[i]` 操作；使用 `for d in drones:` 或等价 per-drone loop。差异化可以接受（焦点机特写、交错启动），但不能跳过任何一架
+- 禁止 inittime/VelXY/import
 - 只输出代码片段（4空格缩进）"""
     else:
         user = f"""## {segment_id} ({start_time}-{end_time}s, 时长{end_time - start_time}s)
@@ -193,25 +193,26 @@ def build_segment_prompt(
 - {keyframe_rule}
 - {coordinate_hint}
 - {assign_rule}
-- 几何主路径是手写目标点表：`geo = custom_points([...], n=len(drones), min_xy_cm=90)`（开阔队形默认 90；刻意密集造型可用 51-90 的字面量，51 以下 pyfii core 会报碰撞），再 `best_assign/far_assign`；S02-S05 必须至少一个主体 keyframe 使用手写坐标表，禁止调用 `geo_wide_v/geo_arrow/geo_box/geo_diagonal/geo_wave/geo_grid`
+- 几何主路径：整数坐标表 `geo = custom_points([...], n=len(drones), min_xy_cm=90)` 或 math 表达式 `[(cx+R*cos(2πi/N), cy+R*sin(2πi/N), z+dz*sin(i)) for i in range(N)]`，再 `best_assign/far_assign`；S02-S05 必须至少一个主体 keyframe 使用手写坐标表或 math 几何，禁止调用 `geo_wide_v/geo_arrow/geo_box/geo_diagonal/geo_wave/geo_grid`
 - 正式段默认展开 per-drone loop，不要用 `move_group` 作为整段主结构：`move2(drone, target, flying_ms)` → `apply_light(drone, color, ticks)` → `drone.delay(flying_ms-ticks*100+100)`
 - 不要重新质疑 `move2/apply_light/delay` 的语义，也不要在回答中推导 API；按上述顺序写代码即可，验证器会负责轨迹检查
 - `move_group/move_group_staggered` 只作为 smoke/兜底工具；S01-S06 纯 helper 执行会被打回。卡农/错峰请在 per-drone loop 内按 `i % group_mod` 写小 delay，并保留每架机自己的灯光/等待
-- 禁止只给 `drones[0]` 或单架无人机 delay/light；每架机都要在显式 per-drone loop 内获得本次 move2 的灯光和执行等待时间
+- 禁止只给单架 `drones[i]` 操作；使用 `for d in drones:` 或等价 per-drone loop。但可以在 loop 内做差异化：如 `d.delay(i * stagger_ms)` 交错启动, `if i == 0: apply_light(d, special_color, t)` 焦点机, `move2(d, (tx, ty, tz + dz*sin(i)), t)` Z 个性——区别对待不等于跳过
 - 主体 move2 通常用 2600-3600ms；不要用 4500ms+ 超慢移动凑时长，段尾由 auto_init 压缩
 - 快节奏必须可完成：单个 2600-3200ms keyframe 的 3D 路径通常控制在约 180-360cm；不要用 2000-2400ms 硬飞 500cm 跨场路径
 - 如果段长需要覆盖，不要拉长单个 move2；用多个可完成的快 keyframe、分组错峰或高度切层承接，保持每 1 秒窗口都有群体运动
 - 3s 以上 keyframe 不要写 `min_path_cm=90/100`；用 `flying_ms = 3000` 后 `targets = far_assign(prev, geo, min_path_cm=active_min_path_cm(flying_ms))`
 - 安全距离按 XY 看：不要把同一 XY 的不同 Z 当成安全分离；开阔段每个 keyframe 的 XY 点间距尽量 ≥100cm，刻意密集造型可压到 55-75cm（硬下限 51cm，需配合短路径慢速），复杂交换交给 `far_assign`
 - 高度层必须真实混合：每个主体 keyframe 至少 3 个 Z 层，整段 Z range ≥90cm；不要全队同一高度平面
-- 编舞词汇（每段至少用一种，并在 #beat/#formation 标明）：分组错峰启动（per-drone loop 内 i % group_mod 小 delay）、焦点机对比（1-2 架走独立高度/路径）、中心迁移（整段重心向一侧推进或回收）、密度呼吸（宽阵与 51-90cm 密集簇交替）、灯光渐变（同 keyframe 连续两次 apply_light 换色）；全段匀速单色同步会被节奏门打回
+- 编舞词汇（每段至少用一种，并在 #beat/#formation 标明）：交错启动 (delay(i*ms)), Z 个性 (move2 内 +dz*sin(i)), 分组对比 (两组不同几何/灯光), 焦点机 (1-2 架独立轨迹), 中心迁移, 密度呼吸, 灯光渐变 (同 keyframe 内多次 apply_light 或 range()+TurnOnAll((r,g,b)) 呼吸)；全段匀速单色无差异会被节奏门打回
+- `TurnOnAll((r,g,b))` 直接接受 RGB 三元组 (0-255)：`d.TurnOnAll((255,255,255))`=白色。可在 per-drone loop 内做灯光渐变呼吸: `for a in range(30): d.TurnOnAll((int(128+127*sin(a*π/16)), ...)); d.delay(100)` — 30 ticks = 3秒渐变
 - LAND 前如果整体真实动作还没超过 60s，系统会追加 S07/S08 等正式段继续编舞；不要靠当前段硬等待
 - {prev_update_rule}
 - ## 时间预算
 段长: {end_time - start_time}s。所有 move2 的 flying_ms 之和必须≥ {(end_time - start_time - 1) * 1000:.0f}ms（留1s灯光余量）
 示例: 3个move2，各3000ms → 总9000ms，覆盖9s → 快节奏且不会过早收束 ✓
 反例: 1个move2，8000ms → 虽覆盖时间但视觉拖沓 ✗；2个move2，各2500ms → 总5000ms，动作在 {start_time + 5}s 结束 ✗（收束过早）
-- 禁止inittime/VelXY/drone.x=tx/import
+- 禁止 inittime/VelXY/import
 - 只输出代码片段（4空格缩进）"""
 
     if feedback:
@@ -222,7 +223,7 @@ def build_segment_prompt(
 
 def _format_coordinate_hint(drone_count: int, segment_id: str) -> str:
     if int(drone_count) != 9:
-        return "坐标点表必须全部写成数字三元组；不要写变量、公式或省略号"
+        return "坐标写数字三元组或 math 表达式（如 [(cx+R*cos(2πi/N), cy+R*sin(2πi/N), z) for i in range(N)]）；不要写省略号(...)"
 
     start_hint = ""
     if segment_id == "S01":
@@ -234,7 +235,7 @@ def _format_coordinate_hint(drone_count: int, segment_id: str) -> str:
 
     discipline = (
         "9机手写坐标表：用粗网格整数坐标（建议 20/50 的倍数），XY 0-560，Z 在 80-250 内至少 3 层；"
-        "不要现场计算两两距离或三角函数推导圆弧——间距/路径安全由规划检查器和 validator 用精确数字回报；"
+        "不要手算两两距离——间距/路径安全由规划检查器和 validator 用精确数字回报；"
         "禁止 jitter_points；custom_points 默认 min_xy_cm=90，刻意密集造型可用 51-90 的字面量"
     )
     if start_hint:
