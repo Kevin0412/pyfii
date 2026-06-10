@@ -221,3 +221,22 @@ System prompt / context packs / `prompt_builder.py` 会影响 LLM 输入缓存�
 - prompt 增加编舞词汇：分组错峰、焦点机对比、中心迁移、密度呼吸、灯光渐变。
 
 门校准锚点：`core/test_gold_run_regression.py` 保证 0605 金标准 run 的全部段落通过 preflight 与结构门；任何拒绝金标准的门都是误校准。
+
+# 11.7 蒸馏复盘 II：dntg 设备清单与系统缺口 (2026-06-10 晚)
+
+重读 `doc/pyfii_script_patterns_human.md`、`doc/deepseek_cannon_reflection.md`、`doc/pyfii_script_patterns_ai.md` 与 dntg 源码，对照当前 agent 能力的设备级缺口：
+
+| dntg/人类设备 | 当前状态 | 优先级 |
+|---|---|---|
+| 共享轨迹表+每机相位（利萨如 24 点表，各机按索引走同一曲线，连续 keyframe 沿曲线推进） | 缺失——每个 keyframe 独立点表，段内连续性只靠 far_assign | 高：连贯性+复杂度免费 |
+| 跨段角色重映射（n2gn/n2sg 字典每段重排，同机不同段不同职责） | 段内有 i%3 分组，跨段无角色轮换 | 高：归入 P1 composition plan 生成 |
+| 三通道异频正弦 RGB（R/G/B 用 3:4:2 频率驱动 = 连续色环，非单色渐变） | prompt 只示例单通道亮度渐变 | 中：一行 prompt 词汇 |
+| TurnOffAll 负空间（段转折黑场再点亮；无人区"留白→爆发"同理） | agent 从不关灯 | 中：一行 prompt 词汇 |
+| 同段每机多步异构路径（边机绕行 ±160、中机下潜回中，先动/后动/长短路径） | per-drone if 分支已合法，但无认知 | 已解锁，待自然涌现 |
+| 异步时间线（太空电梯各机独立段节点） | inittime 被禁，auto_init 统一切段 | 远期架构级 |
+
+新退化风险（reflection 文档预言）：**全程绕圈**——math 解锁后所有段都写 `2*pi*i/N` 同心圆是下一个退化形态。"1-2 段绕圈可取，全程绕圈退化"。建议：跨段检测连续 ≥3 段使用同中心圆公式时打回（degradation 家族扩展）。
+
+旁证：reflection 文档早已写明"不要预设固定安全距离（如>100cm）——这是枷锁"与"不额外加安全常量"，与今日 51cm 唯一硬下限的清理方向一致。
+
+音乐对齐量化：模板段窗 vs librosa hard cues，5/7 边界在 1.5s 内（大闹天宫人类标准 8/11）。13.0s 边界偏 1.9s 最差。P1（music_brief 驱动段窗+章法生成）仍是头号工程。
