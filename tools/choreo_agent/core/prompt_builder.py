@@ -233,7 +233,7 @@ def _format_coordinate_hint(drone_count: int, segment_id: str) -> str:
 
     seeds = (
         "9机手写坐标可从这些安全低层点表变奏，避免临场手算失败；每个 keyframe 选一个 seed 后只做 ±20-35cm 小变奏，"
-        "不要写 60cm 步长密集斜线，不要连续原样复制同一 seed。"
+        "不要写 60cm 步长密集斜线，不要现场三角函数算圆弧；禁止 jitter_points，custom_points 固定写 min_xy_cm=90。"
         " seed_box="
         "`[(60,60,120),(280,60,210),(500,60,120),(60,280,180),(280,280,240),(500,280,180),(60,500,120),(280,500,210),(500,500,120)]`;"
         " seed_slant="

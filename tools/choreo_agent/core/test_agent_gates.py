@@ -62,6 +62,20 @@ prev = move_group(drones, targets, 3000, "#4488ff", 4)
     print("PASSED: preflight blocks deprecated geo templates")
 
 
+def test_preflight_blocks_jitter_points_and_nonstandard_min_xy():
+    r = preflight_check("""
+geo = custom_points([
+    (60, 60, 120), (280, 60, 210), (500, 60, 120)
+], n=3, min_xy_cm=110)
+geo = jitter_points(geo, xy=10, seed=7)
+""")
+    assert not r
+    joined = " ".join(r.errors)
+    assert "min_xy_cm=110" in joined
+    assert "jitter_points" in joined
+    print("PASSED: preflight blocks jitter_points + nonstandard min_xy")
+
+
 def test_preflight_blocks_bare_api():
     r = preflight_check("drone.VelXY(120,200)")
     assert not r
@@ -142,6 +156,7 @@ if __name__ == "__main__":
     test_preflight_blocks_def()
     test_preflight_blocks_tool_leak()
     test_preflight_blocks_geo_templates()
+    test_preflight_blocks_jitter_points_and_nonstandard_min_xy()
     test_preflight_blocks_bare_api()
     test_preflight_blocks_inittime()
     test_preflight_blocks_single_drone_timing()
@@ -149,4 +164,4 @@ if __name__ == "__main__":
     test_preflight_accepts_clean()
     test_planning_pass_importable()
     test_degradation_signature_in_state()
-    print("\nALL 12 TESTS PASSED")
+    print("\nALL 13 TESTS PASSED")

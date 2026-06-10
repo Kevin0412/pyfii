@@ -47,15 +47,17 @@ def preflight_check(code: str) -> PreflightResult:
     _check_no_tool_leakage(code, r)
     # 5. Deprecated geometry templates
     _check_no_geo_templates(code, r)
-    # 6. Syntax / indentation
+    # 6. Handwritten geometry contract
+    _check_custom_points_contract(code, r)
+    # 7. Syntax / indentation
     _check_syntax(code, r)
-    # 7. Bare API calls (d.move2 / d.VelXY)
+    # 8. Bare API calls (d.move2 / d.VelXY)
     _check_no_bare_api(code, r)
-    # 8. inittime calls
+    # 9. inittime calls
     _check_no_inittime(code, r)
-    # 9. Single-drone timing after group move
+    # 10. Single-drone timing after group move
     _check_no_single_drone_timing(code, r)
-    # 10. Cheap coordinate literal range guard
+    # 11. Cheap coordinate literal range guard
     _check_coordinate_literals(code, r)
 
     return r
@@ -99,6 +101,37 @@ def _check_no_geo_templates(code, r):
             f"几何模板已下线: {name}() — 改用 custom_points([...], n=len(drones), min_xy_cm=90) "
             "手写目标点表，再用 best_assign/far_assign 做路径分配"
         )
+    if "jitter_points(" in code:
+        r.add(
+            "禁止 jitter_points() 出现在 final segment — 它会在 custom_points 校验后再次扰动坐标，"
+            "可能绕过安全点表检查；请直接手写最终 numeric targets，并使用 custom_points(..., min_xy_cm=90)"
+        )
+
+
+def _check_custom_points_contract(code, r):
+    try:
+        tree = ast.parse(code)
+    except SyntaxError:
+        return
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Call):
+            continue
+        if not isinstance(node.func, ast.Name) or node.func.id != "custom_points":
+            continue
+        for keyword in node.keywords:
+            if keyword.arg != "min_xy_cm":
+                continue
+            value = _literal_number(keyword.value)
+            if value is None:
+                r.add(
+                    "custom_points 的 min_xy_cm 必须是字面量 90；不要写变量或表达式，"
+                    "也不要临时提高到 110/120 导致可用点表被拒"
+                )
+            elif abs(value - 90.0) > 1e-9:
+                r.add(
+                    f"custom_points min_xy_cm={value:g} — final segment 固定使用 min_xy_cm=90，"
+                    "不要自行调高/调低；碰撞安全由完整 validator 负责"
+                )
 
 
 def _check_syntax(code, r):

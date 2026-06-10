@@ -120,6 +120,7 @@ def _format_safe_coordinate_seeds(drone_count: int) -> str:
 - 这些 seed 只用来避免现场手算失败；每个 keyframe 选一个 seed 后可做 ±20-35cm 小变奏、换 z 层、换无人机顺序。
 - 不要连续 keyframe 原样复制同一 seed；至少改变中心偏移、稀疏/密集、Z 层或左右/前后关系。
 - 每个 targets 必须是 9 个 numeric triples，禁止变量/省略号/公式。
+- 不要现场三角函数算圆弧，不要用 jitter_points；final 代码里的 custom_points 固定使用 min_xy_cm=90。
 
 seed_box:
 [[60,60,120],[280,60,210],[500,60,120],

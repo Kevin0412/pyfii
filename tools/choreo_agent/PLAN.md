@@ -187,6 +187,7 @@ System prompt / context packs / `prompt_builder.py` 会影响 LLM 输入缓存�
 - 低层 seed 的定位是“安全坐标脚手架”，不是可连续复用的队形模板。正式段仍要求每个 keyframe 改变中心偏移、Z 层、左右/前后关系、灯光或节奏；连续原样复制 seed 仍视为退化。
 - 本轮改动只调整 `prompt_builder.py` 的 user prompt 与 `planning_pass.py` 的规划提示，`build_system_prompt()` 与 context packs 未改，尽量避免大块 system prompt 缓存失效。
 - 实测中断记录：`codex_9d_perdrone_flash_20260610_120551` 在 S01 通过后卡在 S02 规划长推理；`codex_9d_seeded_flash_20260610_122132` 证明 per-drone + 3 keyframes 方向成立，但普通 S01 prompt 也需要同样的安全点表纪律。
+- `codex_9d_guided_flash_20260610_122658` 证明 S01 可锁定，但 S02 仍会犯两个便宜错误：在 `custom_points` 后调用 `jitter_points` 绕过点表校验，以及把 `min_xy_cm` 擅自提高到 110/120 导致运行期拒绝。因此 preflight 已新增硬门：final segment 禁止 `jitter_points()`，`custom_points(..., min_xy_cm=...)` 若出现必须是字面量 90。
 
 # 12-13. Token预算
 
