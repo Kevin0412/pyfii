@@ -47,6 +47,7 @@ def evaluate_composition(
         "role": role_text,
         "role_motifs": role_motifs,
         "avoid": avoid_terms,
+        "recommendations": [],
     }
     errors: list[str] = []
 
@@ -155,6 +156,28 @@ def evaluate_composition(
             "单 keyframe 容易变成小挪动或过早悬停。"
         )
 
+    # ---- 品质建议（非阻塞） ----
+    recs: list[str] = result["recommendations"]
+    if errors:
+        pass  # 有阻塞错误时不输出品质建议
+    elif segment_id in PER_DRONE_REQUIRED_SEGMENTS:
+        if not features["has_math_geometry"] and not features["has_indexed_stagger"]:
+            recs.append(
+                "品质提升：本段只有整数坐标表，没有 math 构造几何和交错启动。"
+                "考虑加一个 sin/cos 圆形/弧线 keyframe，或 per-drone delay(i*ms) 分层启动。"
+            )
+        if features["lighting_tick_estimate"] < 30 and segment_id in {"S04", "S05"}:
+            recs.append(
+                "灯光密度偏低（约 " + str(features["lighting_tick_estimate"])
+                + " ticks）。S04/S05 推荐 30-80 ticks 的渐变/呼吸灯光，"
+                "可用 `for a in range(N): TurnOnAll((r,g,b)); d.delay(100)` 做长渐变。"
+            )
+        if features["z_range_cm"] is not None and features["z_range_cm"] < 60:
+            recs.append(
+                f"Z 跨度仅 {features['z_range_cm']:.0f}cm。推荐适当增大高度层范围（≥90cm）"
+                "或加入 per-drone Z 个性偏移 (move2 内 +dz*sin(i))。"
+            )
+
     return result, errors
 
 
@@ -222,14 +245,20 @@ def extract_code_features(code: str) -> dict:
         "estimated_keyframe_count": max(move2_calls, custom_points_calls),
         "has_handwritten_geometry": "custom_points(" in code or xyz_literal_count >= 6,
         "has_indexed_stagger": has_indexed_stagger,
+        "has_math_geometry": _has_math_geometry(code),
         "color_literals": colors,
         "move2_duration_values": move2_durations,
         "uniform_move2_duration": len(move2_durations) == 1,
+        "lighting_tick_estimate": _estimate_lighting_ticks(code),
         "z_literal_range_cm": None,
+        # 品质建议用的别名
+        "z_range_cm": None,
     }
     z_values = _extract_target_z_literals(code)
     if z_values:
-        features["z_literal_range_cm"] = round(max(z_values) - min(z_values), 1)
+        zr = round(max(z_values) - min(z_values), 1)
+        features["z_literal_range_cm"] = zr
+        features["z_range_cm"] = zr
     return features
 
 
@@ -311,6 +340,38 @@ def _attach_parents(tree: ast.AST) -> None:
     for parent in ast.walk(tree):
         for child in ast.iter_child_nodes(parent):
             child.parent = parent  # type: ignore[attr-defined]
+
+
+def _has_math_geometry(code: str) -> bool:
+    """Detect math-based geometry: sin/cos comprehensions or inline math expressions."""
+    return bool(
+        re.search(r"\bsin\s*\(", code)
+        or re.search(r"\bcos\s*\(", code)
+        or "cmath" in code
+        or "math." in code
+    )
+
+
+def _estimate_lighting_ticks(code: str) -> int:
+    """Estimate total lighting ticks from apply_light calls and for-loop ranges.
+
+    apply_light(d, color, ticks) → ticks
+    range(N) after TurnOnAll or apply_light → N (heuristic)
+    """
+    ticks = 0
+    for match in re.finditer(r"\bapply_light\s*\([^,]+,\s*[^,]+,\s*(\d+)\s*\)", code):
+        ticks += int(match.group(1))
+    for match in re.finditer(
+        r"for\s+\w+\s+in\s+range\s*\(\s*(\d+)\s*\).*?(?:TurnOnAll|TurnOffAll|apply_light)",
+        code,
+    ):
+        ticks += int(match.group(1))
+    for match in re.finditer(
+        r"for\s+\w+\s+in\s+range\s*\(\s*(\d+)\s*\).*?delay\(100",
+        code,
+    ):
+        ticks += int(match.group(1))
+    return ticks
 
 
 def _is_z_layers_literal(node: ast.AST) -> bool:
