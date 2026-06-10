@@ -137,6 +137,7 @@ def _format_safe_coordinate_seeds(drone_count: int) -> str:
 - JSON 里的每个 targets 必须是 {int(drone_count)} 个算好的数字三元组；JSON 不能包含公式/变量/省略号。
 - 队形可以按数学概念设计（圆形/弧线/斜线/波浪——半径、相位、Z 起伏自定），取整后填入数字即可；公式写法留到编码阶段（final 代码里 sin/cos/pi 可直接用）。
 - 不要手算两两间距——系统会用确定性检查器回报每个 keyframe 的精确间距/路径数字，按数字修正即可。
+- 帧内可读构图：每个 keyframe 的 targets 本身要是可读图形——镜像对（点两两穿过构图中心配对）、点对称、或可辨轮廓（线/V/弧/环/双排/点阵）；随机散点读作噪声。变奏放在 keyframe 之间。
 - 把注意力放在编舞：中心偏移、稀疏/密集呼吸、Z 层关系、左右/前后交换、灯光渐变；不要连续 keyframe 复制同一队形。"""
 
 
@@ -436,6 +437,7 @@ def build_coding_prompt(
 - 正式段默认展开 per-drone loop：`move2(drone, target, flying_ms)` → `apply_light(drone, color, ticks)` → `drone.delay(delay_ms)`，让每架机保留自己的灯光/等待细节
 - S02-S05 每段至少一个 keyframe 必须打破时间同步（同起同停会被节奏门打回）：起飞波次 `drone.delay(i * 120)`（move2 前）或到达波次 `move2(drone, t, fly_ms + (i % 3) * 250)`
 - 灯光时钟型写法可免时间算术：`apply_light(drone, color, fly_ms // 100)` 占满飞行窗口不写尾部 delay；错峰时 `(fly_ms - i*120) // 100` 自然回正
+- 个体色彩身份：群舞/交换 keyframe 每架机自己的色相（palette[i]），观众才能跟踪换位；统一色留给宣言时刻
 - 定格 pose 合法（静止展示造型可超 1s），但定格期间必须灯亮；黑灯静止会被判低活动
 - `move_group/move_group_staggered` 只作为 smoke/兜底工具；S01-S06 纯 helper 执行会被 composition gate 打回。卡农/错峰请在 per-drone loop 内按 `i % group_mod` 写小 delay
 - 3s 以上 keyframe 若用 `far_assign`，写 `min_path_cm=active_min_path_cm(flying_ms)`；不要写 90/100cm 导致真实运动过早结束

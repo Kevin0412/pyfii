@@ -130,7 +130,7 @@ def build_segment_prompt(
     elif segment_upper == "S04":
         keyframe_rule = (
             "S04 是抒情展开段：写 4-5 个短 keyframe，每个 2800-3200ms，"
-            "至少 3 种颜色/灯光变化；使用手写非同构几何和 per-drone loop，避免同步大块移动"
+            "至少 3 种颜色/灯光变化；每个 keyframe 用帧内可读构图和 per-drone loop，避免同步大块移动"
         )
         prev_update_rule = "每个 keyframe 后更新 prev；段尾更新 prev = [(t[0],t[1],t[2]) for t in targets]"
     elif segment_upper == "S05":
@@ -156,7 +156,7 @@ def build_segment_prompt(
         )
         prev_update_rule = "段尾更新 prev = [(t[0],t[1],t[2]) for t in targets]"
     else:
-        keyframe_rule = "2-4个利落 keyframe，非对称几何（点表 XY 间距硬下限 51cm，密度是构图自由），用短促推进/交换/高度切层制造节奏"
+        keyframe_rule = "2-4个利落 keyframe（点表 XY 间距硬下限 51cm，密度是构图自由），用短促推进/交换/高度切层制造节奏"
         prev_update_rule = "段尾更新 prev = [(t[0],t[1],t[2]) for t in targets]"
 
     coordinate_hint = _format_coordinate_hint(drone_count, segment_upper)
@@ -202,6 +202,7 @@ def build_segment_prompt(
 - 灯光两种语体，按段落角色选一（也可混用）：
   (a) 运动驱动型：`apply_light(drone, color, 3-5)` 短提示 + `drone.delay(余量)` —— 灯光稀疏、动作主导；
   (b) 灯光时钟型（dntg 式，免时间算术）：`apply_light(drone, color, flying_ms // 100)` 灯光循环本身占满飞行窗口，**不写尾部 delay**；错峰时 `apply_light(drone, color, (flying_ms - i*120) // 100)` 自然回正。渐变/呼吸归这一型
+- 个体色彩身份（dntg 视觉语法）：群舞/交换 keyframe 给每架机（或每对镜像机）自己的色相，如 `palette = ["#ff4444","#ffaa00","#ffee44","#44ff88","#44ddff","#4466ff","#aa44ff","#ff44aa","#ffffff"]` 后 `apply_light(drone, palette[i], ...)` —— 观众才能跟踪个体换位；全队统一色只留给宣言时刻（高潮齐爆、署名定格）
 - 定格 pose 合法：飞到造型后保持静止展示（如署名/符号阵）可以超过 1s，**但定格期间必须灯亮**（apply_light 或 TurnOnAll 持续覆盖）；黑灯静止才会被判低活动
 - 不要重新质疑 `move2/apply_light/delay` 的语义，也不要在回答中推导 API；按上述顺序写代码即可，验证器会负责轨迹检查
 - `move_group/move_group_staggered` 只作为 smoke/兜底工具；S01-S06 纯 helper 执行会被打回。卡农/错峰请在 per-drone loop 内按 `i % group_mod` 写小 delay，并保留每架机自己的灯光/等待
@@ -212,6 +213,7 @@ def build_segment_prompt(
 - 3s 以上 keyframe 不要写 `min_path_cm=90/100`；用 `flying_ms = 3000` 后 `targets = far_assign(prev, geo, min_path_cm=active_min_path_cm(flying_ms))`
 - 安全距离按 XY 看：不要把同一 XY 的不同 Z 当成安全分离；XY 间距硬下限 51cm（pyfii core 碰撞线，检查器精确验证），密集造型配合短路径慢速；复杂交换交给 `far_assign`
 - 高度层必须真实混合：每个主体 keyframe 至少 3 个 Z 层，整段 Z range ≥90cm；不要全队同一高度平面
+- 帧内可读构图（dntg 视觉语法）：每个 keyframe 的点表本身应当是观众一眼可读的图形——镜像对（点两两穿过构图中心配对，如 (cx+dx,cy+dy) 配 (cx-dx,cy-dy)）、点对称、或可辨轮廓（直线/V/弧/环/双排/点阵）；随机散点在 7-9 机规模下读作噪声。非对称与变奏放在 **keyframe 之间**（换轮廓、转方向、变密度），不放在帧内
 - 编舞词汇（每段至少用一种，并在 #beat/#formation 标明）：交错启动 (delay(i*ms)), Z 个性 (move2 内 +dz*sin(i)), 分组对比 (两组不同几何/灯光), 焦点机 (1-2 架独立轨迹), 中心迁移, 密度呼吸, 灯光渐变 (同 keyframe 内多次 apply_light 或 range()+TurnOnAll((r,g,b)) 呼吸)；全段匀速单色无差异会被节奏门打回
 - `d.TurnOnAll((r,g,b))` 直接接受 RGB 三元组 (0-255)：`d.TurnOnAll((255,255,255))`=白色。可在 per-drone loop 内做灯光渐变呼吸: `for a in range(30): d.TurnOnAll((int(128+127*sin(a*pi/15)), int(60+50*sin(a*pi/10)), 40)); d.delay(100)` — 30 ticks = 3秒渐变（pi 已导出，不要写 π）
 - 渐变必须塞进飞行窗口：每个 keyframe 内 `灯光 ticks*100 + delay_ms ≈ flying_ms`；动作完成后不要再原地长亮灯（无人机静止亮灯 >1s 会被判低活动打回）。30-tick 渐变只配 3000ms 以上的 keyframe

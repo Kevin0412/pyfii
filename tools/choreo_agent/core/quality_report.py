@@ -150,6 +150,64 @@ def score_project(project_root: str | Path) -> dict:
         "comparison_vs_deepseek_cannon": comparison,
         "stability": stability,
         "centroid": centroid_drift(root / "output"),
+        "symmetry": symmetry_profile(root / "output"),
+    }
+
+
+def mirror_symmetry_error(points) -> float:
+    """帧内可读性代理（PLAN 11.10）：每点对构图质心反射后到最近点的平均距离 (cm)。
+
+    dntg 的镜像构图 ≈ 0-15cm；随机散点通常 >80cm。点数 <3 返回 0。
+    """
+    pts = [(float(p[0]), float(p[1])) for p in points]
+    if len(pts) < 3:
+        return 0.0
+    cx = sum(p[0] for p in pts) / len(pts)
+    cy = sum(p[1] for p in pts) / len(pts)
+    total = 0.0
+    for p in pts:
+        rx, ry = 2 * cx - p[0], 2 * cy - p[1]
+        total += min(
+            ((rx - q[0]) ** 2 + (ry - q[1]) ** 2) ** 0.5 for q in pts
+        )
+    return total / len(pts)
+
+
+def symmetry_profile(output_dir: str | Path) -> dict:
+    """逐秒采样轨迹，输出镜像对称误差的均值/最优时刻。"""
+    try:
+        import sys as _sys
+        repo_src = str(Path(__file__).resolve().parents[3] / "src")
+        if repo_src not in _sys.path:
+            _sys.path.insert(0, repo_src)
+        import warnings as _warnings
+
+        with _warnings.catch_warnings():
+            _warnings.simplefilter("ignore")
+            import pyfii as pf
+
+            data, _t0, *_ = pf.read_fii(str(output_dir), fps=30, ignore_acc=True)
+    except Exception as exc:
+        return {"error": f"{type(exc).__name__}"}
+    if not data:
+        return {"error": "empty"}
+    min_len = min(len(d) for d in data)
+    samples = []
+    for frame in range(30, min_len, 30):  # 跳过起飞第 1 秒，1s 采样
+        pts = [(d[frame][1], d[frame][2]) for d in data]
+        if all(p[0] > 0 or p[1] > 0 for p in pts):
+            samples.append((frame / 30.0, mirror_symmetry_error(pts)))
+    if not samples:
+        return {"error": "no samples"}
+    errors = [e for _, e in samples]
+    best_t, best_e = min(samples, key=lambda s: s[1])
+    return {
+        "mean_err_cm": round(sum(errors) / len(errors)),
+        "best_err_cm": round(best_e),
+        "best_at_s": round(best_t, 1),
+        "readable_ratio": round(
+            sum(1 for e in errors if e < 40) / len(errors), 2
+        ),
     }
 
 
