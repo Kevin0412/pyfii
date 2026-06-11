@@ -50,8 +50,10 @@ def preflight_check(
     #     在 preflight 就按 custom_points 同样的裁剪+间距规则验一遍，
     #     违规直接回报精确数字，省掉一轮运行期 ValueError。
     _check_computed_geometry(code, r, drone_count)
-    # 14. S01 起飞布局静态验算：任意构图都行，但 XY 间距必须 ≥180cm。
+    # 14. S01 起飞布局静态验算：任意构图都行，但 XY 间距必须 ≥51cm。
     _check_start_positions(code, r, segment_id, drone_count)
+    # 15. LAND 协议硬门：必须 d.land()，不得 move2。
+    _check_land_protocol(code, r, segment_id)
 
     # 1. Markdown / 中文解释残留
     _check_no_markdown(code, r)
@@ -415,6 +417,16 @@ def _static_min_xy(points):
                 md = d
                 pair = (i, j)
     return md, pair
+
+
+def _check_land_protocol(code, r, segment_id):
+    """LAND 只降落：必须有 d.land()，不得有 move2 编舞（协议硬门）。"""
+    if segment_id is None or str(segment_id).upper() != "LAND":
+        return
+    if not re.search(r"\.\s*land\s*\(\s*\)", code):
+        r.add("LAND 段缺少 d.land() — LAND 协议：auto_init + 短灯光提示 + 每架机 d.land()，缺一不可")
+    if re.search(r"\bmove2\w*\s*\(", code):
+        r.add("LAND 段出现 move2 — LAND 不编舞不移动，只降落；收束动作属于上一个正式段")
 
 
 def _check_no_position_writes(code, r, segment_id):

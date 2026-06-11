@@ -42,6 +42,7 @@ def main(argv: list[str] | None = None) -> int:
             mode=args.mode,
             drone_count=args.drone_count,
             music=args.music,
+            music_title=args.music_title,
         )
 
     result = run_full_flow(
@@ -432,6 +433,7 @@ def _init_fresh_project(
     mode: str,
     drone_count: int,
     music: str | None = None,
+    music_title: str | None = None,
 ) -> None:
     template = TOOL_ROOT / "project_template"
     if project_root.exists():
@@ -446,12 +448,16 @@ def _init_fresh_project(
     state["drone_count"] = max(1, int(drone_count))
 
     if music:
-        _apply_music_plan(project_root, state, music, provider or state.get("provider", "deepseek"))
+        _apply_music_plan(
+            project_root, state, music,
+            provider or state.get("provider", "deepseek"),
+            title=music_title,
+        )
 
     state_path.write_text(json.dumps(state, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
-def _apply_music_plan(project_root: Path, state: dict, music: str, provider: str) -> None:
+def _apply_music_plan(project_root: Path, state: dict, music: str, provider: str, title: str | None = None) -> None:
     """音乐驱动初始化：分析音乐 → LLM 生成章法+段窗 → 重写 state（PLAN 11.11）。
 
     取代模板里手写的 cannon dramaturgy；模板 composition_plan/段窗仅在
@@ -467,7 +473,8 @@ def _apply_music_plan(project_root: Path, state: dict, music: str, provider: str
 
     print(f"[music plan] analyzing {music_path.name} and generating composition plan...")
     result = generate_composition_plan(
-        str(music_path), provider=provider, drone_count=int(state["drone_count"])
+        str(music_path), provider=provider, drone_count=int(state["drone_count"]),
+        title=title,
     )
     plan, legacy, brief = result["plan"], result["legacy"], result["brief"]
 
@@ -477,13 +484,15 @@ def _apply_music_plan(project_root: Path, state: dict, music: str, provider: str
 
     windows = {str(s["id"]).upper(): s for s in plan["segments"]}
     for seg in state.get("segments", []):
-        win = windows.get(str(seg.get("id", "")).upper())
+        sid = str(seg.get("id", "")).upper()
+        win = windows.get(sid)
         if not win:
             continue
         seg["start_time"] = float(win["start_s"])
         seg["end_time"] = float(win["end_s"])
         role = win.get("role")
-        if role:
+        # LAND 不接受 plan 的编舞角色 — 它只降落（LAND 协议）。
+        if role and sid != "LAND":
             seg["intent"] = str(role)
 
     (project_root / "music_brief.json").write_text(
@@ -539,6 +548,7 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
     parser.add_argument("project", nargs="?", help="Existing project path.")
     parser.add_argument("--fresh-name", help="Create a fresh project under agent_projects/.")
     parser.add_argument("--music", help="Music file (abs or repo-root relative); generates composition plan + segment windows from it.")
+    parser.add_argument("--music-title", help="Human-provided track title/character hint (e.g. 春节序曲); overrides audio-feature mood inference.")
     parser.add_argument("--provider", help="Provider name from ai_providers.local.json.")
     parser.add_argument("--mode", choices=["manual", "fast"], default="manual")
     parser.add_argument("--drone-count", type=int, default=7)

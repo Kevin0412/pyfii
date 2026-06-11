@@ -125,8 +125,15 @@ class Session:
             round_temp = temperature if index == 1 else max(0.05, temperature * 0.4)
             previous_exit_state = self._previous_exit_state()
             
-            # Planning pass (first round only)
-            if use_planning_pass and index == 1 and len(previous_exit_state) == self.state.drone_count:
+            # Planning pass (first round only)。LAND 不走规划层：
+            # 通用 keyframe 合同会诱导"编舞式降落"（move2 keyframes 且无 d.land()），
+            # LAND 协议只在 prompt_builder 的 is_land 分支里。
+            if (
+                use_planning_pass
+                and index == 1
+                and len(previous_exit_state) == self.state.drone_count
+                and str(seg.id).upper() != "LAND"
+            ):
                 seg = self.state.current_segment
                 try:
                     # Stage 1: LLM → JSON plan

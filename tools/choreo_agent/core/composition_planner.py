@@ -27,8 +27,16 @@ LAND_MAX_S = 6.0
 TAKEOFF_S = 4.0
 
 
-def build_planner_prompt(brief: Mapping[str, Any], drone_count: int) -> str:
+def build_planner_prompt(
+    brief: Mapping[str, Any], drone_count: int, title: str | None = None
+) -> str:
     duration = float(brief.get("duration_s") or 0)
+    source_name = str(brief.get("music_source", "")).rsplit("/", 1)[-1]
+    title_line = (
+        f"- 曲目: {title}（人工提供的曲名/气质，**优先于音频特征推断**——文化与情绪语境是音频代理指标读不出来的）"
+        if title
+        else f"- 文件名: {source_name}（无人工曲名，气质只能从音频特征推断，注意不要把安静误读为黑暗、把克制误读为压抑）"
+    )
     show_end_hint = min(duration, MAX_SHOW_S)
     sections = brief.get("sections") or []
     section_lines = "\n".join(
@@ -49,6 +57,7 @@ def build_planner_prompt(brief: Mapping[str, Any], drone_count: int) -> str:
     return f"""## 为这首音乐设计无人机灯光秀全局章法（{int(drone_count)} 机）
 
 音乐证据（librosa 分析，节选至 {show_end_hint:.0f}s）：
+{title_line}
 - 总长 {duration:.1f}s，tempo {brief.get('tempo_bpm')} BPM（1 beat ≈ {brief.get('beat_interval_s')}s）
 - 结构边界 (hard cues): {cues}
 - 能量曲线:
@@ -64,6 +73,7 @@ def build_planner_prompt(brief: Mapping[str, Any], drone_count: int) -> str:
 
 硬约束：
 - 正式段固定 6 个：S01-S06；之后 LAND {LAND_MIN_S:.0f}-{LAND_MAX_S:.0f}s。
+- LAND 不编舞：只写 id/start_s/end_s，不要给 LAND 写 role/motifs——LAND 协议是原地降落，收束动作放进 S06。
 - S01 从 {TAKEOFF_S:.0f}s 开始（前 {TAKEOFF_S:.0f}s 起飞）；每段 {MIN_SEGMENT_S:.0f}-{MAX_SEGMENT_S:.0f}s；窗口连续不重叠。
 - show_end_s（LAND 结束）在 {MIN_SHOW_S:.0f}-{min(duration, MAX_SHOW_S):.0f}s 内。
 
@@ -181,6 +191,7 @@ def generate_composition_plan(
     drone_count: int,
     chat_fn: Callable[..., Any] | None = None,
     max_revisions: int = 2,
+    title: str | None = None,
 ) -> dict:
     """音乐 → brief → LLM 章法 → 确定性校验（最多 2 轮修正）。
 
@@ -199,7 +210,7 @@ def generate_composition_plan(
         def chat_fn(prompt: str) -> str:  # type: ignore[misc]
             return chat(system="", user=prompt, provider=provider, temperature=0.4).text
 
-    prompt = build_planner_prompt(brief, drone_count)
+    prompt = build_planner_prompt(brief, drone_count, title=title)
     text = chat_fn(prompt)
     plan = parse_planner_json(text)
     ok, report = (False, "JSON 解析失败，只输出 JSON") if plan is None else validate_music_plan(plan, brief)

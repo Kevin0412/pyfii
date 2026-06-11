@@ -154,6 +154,31 @@ def test_preflight_verifies_start_positions_spacing():
     print("PASSED: preflight verifies start_positions spacing")
 
 
+def test_preflight_enforces_land_protocol():
+    # 编舞式降落（wrq run 实际发生的 bug）：有 move2 无 d.land() → 双违规
+    bad = (
+        "for i, drone in enumerate(drones):\n"
+        "    move2(drone, (280, 280, 80), 1200)\n"
+        "    apply_light(drone, '#330066', 6)\n"
+        "    drone.delay(300)\n"
+    )
+    r = preflight_check(bad, segment_id="LAND")
+    assert not r
+    joined = " ".join(r.errors)
+    assert "d.land()" in joined and "move2" in joined
+    # 协议正确的 LAND 放行
+    good = (
+        "auto_init(drones)\n"
+        "for d in drones:\n"
+        "    apply_light(d, '#ffffff', 3)\n"
+        "    d.land()\n"
+    )
+    assert preflight_check(good, segment_id="LAND")
+    # 非 LAND 段不受影响
+    assert not any("LAND" in e for e in preflight_check(bad, segment_id="S03").errors)
+    print("PASSED: preflight enforces LAND protocol")
+
+
 def test_preflight_blocks_bare_api():
     r = preflight_check("drone.VelXY(120,200)")
     assert not r
@@ -247,6 +272,7 @@ if __name__ == "__main__":
     test_preflight_evaluates_math_geometry()
     test_preflight_requires_custom_points_wrap_for_comprehensions()
     test_preflight_verifies_start_positions_spacing()
+    test_preflight_enforces_land_protocol()
     test_preflight_blocks_bare_api()
     test_preflight_blocks_inittime()
     test_preflight_blocks_single_drone_timing()
@@ -254,4 +280,4 @@ if __name__ == "__main__":
     test_preflight_accepts_clean()
     test_planning_pass_importable()
     test_degradation_signature_in_state()
-    print("\nALL 17 TESTS PASSED")
+    print("\nALL 18 TESTS PASSED")
