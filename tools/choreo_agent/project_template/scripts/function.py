@@ -25,6 +25,10 @@ __all__ = [
     "clamp_z",
     "best_assign",
     "far_assign",
+    "rotate_assign",
+    "mirror_assign",
+    "swap_assign",
+    "keep_assign",
     "apply_light",
     "auto_init",
     "wait_until",
@@ -515,6 +519,86 @@ def far_assign(starts, targets, min_path_cm=90, min_spacing_cm=140):
             best_score = score
             best = [target_items[i] for i in perm]
     return best
+
+
+# ---------- 意图分配家族：转场即编舞，按叙事意图选映射 ----------
+def keep_assign(prev, targets):
+    """身份保持分配：drone i → targets[i]，不重排。
+
+    用于 per-drone 叙事（palette 色彩身份跟踪、焦点机连续剧情）。
+    交叉风险自行用错峰处理（delay(i*150)），validator 逐帧兜底。
+    """
+    _assert_target_count(prev, targets)
+    return [_target3(t) for t in targets]
+
+
+def rotate_assign(prev, targets, steps=1):
+    """旋转分配：按角序把每架机映射到沿环移动 steps 位的目标 —— 整体漩涡/轨道转场。
+
+    同构队形下机间距离恒定（刚体旋转天然安全）；steps 可负反向，
+    abs(steps) 越大转动越剧烈。
+    """
+    _assert_target_count(prev, targets)
+    n = len(prev)
+    tt = [_target3(t) for t in targets]
+    prev_order = _angle_order([_xyz(p) for p in prev])
+    target_order = _angle_order(tt)
+    mapping = [None] * n
+    for rank, drone_i in enumerate(prev_order):
+        mapping[drone_i] = tt[target_order[(rank + int(steps)) % n]]
+    return mapping
+
+
+def mirror_assign(prev, targets):
+    """镜像对穿分配：每架机飞向自己关于目标质心的反射点附近的目标。
+
+    必须配合错峰（move2 前 `drone.delay(i * 150)`）：同步对穿必撞，
+    错峰让各机在不同时刻过中心 —— 人类作品对穿的安全机制。
+    """
+    _assert_target_count(prev, targets)
+    tt = [_target3(t) for t in targets]
+    cx = sum(t[0] for t in tt) / len(tt)
+    cy = sum(t[1] for t in tt) / len(tt)
+    used: set[int] = set()
+    mapping = []
+    for p in prev:
+        px, py, _ = _xyz(p)
+        rx, ry = 2 * cx - px, 2 * cy - py
+        best_j = min(
+            (j for j in range(len(tt)) if j not in used),
+            key=lambda j: (tt[j][0] - rx) ** 2 + (tt[j][1] - ry) ** 2,
+        )
+        used.add(best_j)
+        mapping.append(tt[best_j])
+    return mapping
+
+
+def swap_assign(prev, targets, axis="x"):
+    """半场交换分配：左右(axis='x')或前后(axis='y')两半互换 —— 组级换位叙事。
+
+    每半场内部用 best_assign 保证路径安全；奇数机时中位机守中。
+    """
+    _assert_target_count(prev, targets)
+    n = len(prev)
+    key = 0 if axis == "x" else 1
+    tt = [_target3(t) for t in targets]
+    prev_rank = sorted(range(n), key=lambda i: _xyz(prev[i])[key])
+    target_rank = sorted(range(n), key=lambda j: tt[j][key])
+    half = n // 2
+    mapping = [None] * n
+    if n % 2:
+        mapping[prev_rank[half]] = tt[target_rank[half]]
+    pairs = [
+        (prev_rank[:half], target_rank[n - half:]),
+        (prev_rank[n - half:], target_rank[:half]),
+    ]
+    for drone_idx, target_idx in pairs:
+        sub_prev = [prev[i] for i in drone_idx]
+        sub_targets = [tt[j] for j in target_idx]
+        assigned = best_assign(sub_prev, sub_targets)
+        for i, t in zip(drone_idx, assigned):
+            mapping[i] = t
+    return mapping
 
 
 def _assignment_permutations(n, starts_xyz, targets_xyz, evaluate):

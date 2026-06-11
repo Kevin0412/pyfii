@@ -61,7 +61,8 @@ def build_planning_prompt(
       "speed_cm_s": 170,
       "accel_cm_s2": 320,
       "light_color": "#44aaff",
-      "light_ticks": 4
+      "light_ticks": 4,
+      "assign": "best"
     }},
     {{
       "start_s": {start_time+3.2},
@@ -81,6 +82,7 @@ def build_planning_prompt(
 可完成性: 单个 keyframe 的 3D 路径通常控制在约 120-380cm；不要规划 500cm 级跨场短飞。
 约束: targets总数={drone_count}, shape=[{target_example}], XY 0-560cm, Z 80-250cm, target 点表 XY 间距硬下限 51cm（pyfii core 碰撞线，检查器精确验证）；密度是构图自由，不要为了凑大间距放弃造型。速度20-200, 加速度50-400, 推荐速度150-200、加速度260-400；light_ticks 两种语体：3-5（运动驱动型短提示）或 duration_s*10（灯光时钟型，灯光占满飞行窗口）。
 章法约束: JSON 里的 feel/targets/light_color 必须服务全局章法；不要随机换题，不要连续重复同一种退化队形。
+assign 字段（可选，默认 best）: "best"收束 / "far"大交换 / "rotate"漩涡(可加 "rotate_steps") / "mirror"对穿(检查器会提醒错峰) / "swap"半场互换 / "keep"身份保持——转场即编舞，按意图声明，检查器按声明的映射验算。
 输出纪律: 直接给 JSON；不要写距离证明、不要手算两两间距、不要自问自答。规划检查器会回报精确间距/路径/时长数字，如有违规你会收到报告再修正。
 
 只输出 JSON，不解释。"""
@@ -222,7 +224,6 @@ def evaluate_plan_safety(
     - 按 speed/accel 估算最长飞行时间 vs keyframe 时长（完不成则违规）
     Returns (ok, report); report 同时用作修正反馈和编码阶段参考。
     """
-    from .best_assign import best_assign as _assign
     from .motion_math import clamp_accel, clamp_speed, dist3, flight_time_ms
 
     drone_count = int(drone_count)
@@ -279,26 +280,32 @@ def evaluate_plan_safety(
         else:
             lines.append(f"- 点表最小 XY 间距 {min_xy:.0f}cm (d{pair[0]}-d{pair[1]}) ≥ 51cm OK")
 
-        perm, path_md = _assign(
-            [(x, y) for x, y, _ in current_prev],
-            [(x, y) for x, y, _ in pts],
+        assign_kind = str(kf.get("assign", "best") or "best").lower()
+        assigned, path_md, kind_note = _intent_assignment(
+            assign_kind, current_prev, pts, kf
         )
-        assigned = [pts[i] for i in perm]
         path_lengths = sorted(
             dist3(current_prev[i], assigned[i]) for i in range(drone_count)
         )
         median_path = path_lengths[drone_count // 2]
         max_path = path_lengths[-1]
-        if path_md < PLAN_PATH_SPACING_FLOOR_CM:
+        if path_md is None:
+            lines.append(f"- {kind_note}")
+        elif path_md < PLAN_PATH_SPACING_FLOOR_CM:
             msg = (
-                f"k{kf_i}: 即使最优分配，转场路径最小间距也只有 {path_md:.0f}cm "
-                f"< {PLAN_PATH_SPACING_FLOOR_CM:.0f}cm — 这组 targets 与上个位置冲突，重写本 keyframe 点表"
+                f"k{kf_i}: {kind_note}转场路径最小间距只有 {path_md:.0f}cm "
+                f"< {PLAN_PATH_SPACING_FLOOR_CM:.0f}cm — "
+                + (
+                    "这组 targets 与上个位置冲突，重写本 keyframe 点表"
+                    if assign_kind in ("best", "far", "swap")
+                    else "改用错峰、换 assign 类型或调整 targets"
+                )
             )
             violations.append(msg)
             lines.append(f"- 违规: {msg}")
         else:
             lines.append(
-                f"- 最优分配后路径最小间距 {path_md:.0f}cm OK；路径长度 中位 {median_path:.0f}cm / 最长 {max_path:.0f}cm"
+                f"- {kind_note}路径最小间距 {path_md:.0f}cm OK；路径长度 中位 {median_path:.0f}cm / 最长 {max_path:.0f}cm"
             )
 
         # 物理上限 20-200 / 50-400：计划里超限的 speed/accel 按真实能力收紧后再算可行性
@@ -346,6 +353,98 @@ def build_plan_revision_prompt(plan: Mapping[str, Any], report: str, segment_id:
 只输出完整修正后的 JSON，不解释。"""
 
 
+def _intent_assignment(kind, current_prev, pts, kf):
+    """按声明的 assign 意图计算映射并给出可检查的路径间距。
+
+    与 project_template/scripts/function.py 的同名分配函数保持同一映射逻辑
+    （keep/rotate/mirror）；best/far/swap 用最优分配检查（far/swap 为保守近似）。
+    mirror 的同步直线间距天然趋零（设计就是对穿），跳过该检查，
+    由错峰 + validator 逐帧负责真实安全。
+    Returns (assigned, path_md | None, note)。
+    """
+    from .best_assign import best_assign as _assign
+
+    prev_xy = [(p[0], p[1]) for p in current_prev]
+    pts_xy = [(t[0], t[1]) for t in pts]
+    n = len(pts)
+
+    if kind == "keep":
+        assigned = list(pts)
+        md = _synced_path_min(prev_xy, pts_xy)
+        return assigned, md, "keep_assign(身份保持) "
+    if kind == "rotate":
+        steps = int(_positive_float(kf.get("rotate_steps"), 1.0))
+        prev_order = _angle_rank(prev_xy)
+        target_order = _angle_rank(pts_xy)
+        assigned = [None] * n
+        for rank, drone_i in enumerate(prev_order):
+            assigned[drone_i] = pts[target_order[(rank + steps) % n]]
+        # 时间同步间距：刚体旋转里相邻弦共享端点但从不同时到达——
+        # 几何线段距离会误判为 0，必须按同一 t 采样。
+        md = _synced_path_min(prev_xy, [(t[0], t[1]) for t in assigned])
+        return assigned, md, f"rotate_assign(steps={steps}) "
+    if kind == "mirror":
+        cx = sum(t[0] for t in pts) / n
+        cy = sum(t[1] for t in pts) / n
+        used: set[int] = set()
+        assigned = []
+        for px, py in prev_xy:
+            rx, ry = 2 * cx - px, 2 * cy - py
+            best_j = min(
+                (j for j in range(n) if j not in used),
+                key=lambda j: (pts[j][0] - rx) ** 2 + (pts[j][1] - ry) ** 2,
+            )
+            used.add(best_j)
+            assigned.append(pts[best_j])
+        return assigned, None, (
+            "mirror_assign(镜像对穿)：同步直线间距不适用——必须错峰 "
+            "`drone.delay(i * 150)`，validator 会逐帧验证真实间距"
+        )
+    # best / far / swap：最优分配检查（far/swap 保守近似）
+    perm, md = _assign(prev_xy, pts_xy)
+    assigned = [pts[i] for i in perm]
+    note = "" if kind == "best" else f"{kind}_assign(按最优分配近似检查) "
+    return assigned, md, note
+
+
+def _synced_path_min(prev_xy, target_xy, steps: int = 50) -> float:
+    """时间同步的转场最小 XY 间距：所有机同一 t 沿直线推进时的两两最小距离。"""
+    n = len(prev_xy)
+    md = 1e9
+    for s in range(steps + 1):
+        t = s / steps
+        positions = [
+            (
+                prev_xy[i][0] * (1 - t) + target_xy[i][0] * t,
+                prev_xy[i][1] * (1 - t) + target_xy[i][1] * t,
+            )
+            for i in range(n)
+        ]
+        for i in range(n):
+            for j in range(i + 1, n):
+                d = (
+                    (positions[i][0] - positions[j][0]) ** 2
+                    + (positions[i][1] - positions[j][1]) ** 2
+                ) ** 0.5
+                if d < md:
+                    md = d
+    return md
+
+
+def _angle_rank(points_xy):
+    import math as _math
+
+    cx = sum(p[0] for p in points_xy) / len(points_xy)
+    cy = sum(p[1] for p in points_xy) / len(points_xy)
+    return [
+        i
+        for i, _ in sorted(
+            enumerate(points_xy),
+            key=lambda item: _math.atan2(item[1][1] - cy, item[1][0] - cx),
+        )
+    ]
+
+
 def _min_xy_pair(points: Sequence[tuple[float, float, float]]) -> tuple[float, tuple[int, int]]:
     md = 1e9
     pair = (0, 0)
@@ -390,7 +489,9 @@ def plan_to_budget_table(plan: dict, prev_state: list, drone_count: int = 7) -> 
         light_ticks = kf.get("light_ticks", 4)
         light_color = kf.get("light_color", "#4488ff")
 
-        lines.append(f"\n--- Keyframe {kf_i+1} ({feel}) ---")
+        lines.append(
+            f"\n--- Keyframe {kf_i+1} ({feel}) assign={kf.get('assign', 'best')} ---"
+        )
         if len(targets) != drone_count:
             lines.append(f"skip: targets count {len(targets)} != drone_count {drone_count}")
             continue
@@ -440,6 +541,7 @@ def build_coding_prompt(
 - 灯光时钟型写法可免时间算术：`apply_light(drone, color, fly_ms // 100)` 占满飞行窗口不写尾部 delay；错峰时 `(fly_ms - i*120) // 100` 自然回正
 - 个体色彩身份：群舞/交换 keyframe 每架机自己的色相（palette[i]），观众才能跟踪换位；统一色留给宣言时刻
 - 镜像换位/对穿必须错峰：`drone.delay(i * 150)` 各机不同时刻过中心——同步对穿必撞，错峰本身就是对穿的安全机制
+- 分配函数家族（按转场意图选）：`best_assign` 收束 / `far_assign` 大交换 / `rotate_assign(prev, geo, steps)` 漩涡 / `mirror_assign` 对穿（配错峰）/ `swap_assign(prev, geo, axis)` 半场互换 / `keep_assign` 身份保持
 - 定格 pose 合法（静止展示造型可超 1s），但定格期间必须灯亮；黑灯静止会被判低活动
 - `move_group/move_group_staggered` 只作为 smoke/兜底工具；S01-S06 纯 helper 执行会被 composition gate 打回。卡农/错峰请在 per-drone loop 内按 `i % group_mod` 写小 delay
 - 3s 以上 keyframe 若用 `far_assign`，写 `min_path_cm=active_min_path_cm(flying_ms)`；不要写 90/100cm 导致真实运动过早结束
