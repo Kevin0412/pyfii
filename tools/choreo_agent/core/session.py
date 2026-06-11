@@ -3,6 +3,7 @@ import json
 import math
 import re
 import textwrap
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable
@@ -39,6 +40,9 @@ class Session:
         self._pending_code: str | None = None
         self._skip_continuity: bool = True  # 单段生成不检查连续性
         self._music_brief: dict | None = None
+        # 并行候选池：preflight 已通过但未走完整验证的备胎代码（按段清空）。
+        self._candidate_pool: list[str] = []
+        self._candidate_pool_seg: str | None = None
         self.sync_state_with_markers(save=False)
 
     @property
@@ -100,6 +104,92 @@ class Session:
             on_heartbeat=on_heartbeat,
         )
 
+    def generate_candidates_parallel(
+        self,
+        provider: str = "deepseek",
+        feedback: str = "",
+        base_temperature: float = 0.3,
+        k: int = 2,
+        stage: str = "generation",
+        on_delta: Callable[[str], None] | None = None,
+        on_reasoning_delta: Callable[[str], None] | None = None,
+        on_heartbeat: Callable[[], None] | None = None,
+    ) -> list[LlmResponse]:
+        """并行生成 K 个候选（温度梯度），按完成顺序返回成功响应。
+
+        - LLM 调用是修复轮的墙钟大头（3-6 min），并行直接折半；
+        - 同时对冲单流网络错误（RemoteProtocolError）：K 流死一条不毁整轮；
+        - 只有第一个候选挂流式回调，避免日志交错；记录串行完成（线程安全）。
+        """
+        seg = self.state.current_segment
+        if seg is None or seg.locked:
+            return []
+        k = max(1, int(k))
+        system, user = build_segment_prompt(
+            segment_id=seg.id,
+            start_time=seg.start_time,
+            end_time=seg.end_time,
+            intent=seg.intent or "",
+            prev_state=self._previous_exit_state(),
+            feedback=feedback,
+            drone_count=self.state.drone_count,
+            composition_plan=self.state.composition_plan,
+        )
+        temps = [
+            max(0.05, min(1.0, base_temperature + 0.2 * i)) for i in range(k)
+        ]
+
+        def _call(i: int) -> LlmResponse:
+            return chat(
+                system=system,
+                user=user,
+                provider=provider,
+                temperature=temps[i],
+                on_delta=on_delta if i == 0 else None,
+                on_reasoning_delta=on_reasoning_delta if i == 0 else None,
+                on_heartbeat=on_heartbeat if i == 0 else None,
+            )
+
+        responses: list[LlmResponse] = []
+        errors: list[Exception] = []
+        with ThreadPoolExecutor(max_workers=k) as pool:
+            futures = {pool.submit(_call, i): i for i in range(k)}
+            for future in as_completed(futures):
+                i = futures[future]
+                try:
+                    response = future.result()
+                except Exception as exc:  # 单流失败不毁整轮
+                    errors.append(exc)
+                    self._record_generation_error(
+                        seg=seg,
+                        provider=provider,
+                        stage=f"{stage}_par{i}",
+                        feedback=feedback,
+                        exc=exc,
+                        system_chars=len(system),
+                        user_chars=len(user),
+                    )
+                    continue
+                self._record_generation_response(
+                    seg=seg,
+                    provider=provider,
+                    stage=f"{stage}_par{i}",
+                    feedback=feedback,
+                    response=response,
+                    system_chars=len(system),
+                    user_chars=len(user),
+                )
+                responses.append(response)
+        if not responses and errors:
+            raise errors[0]
+        return responses
+
+    def _pool_for_segment(self, seg_id: str) -> list[str]:
+        if self._candidate_pool_seg != seg_id:
+            self._candidate_pool = []
+            self._candidate_pool_seg = seg_id
+        return self._candidate_pool
+
     def generate_until_safe_with_llm(
         self,
         provider: str = "deepseek",
@@ -107,12 +197,18 @@ class Session:
         temperature: float = 0.3,
         max_attempts: int = 3,
         use_planning_pass: bool = False,
+        parallel_candidates: int = 1,
         on_delta: Callable[[str], None] | None = None,
         on_reasoning_delta: Callable[[str], None] | None = None,
         on_heartbeat: Callable[[], None] | None = None,
         on_round_start: Callable[[int], None] | None = None,
     ) -> list[GenerationRound]:
-        """生成当前段并自动验证；失败则把危险反馈回灌给 LLM。"""
+        """生成当前段并自动验证；失败则把危险反馈回灌给 LLM。
+
+        parallel_candidates > 1 时，直接生成/修复轮并行 K 个候选：
+        第一个过 preflight 的进完整验证，其余过 preflight 的入候选池；
+        验证失败的下一轮先吃池（零 API 成本），池空才再并行调用。
+        """
         seg = self.state.current_segment
         if seg is None or seg.locked:
             return []
@@ -124,6 +220,7 @@ class Session:
                 on_round_start(index)
             round_temp = temperature if index == 1 else max(0.05, temperature * 0.4)
             previous_exit_state = self._previous_exit_state()
+            pooled_code: str | None = None
             
             # Planning pass (first round only)。LAND 不走规划层：
             # 通用 keyframe 合同会诱导"编舞式降落"（move2 keyframes 且无 d.land()），
@@ -227,22 +324,59 @@ class Session:
                         stage="fallback_after_planning_error",
                     )
             else:
-                response = self.generate_current_segment_with_llm(
-                    provider=provider,
-                    feedback=repair_feedback,
-                    temperature=round_temp,
-                    on_delta=on_delta,
-                    on_reasoning_delta=on_reasoning_delta,
-                    on_heartbeat=on_heartbeat,
-                    stage="direct_generation",
-                )
-            if response is None:
+                pool = self._pool_for_segment(seg.id)
+                if pool:
+                    # 上一并行轮的备胎候选：preflight 已过、几何不同 — 先试它，零 API 成本
+                    pooled_code = pool.pop(0)
+                    self._record_attempt_update({
+                        "stage": "pool_candidate",
+                        "pool_remaining": len(pool),
+                    })
+                    response = None
+                elif parallel_candidates > 1:
+                    candidates = self.generate_candidates_parallel(
+                        provider=provider,
+                        feedback=repair_feedback,
+                        base_temperature=round_temp,
+                        k=parallel_candidates,
+                        stage="direct_generation",
+                        on_delta=on_delta,
+                        on_reasoning_delta=on_reasoning_delta,
+                        on_heartbeat=on_heartbeat,
+                    )
+                    response = None
+                    for cand in candidates:
+                        cand_code = _extract_candidate_code(cand.text)
+                        if cand_code.strip() and preflight_check(
+                            cand_code, segment_id=seg.id, drone_count=self.state.drone_count
+                        ):
+                            if response is None:
+                                response = cand
+                            else:
+                                self._pool_for_segment(seg.id).append(cand_code)
+                    if response is None and candidates:
+                        # 没人过 preflight：拿第一个候选走常规 preflight 修复
+                        response = candidates[0]
+                else:
+                    response = self.generate_current_segment_with_llm(
+                        provider=provider,
+                        feedback=repair_feedback,
+                        temperature=round_temp,
+                        on_delta=on_delta,
+                        on_reasoning_delta=on_reasoning_delta,
+                        on_heartbeat=on_heartbeat,
+                        stage="direct_generation",
+                    )
+            if response is None and pooled_code is None:
                 rounds.append(GenerationRound(index=index, response=None, validation=None))
                 repair_feedback = "上一轮生成的代码无法插入（语法错误或违反段标记协议）。请检查代码格式。"
                 continue
 
-            # Extract candidate code from LLM response
-            code = _extract_candidate_code(response.text) if hasattr(response, 'text') else ''
+            # Extract candidate code from LLM response (or take the pooled one)
+            if pooled_code is not None:
+                code = pooled_code
+            else:
+                code = _extract_candidate_code(response.text) if hasattr(response, 'text') else ''
             if not code.strip():
                 self._record_attempt_update({
                     "candidate_code_chars": 0,

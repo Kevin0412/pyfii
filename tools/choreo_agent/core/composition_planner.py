@@ -28,7 +28,11 @@ TAKEOFF_S = 4.0
 
 
 def build_planner_prompt(
-    brief: Mapping[str, Any], drone_count: int, title: str | None = None
+    brief: Mapping[str, Any],
+    drone_count: int,
+    title: str | None = None,
+    human_directives: list[str] | None = None,
+    prior_plan: Mapping[str, Any] | None = None,
 ) -> str:
     duration = float(brief.get("duration_s") or 0)
     source_name = str(brief.get("music_source", "")).rsplit("/", 1)[-1]
@@ -53,9 +57,24 @@ def build_planner_prompt(
         if has_high
         else "\n注意：这首音乐没有 high 能量段——不要伪造爆发/高潮段；强度变化用队形复杂度、灯光密度、角色交换表达。"
     )
+    directives_block = ""
+    if human_directives:
+        numbered = "\n".join(f"{i+1}. {d}" for i, d in enumerate(human_directives))
+        directives_block = (
+            "\n## 人类导演意见（权威——与音频特征推断或默认原则冲突时，以导演意见为准）\n"
+            + numbered
+            + "\n"
+        )
+    prior_block = ""
+    if prior_plan:
+        prior_block = (
+            "\n## 上一版计划（按导演意见修改；导演未提及的部分尽量保留）\n"
+            + json.dumps(prior_plan, ensure_ascii=False)
+            + "\n"
+        )
 
     return f"""## 为这首音乐设计无人机灯光秀全局章法（{int(drone_count)} 机）
-
+{directives_block}{prior_block}
 音乐证据（librosa 分析，节选至 {show_end_hint:.0f}s）：
 {title_line}
 - 总长 {duration:.1f}s，tempo {brief.get('tempo_bpm')} BPM（1 beat ≈ {brief.get('beat_interval_s')}s）
@@ -185,6 +204,76 @@ def to_legacy_plan(plan: Mapping[str, Any]) -> dict:
     return legacy
 
 
+def format_plan_summary(plan: Mapping[str, Any], brief: Mapping[str, Any]) -> str:
+    """一屏可读的 plan 评审摘要：主题/弧线 + 段窗-cue 对照表。"""
+    cues = brief.get("hard_cues") or []
+    lines = [
+        f"主题: {plan.get('theme')}",
+        f"戏剧结构: {plan.get('dramaturgy')}",
+        f"灯光弧线: {plan.get('light_arc')}",
+        f"质心叙事: {plan.get('centroid_arc')}",
+        "",
+        f"{'段':<5} {'窗口':<13} {'时长':<5} {'贴cue':<7} {'灯光语体':<12} 角色",
+    ]
+    for seg in plan.get("segments", []):
+        sid = str(seg.get("id", "?"))
+        start, end = float(seg.get("start_s", 0)), float(seg.get("end_s", 0))
+        cue_delta = (
+            f"{min(abs(c - start) for c in cues):.1f}s" if cues else "-"
+        )
+        role = str(seg.get("role", ""))[:34]
+        register = str(seg.get("lighting_register", "-"))
+        lines.append(
+            f"{sid:<5} {start:>5.1f}-{end:<6.1f} {end-start:>4.1f}s {cue_delta:<7} {register:<12} {role}"
+        )
+    return "\n".join(lines)
+
+
+def plan_review_loop(
+    music_path: str,
+    provider: str,
+    drone_count: int,
+    title: str | None = None,
+    chat_fn: Callable[..., Any] | None = None,
+    input_fn: Callable[[str], str] = input,
+    print_fn: Callable[[str], None] = print,
+    max_rounds: int = 6,
+) -> tuple[dict, list[dict]]:
+    """HITL plan 评审门（PLAN 12.1）：approve 或给导演意见重新生成，循环至接受。
+
+    导演意见作为权威约束注入重新生成 prompt（优先于音频推断）。
+    Returns (result, trail)；trail 记录每轮 plan+意见，供 design_memory 持久化。
+    """
+    directives: list[str] = []
+    prior_plan = None
+    trail: list[dict] = []
+    for round_i in range(1, max_rounds + 1):
+        result = generate_composition_plan(
+            music_path,
+            provider=provider,
+            drone_count=drone_count,
+            chat_fn=chat_fn,
+            title=title,
+            human_directives=directives or None,
+            prior_plan=prior_plan,
+        )
+        summary = format_plan_summary(result["plan"], result["brief"])
+        print_fn("\n===== 章法评审 第 %d 轮 =====\n%s\n" % (round_i, summary))
+        verdict = input_fn(
+            "[回车/a]=接受并开始生成  [文本]=导演意见并重新生成  [q]=中止: "
+        ).strip()
+        if verdict.lower() in ("", "a", "y", "approve"):
+            trail.append({"round": round_i, "plan": result["plan"], "verdict": "approved"})
+            return result, trail
+        if verdict.lower() == "q":
+            trail.append({"round": round_i, "plan": result["plan"], "verdict": "aborted"})
+            raise SystemExit("plan review aborted by human")
+        directives.append(verdict)
+        prior_plan = result["plan"]
+        trail.append({"round": round_i, "plan": result["plan"], "verdict": "rejected", "directive": verdict})
+    raise SystemExit(f"plan review: {max_rounds} 轮未达成接受")
+
+
 def generate_composition_plan(
     music_path: str,
     provider: str,
@@ -192,6 +281,8 @@ def generate_composition_plan(
     chat_fn: Callable[..., Any] | None = None,
     max_revisions: int = 2,
     title: str | None = None,
+    human_directives: list[str] | None = None,
+    prior_plan: Mapping[str, Any] | None = None,
 ) -> dict:
     """音乐 → brief → LLM 章法 → 确定性校验（最多 2 轮修正）。
 
@@ -210,7 +301,13 @@ def generate_composition_plan(
         def chat_fn(prompt: str) -> str:  # type: ignore[misc]
             return chat(system="", user=prompt, provider=provider, temperature=0.4).text
 
-    prompt = build_planner_prompt(brief, drone_count, title=title)
+    prompt = build_planner_prompt(
+        brief,
+        drone_count,
+        title=title,
+        human_directives=human_directives,
+        prior_plan=prior_plan,
+    )
     text = chat_fn(prompt)
     plan = parse_planner_json(text)
     ok, report = (False, "JSON 解析失败，只输出 JSON") if plan is None else validate_music_plan(plan, brief)

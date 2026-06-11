@@ -43,6 +43,7 @@ def main(argv: list[str] | None = None) -> int:
             drone_count=args.drone_count,
             music=args.music,
             music_title=args.music_title,
+            plan_review=args.plan_review,
         )
 
     result = run_full_flow(
@@ -51,6 +52,7 @@ def main(argv: list[str] | None = None) -> int:
         max_cycles_per_segment=args.max_cycles_per_segment,
         max_attempts_per_cycle=args.max_attempts_per_cycle,
         use_planning_pass=not args.no_planning_pass,
+        parallel_candidates=args.parallel_candidates,
         retry_sleep_s=args.retry_sleep_s,
         max_api_exceptions_per_segment=args.max_api_exceptions_per_segment,
     )
@@ -64,6 +66,7 @@ def run_full_flow(
     max_cycles_per_segment: int = DEFAULT_MAX_CYCLES_PER_SEGMENT,
     max_attempts_per_cycle: int = DEFAULT_MAX_ATTEMPTS_PER_CYCLE,
     use_planning_pass: bool = True,
+    parallel_candidates: int = 2,
     retry_sleep_s: int = 30,
     max_api_exceptions_per_segment: int = 5,
 ) -> dict:
@@ -114,6 +117,7 @@ def run_full_flow(
                     feedback=feedback,
                     max_attempts=max_attempts_per_cycle,
                     use_planning_pass=use_planning_pass,
+                    parallel_candidates=parallel_candidates,
                     on_delta=stream.delta,
                     on_reasoning_delta=stream.reasoning_delta,
                     on_heartbeat=stream.heartbeat,
@@ -434,6 +438,7 @@ def _init_fresh_project(
     drone_count: int,
     music: str | None = None,
     music_title: str | None = None,
+    plan_review: bool = False,
 ) -> None:
     template = TOOL_ROOT / "project_template"
     if project_root.exists():
@@ -452,12 +457,13 @@ def _init_fresh_project(
             project_root, state, music,
             provider or state.get("provider", "deepseek"),
             title=music_title,
+            plan_review=plan_review,
         )
 
     state_path.write_text(json.dumps(state, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
-def _apply_music_plan(project_root: Path, state: dict, music: str, provider: str, title: str | None = None) -> None:
+def _apply_music_plan(project_root: Path, state: dict, music: str, provider: str, title: str | None = None, plan_review: bool = False) -> None:
     """音乐驱动初始化：分析音乐 → LLM 生成章法+段窗 → 重写 state（PLAN 11.11）。
 
     取代模板里手写的 cannon dramaturgy；模板 composition_plan/段窗仅在
@@ -472,10 +478,21 @@ def _apply_music_plan(project_root: Path, state: dict, music: str, provider: str
         raise SystemExit(f"music not found: {music_path}")
 
     print(f"[music plan] analyzing {music_path.name} and generating composition plan...")
-    result = generate_composition_plan(
-        str(music_path), provider=provider, drone_count=int(state["drone_count"]),
-        title=title,
-    )
+    review_trail = None
+    if plan_review:
+        from core.composition_planner import plan_review_loop
+
+        if not sys.stdin.isatty():
+            raise SystemExit("--plan-review needs an interactive terminal (stdin is not a tty)")
+        result, review_trail = plan_review_loop(
+            str(music_path), provider=provider,
+            drone_count=int(state["drone_count"]), title=title,
+        )
+    else:
+        result = generate_composition_plan(
+            str(music_path), provider=provider, drone_count=int(state["drone_count"]),
+            title=title,
+        )
     plan, legacy, brief = result["plan"], result["legacy"], result["brief"]
 
     state["music_path"] = os.path.relpath(music_path, project_root)
@@ -501,6 +518,10 @@ def _apply_music_plan(project_root: Path, state: dict, music: str, provider: str
     (project_root / "music_plan.json").write_text(
         json.dumps(plan, ensure_ascii=False, indent=1), encoding="utf-8"
     )
+    if review_trail is not None:
+        (project_root / "plan_review.json").write_text(
+            json.dumps(review_trail, ensure_ascii=False, indent=1), encoding="utf-8"
+        )
     show_end = windows.get("LAND", {}).get("end_s")
     print(f"[music plan] theme: {str(plan.get('theme'))[:60]} | show_end: {show_end}s")
 
@@ -548,6 +569,7 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
     parser.add_argument("project", nargs="?", help="Existing project path.")
     parser.add_argument("--fresh-name", help="Create a fresh project under agent_projects/.")
     parser.add_argument("--music", help="Music file (abs or repo-root relative); generates composition plan + segment windows from it.")
+    parser.add_argument("--plan-review", action="store_true", help="HITL: review the generated plan interactively; reject with director notes to regenerate (PLAN 12.1).")
     parser.add_argument("--music-title", help="Human-provided track title/character hint (e.g. 春节序曲); overrides audio-feature mood inference.")
     parser.add_argument("--provider", help="Provider name from ai_providers.local.json.")
     parser.add_argument("--mode", choices=["manual", "fast"], default="manual")
@@ -555,6 +577,7 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
     parser.add_argument("--max-cycles-per-segment", type=int, default=DEFAULT_MAX_CYCLES_PER_SEGMENT)
     parser.add_argument("--max-attempts-per-cycle", type=int, default=DEFAULT_MAX_ATTEMPTS_PER_CYCLE)
     parser.add_argument("--no-planning-pass", action="store_true")
+    parser.add_argument("--parallel-candidates", type=int, default=2, help="K parallel candidate generations per repair round (1=serial); hedges slow/dead streams and halves repair wall-time.")
     parser.add_argument("--retry-sleep-s", type=int, default=30)
     parser.add_argument("--max-api-exceptions-per-segment", type=int, default=5)
     return parser.parse_args(argv)
