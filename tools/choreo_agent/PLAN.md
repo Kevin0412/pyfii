@@ -310,3 +310,22 @@ readable_ratio 0.55 / settled readable 66% / mean_err 37cm（=dntg 水平）/ ce
 自由起飞 + 错峰启动 + math 几何 + 灯光时钟 + 帧内可读构图。
 记录为历史最佳的人工评价（文档记录，不入 fixture——把"最佳 run"钉进测试就是 hardcode：
 最佳会持续轮换，质量参照活在指标与文档里，不冻结在代码里）。
+
+# 12. 下一阶段：Human in the Loop (2026-06-11 人工定向)
+
+前置：音乐工作流通过验收（无人区 run + cjxq/云宫迅音 跨音乐差异化）。
+
+四个环节，按实现顺序：
+
+1. **Plan 评审门（核心新增）**：`--music` 生成章法后、S01 开始前，人类评审。
+   - 呈现：主题/戏剧结构/段窗 vs 音乐 cues 对照/每段角色+灯光语体，一屏可读。
+   - 动作：approve / reject+意见。人类对音乐的理解（"这首是 X 气质，高潮在 Y，S03 应该 Z"）
+     作为**权威约束**进入重新生成 prompt——人类观点覆盖 librosa 证据冲突处；循环至 approve。
+   - 形态：`run_pipeline --music X --plan-review`（stdin 交互）；plan 评审在 run 前，成本极低、杠杆最大。
+2. **人类偏好持久化**：design_memory.md 记录每次 approve/reject/意见（含 session 级验收结论），
+   作为 per-project 偏好包注入 planner 与段 prompt——被否决的方向不再重犯（原 backlog 项落地）。
+3. **段级评审**：正式段过门后暂停，呈现质量摘要（+快速帧抽样），人类 approve/lock 或 feedback→重生成。
+   复用 manual mode 与 Session.approve_and_lock；run_pipeline 增加 --review segments。
+4. **Session 级验收**：全程结束后人类 approve/disapprove+评语 → 归档进 design_memory.md。
+
+原则不变：人类意见是 plan/段的输入约束，不是 hardcode——意见进 per-project 偏好文件，不进系统 prompt/模板。
