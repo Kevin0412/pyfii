@@ -212,6 +212,7 @@ def build_segment_prompt(
 - 如果段长需要覆盖，不要拉长单个 move2；用多个可完成的快 keyframe、分组错峰、高度切层，或**亮灯定格**承接——图形到位后保持灯亮定格 0.8-2s 让观众读图（dntg 节奏=移动→定格→移动，dntg 全片 57% 时间是定格展示）；黑灯静止才算低活动
 - 3s 以上 keyframe 不要写 `min_path_cm=90/100`；用 `flying_ms = 3000` 后 `targets = far_assign(prev, geo, min_path_cm=active_min_path_cm(flying_ms))`
 - 安全距离按 XY 看：不要把同一 XY 的不同 Z 当成安全分离；XY 间距硬下限 51cm（pyfii core 碰撞线，检查器精确验证），密集造型配合短路径慢速；复杂交换交给 `far_assign`
+- 镜像换位/对穿的安全机制就是错峰：`drone.delay(i * 150)` 让各机在不同时刻过中心——同步对穿必撞，错峰对穿安全且好看（人类作品的对穿全部错峰）。不要为了消碰撞而丢掉错峰，应该反过来用错峰消碰撞
 - 高度层必须真实混合：每个主体 keyframe 至少 3 个 Z 层，整段 Z range ≥90cm；不要全队同一高度平面
 - 帧内可读构图（dntg 视觉语法）：每个 keyframe 的点表本身应当是观众一眼可读的图形——镜像对（点两两穿过构图中心配对，如 (cx+dx,cy+dy) 配 (cx-dx,cy-dy)）、点对称、或可辨轮廓（直线/V/弧/环/双排/点阵）；随机散点在 7-9 机规模下读作噪声。非对称与变奏放在 **keyframe 之间**（换轮廓、转方向、变密度），不放在帧内
 - 编舞词汇（每段至少用一种，并在 #beat/#formation 标明）：交错启动 (delay(i*ms)), Z 个性 (move2 内 +dz*sin(i)), 分组对比 (两组不同几何/灯光), 焦点机 (1-2 架独立轨迹), 中心迁移, 密度呼吸, 灯光渐变 (同 keyframe 内多次 apply_light 或 range()+TurnOnAll((r,g,b)) 呼吸)；全段匀速单色无差异会被节奏门打回

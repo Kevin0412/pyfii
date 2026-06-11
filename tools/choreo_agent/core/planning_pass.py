@@ -439,6 +439,7 @@ def build_coding_prompt(
 - S02-S05 每段至少一个 keyframe 必须打破时间同步（同起同停会被节奏门打回）：起飞波次 `drone.delay(i * 120)`（move2 前）或到达波次 `move2(drone, t, fly_ms + (i % 3) * 250)`
 - 灯光时钟型写法可免时间算术：`apply_light(drone, color, fly_ms // 100)` 占满飞行窗口不写尾部 delay；错峰时 `(fly_ms - i*120) // 100` 自然回正
 - 个体色彩身份：群舞/交换 keyframe 每架机自己的色相（palette[i]），观众才能跟踪换位；统一色留给宣言时刻
+- 镜像换位/对穿必须错峰：`drone.delay(i * 150)` 各机不同时刻过中心——同步对穿必撞，错峰本身就是对穿的安全机制
 - 定格 pose 合法（静止展示造型可超 1s），但定格期间必须灯亮；黑灯静止会被判低活动
 - `move_group/move_group_staggered` 只作为 smoke/兜底工具；S01-S06 纯 helper 执行会被 composition gate 打回。卡农/错峰请在 per-drone loop 内按 `i % group_mod` 写小 delay
 - 3s 以上 keyframe 若用 `far_assign`，写 `min_path_cm=active_min_path_cm(flying_ms)`；不要写 90/100cm 导致真实运动过早结束
