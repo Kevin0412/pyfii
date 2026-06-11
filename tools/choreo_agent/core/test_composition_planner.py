@@ -123,6 +123,46 @@ def test_parse_extracts_json_from_noise():
     assert parse_planner_json("没有 json") is None
 
 
+
+
+def test_plan_summary_one_screen():
+    from core.composition_planner import format_plan_summary
+    s = format_plan_summary(_good_plan(), _BRIEF)
+    assert "主题" in s and "S03" in s and "贴cue" in s
+    assert "identity" in s  # lighting register column
+
+
+def test_plan_review_loop_directives_are_authoritative():
+    from core.composition_planner import plan_review_loop
+    import core.music_brief as mb
+    chats, inputs_given = [], iter(["太亮了，我要更神秘的开场", ""])
+
+    def fake_chat(prompt):
+        chats.append(prompt)
+        return json.dumps(_good_plan(), ensure_ascii=False)
+
+    printed = []
+    real = mb.generate_music_brief
+    mb.generate_music_brief = lambda path, **kw: dict(_BRIEF)
+    try:
+        result, trail = plan_review_loop(
+            "fake.mp3", "deepseek", 9,
+            chat_fn=fake_chat,
+            input_fn=lambda _: next(inputs_given),
+            print_fn=printed.append,
+        )
+    finally:
+        mb.generate_music_brief = real
+
+    assert len(chats) == 2
+    assert "人类导演意见" in chats[1] and "太亮了" in chats[1]
+    assert "权威" in chats[1]
+    assert "上一版计划" in chats[1]  # 旧 plan 带入，未提及部分保留
+    assert [t["verdict"] for t in trail] == ["rejected", "approved"]
+    assert trail[0]["directive"] == "太亮了，我要更神秘的开场"
+    assert any("章法评审" in p for p in printed)
+
+
 if __name__ == "__main__":
     for name, fn in sorted(globals().items()):
         if name.startswith("test_") and callable(fn):
