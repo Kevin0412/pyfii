@@ -348,3 +348,12 @@ readable_ratio 0.55 / settled readable 66% / mean_err 37cm（=dntg 水平）/ ce
 2. 曲名通道是质量倍增器：云宫迅音带曲名 0.64，纯音频推断的两场 0.25-0.27。文化语境无法从音频代理读出（春节序曲被读成暗夜即证）。HITL plan 评审 + 曲名输入是正道。
 3. 已知欠账：wrq/cjxq 两场的 LAND 是编舞降落 bug 时期产物；cjxq 全场建立在误读气质上——两者都值得带曲名重跑（HITL 时代）。
 4. S04(ygxy) 13 轮成本剖析：碰撞 4 轮 > 章法门 3 轮 > preflight 2 轮——并行候选+候选池已落地对冲。
+
+# 12 落地记录 (2026-06-12)：HITL 三件套 + 并行修复全部交付
+
+- 12.1 `--plan-review`：一屏章法摘要（主题/弧线/段窗-cue 对照/语体），approve 或导演意见重生成（意见为权威约束，写入 plan_review.json）。
+- 12.2 design_memory：plan 意见/段反馈/session 验收全部落 per-project design_memory.md（+可选全局 design_memory.global.md），偏好包注入 planner 与段 prompt（截最近 ~900 字符）。人类意见只进偏好文件，不进系统 prompt/模板。
+- 12.3/12.4 `--review-segments`：段过门后暂停（验证指标+设计卡），回车锁定 / 文本反馈重做（消耗 cycle）/ q 中止；结束后 Session 验收落 memory 与 stability summary。
+- 提速：`--parallel-candidates`（默认 2）并行候选 + 段级候选池；单流死亡不毁轮，验证失败先吃池零 API 成本。
+- 推荐 HITL 全开命令：
+  `python tools/choreo_agent/run_pipeline.py --fresh-name X --music 曲.mp3 --music-title "曲名（气质）" --plan-review --review-segments`

@@ -53,6 +53,7 @@ def main(argv: list[str] | None = None) -> int:
         max_attempts_per_cycle=args.max_attempts_per_cycle,
         use_planning_pass=not args.no_planning_pass,
         parallel_candidates=args.parallel_candidates,
+        review_segments=args.review_segments,
         retry_sleep_s=args.retry_sleep_s,
         max_api_exceptions_per_segment=args.max_api_exceptions_per_segment,
     )
@@ -67,10 +68,13 @@ def run_full_flow(
     max_attempts_per_cycle: int = DEFAULT_MAX_ATTEMPTS_PER_CYCLE,
     use_planning_pass: bool = True,
     parallel_candidates: int = 2,
+    review_segments: bool = False,
     retry_sleep_s: int = 30,
     max_api_exceptions_per_segment: int = 5,
 ) -> dict:
     project_root = Path(project_root).resolve()
+    if review_segments and not sys.stdin.isatty():
+        raise SystemExit("--review-segments needs an interactive terminal")
     log_path = project_root / "agent_interaction.log"
     _append(log_path, f"\n\n# FULL FLOW START {time.strftime('%Y-%m-%d %H:%M:%S')}\n")
 
@@ -173,6 +177,21 @@ def run_full_flow(
             )
 
             if rounds and rounds[-1].validation and rounds[-1].validation.passed:
+                if review_segments:
+                    human = _segment_review_prompt(seg, rounds[-1].validation)
+                    if human == "__quit__":
+                        _append(log_path, f"\n# STOP human aborted at {seg.id}\n")
+                        raise SystemExit("segment review aborted by human")
+                    if human:
+                        from core.design_memory import record as _dm_record
+
+                        _dm_record(project_root, "segment_feedback", human, context=seg.id)
+                        _append(log_path, f"\n# {seg.id} HUMAN FEEDBACK\n{human}\n")
+                        feedback = (
+                            _segment_feedback(seg.id, session.state.drone_count)
+                            + "\n\n## 导演反馈（权威，必须满足）\n" + human
+                        )
+                        continue  # 重做本段（消耗一个 cycle）
                 approval = session.approve_and_lock(allow_human_override=False)
                 lock_summary = {
                     "locked": approval.locked,
@@ -226,6 +245,16 @@ def run_full_flow(
         "token_usage": _token_usage_summary(records),
         "records": records,
     }
+    if review_segments:
+        verdict = input(
+            f"\nSession 验收（locked: {summary['locked_segment_ids']}）"
+            "[回车=通过 / 文本=评语（'否'开头=否决）]: "
+        ).strip()
+        summary["human_verdict"] = verdict or "approved"
+        if verdict:
+            from core.design_memory import record as _dm_record
+
+            _dm_record(project_root, "session_verdict", verdict)
     result = {"summary": summary}
     _write_json_atomic(project_root / "stability_result.json", result)
     _append(
@@ -527,6 +556,25 @@ def _apply_music_plan(project_root: Path, state: dict, music: str, provider: str
     print(f"[music plan] theme: {str(plan.get('theme'))[:60]} | show_end: {show_end}s")
 
 
+def _segment_review_prompt(seg, validation) -> str:
+    """段级评审（PLAN 12.3）：返回 '' = 锁定，文本 = 导演反馈重做，'__quit__' = 中止。"""
+    print(f"\n===== 段级评审 {seg.id} ({seg.start_time}-{seg.end_time}s) =====")
+    print(
+        f"dist={validation.distance_warnings} act={validation.action_warnings} "
+        f"minD={validation.min_distance_cm} dense_minD={validation.dense_min_distance_cm}"
+    )
+    card = (validation.composition or {}).get("design_card") or {}
+    for key in ("role", "motifs", "beat", "formation", "lighting"):
+        if card.get(key):
+            print(f"  #{key}: {card[key]}")
+    answer = input("[回车/a]=锁定  [文本]=导演反馈重做本段  [q]=中止: ").strip()
+    if answer.lower() in ("", "a", "y"):
+        return ""
+    if answer.lower() == "q":
+        return "__quit__"
+    return answer
+
+
 def _append(path: Path, text: str) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("a", encoding="utf-8") as handle:
@@ -570,6 +618,7 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
     parser.add_argument("project", nargs="?", help="Existing project path.")
     parser.add_argument("--fresh-name", help="Create a fresh project under agent_projects/.")
     parser.add_argument("--music", help="Music file (abs or repo-root relative); generates composition plan + segment windows from it.")
+    parser.add_argument("--review-segments", action="store_true", help="HITL: pause after each gate-passing segment for approve/feedback; session verdict at the end (PLAN 12.3/12.4). Rejections consume cycles.")
     parser.add_argument("--plan-review", action="store_true", help="HITL: review the generated plan interactively; reject with director notes to regenerate (PLAN 12.1).")
     parser.add_argument("--music-title", help="Human-provided track title/character hint (e.g. 春节序曲); overrides audio-feature mood inference.")
     parser.add_argument("--provider", help="Provider name from ai_providers.local.json.")
