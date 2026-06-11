@@ -487,6 +487,7 @@ def _apply_music_plan(project_root: Path, state: dict, music: str, provider: str
         result, review_trail = plan_review_loop(
             str(music_path), provider=provider,
             drone_count=int(state["drone_count"]), title=title,
+            memory_root=str(project_root),
         )
     else:
         result = generate_composition_plan(

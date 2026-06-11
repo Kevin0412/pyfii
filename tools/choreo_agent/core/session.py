@@ -46,6 +46,18 @@ class Session:
         self.sync_state_with_markers(save=False)
 
     @property
+    def human_preferences(self) -> str:
+        """design_memory 偏好包（全局+项目，惰性加载缓存）。"""
+        if getattr(self, "_human_preferences", None) is None:
+            try:
+                from .design_memory import load_preferences
+
+                self._human_preferences = load_preferences(self.project_root)
+            except Exception:
+                self._human_preferences = ""
+        return self._human_preferences
+
+    @property
     def music_brief(self) -> dict:
         """项目音乐 brief（librosa 分析，项目内缓存为 music_brief.json）。"""
         if self._music_brief is None:
@@ -90,6 +102,7 @@ class Session:
             feedback=feedback,
             drone_count=self.state.drone_count,
             composition_plan=self.state.composition_plan,
+            human_preferences=self.human_preferences,
         )
         return self._chat_stage(
             seg=seg,
@@ -134,6 +147,7 @@ class Session:
             feedback=feedback,
             drone_count=self.state.drone_count,
             composition_plan=self.state.composition_plan,
+            human_preferences=self.human_preferences,
         )
         temps = [
             max(0.05, min(1.0, base_temperature + 0.2 * i)) for i in range(k)

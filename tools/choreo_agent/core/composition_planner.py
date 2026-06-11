@@ -33,6 +33,7 @@ def build_planner_prompt(
     title: str | None = None,
     human_directives: list[str] | None = None,
     prior_plan: Mapping[str, Any] | None = None,
+    preferences: str = "",
 ) -> str:
     duration = float(brief.get("duration_s") or 0)
     source_name = str(brief.get("music_source", "")).rsplit("/", 1)[-1]
@@ -57,6 +58,11 @@ def build_planner_prompt(
         if has_high
         else "\n注意：这首音乐没有 high 能量段——不要伪造爆发/高潮段；强度变化用队形复杂度、灯光密度、角色交换表达。"
     )
+    preferences_block = ""
+    if preferences:
+        from .design_memory import format_preferences_block
+
+        preferences_block = "\n" + format_preferences_block(preferences)
     directives_block = ""
     if human_directives:
         numbered = "\n".join(f"{i+1}. {d}" for i, d in enumerate(human_directives))
@@ -74,7 +80,7 @@ def build_planner_prompt(
         )
 
     return f"""## 为这首音乐设计无人机灯光秀全局章法（{int(drone_count)} 机）
-{directives_block}{prior_block}
+{preferences_block}{directives_block}{prior_block}
 音乐证据（librosa 分析，节选至 {show_end_hint:.0f}s）：
 {title_line}
 - 总长 {duration:.1f}s，tempo {brief.get('tempo_bpm')} BPM（1 beat ≈ {brief.get('beat_interval_s')}s）
@@ -238,12 +244,19 @@ def plan_review_loop(
     input_fn: Callable[[str], str] = input,
     print_fn: Callable[[str], None] = print,
     max_rounds: int = 6,
+    memory_root: str | None = None,
 ) -> tuple[dict, list[dict]]:
     """HITL plan 评审门（PLAN 12.1）：approve 或给导演意见重新生成，循环至接受。
 
-    导演意见作为权威约束注入重新生成 prompt（优先于音频推断）。
-    Returns (result, trail)；trail 记录每轮 plan+意见，供 design_memory 持久化。
+    导演意见作为权威约束注入重新生成 prompt（优先于音频推断）；
+    memory_root 给定时，意见与结论同步落入 design_memory（PLAN 12.2）。
+    Returns (result, trail)。
     """
+    preferences = ""
+    if memory_root:
+        from .design_memory import load_preferences
+
+        preferences = load_preferences(memory_root)
     directives: list[str] = []
     prior_plan = None
     trail: list[dict] = []
@@ -256,6 +269,7 @@ def plan_review_loop(
             title=title,
             human_directives=directives or None,
             prior_plan=prior_plan,
+            preferences=preferences,
         )
         summary = format_plan_summary(result["plan"], result["brief"])
         print_fn("\n===== 章法评审 第 %d 轮 =====\n%s\n" % (round_i, summary))
@@ -264,6 +278,15 @@ def plan_review_loop(
         ).strip()
         if verdict.lower() in ("", "a", "y", "approve"):
             trail.append({"round": round_i, "plan": result["plan"], "verdict": "approved"})
+            if memory_root:
+                from .design_memory import record
+
+                record(
+                    memory_root, "plan_approved",
+                    f"主题《{result['plan'].get('theme')}》第 {round_i} 轮通过"
+                    + (f"；此前意见：{'；'.join(directives)}" if directives else ""),
+                    context=title or "",
+                )
             return result, trail
         if verdict.lower() == "q":
             trail.append({"round": round_i, "plan": result["plan"], "verdict": "aborted"})
@@ -271,6 +294,10 @@ def plan_review_loop(
         directives.append(verdict)
         prior_plan = result["plan"]
         trail.append({"round": round_i, "plan": result["plan"], "verdict": "rejected", "directive": verdict})
+        if memory_root:
+            from .design_memory import record
+
+            record(memory_root, "plan_directive", verdict, context=title or "")
     raise SystemExit(f"plan review: {max_rounds} 轮未达成接受")
 
 
@@ -283,6 +310,7 @@ def generate_composition_plan(
     title: str | None = None,
     human_directives: list[str] | None = None,
     prior_plan: Mapping[str, Any] | None = None,
+    preferences: str = "",
 ) -> dict:
     """音乐 → brief → LLM 章法 → 确定性校验（最多 2 轮修正）。
 
@@ -307,6 +335,7 @@ def generate_composition_plan(
         title=title,
         human_directives=human_directives,
         prior_plan=prior_plan,
+        preferences=preferences,
     )
     text = chat_fn(prompt)
     plan = parse_planner_json(text)

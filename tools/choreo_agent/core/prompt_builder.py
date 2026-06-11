@@ -74,11 +74,17 @@ def build_segment_prompt(
     feedback: str,
     drone_count: int = 7,
     composition_plan: Mapping[str, Any] | None = None,
+    human_preferences: str = "",
 ) -> tuple[str, str]:
     """Build system + user prompt for the current segment."""
 
     drone_count = int(drone_count)
     system = build_system_prompt(drone_count=drone_count)
+    preferences_text = ""
+    if human_preferences.strip():
+        from .design_memory import format_preferences_block
+
+        preferences_text = format_preferences_block(human_preferences)
 
     # 描述 prev 分布
     prev_lines = []
@@ -166,7 +172,7 @@ def build_segment_prompt(
 意图：{intent or segment_id}
 
 {composition_text}
-
+{preferences_text}
 {prev_text}
 
 ## 要求
@@ -181,7 +187,7 @@ def build_segment_prompt(
 意图：{intent or segment_id}
 
 {composition_text}
-
+{preferences_text}
 {prev_text}
 
 ## 要求
