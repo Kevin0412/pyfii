@@ -308,5 +308,5 @@ output/太空电梯/动作组/阿鲲-太空电梯.mp3 (70.7s/86BPM)、output/无
 人工视觉验收认定为迄今最佳。档案：全流程 S01→LAND 每段 1 cycle，0 警告，¥0.53/52min；
 readable_ratio 0.55 / settled readable 66% / mean_err 37cm（=dntg 水平）/ centroid 120/79cm；
 自由起飞 + 错峰启动 + math 几何 + 灯光时钟 + 帧内可读构图。
-作用：替代 0605 run 成为质量参照（0605 保留为安全/可靠性底线 fixture）；
-后续 run（含音乐工作流）的质量对比基准。其 design.py 已 force-add 入库并加入回归 fixture。
+记录为历史最佳的人工评价（文档记录，不入 fixture——把"最佳 run"钉进测试就是 hardcode：
+最佳会持续轮换，质量参照活在指标与文档里，不冻结在代码里）。
