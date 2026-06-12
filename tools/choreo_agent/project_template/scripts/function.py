@@ -80,16 +80,21 @@ def Vel(p1, p2, t):
             return v
     return 200
 
-def move2(d, p, t_ms, T=100):
+def move2(d, p, t_ms=None, T=100, flying_ms=None):
     """反算速度 → VelXY/VelZ → d.move2。不 delay。
-    
+
     原理：
     1. v = Vel(start, p, (t_ms-T)/1000)
     2. d.VelXY(v, 2v); d.VelZ(v, 2v)
     3. d.move2(p[0], p[1], p[2])
-    
+
+    flying_ms 是 t_ms 的别名（文档用语）。
     不调用 d.delay()；但会记录预计飞行完成时间，供 auto_init 防止下一段提前开始。
     """
+    if t_ms is None:
+        t_ms = flying_ms
+    if t_ms is None:
+        raise ValueError("move2 需要时长参数：move2(drone, target, flying_ms)")
     start_ms = int(getattr(d, "time", 0))
     v = Vel((d.x, d.y, d.z), p, (t_ms - T) / 1000)
     d.VelXY(v, 2 * v)
@@ -793,13 +798,15 @@ def split_groups(points, mode="left_right", origin=None, center=None):
 
 
 # ---------- 母题执行器：波次推进 / 链式跟随 / 分组问答 ----------
-def ripple_move(drones, targets, flying_ms, delays, colors="#ffffff", hold_ticks=4, tail_ms=0):
+def ripple_move(drones, targets, flying_ms, delays, colors="#ffffff", hold_ticks=4, tail_ms=0, palette=None):
     """波次推进：每架机等待自己的波次延迟后启动，启动瞬间点亮 —— 先动先亮。
 
     delays（毫秒表）用 ripple_delays(prev, mode=...) 从当前队形算出；
     所有机段尾自动对齐到 max(delays)+flying_ms+tail_ms，免回正算术。
-    返回标准化 targets，可直接赋给 prev。
+    palette 是 colors 的别名。返回标准化 targets，可直接赋给 prev。
     """
+    if palette is not None:
+        colors = palette
     _assert_target_count(drones, targets)
     if len(delays) != len(drones):
         raise ValueError(f"delays count {len(delays)} != drones count {len(drones)}")
@@ -819,15 +826,17 @@ def ripple_move(drones, targets, flying_ms, delays, colors="#ffffff", hold_ticks
     return normalized
 
 
-def follow_chain(drones, waypoints, hop_ms, lag_hops=1, colors="#ffffff", min_xy_cm=51.0, hold_ticks=2):
+def follow_chain(drones, waypoints, hop_ms, lag_hops=1, colors="#ffffff", min_xy_cm=51.0, hold_ticks=2, palette=None):
     """链式跟随（蛇形/领舞）：头机沿 waypoints 逐点推进，后机依次延迟 lag_hops 跳走同一路径。
 
     - 进链顺序按当前位置距 waypoints[0] 由近到远（自然蛇形），进链瞬间点亮 —— 先动先亮。
     - 需要 len(waypoints) ≥ (机数-1)*lag_hops + 1；结束时队伍停在路径末端连续 lag 间隔点上。
     - 安全由链上间距保证：任意相距 k*lag_hops 跳的波点对 XY 间距必须 ≥ min_xy_cm，否则直接抛错。
     - 每架机总耗时都等于 len(waypoints)*hop_ms，段尾天然对齐。
-    返回每架机的结束点（与 drones 同序），可直接赋给 prev。
+    palette 是 colors 的别名。返回每架机的结束点（与 drones 同序），可直接赋给 prev。
     """
+    if palette is not None:
+        colors = palette
     n = len(drones)
     wps = [_target3(w) for w in waypoints]
     H = len(wps)
@@ -874,12 +883,15 @@ def follow_chain(drones, waypoints, hop_ms, lag_hops=1, colors="#ffffff", min_xy
 
 
 def group_relay(drones, targets, group_ids, flying_ms, colors=("#ff6040", "#4060ff"),
-                hold_ticks=4, gap_ms=200, lead_group=0):
+                hold_ticks=4, gap_ms=200, lead_group=0, palette=None):
     """分组问答接力：lead 组先动（另一组原地亮灯应答），到位后另一组再动 —— 组色对话。
 
     group_ids 用 split_groups(prev, mode=...) 从当前队形算出；colors[g] 是 g 组色。
-    总时长 = 2*flying_ms + gap_ms，所有机段尾自动对齐。返回标准化 targets。
+    总时长 = 2*flying_ms + gap_ms，所有机段尾自动对齐。palette 是 colors 的别名。
+    返回标准化 targets。
     """
+    if palette is not None:
+        colors = palette
     _assert_target_count(drones, targets)
     if len(group_ids) != len(drones):
         raise ValueError(f"group_ids count {len(group_ids)} != drones count {len(drones)}")
@@ -925,12 +937,17 @@ def _rgb(color):
     raise ValueError(f"无法解析颜色: {color!r}（支持 '#rrggbb' 或 (r,g,b)）")
 
 
-def light_wave(drones, delays, colors, hold_ticks=6, tail_ms=0):
+def light_wave(drones, delays, colors=None, hold_ticks=6, tail_ms=0, palette=None):
     """静止队形上的灯光涟漪：按 delays 依次点亮，段尾对齐（不移动）。
 
     与 ripple_delays 配合：用与动作同一份 delays（或定格段单独算）即光波扫过队形。
-    每架机总耗时 = max(delays) + hold_ticks*100 + tail_ms。返回消耗的毫秒数。
+    每架机总耗时 = max(delays) + hold_ticks*100 + tail_ms。palette 是 colors 的别名。
+    返回消耗的毫秒数。
     """
+    if palette is not None:
+        colors = palette
+    if colors is None:
+        colors = "#ffffff"
     if len(delays) != len(drones):
         raise ValueError(f"delays count {len(delays)} != drones count {len(drones)}")
     delays = [max(0, int(round(v))) for v in delays]
