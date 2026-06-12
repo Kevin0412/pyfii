@@ -692,7 +692,7 @@ def _greedy_assignment(starts_xyz, targets_xyz, prefer_far=False):
     return tuple(perm)
 
 # ---------- 波次/分组计算器：从当前队形推导时间编排，动序即光序 ----------
-def spatial_ranks(points, mode="center_out", origin=None, reverse=False, quantize_cm=30):
+def spatial_ranks(points, mode="center_out", origin=None, reverse=False, quantize_cm=30, center=None):
     """按空间结构给每架机一个波次序号 rank（0 = 第一波）。返回与 points 同序的 rank 列表。
 
     mode:
@@ -701,8 +701,10 @@ def spatial_ranks(points, mode="center_out", origin=None, reverse=False, quantiz
       spiral — 按质心方位角顺序（每机一个波次）
       by_index — 机号顺序
     quantize_cm 把相近的键合并为同一波（对称队形的镜像机自然同波），spiral 不适用。
-    同一份 rank 同时驱动动作错峰和灯光波次，就是"先动先亮"。
+    center 是 origin 的别名。同一份 rank 同时驱动动作错峰和灯光波次，就是"先动先亮"。
     """
+    if origin is None:
+        origin = center
     n = len(points)
     if n == 0:
         return []
@@ -739,21 +741,27 @@ def spatial_ranks(points, mode="center_out", origin=None, reverse=False, quantiz
     return ranks
 
 
-def ripple_delays(points, mode="center_out", step_ms=150, origin=None, reverse=False, quantize_cm=30):
+def ripple_delays(points, mode="center_out", step_ms=150, origin=None, reverse=False, quantize_cm=30, center=None):
     """波次延迟表(ms)：rank * step_ms。直接喂给 ripple_move / light_wave。
 
     同一份 delays 同时用于动作和灯光，即"先动的先亮"；reverse 反向（边缘先动=收拢）。
+    center 是 origin 的别名。
     """
-    ranks = spatial_ranks(points, mode=mode, origin=origin, reverse=reverse, quantize_cm=quantize_cm)
+    ranks = spatial_ranks(
+        points, mode=mode, origin=origin, reverse=reverse, quantize_cm=quantize_cm, center=center
+    )
     step = max(0, int(round(step_ms)))
     return [r * step for r in ranks]
 
 
-def split_groups(points, mode="left_right", origin=None):
+def split_groups(points, mode="left_right", origin=None, center=None):
     """把当前队形按空间结构分成 0/1 两组，返回每架机的组号列表（问答/异步分组输入）。
 
     mode: left_right(X 中位) / front_back(Y 中位) / inner_outer(距质心中位) / alternate(角序奇偶)。
+    center 是 origin 的别名。
     """
+    if origin is None:
+        origin = center
     n = len(points)
     if n == 0:
         return []
