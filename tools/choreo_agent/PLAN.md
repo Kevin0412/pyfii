@@ -383,3 +383,8 @@ readable_ratio 0.55 / settled readable 66% / mean_err 37cm（=dntg 水平）/ ce
 - prompt：时间预算节明示"窗口必须填满（硬校验）"+ 母题耗时公式表；波次计算器文档加"环形队形 center_out 退化为同步，要可见波次用 spiral/sweep/by_index"。
 - 顺带修复：chat() 的 SIGALRM 墙钟只能装在主线程——并行候选 worker 线程全员崩溃（该路径首次真实出战），改为主线程装 alarm、worker 用单调时钟软墙+httpx/无内容看门狗。
 - 测试：test_window_fill.py 5 项 + 并行线程回归 1 项，全绿。
+
+## 15.2 母题验收运行 (2026-06-13)
+
+9 机 ygxy 全流程通过（S01-S06+LAND 全锁，无需 S07 填充——填充门让时间线首次与窗口严格一致）。锁定代码母题census：ripple_move×10、group_relay×2、split_groups×2、flash_group×2、breathe_group×1。S04 仍是磨段（两次耗尽后第三次 2 cycle 通过）；烧轮主因依次：碰撞（多轮 48-50cm 贴线）> 模型自写 bug（IndexError/重复点）> kwarg 猜测（已修：move2 flying_ms=、母题 palette=、波次 center= 别名——函数参数必须接受文档词汇）。
+9v9 对照（vs 0611 ygxy 0.64 标杆场）：keyframes 27 vs 18，灯光 tick 123 vs 109，错峰段 6/6 持平；但 distinct RGB 38 vs 160、变色事件 592 vs 1071（旧场 sin/cos 逐机渐变更密），readable_ratio 0.32 vs 0.64（波次过渡态天然压低 settled 对称帧占比，指标对异步有结构性偏置——但也可能是真实构图差距，待人工目检裁决）。已知后续方向：把 fade_rgb/逐机渐变重新引导回母题用法（光波+渐变叠加），以及 readable 指标的 wave-aware 化。
