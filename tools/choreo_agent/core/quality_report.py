@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import re
+import textwrap
 from pathlib import Path
 
 # deepseek_cannon_choreo.py baselines (7 drones, 8 segments, ~170 lines)
@@ -46,7 +47,9 @@ def score_project(project_root: str | Path) -> dict:
         code,
         re.DOTALL,
     ):
-        segments[match.group(1)] = match.group(2).strip()
+        # 段体来自 design.py 函数内部（4 空格缩进）。不去缩进的话 ast.parse 必炸，
+        # extract_code_features 的所有 AST 特征（母题灯光 tick、时间错峰等）会静默归零。
+        segments[match.group(1)] = textwrap.dedent(match.group(2)).strip()
 
     per_segment: dict[str, dict] = {}
     all_colors: set[str] = set()
