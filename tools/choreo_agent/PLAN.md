@@ -372,3 +372,14 @@ readable_ratio 0.55 / settled readable 66% / mean_err 37cm（=dntg 水平）/ ce
 - preflight 适配：follow_chain 波点表豁免 custom_points 包裹（路径语义≠全对间距），改为静态 lag 间距预检报准确数字；灯光函数参数/color 关键字/palette 命名赋值里的 RGB 三元组不再被坐标范围检查误杀（此前 (10,0,60) 会报 z=60 越界）。
 - planner/段 prompt：母题词汇表 + 灯光绑定原则进 user prompt（系统 prompt 维持冻结）；编舞词汇新增 波次涟漪/链式跟随/分组问答/同步频闪收尾。
 - 测试：core/test_motifs.py 14 项全绿（对齐性、波次顺序、链上间距拒绝、渐变端点、门识别、preflight 豁免/误杀修复）；既有 161 项无回归。
+
+## 15.1 母题首航发现的系统级缺口：窗口填充硬门 (2026-06-13)
+
+首航 codex_9d_motif_ygxy 死于 S02——但根因在 S01：环形队形上 center_out 全员等距=同一波（波次退化为同步），S01 两个"波次"实际零错峰，4.0+2.5+2.5=9.0s 就把 8.5s 窗口的内容写完；9.0→12.5s 的静止尾被亮灯定格豁免宽恕，S01 欠填 3.5s 仍锁定。S02 实际播放 9.0-14.7s 却按 12.5-19.0s 评审，"有效群体运动 1.13s"在 S02 内无解，15 轮全废——错误归因到无辜段。
+
+修复（音乐时代窗口=cue，欠填=全片错位，必须硬门）：
+- design.py 模板主流程每段后打 `SEGCURSOR <id> <ms>`（含未完成移动的最大游标）；S07+ 追加路径同步带标记（旧项目无 _segcursor 定义时自动跳过）。
+- validator 新增 window_fill 硬门：游标须落在窗口尾 -1.0s/+1.5s 内，违规直接打回并报缺口数字+母题耗时公式；LAND 豁免；旧模板无标记不阻塞。
+- prompt：时间预算节明示"窗口必须填满（硬校验）"+ 母题耗时公式表；波次计算器文档加"环形队形 center_out 退化为同步，要可见波次用 spiral/sweep/by_index"。
+- 顺带修复：chat() 的 SIGALRM 墙钟只能装在主线程——并行候选 worker 线程全员崩溃（该路径首次真实出战），改为主线程装 alarm、worker 用单调时钟软墙+httpx/无内容看门狗。
+- 测试：test_window_fill.py 5 项 + 并行线程回归 1 项，全绿。

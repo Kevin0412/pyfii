@@ -106,13 +106,21 @@ def land(drones: list):
 # ============================================================
 # MAIN EXECUTION
 # ============================================================
-s01(drones)
-s02(drones)
-s03(drones)
-s04(drones)
-s05(drones)
-s06(drones)
-land(drones)
+def _segcursor(seg_id):
+    """验证器窗口填充硬门的数据源：段结束时的最大时间游标（含未完成移动）。"""
+    end_ms = max(
+        max(int(getattr(d, "time", 0)), int(getattr(d, "_agent_motion_end_ms", 0)))
+        for d in drones
+    )
+    print(f"SEGCURSOR {seg_id} {end_ms}")
+
+s01(drones); _segcursor("S01")
+s02(drones); _segcursor("S02")
+s03(drones); _segcursor("S03")
+s04(drones); _segcursor("S04")
+s05(drones); _segcursor("S05")
+s06(drones); _segcursor("S06")
+land(drones); _segcursor("LAND")
 
 # ============================================================
 # FIXED FOOTER

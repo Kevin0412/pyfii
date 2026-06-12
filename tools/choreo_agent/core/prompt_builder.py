@@ -221,7 +221,7 @@ def build_segment_prompt(
 - 安全距离按 XY 看：不要把同一 XY 的不同 Z 当成安全分离；XY 间距硬下限 51cm（pyfii core 碰撞线，检查器精确验证），密集造型配合短路径慢速；复杂交换交给 `far_assign`
 - 镜像换位/对穿的安全机制就是错峰：`drone.delay(i * 150)` 让各机在不同时刻过中心——同步对穿必撞，错峰对穿安全且好看（人类作品的对穿全部错峰）。不要为了消碰撞而丢掉错峰，应该反过来用错峰消碰撞
 - 分配函数家族（转场即编舞，按叙事意图选映射，不只有一个最优解）：`best_assign(prev, geo)` 就近收束 / `far_assign(prev, geo, min_path_cm=...)` 大幅交换 / `rotate_assign(prev, geo, steps=1)` 整体漩涡旋转（同构队形刚体旋转天然安全，steps 可负）/ `mirror_assign(prev, geo)` 镜像对穿（必须配错峰）/ `swap_assign(prev, geo, axis='x'|'y')` 半场互换 / `keep_assign(prev, geo)` 身份保持（drone i 固定走第 i 个目标，palette 叙事用）
-- 波次计算器（从当前队形推导时间编排，动序即光序）：`delays = ripple_delays(prev, mode='center_out'|'sweep_x'|'sweep_y'|'spiral'|'by_index', step_ms=120-250, reverse=False)` 波次延迟表；`spatial_ranks(prev, mode=...)` 波次序号（可按 rank 配色）；`gids = split_groups(prev, mode='left_right'|'front_back'|'inner_outer'|'alternate')` 0/1 分组
+- 波次计算器（从当前队形推导时间编排，动序即光序）：`delays = ripple_delays(prev, mode='center_out'|'sweep_x'|'sweep_y'|'spiral'|'by_index', step_ms=120-250, reverse=False)` 波次延迟表；`spatial_ranks(prev, mode=...)` 波次序号（可按 rank 配色）；`gids = split_groups(prev, mode='left_right'|'front_back'|'inner_outer'|'alternate')` 0/1 分组。注意：环形/等距队形上 center_out 全员同距=同一波（退化为同步起步），想要可见波次改用 spiral/sweep_x/sweep_y/by_index
 - 动作母题执行器（内部已做 per-drone 灯光+段尾自动对齐，免回正算术，计入时间错峰门）：
   `prev = ripple_move(drones, targets, flying_ms, delays, colors=palette, hold_ticks=4)` 波次推进，先动先亮，总时长 max(delays)+flying_ms；
   `prev = follow_chain(drones, waypoints, hop_ms, lag_hops=1, colors=palette)` 链式跟随/蛇形——头机沿 waypoints 逐点推进，后机依次延迟跟进同一路径，进链顺序自动按离 waypoints[0] 远近；需要 len(waypoints) ≥ (机数-1)*lag_hops+1，相距 lag 的波点 XY ≥51cm（函数校验报数），总时长 = len(waypoints)*hop_ms；
@@ -242,8 +242,10 @@ def build_segment_prompt(
 - {prev_update_rule}
 - ## 时间预算
 段长: {end_time - start_time}s。`move2 飞行 + 亮灯定格` 之和必须≥ {(end_time - start_time - 1) * 1000:.0f}ms——**亮灯定格是预算的一等公民**（dntg 全片 57% 时间是定格展示图形）
+**窗口必须填满**（验证器硬校验）：段尾时间游标要落在窗口尾 ±（-1.0s/+1.5s）内；欠填会把后续段推离音乐 cue 直接打回
+母题耗时是确定的，直接加总贴满窗口：ripple_move=max(delays)+flying_ms / follow_chain=len(waypoints)*hop_ms / group_relay=2*flying_ms+gap_ms / light_wave=max(delays)+hold_ticks*100 / fade_group=duration_ms / breathe_group=cycles*period_ms / flash_group=times*(on_ms+off_ms)
 示例: 2个move2各2800ms + 每次到位后亮灯定格1700ms → 9000ms，观众有时间读图 ✓；3个move2各3000ms 全程飞不停 → 覆盖但观众读不到任何图形 △
-反例: 1个move2 8000ms 超慢飘移 ✗；黑灯静止凑时长 ✗（低活动打回）
+反例: 1个move2 8000ms 超慢飘移 ✗；黑灯静止凑时长 ✗（低活动打回）；keyframe 加完离窗口尾还差 3s 不管 ✗（窗口填充门打回）
 - 禁止 inittime/VelXY/import
 - 只输出代码片段（4空格缩进）"""
 

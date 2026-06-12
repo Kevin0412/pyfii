@@ -629,7 +629,13 @@ def {function_name}(drones: list):
         land_call = "\nland(drones)"
         if land_call not in content:
             return False
-        content = content.replace(land_call, f"\n{function_name}(drones)" + land_call, 1)
+        # 旧项目模板没有 _segcursor 定义，追加段时不要引用它。
+        marker = f'; _segcursor("{segment_id}")' if "def _segcursor(" in content else ""
+        content = content.replace(
+            land_call,
+            f"\n{function_name}(drones){marker}" + land_call,
+            1,
+        )
 
         tmp = script_path.with_suffix(".tmp")
         tmp.write_text(content, encoding="utf-8")

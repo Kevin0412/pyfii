@@ -34,6 +34,9 @@ MIN_EFFECTIVE_ACTIVE_DRONES = 2
 MAX_GLOBAL_HOVER_S = 1.0
 # 错峰启动是 sanctioned 词汇（delay(i*120) 最多 ~960ms），起步缓冲给足余量。
 SEGMENT_EDGE_BUFFER_S = 1.3
+# 窗口填充硬门：段时间游标允许的欠填/溢出（秒）。欠填会让后续段与音乐 cue 错位。
+SEGMENT_FILL_TOLERANCE_S = 1.0
+SEGMENT_OVERFLOW_TOLERANCE_S = 1.5
 # 定格合法化（语料库铁证，PLAN 11.9）：全队静止但灯亮 ≥ 该占比 = 合法定格/留白；
 # 黑灯静止才是真空洞。dntg 24% 片长是亮灯定格。
 LIT_HOLD_MIN_ON_RATIO = 0.5
@@ -79,6 +82,9 @@ class ValidationResult:
     effective_motion_end_s: float | None = None
     effective_motion_ok: bool = True
     effective_motion_errors: list[str] = field(default_factory=list)
+    segment_cursor_end_s: float | None = None
+    window_fill_ok: bool = True
+    window_fill_errors: list[str] = field(default_factory=list)
     low_activity_segments: list[tuple[float, float]] = field(default_factory=list)
     motion_quality_ok: bool = True
     motion_quality: dict = field(default_factory=dict)
@@ -121,6 +127,7 @@ class ValidationResult:
                     and not self.hover_segments
                     and self.motion_envelope_ok
                     and self.effective_motion_ok
+                    and self.window_fill_ok
                     and not self.low_activity_segments
                     and self.motion_quality_ok
                     and self.composition_ok
@@ -204,6 +211,16 @@ class ValidationResult:
             lines.append(
                 "修复：首个正式 move2 应尽早发起。尾部空白不再作为硬失败，"
                 "会由 auto_init/下一段接续压缩。"
+            )
+        if self.window_fill_errors:
+            lines.append("窗口填充失败（音乐对齐硬门）：")
+            lines.extend(f"- {item}" for item in self.window_fill_errors)
+            lines.append(
+                "修复：段内容必须贴满本段窗口，否则后续段与音乐 cue 全部错位。"
+                "母题执行器耗时是确定的：ripple_move=max(delays)+flying_ms；follow_chain=len(waypoints)*hop_ms；"
+                "group_relay=2*flying_ms+gap_ms；light_wave=max(delays)+hold_ticks*100；"
+                "fade_group=duration_ms；breathe_group=cycles*period_ms；flash_group=times*(on_ms+off_ms)。"
+                "把各调用耗时加总到窗口长度；缺口用亮灯定格补（light_wave/breathe_group/fade_group——亮灯定格是预算的一等公民）。"
             )
         if self.effective_motion_errors:
             lines.append("有效群体运动失败：")
@@ -365,6 +382,16 @@ def validate(
                     result.low_activity_segments,
                 )
                 result.effective_motion_ok = not result.effective_motion_errors
+                # 窗口填充硬门：段时间游标必须贴到窗口尾，否则后续段与音乐 cue 全部错位。
+                cursors = _parse_segment_cursors(output)
+                if segment_id and segment_id.upper() != "LAND":
+                    result.segment_cursor_end_s = cursors.get(segment_id.upper())
+                    result.window_fill_errors = _check_window_fill(
+                        quality_window,
+                        segment_id.upper(),
+                        result.segment_cursor_end_s,
+                    )
+                    result.window_fill_ok = not result.window_fill_errors
                 result.motion_quality = _measure_motion_quality(
                     output_dir,
                     window=continuity_window,
@@ -803,6 +830,45 @@ def _frame_move_cm(drone, frame: int) -> float:
     dy = abs(drone[frame][2] - drone[frame - 1][2])
     dz = abs(drone[frame][3] - drone[frame - 1][3])
     return math.sqrt(dx * dx + dy * dy + dz * dz)
+
+
+def _parse_segment_cursors(output: str) -> dict[str, float]:
+    """解析 design.py 模板打印的 SEGCURSOR <id> <ms> 标记 → {段: 游标秒}。"""
+    cursors: dict[str, float] = {}
+    for line in output.splitlines():
+        match = re.match(r"\s*SEGCURSOR\s+(\S+)\s+(\d+)\s*$", line)
+        if match:
+            cursors[match.group(1).upper()] = int(match.group(2)) / 1000.0
+    return cursors
+
+
+def _check_window_fill(
+    window: tuple[float, float],
+    segment_id: str,
+    cursor_end_s: float | None,
+) -> list[str]:
+    """段内容（移动+灯光+等待的时间游标）必须贴满本段窗口。
+
+    欠填的段会把后续所有段往前推，音乐 cue 全部错位，而且下一段会在
+    错误的窗口里被判"有效运动过短"——错误归因到无辜的段。
+    旧模板没有 SEGCURSOR 标记时（cursor_end_s=None）不阻塞。
+    """
+    if cursor_end_s is None:
+        return []
+    _start_s, end_s = window
+    if cursor_end_s < end_s - SEGMENT_FILL_TOLERANCE_S:
+        gap = end_s - cursor_end_s
+        return [
+            f"段未填满窗口：{segment_id} 内容止于 {cursor_end_s:.2f}s，窗口到 {end_s:.2f}s"
+            f"（缺口 {gap:.1f}s）。把 move2/亮灯定格/灯光母题的耗时加总补到窗口尾。"
+        ]
+    if cursor_end_s > end_s + SEGMENT_OVERFLOW_TOLERANCE_S:
+        over = cursor_end_s - end_s
+        return [
+            f"段溢出窗口：{segment_id} 内容到 {cursor_end_s:.2f}s，窗口止于 {end_s:.2f}s"
+            f"（超出 {over:.1f}s）。压缩 flying_ms、减少 keyframe 或缩短灯光循环。"
+        ]
+    return []
 
 
 def _check_effective_motion(
