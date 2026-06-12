@@ -29,7 +29,19 @@ __all__ = [
     "mirror_assign",
     "swap_assign",
     "keep_assign",
+    "spatial_ranks",
+    "ripple_delays",
+    "split_groups",
+    "ripple_move",
+    "follow_chain",
+    "group_relay",
     "apply_light",
+    "light_wave",
+    "fade_rgb",
+    "fade_group",
+    "breathe_group",
+    "flash_group",
+    "beat_ms",
     "auto_init",
     "wait_until",
     "sin",
@@ -679,12 +691,318 @@ def _greedy_assignment(starts_xyz, targets_xyz, prefer_far=False):
         perm.append(target_i)
     return tuple(perm)
 
+# ---------- 波次/分组计算器：从当前队形推导时间编排，动序即光序 ----------
+def spatial_ranks(points, mode="center_out", origin=None, reverse=False, quantize_cm=30):
+    """按空间结构给每架机一个波次序号 rank（0 = 第一波）。返回与 points 同序的 rank 列表。
+
+    mode:
+      center_out — 距质心(或 origin)由近到远；reverse=True 即 edge_in
+      sweep_x / sweep_y — 沿 X / Y 扫过
+      spiral — 按质心方位角顺序（每机一个波次）
+      by_index — 机号顺序
+    quantize_cm 把相近的键合并为同一波（对称队形的镜像机自然同波），spiral 不适用。
+    同一份 rank 同时驱动动作错峰和灯光波次，就是"先动先亮"。
+    """
+    n = len(points)
+    if n == 0:
+        return []
+    xyz = [_xyz(p) for p in points]
+    if mode == "by_index":
+        ranks = list(range(n))
+    elif mode == "spiral":
+        order = _angle_order(xyz)
+        ranks = [0] * n
+        for rank, i in enumerate(order):
+            ranks[i] = rank
+    else:
+        if origin is None:
+            origin = (sum(p[0] for p in xyz) / n, sum(p[1] for p in xyz) / n)
+        ox, oy = float(origin[0]), float(origin[1])
+        if mode == "center_out":
+            keys = [((p[0] - ox) ** 2 + (p[1] - oy) ** 2) ** 0.5 for p in xyz]
+        elif mode == "sweep_x":
+            keys = [p[0] for p in xyz]
+        elif mode == "sweep_y":
+            keys = [p[1] for p in xyz]
+        else:
+            raise ValueError(
+                f"spatial_ranks mode {mode!r} 不存在；可用: center_out/sweep_x/sweep_y/spiral/by_index"
+            )
+        q = max(0.0, float(quantize_cm))
+        bucketed = [round(k / q) if q > 0 else k for k in keys]
+        ordered = sorted(set(bucketed))
+        rank_of = {b: r for r, b in enumerate(ordered)}
+        ranks = [rank_of[b] for b in bucketed]
+    if reverse:
+        top = max(ranks)
+        ranks = [top - r for r in ranks]
+    return ranks
+
+
+def ripple_delays(points, mode="center_out", step_ms=150, origin=None, reverse=False, quantize_cm=30):
+    """波次延迟表(ms)：rank * step_ms。直接喂给 ripple_move / light_wave。
+
+    同一份 delays 同时用于动作和灯光，即"先动的先亮"；reverse 反向（边缘先动=收拢）。
+    """
+    ranks = spatial_ranks(points, mode=mode, origin=origin, reverse=reverse, quantize_cm=quantize_cm)
+    step = max(0, int(round(step_ms)))
+    return [r * step for r in ranks]
+
+
+def split_groups(points, mode="left_right", origin=None):
+    """把当前队形按空间结构分成 0/1 两组，返回每架机的组号列表（问答/异步分组输入）。
+
+    mode: left_right(X 中位) / front_back(Y 中位) / inner_outer(距质心中位) / alternate(角序奇偶)。
+    """
+    n = len(points)
+    if n == 0:
+        return []
+    xyz = [_xyz(p) for p in points]
+    if mode == "alternate":
+        order = _angle_order(xyz)
+        gid = [0] * n
+        for rank, i in enumerate(order):
+            gid[i] = rank % 2
+        return gid
+    if origin is None:
+        origin = (sum(p[0] for p in xyz) / n, sum(p[1] for p in xyz) / n)
+    ox, oy = float(origin[0]), float(origin[1])
+    if mode == "left_right":
+        keys = [p[0] for p in xyz]
+    elif mode == "front_back":
+        keys = [p[1] for p in xyz]
+    elif mode == "inner_outer":
+        keys = [((p[0] - ox) ** 2 + (p[1] - oy) ** 2) ** 0.5 for p in xyz]
+    else:
+        raise ValueError(
+            f"split_groups mode {mode!r} 不存在；可用: left_right/front_back/inner_outer/alternate"
+        )
+    order = sorted(range(n), key=lambda i: keys[i])
+    gid = [1] * n
+    for rank in range((n + 1) // 2):
+        gid[order[rank]] = 0
+    return gid
+
+
+# ---------- 母题执行器：波次推进 / 链式跟随 / 分组问答 ----------
+def ripple_move(drones, targets, flying_ms, delays_ms, colors="#ffffff", hold_ticks=4, tail_ms=0):
+    """波次推进：每架机等待自己的波次延迟后启动，启动瞬间点亮 —— 先动先亮。
+
+    delays_ms 用 ripple_delays(prev, mode=...) 从当前队形算出；
+    所有机段尾自动对齐到 max(delays)+flying_ms+tail_ms，免回正算术。
+    返回标准化 targets，可直接赋给 prev。
+    """
+    _assert_target_count(drones, targets)
+    if len(delays_ms) != len(drones):
+        raise ValueError(f"delays_ms count {len(delays_ms)} != drones count {len(drones)}")
+    delays = [max(0, int(round(v))) for v in delays_ms]
+    span = max(delays) if delays else 0
+    flying_ms = int(round(flying_ms))
+    ticks = max(1, min(int(hold_ticks), max(1, flying_ms // 100)))
+    normalized = []
+    for i, drone in enumerate(drones):
+        if delays[i]:
+            drone.delay(delays[i])
+        target = _target3(targets[i])
+        move2(drone, target, flying_ms)
+        apply_light(drone, _color_at(colors, i), ticks)
+        drone.delay(max(0, flying_ms - ticks * 100 + (span - delays[i]) + int(tail_ms)))
+        normalized.append(target)
+    return normalized
+
+
+def follow_chain(drones, waypoints, hop_ms, lag_hops=1, colors="#ffffff", min_xy_cm=51.0, hold_ticks=2):
+    """链式跟随（蛇形/领舞）：头机沿 waypoints 逐点推进，后机依次延迟 lag_hops 跳走同一路径。
+
+    - 进链顺序按当前位置距 waypoints[0] 由近到远（自然蛇形），进链瞬间点亮 —— 先动先亮。
+    - 需要 len(waypoints) ≥ (机数-1)*lag_hops + 1；结束时队伍停在路径末端连续 lag 间隔点上。
+    - 安全由链上间距保证：任意相距 k*lag_hops 跳的波点对 XY 间距必须 ≥ min_xy_cm，否则直接抛错。
+    - 每架机总耗时都等于 len(waypoints)*hop_ms，段尾天然对齐。
+    返回每架机的结束点（与 drones 同序），可直接赋给 prev。
+    """
+    n = len(drones)
+    wps = [_target3(w) for w in waypoints]
+    H = len(wps)
+    lag = max(1, int(lag_hops))
+    if H < 2:
+        raise ValueError("follow_chain 至少需要 2 个波点")
+    need = (n - 1) * lag + 1
+    if H < need:
+        raise ValueError(
+            f"follow_chain 波点不足：{n} 机 lag_hops={lag} 需要至少 {need} 个波点，目前 {H} 个"
+        )
+    worst, pair = 1e9, (0, 0)
+    for k in range(1, n):
+        gap = k * lag
+        for j in range(gap, H):
+            d = ((wps[j][0] - wps[j - gap][0]) ** 2 + (wps[j][1] - wps[j - gap][1]) ** 2) ** 0.5
+            if d < worst:
+                worst, pair = d, (j - gap, j)
+    if worst < float(min_xy_cm):
+        raise ValueError(
+            f"follow_chain 链上间距不足：波点{pair[0]}-波点{pair[1]} XY 距离 {worst:.1f}cm"
+            f" < {float(min_xy_cm):.0f}cm（两机会同时占据这两点）— 增大波点间距或减少机数重叠"
+        )
+    hop_ms = int(round(hop_ms))
+    ticks = max(1, min(int(hold_ticks), max(1, hop_ms // 100)))
+    order = sorted(range(n), key=lambda i: (
+        (float(getattr(drones[i], "x", 0)) - wps[0][0]) ** 2
+        + (float(getattr(drones[i], "y", 0)) - wps[0][1]) ** 2
+    ))
+    ends = [None] * n
+    for rank, di in enumerate(order):
+        drone = drones[di]
+        if rank:
+            drone.delay(rank * lag * hop_ms)
+        move2(drone, wps[0], hop_ms)
+        apply_light(drone, _color_at(colors, rank), ticks)
+        drone.delay(hop_ms - ticks * 100)
+        last = H - 1 - rank * lag
+        for k in range(1, last + 1):
+            move2(drone, wps[k], hop_ms)
+            drone.delay(hop_ms)
+        ends[di] = wps[last]
+    return ends
+
+
+def group_relay(drones, targets, group_ids, flying_ms, colors=("#ff6040", "#4060ff"),
+                hold_ticks=4, gap_ms=200, lead_group=0):
+    """分组问答接力：lead 组先动（另一组原地亮灯应答），到位后另一组再动 —— 组色对话。
+
+    group_ids 用 split_groups(prev, mode=...) 从当前队形算出；colors[g] 是 g 组色。
+    总时长 = 2*flying_ms + gap_ms，所有机段尾自动对齐。返回标准化 targets。
+    """
+    _assert_target_count(drones, targets)
+    if len(group_ids) != len(drones):
+        raise ValueError(f"group_ids count {len(group_ids)} != drones count {len(drones)}")
+    flying_ms = int(round(flying_ms))
+    gap = max(0, int(round(gap_ms)))
+    ticks = max(1, min(int(hold_ticks), max(1, flying_ms // 100)))
+    resp_ticks = max(1, (flying_ms + gap) // 100)
+    normalized = []
+    for i, drone in enumerate(drones):
+        g = int(group_ids[i]) % 2
+        target = _target3(targets[i])
+        color = _color_at(colors[g] if isinstance(colors, (list, tuple)) and len(colors) >= 2 else colors, i)
+        if g == int(lead_group) % 2:
+            move2(drone, target, flying_ms)
+            apply_light(drone, color, ticks)
+            drone.delay(flying_ms - ticks * 100 + gap + flying_ms)
+        else:
+            apply_light(drone, color, resp_ticks)
+            drone.delay(max(0, flying_ms + gap - resp_ticks * 100))
+            move2(drone, target, flying_ms)
+            apply_light(drone, color, ticks)
+            drone.delay(flying_ms - ticks * 100)
+        normalized.append(target)
+    return normalized
+
+
 # ---------- 灯光 ----------
 def apply_light(drone, color_hex: str, ticks: int, interval_ms: int = 100):
     """灯光：ticks 次 TurnOnAll，每次 interval_ms。总耗时 ticks*interval_ms。"""
     for _ in range(ticks):
         drone.TurnOnAll(color_hex)
         drone.delay(interval_ms)
+
+
+def _rgb(color):
+    """颜色解析：'#rrggbb' / 'rrggbb' / (r,g,b) → (r,g,b) 整数三元组。"""
+    if isinstance(color, (list, tuple)) and len(color) == 3:
+        return tuple(max(0, min(255, int(round(float(v))))) for v in color)
+    if isinstance(color, str):
+        s = color.lstrip("#")
+        if len(s) == 6:
+            return tuple(int(s[i:i + 2], 16) for i in (0, 2, 4))
+    raise ValueError(f"无法解析颜色: {color!r}（支持 '#rrggbb' 或 (r,g,b)）")
+
+
+def light_wave(drones, delays_ms, colors, hold_ticks=6, tail_ms=0):
+    """静止队形上的灯光涟漪：按 delays 依次点亮，段尾对齐（不移动）。
+
+    与 ripple_delays 配合：用与动作同一份 delays（或定格段单独算）即光波扫过队形。
+    每架机总耗时 = max(delays) + hold_ticks*100 + tail_ms。返回消耗的毫秒数。
+    """
+    if len(delays_ms) != len(drones):
+        raise ValueError(f"delays_ms count {len(delays_ms)} != drones count {len(drones)}")
+    delays = [max(0, int(round(v))) for v in delays_ms]
+    span = max(delays) if delays else 0
+    ticks = max(1, int(hold_ticks))
+    for i, drone in enumerate(drones):
+        if delays[i]:
+            drone.delay(delays[i])
+        apply_light(drone, _color_at(colors, i), ticks)
+        drone.delay(span - delays[i] + max(0, int(tail_ms)))
+    return span + ticks * 100 + max(0, int(tail_ms))
+
+
+def fade_rgb(drone, c_from, c_to, steps=12, interval_ms=100):
+    """单机颜色渐变：c_from→c_to 线性插值 steps 步（dntg 式"持续变色"）。
+
+    总耗时 steps*interval_ms。返回消耗的毫秒数。
+    """
+    a, b = _rgb(c_from), _rgb(c_to)
+    steps = max(2, int(steps))
+    for s in range(steps):
+        t = s / (steps - 1)
+        drone.TurnOnAll(tuple(int(round(a[c] + (b[c] - a[c]) * t)) for c in range(3)))
+        drone.delay(int(interval_ms))
+    return steps * int(interval_ms)
+
+
+def fade_group(drones, c_from, c_to, duration_ms=1500, interval_ms=100):
+    """全队同步渐变（收束/过渡）：duration_ms 内 c_from→c_to。返回消耗的毫秒数。"""
+    duration_ms = max(200, int(round(duration_ms)))
+    interval_ms = max(50, int(interval_ms))
+    steps = max(2, duration_ms // interval_ms)
+    rem = duration_ms - steps * interval_ms
+    for drone in drones:
+        fade_rgb(drone, c_from, c_to, steps, interval_ms)
+        if rem > 0:
+            drone.delay(rem)
+    return duration_ms
+
+
+def breathe_group(drones, color, cycles=2, period_ms=1600, floor=0.18, interval_ms=100):
+    """呼吸灯：亮度从满亮按余弦凹陷到 floor 再回满，cycles 个周期（静止持灯段首选）。
+
+    返回消耗的毫秒数（所有机相同，段尾对齐）。
+    """
+    base = _rgb(color)
+    cycles = max(1, int(cycles))
+    interval_ms = max(50, int(interval_ms))
+    steps_per = max(4, int(period_ms) // interval_ms)
+    lo = max(0.0, min(1.0, float(floor)))
+    for drone in drones:
+        for s in range(cycles * steps_per):
+            k = lo + (1.0 - lo) * 0.5 * (1.0 + cos(2 * pi * (s % steps_per) / steps_per))
+            drone.TurnOnAll(tuple(int(round(v * k)) for v in base))
+            drone.delay(interval_ms)
+    return cycles * steps_per * interval_ms
+
+
+def flash_group(drones, color, times=3, on_ms=250, off_ms=150, alt_color=None):
+    """全队同步频闪（强拍/结尾宣言）：times 次亮-灭；alt_color 时双色交替。
+
+    结束后自动回亮 color，避免落入黑灯静止。返回消耗的毫秒数。
+    """
+    times = max(1, int(times))
+    on_ms = max(100, int(on_ms))
+    off_ms = max(50, int(off_ms))
+    for drone in drones:
+        for t in range(times):
+            c = color if (alt_color is None or t % 2 == 0) else alt_color
+            drone.TurnOnAll(_rgb(c))
+            drone.delay(on_ms)
+            drone.TurnOffAll()
+            drone.delay(off_ms)
+        drone.TurnOnAll(_rgb(color))
+    return times * (on_ms + off_ms)
+
+
+def beat_ms(bpm, beats=1.0):
+    """节拍转毫秒：把动作/灯光时长贴到音乐拍上。beat_ms(120, 4) = 2000ms。"""
+    return int(round(60000.0 / max(1e-6, float(bpm)) * float(beats)))
 
 # ---------- 自动计时 ----------
 def auto_init(drones):

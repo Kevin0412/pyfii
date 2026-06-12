@@ -14,9 +14,12 @@ from typing import Any
 
 
 CARD_FIELDS = ("role", "motifs", "beat", "formation", "lighting")
-STAGGER_WORDS = ("卡农", "错峰", "分组", "canon", "stagger")
+STAGGER_WORDS = ("卡农", "错峰", "分组", "波次", "涟漪", "接力", "跟随", "canon", "stagger", "wave", "ripple", "relay")
 CLIMAX_WORDS = ("高潮", "爆发", "爆点", "climax", "burst")
 GEO_TEMPLATE_NAMES = ("geo_wide_v", "geo_arrow", "geo_box", "geo_diagonal", "geo_wave", "geo_grid")
+# 母题执行器（function.py）：调用即真实时间错峰/动态灯光，门当作 per-drone 细节对待。
+MOTIF_MOVE_NAMES = ("ripple_move", "follow_chain", "group_relay")
+MOTIF_LIGHT_NAMES = ("light_wave", "fade_rgb", "fade_group", "breathe_group", "flash_group")
 HANDWRITTEN_REQUIRED_SEGMENTS = {"S02", "S03", "S04", "S05"}
 PER_DRONE_REQUIRED_SEGMENTS = {"S01", "S02", "S03", "S04", "S05", "S06"}
 MONOTONE_PACING_SEGMENTS = {"S01", "S02", "S03", "S04", "S05"}
@@ -160,9 +163,10 @@ def evaluate_composition(
     ):
         errors.append(
             f"{segment_id} 全段所有无人机同起同停 — 至少一个 keyframe 要打破时间同步："
-            "起飞波次 `drone.delay(i * 120)`（写在 move2 之前，等待期间灯保持亮即可，不需要复杂回正算术），"
-            "或到达波次 `move2(drone, t, flying_ms + (i % 3) * 250)`；"
-            "灯光时钟型写法 `apply_light(drone, color, (flying_ms - i*120) // 100)` 一个表达式同时完成灯光和对齐。"
+            "最简单是母题执行器 `prev = ripple_move(drones, targets, flying_ms, "
+            "ripple_delays(prev, mode='center_out'), colors=palette)`（自动段尾对齐+先动先亮）；"
+            "或手写起飞波次 `drone.delay(i * 120)`（move2 之前，等待期间灯保持亮即可），"
+            "或到达波次 `move2(drone, t, flying_ms + (i % 3) * 250)`。"
         )
 
     if segment_id == "S04" and features["estimated_keyframe_count"] < 4:
@@ -192,8 +196,10 @@ def evaluate_composition(
         if features["lighting_tick_estimate"] < 30 and segment_id in {"S04", "S05"}:
             recs.append(
                 "灯光密度偏低（约 " + str(features["lighting_tick_estimate"])
-                + " ticks）。S04/S05 推荐 30-80 ticks 的渐变/呼吸灯光，"
-                "可用 `for a in range(N): TurnOnAll((r,g,b)); d.delay(100)` 做长渐变。"
+                + " ticks）。S04/S05 推荐 30-80 ticks 的渐变/呼吸灯光：一行 "
+                "`fade_group(drones, c1, c2, duration_ms)` / `breathe_group(drones, color, cycles, period_ms)` "
+                "/ `light_wave(drones, ripple_delays(prev), palette)`，"
+                "或 `for a in range(N): TurnOnAll((r,g,b)); d.delay(100)` 手写长渐变。"
             )
         if features["z_range_cm"] is not None and features["z_range_cm"] < 60:
             recs.append(
@@ -236,18 +242,35 @@ def extract_code_features(code: str) -> dict:
         or re.search(r"\bi\s*(?:%|//|\*)", code)
         or re.search(r"\bgroup(?:s|_id)?\b", code, re.I)
         or re.search(r"\bmove_group_staggered\s*\(", code)
+        or re.search(rf"\b(?:{'|'.join(MOTIF_MOVE_NAMES)})\s*\(", code)
     )
     move_group_calls = len(re.findall(r"\bmove_group\s*\(", code))
     staggered_group_calls = len(re.findall(r"\bmove_group_staggered\s*\(", code))
+    motif_move_counts = {
+        name: len(re.findall(rf"\b{name}\s*\(", code)) for name in MOTIF_MOVE_NAMES
+    }
+    motif_light_counts = {
+        name: len(re.findall(rf"\b{name}\s*\(", code)) for name in MOTIF_LIGHT_NAMES
+    }
+    motif_move_calls = sum(motif_move_counts.values())
+    motif_light_calls = sum(motif_light_counts.values())
     raw_apply_light_calls = len(re.findall(r"\bapply_light\s*\(", code))
     raw_turnonall_calls = len(re.findall(r"\.TurnOnAll\s*\(", code))
-    # RGB 三元组字面量颜色：d.TurnOnAll((255, 200, 40))
-    rgb_tuple_colors = sorted(
-        set(re.findall(r"TurnOnAll\s*\(\s*\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*\)", code))
+    # RGB 三元组字面量颜色：d.TurnOnAll((255, 200, 40)) 及灯光母题参数里的 (r,g,b)
+    rgb_tuple_colors = set(
+        re.findall(r"TurnOnAll\s*\(\s*\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*\)", code)
     )
-    # 计算式灯光（渐变/呼吸）：TurnOnAll 参数含 int()/sin()/cos()
+    light_motif_line = re.compile(rf"\b(?:{'|'.join(MOTIF_LIGHT_NAMES)})\s*\(")
+    for line in code.splitlines():
+        if light_motif_line.search(line):
+            for triple in re.findall(r"\(\s*(\d{1,3})\s*,\s*(\d{1,3})\s*,\s*(\d{1,3})\s*\)", line):
+                if all(int(v) <= 255 for v in triple):
+                    rgb_tuple_colors.add(triple)
+    rgb_tuple_colors = sorted(rgb_tuple_colors)
+    # 计算式灯光（渐变/呼吸）：TurnOnAll 参数含 int()/sin()/cos()，或灯光母题执行器
     has_dynamic_lighting = bool(
         re.search(r"TurnOnAll\s*\([^)]*(?:int\s*\(|sin\s*\(|cos\s*\()", code)
+        or motif_light_calls
     )
     geo_template_calls = {
         name: len(re.findall(rf"\b{name}\s*\(", code))
@@ -258,16 +281,31 @@ def extract_code_features(code: str) -> dict:
     delay_calls = len(re.findall(r"\.delay\s*\(", code))
     custom_points_calls = len(re.findall(r"\bcustom_points\s*\(", code))
     move2_durations = _extract_move2_durations(code)
+    motif_keyframe_bonus = (
+        motif_move_counts["ripple_move"]
+        + 2 * motif_move_counts["group_relay"]
+        + 3 * motif_move_counts["follow_chain"]
+    )
     features = {
         "move2_calls": move2_calls,
         "move_group_calls": move_group_calls,
         "move_group_staggered_calls": staggered_group_calls,
+        "motif_move_calls": motif_move_calls,
+        "motif_light_calls": motif_light_calls,
+        "motif_calls": {**motif_move_counts, **motif_light_counts},
         "raw_apply_light_calls": raw_apply_light_calls,
         "raw_turnonall_calls": raw_turnonall_calls,
-        "apply_light_calls": raw_apply_light_calls + move_group_calls + staggered_group_calls,
+        "apply_light_calls": (
+            raw_apply_light_calls + move_group_calls + staggered_group_calls
+            + motif_move_calls + motif_light_calls
+        ),
         "has_dynamic_lighting": has_dynamic_lighting,
         "delay_calls": delay_calls,
-        "uses_group_only_execution": (move_group_calls + staggered_group_calls) > 0 and move2_calls == 0,
+        "uses_group_only_execution": (
+            (move_group_calls + staggered_group_calls) > 0
+            and move2_calls == 0
+            and motif_move_calls == 0
+        ),
         "uses_best_assign": "best_assign(" in code,
         "uses_far_assign": "far_assign(" in code,
         "custom_points_calls": custom_points_calls,
@@ -276,7 +314,7 @@ def extract_code_features(code: str) -> dict:
         "geo_template_calls": geo_template_calls,
         "geo_template_call_count": sum(geo_template_calls.values()),
         "xyz_literal_count": xyz_literal_count,
-        "estimated_keyframe_count": max(move2_calls, custom_points_calls),
+        "estimated_keyframe_count": max(move2_calls, custom_points_calls) + motif_keyframe_bonus,
         "has_handwritten_geometry": "custom_points(" in code or xyz_literal_count >= 6,
         "has_indexed_stagger": has_indexed_stagger,
         "has_time_stagger": _has_time_stagger(code),
@@ -332,6 +370,31 @@ def _extract_move2_durations(code: str) -> list[float]:
     return sorted(durations)
 
 
+_LIGHT_CONTEXT_FUNCS = frozenset(MOTIF_LIGHT_NAMES) | {"TurnOnAll", "apply_light", "pulse_group"}
+_COLOR_KWARGS = frozenset({"color", "colors", "alt_color", "c_from", "c_to"})
+
+
+def _in_light_context(node: ast.AST) -> bool:
+    """3 元组位于灯光函数参数/color 关键字/palette 命名赋值内 → 是颜色不是坐标。"""
+    current = getattr(node, "parent", None)
+    while current is not None:
+        if isinstance(current, ast.keyword) and current.arg in _COLOR_KWARGS:
+            return True
+        if isinstance(current, ast.Call):
+            func = current.func
+            name = func.id if isinstance(func, ast.Name) else (
+                func.attr if isinstance(func, ast.Attribute) else None
+            )
+            if name in _LIGHT_CONTEXT_FUNCS:
+                return True
+        if isinstance(current, ast.Assign) and len(current.targets) == 1:
+            target = current.targets[0]
+            if isinstance(target, ast.Name) and re.search(r"color|palette", target.id, re.I):
+                return True
+        current = getattr(current, "parent", None)
+    return False
+
+
 def _extract_target_z_literals(code: str) -> list[float]:
     try:
         tree = ast.parse(code)
@@ -343,7 +406,7 @@ def _extract_target_z_literals(code: str) -> list[float]:
     for node in ast.walk(tree):
         if not isinstance(node, (ast.Tuple, ast.List)) or len(node.elts) != 3:
             continue
-        if _is_z_layers_literal(node):
+        if _is_z_layers_literal(node) or _in_light_context(node):
             continue
         z = _numeric_literal(node.elts[2])
         if z is not None:
@@ -362,7 +425,7 @@ def _count_coordinate_literals(code: str) -> int:
     for node in ast.walk(tree):
         if not isinstance(node, (ast.Tuple, ast.List)) or len(node.elts) != 3:
             continue
-        if _is_z_layers_literal(node):
+        if _is_z_layers_literal(node) or _in_light_context(node):
             continue
         values = [_numeric_literal(elt) for elt in node.elts]
         if any(value is None for value in values):
@@ -382,12 +445,16 @@ def _attach_parents(tree: ast.AST) -> None:
 _LOOP_VAR_NAMES = {"i", "j", "k", "idx", "gi"}
 
 
+_STAGGER_CALL_NAMES = frozenset(MOTIF_MOVE_NAMES) | {"move_group_staggered"}
+
+
 def _has_time_stagger(code: str) -> bool:
     """True if drones genuinely desynchronize in time, not just in color/grouping.
 
-    认定为时间错峰的两种写法：
+    认定为时间错峰的写法：
     - `drone.delay(<含循环变量的表达式>)`：起飞波次 / 尾部回正
     - `move2(drone, target, <含循环变量的时长>)`：到达波次（每架机不同 flying_ms）
+    - 母题执行器 `ripple_move/follow_chain/group_relay/move_group_staggered`：内部真实错峰
     `targets[i]` 这种下标用法不算 — 那只是取目标点，时间仍然同步。
     """
     try:
@@ -403,6 +470,8 @@ def _has_time_stagger(code: str) -> bool:
             and node.args
             and _contains_loop_var(node.args[0])
         ):
+            return True
+        if isinstance(node.func, ast.Name) and node.func.id in _STAGGER_CALL_NAMES:
             return True
         if (
             isinstance(node.func, ast.Name)
@@ -437,6 +506,7 @@ def _estimate_lighting_ticks(code: str) -> int:
     apply_light(d, color, ticks) → ticks（直接计入）
     `for a in range(N):` 循环体（同行或后 4 行）内含 TurnOnAll/TurnOffAll → 计 N 一次；
     apply_light 循环不重复计（其 ticks 参数已计入）。
+    灯光母题执行器按参数估算（缺省用默认值）。
     """
     ticks = 0
     for match in re.finditer(r"\bapply_light\s*\([^,]+,\s*[^,]+,\s*(\d+)\s*\)", code):
@@ -449,7 +519,56 @@ def _estimate_lighting_ticks(code: str) -> int:
         window = " ".join(lines[idx : idx + 5])
         if re.search(r"TurnOnAll|TurnOffAll", window) and "apply_light" not in window:
             ticks += int(match.group(1))
-    return ticks
+    return ticks + _motif_light_ticks(code)
+
+
+def _motif_light_ticks(code: str) -> int:
+    """灯光母题执行器的 tick 估算（AST 取数字字面量参数，缺省用签名默认值）。"""
+    try:
+        tree = ast.parse(code)
+    except SyntaxError:
+        return 0
+
+    def arg_num(node: ast.Call, pos: int, name: str, default: float) -> float:
+        if len(node.args) > pos:
+            value = _numeric_literal(node.args[pos])
+            if value is not None:
+                return value
+        for keyword in node.keywords:
+            if keyword.arg == name:
+                value = _numeric_literal(keyword.value)
+                if value is not None:
+                    return value
+        return default
+
+    ticks = 0.0
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Call) or not isinstance(node.func, ast.Name):
+            continue
+        name = node.func.id
+        if name == "fade_rgb":
+            ticks += arg_num(node, 3, "steps", 12)
+        elif name == "fade_group":
+            ticks += arg_num(node, 3, "duration_ms", 1500) / max(
+                50, arg_num(node, 4, "interval_ms", 100)
+            )
+        elif name == "breathe_group":
+            ticks += arg_num(node, 2, "cycles", 2) * arg_num(node, 3, "period_ms", 1600) / max(
+                50, arg_num(node, 5, "interval_ms", 100)
+            )
+        elif name == "flash_group":
+            ticks += arg_num(node, 2, "times", 3) * (
+                arg_num(node, 3, "on_ms", 250) + arg_num(node, 4, "off_ms", 150)
+            ) / 100
+        elif name == "light_wave":
+            ticks += arg_num(node, 3, "hold_ticks", 6) + 4
+        elif name == "ripple_move":
+            ticks += arg_num(node, 5, "hold_ticks", 4)
+        elif name == "follow_chain":
+            ticks += arg_num(node, 6, "hold_ticks", 2)
+        elif name == "group_relay":
+            ticks += 12
+    return int(round(ticks))
 
 
 def _is_z_layers_literal(node: ast.AST) -> bool:

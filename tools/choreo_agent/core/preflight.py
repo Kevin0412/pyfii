@@ -321,6 +321,73 @@ def _check_computed_geometry(code, r, drone_count):
                     "（9 机圆形建议 R≥150，弦距≈116cm）"
                 )
 
+    # 1b. follow_chain(...) 的波点表：路径语义（按 lag 间隔校验，不是全对间距），
+    #     自带运行期校验，所以豁免 custom_points 包裹要求；这里做静态预检报准确数字。
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Call):
+            continue
+        if not isinstance(node.func, ast.Name) or node.func.id != "follow_chain":
+            continue
+        if len(node.args) < 2:
+            continue
+        arg = node.args[1]
+        wrapped_nodes.add(id(arg))
+        if isinstance(arg, ast.Name):
+            wrapped_names.add(arg.id)
+        lag = 1.0
+        min_xy_cm = 51.0
+        if len(node.args) >= 4:
+            value = _literal_number(node.args[3])
+            if value is not None:
+                lag = value
+        for keyword in node.keywords:
+            if keyword.arg == "lag_hops":
+                value = _literal_number(keyword.value)
+                if value is not None:
+                    lag = value
+            if keyword.arg == "min_xy_cm":
+                value = _literal_number(keyword.value)
+                if value is not None:
+                    min_xy_cm = value
+        if isinstance(arg, ast.Name):
+            raw = env.get(arg.id)
+        else:
+            try:
+                raw = _safe_eval(arg, env)
+            except _UnsafeExpression:
+                raw = None
+        points = _coerce_points(raw)
+        if not points:
+            continue  # 静态算不出来交给运行期 follow_chain 兜底
+        wps = [_clamp_point(p) for p in points]
+        lag = max(1, int(lag))
+        if drone_count:
+            need = (int(drone_count) - 1) * lag + 1
+            if len(wps) < need:
+                r.add(
+                    f"follow_chain 波点不足(line {getattr(node, 'lineno', '?')})："
+                    f"{int(drone_count)} 机 lag_hops={lag} 需要至少 {need} 个波点，目前 {len(wps)} 个"
+                )
+                continue
+        # 机数未知时只查相邻 lag 对（k=1），避免对闭环路径误报不会同时出现的远间隔。
+        n_chain = int(drone_count) if drone_count else 2
+        worst, pair = 1e9, (0, 0)
+        for k in range(1, n_chain):
+            gap = k * lag
+            for j in range(gap, len(wps)):
+                d = (
+                    (wps[j][0] - wps[j - gap][0]) ** 2
+                    + (wps[j][1] - wps[j - gap][1]) ** 2
+                ) ** 0.5
+                if d < worst:
+                    worst, pair = d, (j - gap, j)
+        if worst < float(min_xy_cm):
+            r.add(
+                f"follow_chain 链上间距不足(line {getattr(node, 'lineno', '?')})："
+                f"波点{pair[0]}-波点{pair[1]} XY 距离 {worst:.0f}cm < {float(min_xy_cm):g}cm，"
+                "两机会同时占据这两点，运行期会直接抛错 — 增大相邻波点间距或减小路径弯折重叠"
+            )
+
     # 2. 没包 custom_points 的 computed 3 元组 comprehension 直接拒绝：
     #    raw comprehension 跳过裁剪和间距校验，等于裸坐标。
     assigned_comp_names = {
@@ -584,13 +651,56 @@ def _check_no_single_drone_timing(code, r):
             )
 
 
+_LIGHT_FUNC_NAMES = {
+    "TurnOnAll", "apply_light", "pulse_group", "fade_rgb", "fade_group",
+    "breathe_group", "flash_group", "light_wave",
+}
+_COLOR_KWARG_NAMES = {"color", "colors", "alt_color", "c_from", "c_to"}
+
+
+def _collect_light_tuple_ids(tree) -> set[int]:
+    """RGB 三元组出现的合法位置：灯光函数参数 / color 类关键字 / palette·color 命名赋值。
+
+    这些 3 元组是颜色不是坐标，坐标范围检查必须跳过它们。
+    """
+    light_ids: set[int] = set()
+
+    def _mark(node):
+        for sub in ast.walk(node):
+            if isinstance(sub, (ast.Tuple, ast.List)) and len(sub.elts) == 3:
+                light_ids.add(id(sub))
+
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Call):
+            func = node.func
+            name = func.id if isinstance(func, ast.Name) else (
+                func.attr if isinstance(func, ast.Attribute) else None
+            )
+            if name in _LIGHT_FUNC_NAMES:
+                for arg in node.args:
+                    _mark(arg)
+            for keyword in node.keywords:
+                if keyword.arg in _COLOR_KWARG_NAMES:
+                    _mark(keyword.value)
+        elif isinstance(node, ast.Assign) and len(node.targets) == 1:
+            target = node.targets[0]
+            if isinstance(target, ast.Name) and re.search(
+                r"color|palette", target.id, re.I
+            ):
+                _mark(node.value)
+    return light_ids
+
+
 def _check_coordinate_literals(code, r):
     try:
         tree = ast.parse(code)
     except SyntaxError:
         return
+    light_tuple_ids = _collect_light_tuple_ids(tree)
     for node in ast.walk(tree):
         if not isinstance(node, (ast.Tuple, ast.List)) or len(node.elts) != 3:
+            continue
+        if id(node) in light_tuple_ids:
             continue
         values = [_literal_number(elt) for elt in node.elts]
         if any(value is None for value in values):

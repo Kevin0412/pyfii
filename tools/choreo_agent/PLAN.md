@@ -357,3 +357,18 @@ readable_ratio 0.55 / settled readable 66% / mean_err 37cm（=dntg 水平）/ ce
 - 提速：`--parallel-candidates`（默认 2）并行候选 + 段级候选池；单流死亡不毁轮，验证失败先吃池零 API 成本。
 - 推荐 HITL 全开命令：
   `python tools/choreo_agent/run_pipeline.py --fresh-name X --music 曲.mp3 --music-title "曲名（气质）" --plan-review --review-segments`
+
+# 15. 动作/灯光母题库 (2026-06-12)
+
+目标：补齐"异步/波次/跟随/问答"这一层人类编舞语汇，并把灯光绑定到编舞意图——先动先亮、扩张配中心光波、问答配双色、收尾齐闪/渐隐。全部以 function.py 可复用执行器交付，不写一次性 prompt hack；蒸馏依据：dntg 100ms 级 16 步渐变("持续变色")、跑马灯 HorseRace、异步编排(焦点/伴随/背景层)、领头机 waypoint 链、分组错峰。
+
+- 波次计算器（从当前队形推导，零 hardcode）：`spatial_ranks/ripple_delays(mode=center_out|sweep_x|sweep_y|spiral|by_index, reverse, quantize_cm)`、`split_groups(mode=left_right|front_back|inner_outer|alternate)`。同一份 delays 喂动作和灯光 = "动序即光序"。
+- 动作母题执行器（内部 per-drone 灯光 + 段尾自动对齐，免回正算术）：
+  - `ripple_move(drones, targets, flying_ms, delays, colors)` 波次推进，先动先亮；
+  - `follow_chain(drones, waypoints, hop_ms, lag_hops, colors)` 链式跟随/蛇形——进链顺序自动按离 wps[0] 远近，每机总时长恒等于 len(wps)*hop_ms（数学上天然对齐），链上间距按"相距 k*lag 跳的波点对 ≥51cm"校验（这是两机同时占据的真实距离）；
+  - `group_relay(drones, targets, gids, flying_ms, colors, gap_ms)` 分组问答——A 动 B 亮灯应答再互换，总时长 2*fly+gap。
+- 灯光母题：`light_wave`(静止队形光波涟漪，定格展示首选)、`fade_rgb/fade_group`(dntg 式持续变色)、`breathe_group`(呼吸明暗，满亮起步衔接)、`flash_group`(同步频闪，结束自动回亮防黑灯静止)、`beat_ms(bpm, beats)`(时长贴拍)。
+- 门适配（识别不惩罚）：母题调用计入 has_time_stagger/has_indexed_stagger/动态灯光/灯光声明门/keyframe 估算（ripple+1/relay+2/chain+3）；uses_group_only_execution 豁免；tick 估算按参数推（fade=duration/100 等）；同步门/灯光建议的修复文案直接给母题一行写法。
+- preflight 适配：follow_chain 波点表豁免 custom_points 包裹（路径语义≠全对间距），改为静态 lag 间距预检报准确数字；灯光函数参数/color 关键字/palette 命名赋值里的 RGB 三元组不再被坐标范围检查误杀（此前 (10,0,60) 会报 z=60 越界）。
+- planner/段 prompt：母题词汇表 + 灯光绑定原则进 user prompt（系统 prompt 维持冻结）；编舞词汇新增 波次涟漪/链式跟随/分组问答/同步频闪收尾。
+- 测试：core/test_motifs.py 14 项全绿（对齐性、波次顺序、链上间距拒绝、渐变端点、门识别、preflight 豁免/误杀修复）；既有 161 项无回归。
