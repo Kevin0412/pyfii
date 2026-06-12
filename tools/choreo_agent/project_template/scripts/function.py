@@ -785,17 +785,17 @@ def split_groups(points, mode="left_right", origin=None):
 
 
 # ---------- 母题执行器：波次推进 / 链式跟随 / 分组问答 ----------
-def ripple_move(drones, targets, flying_ms, delays_ms, colors="#ffffff", hold_ticks=4, tail_ms=0):
+def ripple_move(drones, targets, flying_ms, delays, colors="#ffffff", hold_ticks=4, tail_ms=0):
     """波次推进：每架机等待自己的波次延迟后启动，启动瞬间点亮 —— 先动先亮。
 
-    delays_ms 用 ripple_delays(prev, mode=...) 从当前队形算出；
+    delays（毫秒表）用 ripple_delays(prev, mode=...) 从当前队形算出；
     所有机段尾自动对齐到 max(delays)+flying_ms+tail_ms，免回正算术。
     返回标准化 targets，可直接赋给 prev。
     """
     _assert_target_count(drones, targets)
-    if len(delays_ms) != len(drones):
-        raise ValueError(f"delays_ms count {len(delays_ms)} != drones count {len(drones)}")
-    delays = [max(0, int(round(v))) for v in delays_ms]
+    if len(delays) != len(drones):
+        raise ValueError(f"delays count {len(delays)} != drones count {len(drones)}")
+    delays = [max(0, int(round(v))) for v in delays]
     span = max(delays) if delays else 0
     flying_ms = int(round(flying_ms))
     ticks = max(1, min(int(hold_ticks), max(1, flying_ms // 100)))
@@ -917,15 +917,15 @@ def _rgb(color):
     raise ValueError(f"无法解析颜色: {color!r}（支持 '#rrggbb' 或 (r,g,b)）")
 
 
-def light_wave(drones, delays_ms, colors, hold_ticks=6, tail_ms=0):
+def light_wave(drones, delays, colors, hold_ticks=6, tail_ms=0):
     """静止队形上的灯光涟漪：按 delays 依次点亮，段尾对齐（不移动）。
 
     与 ripple_delays 配合：用与动作同一份 delays（或定格段单独算）即光波扫过队形。
     每架机总耗时 = max(delays) + hold_ticks*100 + tail_ms。返回消耗的毫秒数。
     """
-    if len(delays_ms) != len(drones):
-        raise ValueError(f"delays_ms count {len(delays_ms)} != drones count {len(drones)}")
-    delays = [max(0, int(round(v))) for v in delays_ms]
+    if len(delays) != len(drones):
+        raise ValueError(f"delays count {len(delays)} != drones count {len(drones)}")
+    delays = [max(0, int(round(v))) for v in delays]
     span = max(delays) if delays else 0
     ticks = max(1, int(hold_ticks))
     for i, drone in enumerate(drones):
