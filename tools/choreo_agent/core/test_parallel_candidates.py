@@ -114,6 +114,38 @@ def test_candidate_pool_scoped_per_segment():
     _with_temp_session(run)
 
 
+def test_chat_works_in_worker_thread_without_sigalrm():
+    """SIGALRM 只允许主线程；worker 线程里的 chat() 必须改走软墙，不得 ValueError。"""
+    import core.llm_client as lc
+
+    def fake_stream(**_kw):
+        return lc.LlmResponse(text="ok", model="fake")
+
+    real_stream, real_once = lc._chat_stream, lc._chat_once
+    lc._chat_stream = fake_stream
+    lc._chat_once = lambda **_kw: lc.LlmResponse(text="ok", model="fake")
+    try:
+        outcome = {}
+
+        def run():
+            try:
+                outcome["resp"] = lc.chat("sys", "user", provider="deepseek")
+            except Exception as exc:  # noqa: BLE001 — 断言用
+                outcome["exc"] = exc
+
+        worker = threading.Thread(target=run)
+        worker.start()
+        worker.join(timeout=10)
+        assert "exc" not in outcome, f"worker 线程 chat() 抛错: {outcome.get('exc')!r}"
+        assert outcome["resp"].text == "ok"
+
+        # 主线程路径不回归
+        main_resp = lc.chat("sys", "user", provider="deepseek")
+        assert main_resp.text == "ok"
+    finally:
+        lc._chat_stream, lc._chat_once = real_stream, real_once
+
+
 if __name__ == "__main__":
     for name, fn in sorted(globals().items()):
         if name.startswith("test_") and callable(fn):

@@ -2,6 +2,7 @@
 import json
 import math
 import signal
+import threading
 import time
 import httpx
 from pathlib import Path
@@ -106,15 +107,25 @@ def chat(
             f"provider={provider} model={cfg['model']}"
         )
 
-    previous_handler = signal.getsignal(signal.SIGALRM)
-    signal.signal(signal.SIGALRM, on_timeout)
-    signal.setitimer(signal.ITIMER_REAL, wall_timeout_s)
+    # SIGALRM 只能装在主线程；并行候选的 worker 线程改用单调时钟软墙——
+    # 线程内仍有 httpx connect/read 超时 + 流式 no-content 看门狗兜底。
+    use_alarm = threading.current_thread() is threading.main_thread()
+    if use_alarm:
+        previous_handler = signal.getsignal(signal.SIGALRM)
+        signal.signal(signal.SIGALRM, on_timeout)
+        signal.setitimer(signal.ITIMER_REAL, wall_timeout_s)
+    started_at = time.monotonic()
     try:
         url = f"{cfg['base_url'].rstrip('/')}/chat/completions"
         attempts = max(1, int(cfg.get("max_retries", DEFAULT_MAX_RETRIES)) + 1)
         retry_backoff_s = float(cfg.get("retry_backoff_s", DEFAULT_RETRY_BACKOFF_S))
         last_exc: Exception | None = None
         for attempt in range(1, attempts + 1):
+            if time.monotonic() - started_at > wall_timeout_s:
+                raise LlmTimeoutError(
+                    f"LLM request exceeded wall timeout {wall_timeout_s:.0f}s before attempt {attempt}: "
+                    f"provider={provider} model={cfg['model']}"
+                )
             try:
                 if use_stream:
                     response = _chat_stream(
@@ -151,8 +162,9 @@ def chat(
                 time.sleep(_retry_delay_s(attempt, retry_backoff_s))
         raise last_exc or LlmRequestError("LLM request failed before sending")
     finally:
-        signal.setitimer(signal.ITIMER_REAL, 0)
-        signal.signal(signal.SIGALRM, previous_handler)
+        if use_alarm:
+            signal.setitimer(signal.ITIMER_REAL, 0)
+            signal.signal(signal.SIGALRM, previous_handler)
 
 
 def _chat_once(
