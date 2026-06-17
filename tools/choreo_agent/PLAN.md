@@ -416,3 +416,19 @@ codex_9d_motif_grad_ygxy 9 机全流程通过（7 段全锁，76min/20 轮/0.79 
 1. **灯光色彩回归已修复**：真实 distinct RGB 38→133（3.5×），逼近标杆 160。关键——模型只用了 1 次 gradient_to（S01），其余靠 fade_group + flash_group(alt_color) 达成。说明 gradient_to 是充分非必要的工具，prompt 提示已足够，不需强制（强制=滑向 hardcode）。
 2. **readable_ratio 对异步母题的结构性偏置确认**：两场母题场 0.32/0.22 vs 标杆 0.64——波次/过渡态非定格帧多，settled-symmetric 帧占比天然被压低。该指标不能用于母题重场的横评，真实裁决靠人工目检。这是 readable 指标 wave-aware 化的待办依据。
 3. S05 仍磨段（并行候选 line-number 串扰使 preflight 反馈引用错候选的行号——模型代码其实已包裹 custom_points）。这是并行候选的已知摩擦，非代码 bug，但值得后续给 preflight 反馈加"按当前提交代码行号"校正。
+
+# 16. 内部技能化 Stage 1 (2026-06-17)
+
+把 function.py 的原语和复用编舞模式显式化为有文档、可复用、可测试的「编舞技能」，让内部 agent 更可靠地选用——不是插件框架，不对外暴露。
+
+单一真相源 = `core/skills.py` 注册表（纯元数据，无执行/门/状态耦合）：
+- `PRIMITIVE_SKILLS`（15 张卡，每张包一个 function.py 函数）：含 brief 点名的 11 个 + fade_rgb + best/far_assign + custom_points。字段：name/function/category/role_fit/purpose/when_to_use/when_not/key_params/safety/validation_risks/example/combines_with/music_fit。
+- `COMPOSITE_SKILLS`（8 个，**文档化模式而非新函数**——避免 geo_* 式模板退化、不含硬编码坐标，example 用 custom_points([...]) 占位）：center-out-climax / breathing-transition / call-and-response / chain-follow-phrase / static-pose-active-light / ending-flash-fade-closure / density-expand-contract / beat-aligned-light-wave。每个声明 uses（必为已知原语）/role_fit/music_fit/visual_effect/constraints/how_to_choose/avoid_overuse。
+- 生成器：`render_full_skill_doc()`（SKILL.md 全文）、`skill_menu_for_role(role)`（段 prompt 注入）、`composite_catalog_block()`（planner 注入）、`role_class_for_segment()`（段→角色软映射，关键词覆盖 + S01→opening/S05→climax/S06→closure 兜底）。
+
+交付：
+- `SKILL.md`（466 行，注册表生成）：概念（primitive=执行/skill=语义单元）+ 卡片解剖 + 安全验证哲学（碰撞/窗口填充/低活动/同步门）+ 原语卡 + 组合卡 + Future direction（Stage 2-5，外部 agent 暴露明确留待将来，本阶段不做）。
+- prompt 集成（缓存安全，§11.3）：段 USER prompt 注入 `skill_menu_for_role`（按角色给候选乐句，LAND 不注入），planner prompt 增 `composite_catalog_block`（与段菜单同源）；冻结的 system prompt / PACK_ORDER 不动，零缓存未命中。
+- `core/test_skills.py`（14 项）：原语函数都在 function.py __all__、组合只引已知原语、SKILL.md 与注册表快照同步、菜单/目录非空且只引已知技能、段/planner prompt 含技能引导、角色映射正确。
+
+约束守住：门未削弱（skills.py 纯元数据）、无 LLM 判断替代确定性校验、无硬编码坐标技能、checkpoint/resume/锁定/DeepSeek 流程不变；既有 174 core + 12 integration 全绿。

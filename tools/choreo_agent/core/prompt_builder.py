@@ -4,6 +4,8 @@ from pathlib import Path
 from collections.abc import Mapping, Sequence
 from typing import Any
 
+from .skills import role_class_for_segment, skill_menu_for_role
+
 CONTEXT_DIR = Path(__file__).resolve().parent.parent / "context_packs"
 
 # 加载顺序：API 基础 → 规则 → 模式 → 验证
@@ -166,6 +168,9 @@ def build_segment_prompt(
         prev_update_rule = "段尾更新 prev = [(t[0],t[1],t[2]) for t in targets]"
 
     coordinate_hint = _format_coordinate_hint(drone_count, segment_upper)
+    # 技能候选菜单（从 core/skills.py 注册表生成，按段落角色选用）。只进 user
+    # prompt，不动冻结的 system prompt（§11.3 缓存约束）。
+    skill_menu = skill_menu_for_role(role_class_for_segment(segment_upper, plan_role=intent or ""))
 
     if is_land:
         user = f"""## {segment_id} ({start_time}-{end_time}s, 时长{end_time - start_time}s)
@@ -189,6 +194,8 @@ def build_segment_prompt(
 {composition_text}
 {preferences_text}
 {prev_text}
+
+{skill_menu}
 
 ## 要求
 {segment_start_rule}

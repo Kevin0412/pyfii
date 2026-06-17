@@ -1,0 +1,179 @@
+"""Skill registry tests — Stage 1 internal skillization.
+
+Enforce that the registry (core/skills.py) is the single source of truth: every
+documented skill maps to a real function.py primitive, every composite composes
+only known primitives, the generated SKILL.md is in sync, and the prompts carry
+the skill guidance.
+"""
+
+import importlib.util
+from pathlib import Path
+
+import core.skills as sk
+from core.prompt_builder import build_segment_prompt
+from core.composition_planner import build_planner_prompt
+
+ROOT = Path(__file__).resolve().parents[1]
+
+# The primitives the brief explicitly requires to be documented.
+REQUIRED_PRIMITIVES = {
+    "ripple_move", "follow_chain", "group_relay", "light_wave", "fade_group",
+    "breathe_group", "flash_group", "spatial_ranks", "ripple_delays",
+    "split_groups", "beat_ms",
+}
+
+
+def _function_all() -> set[str]:
+    path = ROOT / "project_template" / "scripts" / "function.py"
+    spec = importlib.util.spec_from_file_location("template_function_skills", path)
+    module = importlib.util.module_from_spec(spec)
+    assert spec.loader is not None
+    spec.loader.exec_module(module)
+    return set(module.__all__)
+
+
+# ---------- registry ↔ function.py ----------
+
+def test_primitive_functions_exist_in_function_all():
+    allset = _function_all()
+    missing = [s["function"] for s in sk.PRIMITIVE_SKILLS if s["function"] not in allset]
+    assert not missing, f"primitive skills point at non-exported functions: {missing}"
+
+
+def test_required_primitives_are_documented():
+    documented = sk.primitive_functions()
+    missing = REQUIRED_PRIMITIVES - documented
+    assert not missing, f"brief-required primitives lack a skill card: {sorted(missing)}"
+
+
+def test_composite_uses_are_known_primitives():
+    known = sk.primitive_functions()
+    for s in sk.COMPOSITE_SKILLS:
+        unknown = [u for u in s["uses"] if u not in known]
+        assert not unknown, f"composite {s['name']} uses unknown primitives: {unknown}"
+        assert s["uses"], f"composite {s['name']} composes nothing"
+
+
+# ---------- metadata shape ----------
+
+def test_categories_and_roles_valid():
+    required_fields_prim = {
+        "name", "function", "category", "role_fit", "purpose", "when_to_use",
+        "when_not", "key_params", "safety", "validation_risks", "example",
+        "combines_with", "music_fit",
+    }
+    required_fields_comp = {
+        "name", "uses", "category", "role_fit", "music_fit", "visual_effect",
+        "constraints", "how_to_choose", "avoid_overuse", "example",
+    }
+    for s in sk.PRIMITIVE_SKILLS:
+        assert required_fields_prim <= set(s), f"{s.get('name')} missing fields"
+        assert s["category"] in sk.VALID_CATEGORIES, (s["name"], s["category"])
+        assert s["role_fit"] and set(s["role_fit"]) <= sk.VALID_ROLES, (s["name"], s["role_fit"])
+    for s in sk.COMPOSITE_SKILLS:
+        assert required_fields_comp <= set(s), f"{s.get('name')} missing fields"
+        assert s["category"] in sk.VALID_CATEGORIES, (s["name"], s["category"])
+        assert s["role_fit"] and set(s["role_fit"]) <= sk.VALID_ROLES, (s["name"], s["role_fit"])
+
+
+def test_skill_names_unique():
+    names = [s["name"] for s in sk.PRIMITIVE_SKILLS] + [s["name"] for s in sk.COMPOSITE_SKILLS]
+    dups = {n for n in names if names.count(n) > 1}
+    assert not dups, f"duplicate skill names: {dups}"
+
+
+def test_combines_with_references_real_skills():
+    names = sk.all_skill_names()
+    for s in sk.PRIMITIVE_SKILLS:
+        bad = [c for c in s["combines_with"] if c not in names]
+        assert not bad, f"{s['name']} combines_with unknown skills: {bad}"
+
+
+# ---------- SKILL.md ↔ registry ----------
+
+def test_skill_doc_in_sync_with_registry():
+    doc_path = ROOT / "SKILL.md"
+    assert doc_path.exists(), "SKILL.md missing — generate it from core.skills.render_full_skill_doc()"
+    on_disk = doc_path.read_text(encoding="utf-8")
+    expected = sk.render_full_skill_doc()
+    assert on_disk == expected, (
+        "SKILL.md is stale. Regenerate:\n"
+        "  python -c \"import core.skills as s, pathlib; "
+        "pathlib.Path('SKILL.md').write_text(s.render_full_skill_doc())\""
+    )
+
+
+def test_every_skill_appears_in_doc():
+    doc = (ROOT / "SKILL.md").read_text(encoding="utf-8")
+    for s in sk.PRIMITIVE_SKILLS:
+        assert s["name"] in doc and s["function"] in doc, f"{s['name']} not documented"
+    for s in sk.COMPOSITE_SKILLS:
+        assert s["name"] in doc, f"composite {s['name']} not documented"
+
+
+# ---------- prompt-facing renderers ----------
+
+def test_skill_menu_for_each_role_non_empty_and_known():
+    known = sk.all_skill_names() | sk.primitive_functions()
+    for role in sk.VALID_ROLES:
+        menu = sk.skill_menu_for_role(role)
+        assert menu and "本段技能候选" in menu, f"empty menu for {role}"
+        # every token that looks like a skill name must be a registered skill/function
+        for s in sk.COMPOSITE_SKILLS:
+            if role in s["role_fit"]:
+                assert s["name"] in menu, f"{s['name']} should appear in {role} menu"
+
+
+def test_unknown_role_falls_back():
+    assert "本段技能候选" in sk.skill_menu_for_role("not-a-role")
+
+
+def test_role_class_for_segment():
+    assert sk.role_class_for_segment("S05") == "climax"
+    assert sk.role_class_for_segment("S06") == "closure"
+    assert sk.role_class_for_segment("S01") == "opening"
+    assert sk.role_class_for_segment("LAND") == "closure"
+    assert sk.role_class_for_segment("S03") == "development"
+    # plan-role keywords override the canonical default
+    assert sk.role_class_for_segment("S03", plan_role="本段是全场高潮爆发") == "climax"
+    assert sk.role_class_for_segment("S02", plan_role="安静留白悬停") == "calm"
+
+
+def test_composite_catalog_lists_all_composites():
+    block = sk.composite_catalog_block()
+    for s in sk.COMPOSITE_SKILLS:
+        assert s["name"] in block, f"{s['name']} missing from planner catalog"
+
+
+# ---------- prompt integration ----------
+
+def test_segment_prompt_injects_skill_menu():
+    _sys, user = build_segment_prompt(
+        "S05", 47.0, 59.0, "高潮爆发段", [[100, 100, 120]] * 9, "", drone_count=9,
+    )
+    assert "本段技能候选" in user
+    assert "center-out-climax" in user  # climax composite surfaced for S05
+
+    _s, land = build_segment_prompt(
+        "LAND", 67.0, 72.0, "降落", [[100, 100, 120]] * 9, "", drone_count=9,
+    )
+    assert "本段技能候选" not in land, "LAND must not get a choreography skill menu"
+
+
+def test_planner_prompt_injects_catalog():
+    brief = {
+        "music_source": "x.mp3", "duration_s": 70.0, "tempo_bpm": 120.0,
+        "beat_interval_s": 0.5, "hard_cues": [4.0, 20.0],
+        "sections": [{"time_range": [0, 20], "energy": 0.5, "energy_label": "mid", "onset_per_s": 2}],
+    }
+    prompt = build_planner_prompt(brief, 9)
+    assert "组合技能目录" in prompt
+    assert "ending-flash-fade-closure" in prompt
+
+
+if __name__ == "__main__":
+    for name, fn in sorted(globals().items()):
+        if name.startswith("test_") and callable(fn):
+            fn()
+            print(f"PASSED: {name}")
+    print("\nALL SKILL TESTS PASSED")

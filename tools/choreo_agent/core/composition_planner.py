@@ -17,6 +17,8 @@ import re
 from collections.abc import Mapping
 from typing import Any, Callable
 
+from .skills import composite_catalog_block
+
 FORMAL_SEGMENT_IDS = ["S01", "S02", "S03", "S04", "S05", "S06"]
 MIN_SHOW_S = 55.0
 MAX_SHOW_S = 75.0
@@ -78,6 +80,8 @@ def build_planner_prompt(
             + json.dumps(prior_plan, ensure_ascii=False)
             + "\n"
         )
+    # 组合技能目录（从 core/skills.py 注册表生成，与段 prompt 的技能菜单同源）。
+    catalog = composite_catalog_block()
 
     return f"""## 为这首音乐设计无人机灯光秀全局章法（{int(drone_count)} 机）
 {preferences_block}{directives_block}{prior_block}
@@ -95,6 +99,7 @@ def build_planner_prompt(
 - 质心可以迁移（启程/回归/钉守），是空间叙事工具。
 - 每段给出灯光语体：motion（稀疏短提示）/ light_clock（灯光占满飞行窗，渐变呼吸）/ identity（每机独立色相）。
 - 母题词汇可直接用（代码层有对应执行器，写进 motifs 会被照做）：波次涟漪、链式跟随/蛇形、分组问答接力、光波扫过、渐变收束、呼吸明暗、同步频闪；灯光可绑定动作意图（扩张配中心光波、问答配双色、收尾齐闪/渐隐）。
+{catalog}
 - 音乐比演出长时，演出用开头部分即可（结构上收束在你选的 show_end_s）。
 
 硬约束：
