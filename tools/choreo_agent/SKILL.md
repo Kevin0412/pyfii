@@ -612,13 +612,29 @@ Place the file at `tools/choreo_agent/user_skills.json` (global) or
 `<project>/user_skills.json` (per-project); `run_pipeline.py` loads both at
 startup. See `user_skills.example.json` for a template.
 
+## Distilling human works (Stage 3)
+
+`core/distill.py` reads a finished work's trajectory (a `.fii` directory or any
+project's `output/`) and extracts a **choreography signature** → **technique
+labels** (e.g. *light-clock lighting*, *settled-with-lit-holds*,
+*center-migration arc*, *within-frame mirror symmetry*, *layered height*). Run:
+
+```bash
+python -m core.distill <fii_or_output_dir> "<name>"
+```
+
+The output is a *profile*: principles and measured parameters, **not**
+coordinates. A human reviews the profile and curates reusable principle-skills
+from it — we never replay a human work's point tables. This automates the
+hand-distillation in `doc/human_choreography_distillation.md`.
+
 ## Future direction (out of scope for the internal stages)
 
 The internal skill system is the foundation, not the endpoint. The roadmap:
 
-1. Internal skillization of `function.py` primitives.
-2. Build and harden higher-level composite choreography skills.
-3. Distill human-designed works (e.g. 大闹天宫) into reusable skills.
+1. **(done)** Internal skillization of `function.py` primitives.
+2. **(done)** Build and harden higher-level composite choreography skills.
+3. **(done)** Distill human-designed works into reusable principle-skills.
 4. **(done)** Support user-defined or user-composed skills.
 5. Only after the internal skill system is mature, expose the whole Pyfii
    choreography agent/environment as a tool or skill for external coding agents
