@@ -160,6 +160,45 @@ def test_segment_prompt_injects_skill_menu():
     assert "本段技能候选" not in land, "LAND must not get a choreography skill menu"
 
 
+def test_segment_prompt_includes_quality_budget():
+    """S03-style long segments must be told the quality-gate minimums up front
+    (the fix for the multi-round 'moves too small' grind)."""
+    from core.validator import motion_quality_minimums
+
+    _sys, user = build_segment_prompt(
+        "S03", 24.1, 35.7, "仙鹤对鸣 能量降低", [[280, 280, 160]] * 9, "", drone_count=9,
+    )
+    assert "动作质量预算" in user
+    mins = motion_quality_minimums(6.0, 9)
+    assert f"{mins['min_moving']}/9" in user, "min_moving not surfaced"
+    assert f"≥{mins['min_median_path_cm']:.0f}cm" in user, "median path target missing"
+    # LAND has no choreography quality demand
+    _s, land = build_segment_prompt(
+        "LAND", 67.0, 72.0, "降落", [[280, 280, 160]] * 9, "", drone_count=9,
+    )
+    assert "动作质量预算" not in land
+
+
+def test_motion_quality_minimums_matches_gate():
+    """motion_quality_minimums is the single source of truth for the gate."""
+    from core.validator import motion_quality_minimums, _check_motion_quality
+
+    mins = motion_quality_minimums(5.4, 9)
+    # a quality dict that is exactly at the floors must produce no errors
+    at_floor = {
+        "drone_count": 9,
+        "moving_drones": mins["min_moving"],
+        "median_path_cm": mins["min_median_path_cm"],
+        "median_excursion_cm": mins["min_median_excursion_cm"],
+        "max_excursion_cm": mins["min_max_excursion_cm"],
+    }
+    assert _check_motion_quality((24.1, 29.5), at_floor) == []
+    # just below the path floor must fail
+    below = dict(at_floor, median_path_cm=mins["min_median_path_cm"] - 1)
+    errs = _check_motion_quality((24.1, 29.5), below)
+    assert any("中位路径" in e for e in errs)
+
+
 def test_planner_prompt_injects_catalog():
     brief = {
         "music_source": "x.mp3", "duration_s": 70.0, "tempo_bpm": 120.0,

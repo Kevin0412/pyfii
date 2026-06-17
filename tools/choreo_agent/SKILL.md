@@ -345,8 +345,8 @@ flash_group(drones, '#ffffff', times=2, on_ms=180)
 - **music fit**: 段落之间的换气、情绪转换、能量回落。
 - **visual effect**: 队形小幅就近重排到新姿态，灯光呼吸/渐变完成情绪过渡，不抢戏。
 - **constraints**: 用 best_assign 求就近小动作；呼吸/渐变嵌进有移动的窗口，别让整段静止；保持亮灯。
-- **how to choose**: 两个强段之间需要缓冲、或音乐转句时。
-- **avoid overuse**: 过渡太多会让演出拖沓——相邻不超过一次。
+- **how to choose**: 两个强段之间需要缓冲、或音乐转句时；只配短窗口(≤8s)或当长段的收尾点缀。
+- **avoid overuse**: 过渡太多会让演出拖沓——相邻不超过一次。**不能当长段(≥10s)主体**：它是就近小动作，长段 quality 门要求中位路径≥80cm，呼吸式小动作会被反复打回（用 density-expand-contract / far_assign 做主体，再用它收尾）。
 
 ```python
 prev = ripple_move(drones, best_assign(prev, geo), 2400, ripple_delays(prev, mode='sweep_x', step_ms=120), colors=palette)

@@ -5,6 +5,7 @@ from collections.abc import Mapping, Sequence
 from typing import Any
 
 from .skills import role_class_for_segment, skill_menu_for_role
+from .validator import motion_quality_minimums
 
 CONTEXT_DIR = Path(__file__).resolve().parent.parent / "context_packs"
 
@@ -171,6 +172,19 @@ def build_segment_prompt(
     # 技能候选菜单（从 core/skills.py 注册表生成，按段落角色选用）。只进 user
     # prompt，不动冻结的 system prompt（§11.3 缓存约束）。
     skill_menu = skill_menu_for_role(role_class_for_segment(segment_upper, plan_role=intent or ""))
+    # 动作质量预算：把 validator 质量门的确定性下限提前告诉模型，避免靠失败反馈
+    # 反复试错（S03 这类长段曾磨 15+ 轮才发现"动作太小"）。用封顶时长取门的下限值，
+    # 达到即过；长段建议给余量。与 _check_motion_quality 同源（motion_quality_minimums）。
+    _qm = motion_quality_minimums(min(float(end_time - start_time), 6.0), drone_count)
+    quality_budget = (
+        f"## 动作质量预算（validator 质量门，确定性下限——第一次就设计到位，别靠反馈试错）\n"
+        f"- 至少 {_qm['min_moving']}/{drone_count} 架离起始位 >{_qm['excursion_floor_cm']:.0f}cm（小范围抖动/单机慢挪不算）\n"
+        f"- 中位路径 ≥{_qm['min_median_path_cm']:.0f}cm，中位位移 ≥{_qm['min_median_excursion_cm']:.0f}cm，"
+        f"最大展开 ≥{_qm['min_max_excursion_cm']:.0f}cm（长段更高，建议设计到 110-150cm 留余量）\n"
+        f"- 长段(≥10s)主体用大动作母题：`far_assign(prev, geo, min_path_cm=active_min_path_cm(flying_ms))` + ripple_move；"
+        f"gentle 技能(breathing-transition/呼吸)只配短过渡或定格点缀，不能当长段主体\n"
+        f"- 真实高度层：整段 Z range ≥90cm、每个主体 keyframe ≥3 个 Z 层（避免固定高度/车道退化）"
+    )
 
     if is_land:
         user = f"""## {segment_id} ({start_time}-{end_time}s, 时长{end_time - start_time}s)
@@ -196,6 +210,8 @@ def build_segment_prompt(
 {prev_text}
 
 {skill_menu}
+
+{quality_budget}
 
 ## 要求
 {segment_start_rule}

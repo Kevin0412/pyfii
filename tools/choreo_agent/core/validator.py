@@ -957,6 +957,24 @@ def _point3(row) -> tuple[float, float, float]:
     return (float(row[1]), float(row[2]), float(row[3]))
 
 
+def motion_quality_minimums(duration_s: float, drone_count: int) -> dict:
+    """Deterministic motion-quality thresholds for a segment.
+
+    Single source of truth shared by the quality gate (_check_motion_quality)
+    and the segment prompt (so the model is told the spec up front instead of
+    discovering it through repair feedback). Keys match the gate's checks.
+    """
+    duration = max(0.1, float(duration_s))
+    n = int(drone_count)
+    return {
+        "min_moving": max(1, math.ceil(n * MIN_MOVING_DRONE_FRACTION)),
+        "min_median_path_cm": max(80.0, min(180.0, duration * 8.0)),
+        "min_median_excursion_cm": max(45.0, min(90.0, duration * 4.0)),
+        "min_max_excursion_cm": max(90.0, min(180.0, duration * 8.0)),
+        "excursion_floor_cm": MIN_MEANINGFUL_EXCURSION_CM,
+    }
+
+
 def _check_motion_quality(
     window: tuple[float, float],
     quality: dict,
@@ -967,10 +985,11 @@ def _check_motion_quality(
     start_s, end_s = window
     duration = max(0.1, end_s - start_s)
     drone_count = int(quality.get("drone_count", 0))
-    min_moving = max(1, math.ceil(drone_count * MIN_MOVING_DRONE_FRACTION))
-    min_median_path = max(80.0, min(180.0, duration * 8.0))
-    min_median_excursion = max(45.0, min(90.0, duration * 4.0))
-    min_max_excursion = max(90.0, min(180.0, duration * 8.0))
+    mins = motion_quality_minimums(duration, drone_count)
+    min_moving = mins["min_moving"]
+    min_median_path = mins["min_median_path_cm"]
+    min_median_excursion = mins["min_median_excursion_cm"]
+    min_max_excursion = mins["min_max_excursion_cm"]
 
     errors = []
     moving_drones = int(quality.get("moving_drones", 0))

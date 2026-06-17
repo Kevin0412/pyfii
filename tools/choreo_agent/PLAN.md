@@ -432,3 +432,13 @@ codex_9d_motif_grad_ygxy 9 机全流程通过（7 段全锁，76min/20 轮/0.79 
 - `core/test_skills.py`（14 项）：原语函数都在 function.py __all__、组合只引已知原语、SKILL.md 与注册表快照同步、菜单/目录非空且只引已知技能、段/planner prompt 含技能引导、角色映射正确。
 
 约束守住：门未削弱（skills.py 纯元数据）、无 LLM 判断替代确定性校验、无硬编码坐标技能、checkpoint/resume/锁定/DeepSeek 流程不变；既有 174 core + 12 integration 全绿。
+
+# 17. S03 长段磨轮根因修复：质量预算前置 (2026-06-18)
+
+技能化验收 run 的 S03（11.6s 窗口）磨了 19+ 轮才锁定。根因：planner 按"能量降低"cue 给 S03 配了 gentle 技能（breathing-transition），但 validator 质量门静默要求中位路径≥80cm / ≥7-of-9 机离位 / 最大展开≥90cm——模型只能靠失败反馈逐轮发现"动作太小"，从小动作磨到大动作。非碰撞、非技能 bug，是"门的要求不前置"。
+
+修复（不削门，prompt 前置）：
+- validator.py 抽出 `motion_quality_minimums(duration_s, drone_count)` 作为质量门单一真相源，_check_motion_quality 改用它（零行为变化）。
+- prompt_builder 段 prompt 注入「动作质量预算」块：把确定性下限（≥7/9 离位>30cm、中位路径≥80cm、中位位移≥45cm、最大展开≥90cm、长段主体用 far_assign+ripple_move、Z range≥90cm）提前告诉模型，第一次就设计到位。封顶时长取门的下限值，达到即过。
+- skills.py：breathing-transition 标注"不能当长段(≥10s)主体"，引导长段用 density-expand-contract/far_assign。
+- 测试 +2（预算匹配门下限、LAND 无预算）；176 core + 12 integration 全绿。
