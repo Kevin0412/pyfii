@@ -1,0 +1,18 @@
+{
+  "_comment": "Template for user-defined choreography skills. Copy to user_skills.json (global, beside this file) or <project>/user_skills.json. Composites may only `uses` functions that exist in project_template/scripts/function.py; user primitives may only wrap a function already exported there. Pure metadata — no executables. The loader validates atomically: a malformed file registers nothing. See SKILL.md 'User-defined skills'.",
+  "primitives": [],
+  "composites": [
+    {
+      "name": "my-spiral-bloom",
+      "uses": ["spatial_ranks", "ripple_delays", "ripple_move", "light_wave"],
+      "category": "motion",
+      "role_fit": ["expand", "climax"],
+      "music_fit": "绽放式渐强、华彩展开",
+      "visual_effect": "螺旋波次从中心层层绽放，光波同步扫出",
+      "constraints": "geo 用 far_assign 求大动作；spiral delays 非零；填满窗口；Z 分层",
+      "how_to_choose": "华彩/绽放段且已是中心聚拢队形时",
+      "avoid_overuse": "一场一次，避免与 center-out-climax 重复",
+      "example": "prev = ripple_move(drones, far_assign(prev, geo, min_path_cm=active_min_path_cm(2800)), 2800, ripple_delays(prev, mode='spiral', step_ms=130), colors=palette, gradient_to=cool)"
+    }
+  ]
+}

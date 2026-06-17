@@ -238,6 +238,105 @@ def test_planner_prompt_injects_catalog():
     assert "ending-flash-fade-closure" in prompt
 
 
+# ---------- Stage 4: user-defined skills ----------
+
+def _valid_user_composite(name="my-test-skill"):
+    return {
+        "name": name,
+        "uses": ["ripple_move", "light_wave"],
+        "category": "motion",
+        "role_fit": ["expand"],
+        "music_fit": "测试",
+        "visual_effect": "测试效果",
+        "constraints": "测试约束",
+        "how_to_choose": "测试",
+        "avoid_overuse": "测试",
+        "example": "prev = ripple_move(drones, best_assign(prev, geo), 2600, ripple_delays(prev), colors=palette)",
+    }
+
+
+def test_register_valid_user_composite_appears_in_menu():
+    try:
+        errs = sk.register_user_skills({"composites": [_valid_user_composite()]})
+        assert errs == [], errs
+        assert "my-test-skill" in sk.all_skill_names()
+        assert "my-test-skill" in sk.composite_catalog_block()
+        assert "my-test-skill" in sk.skill_menu_for_role("expand")
+    finally:
+        sk.clear_user_skills()
+
+
+def test_reject_unknown_primitive_in_user_composite():
+    try:
+        bad = _valid_user_composite()
+        bad["uses"] = ["ripple_move", "not_a_real_function"]
+        errs = sk.register_user_skills({"composites": [bad]})
+        assert errs and any("未知原语" in e for e in errs)
+        assert "my-test-skill" not in sk.all_skill_names(), "atomic: nothing registers on error"
+    finally:
+        sk.clear_user_skills()
+
+
+def test_reject_user_primitive_with_unknown_function():
+    try:
+        bad_prim = {
+            "name": "fake-prim", "function": "totally_made_up", "category": "motion",
+            "role_fit": ["any"], "purpose": "x", "when_to_use": "x", "when_not": "x",
+            "key_params": "x", "safety": "x", "validation_risks": "x", "example": "x",
+            "combines_with": [], "music_fit": "x",
+        }
+        errs = sk.register_user_skills({"primitives": [bad_prim]})
+        assert errs and any("不能引入新执行函数" in e or "__all__" in e for e in errs)
+    finally:
+        sk.clear_user_skills()
+
+
+def test_reject_bad_category_and_role_and_missing_field():
+    try:
+        bad = _valid_user_composite()
+        bad["category"] = "teleport"
+        bad["role_fit"] = ["nonsense"]
+        del bad["music_fit"]
+        errs = sk.register_user_skills({"composites": [bad]})
+        assert any("category" in e for e in errs)
+        assert any("role_fit" in e for e in errs)
+        assert any("缺字段" in e for e in errs)
+    finally:
+        sk.clear_user_skills()
+
+
+def test_reject_duplicate_name():
+    try:
+        dup = _valid_user_composite(name="center-out-climax")  # collides with built-in
+        errs = sk.register_user_skills({"composites": [dup]})
+        assert any("重复" in e for e in errs)
+    finally:
+        sk.clear_user_skills()
+
+
+def test_load_example_file_validates():
+    try:
+        errs = sk.load_user_skills(ROOT / "user_skills.example.json")
+        assert errs == [], f"shipped example must be valid: {errs}"
+        assert "my-spiral-bloom" in sk.all_skill_names()
+    finally:
+        sk.clear_user_skills()
+    # missing file is not an error
+    assert sk.load_user_skills(ROOT / "does_not_exist.json") == []
+
+
+def test_user_skills_do_not_leak_into_default_cards():
+    """With no user skills registered, the generated CARD section has no user
+    skill (the snapshot test depends on this isolation). Note 'my-spiral-bloom'
+    still appears in the footer's documentation example — that's expected."""
+    try:
+        sk.register_user_skills({"composites": [_valid_user_composite()]})
+        assert "my-test-skill" in sk.render_skill_markdown(), "registered → in cards"
+    finally:
+        sk.clear_user_skills()
+    assert "my-test-skill" not in sk.render_skill_markdown(), "cleared → gone from cards"
+
+
 if __name__ == "__main__":
     for name, fn in sorted(globals().items()):
         if name.startswith("test_") and callable(fn):

@@ -571,14 +571,55 @@ prev = ripple_move(drones, far_assign(prev, geo, min_path_cm=active_min_path_cm(
 light_wave(drones, ripple_delays(prev, mode='sweep_x', step_ms=120), palette, hold_ticks=6)
 ```
 
-## Future direction (out of scope for Stage 1)
+## User-defined skills (Stage 4)
+
+You can add your own skills without touching `core/skills.py`. Drop a JSON file
+and the agent picks them up in the menu, the planner catalog, and this doc:
+
+```json
+{
+  "primitives": [],
+  "composites": [
+    {
+      "name": "my-spiral-bloom",
+      "uses": ["spatial_ranks", "ripple_delays", "ripple_move", "light_wave"],
+      "category": "motion",
+      "role_fit": ["expand", "climax"],
+      "music_fit": "绽放式渐强、华彩展开",
+      "visual_effect": "螺旋波次从中心层层绽放，光波同步扫出",
+      "constraints": "geo 用 far_assign；spiral delays 非零；填满窗口；Z 分层",
+      "how_to_choose": "华彩/绽放段且已是中心聚拢队形时",
+      "avoid_overuse": "一场一次",
+      "example": "prev = ripple_move(drones, far_assign(prev, geo, min_path_cm=active_min_path_cm(2800)), 2800, ripple_delays(prev, mode='spiral', step_ms=130), colors=palette, gradient_to=cool)"
+    }
+  ]
+}
+```
+
+Rules enforced by the loader (`core.skills.load_user_skills` /
+`register_user_skills`):
+
+- **Composites** may only `uses` primitive functions that already exist in
+  `function.py` — you compose existing kernel pieces, you do not add code.
+- **User primitives** may only wrap a function already exported by
+  `function.py` (`__all__`). User skills are pure metadata: they cannot
+  introduce executables, cannot weaken gates, cannot run arbitrary code.
+- Every entry is validated (required fields, valid `category` / `role_fit`,
+  known primitives, unique name); a malformed file registers **nothing**
+  (atomic), so the built-in catalog is never half-broken.
+
+Place the file at `tools/choreo_agent/user_skills.json` (global) or
+`<project>/user_skills.json` (per-project); `run_pipeline.py` loads both at
+startup. See `user_skills.example.json` for a template.
+
+## Future direction (out of scope for the internal stages)
 
 The internal skill system is the foundation, not the endpoint. The roadmap:
 
-1. **(this stage)** Internal skillization of `function.py` primitives.
+1. Internal skillization of `function.py` primitives.
 2. Build and harden higher-level composite choreography skills.
 3. Distill human-designed works (e.g. 大闹天宫) into reusable skills.
-4. Support user-defined or user-composed skills.
+4. **(done)** Support user-defined or user-composed skills.
 5. Only after the internal skill system is mature, expose the whole Pyfii
    choreography agent/environment as a tool or skill for external coding agents
    such as Claude Code, Codex, OpenClaw, or Cursor.

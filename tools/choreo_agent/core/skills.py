@@ -467,17 +467,34 @@ COMPOSITE_SKILLS = [
 # ---------------------------------------------------------------------------
 # Derived lookups
 # ---------------------------------------------------------------------------
+# Stage 4: user-defined skills register here (validated, metadata-only). The
+# generators below read the EFFECTIVE lists (built-in + user) so user skills
+# show up in the doc, the menu, and the planner catalog.
+_USER_PRIMITIVE_SKILLS: list[dict] = []
+_USER_COMPOSITE_SKILLS: list[dict] = []
+
+
+def effective_primitive_skills() -> list[dict]:
+    return PRIMITIVE_SKILLS + _USER_PRIMITIVE_SKILLS
+
+
+def effective_composite_skills() -> list[dict]:
+    return COMPOSITE_SKILLS + _USER_COMPOSITE_SKILLS
+
+
 def primitive_functions() -> set[str]:
-    """All function names referenced by primitive skills."""
-    return {s["function"] for s in PRIMITIVE_SKILLS}
+    """All function names referenced by primitive skills (built-in + user)."""
+    return {s["function"] for s in effective_primitive_skills()}
 
 
 def all_skill_names() -> set[str]:
-    return {s["name"] for s in PRIMITIVE_SKILLS} | {s["name"] for s in COMPOSITE_SKILLS}
+    return {s["name"] for s in effective_primitive_skills()} | {
+        s["name"] for s in effective_composite_skills()
+    }
 
 
 def _skill_by_function(function_name: str) -> dict | None:
-    for s in PRIMITIVE_SKILLS:
+    for s in effective_primitive_skills():
         if s["function"] == function_name:
             return s
     return None
@@ -526,15 +543,11 @@ def skill_menu_for_role(role_class: str) -> str:
     """
     role_class = role_class if role_class in VALID_ROLES else "development"
 
-    def fits(skill):
-        rf = skill.get("role_fit", [])
-        return role_class in rf or "any" in rf
-
-    composites = [s for s in COMPOSITE_SKILLS if role_class in s.get("role_fit", [])]
+    composites = [s for s in effective_composite_skills() if role_class in s.get("role_fit", [])]
     # primitives: motion/lighting/grouping that fit this role (skip pure helpers
     # tagged only "any" to keep the menu tight)
     prims = [
-        s for s in PRIMITIVE_SKILLS
+        s for s in effective_primitive_skills()
         if role_class in s.get("role_fit", [])
         and s["category"] in ("motion", "lighting", "grouping")
     ]
@@ -560,7 +573,7 @@ def composite_catalog_block() -> str:
     """One-line-per-composite catalog for the planner prompt (kept in sync with
     the registry so the planner picks coherent phrases per segment)."""
     lines = ["- 组合技能目录（写进段 motifs 即被照做，按音乐气质选）："]
-    for s in COMPOSITE_SKILLS:
+    for s in effective_composite_skills():
         roles = "/".join(ROLE_LABELS.get(r, r) for r in s["role_fit"])
         lines.append(f"  · {s['name']}（{roles}）：{s['music_fit']}")
     return "\n".join(lines)
@@ -570,10 +583,10 @@ def render_skill_markdown() -> str:
     """Render the skill-card section of SKILL.md from the registry, so the doc
     can be regenerated and never silently desyncs from the metadata."""
     out = ["## Primitive skill cards", ""]
-    for s in PRIMITIVE_SKILLS:
+    for s in effective_primitive_skills():
         out += _render_primitive_card(s)
     out += ["", "## Composite skill cards", ""]
-    for s in COMPOSITE_SKILLS:
+    for s in effective_composite_skills():
         out += _render_composite_card(s)
     return "\n".join(out).rstrip() + "\n"
 
@@ -642,14 +655,55 @@ every documented skill maps to a real function.
 
 SKILL_DOC_FOOTER = """\
 
-## Future direction (out of scope for Stage 1)
+## User-defined skills (Stage 4)
+
+You can add your own skills without touching `core/skills.py`. Drop a JSON file
+and the agent picks them up in the menu, the planner catalog, and this doc:
+
+```json
+{
+  "primitives": [],
+  "composites": [
+    {
+      "name": "my-spiral-bloom",
+      "uses": ["spatial_ranks", "ripple_delays", "ripple_move", "light_wave"],
+      "category": "motion",
+      "role_fit": ["expand", "climax"],
+      "music_fit": "绽放式渐强、华彩展开",
+      "visual_effect": "螺旋波次从中心层层绽放，光波同步扫出",
+      "constraints": "geo 用 far_assign；spiral delays 非零；填满窗口；Z 分层",
+      "how_to_choose": "华彩/绽放段且已是中心聚拢队形时",
+      "avoid_overuse": "一场一次",
+      "example": "prev = ripple_move(drones, far_assign(prev, geo, min_path_cm=active_min_path_cm(2800)), 2800, ripple_delays(prev, mode='spiral', step_ms=130), colors=palette, gradient_to=cool)"
+    }
+  ]
+}
+```
+
+Rules enforced by the loader (`core.skills.load_user_skills` /
+`register_user_skills`):
+
+- **Composites** may only `uses` primitive functions that already exist in
+  `function.py` — you compose existing kernel pieces, you do not add code.
+- **User primitives** may only wrap a function already exported by
+  `function.py` (`__all__`). User skills are pure metadata: they cannot
+  introduce executables, cannot weaken gates, cannot run arbitrary code.
+- Every entry is validated (required fields, valid `category` / `role_fit`,
+  known primitives, unique name); a malformed file registers **nothing**
+  (atomic), so the built-in catalog is never half-broken.
+
+Place the file at `tools/choreo_agent/user_skills.json` (global) or
+`<project>/user_skills.json` (per-project); `run_pipeline.py` loads both at
+startup. See `user_skills.example.json` for a template.
+
+## Future direction (out of scope for the internal stages)
 
 The internal skill system is the foundation, not the endpoint. The roadmap:
 
-1. **(this stage)** Internal skillization of `function.py` primitives.
+1. Internal skillization of `function.py` primitives.
 2. Build and harden higher-level composite choreography skills.
 3. Distill human-designed works (e.g. 大闹天宫) into reusable skills.
-4. Support user-defined or user-composed skills.
+4. **(done)** Support user-defined or user-composed skills.
 5. Only after the internal skill system is mature, expose the whole Pyfii
    choreography agent/environment as a tool or skill for external coding agents
    such as Claude Code, Codex, OpenClaw, or Cursor.
@@ -707,3 +761,133 @@ def _render_composite_card(s: dict) -> list[str]:
         "```",
         "",
     ]
+
+
+# ---------------------------------------------------------------------------
+# Stage 4: user-defined skill format — validation + loader (metadata only).
+#
+# Users add skills via a JSON file:
+#   {"primitives": [ {primitive card...}, ... ],
+#    "composites": [ {composite card...}, ... ]}
+# A user PRIMITIVE skill may only wrap a function already exported by
+# function.py (no new executables — that keeps user skills safe: they are pure
+# metadata, can't introduce code, can't weaken gates). A user COMPOSITE may only
+# `uses` primitive functions that already exist. The loader validates every
+# entry and registers atomically (all-or-nothing) so a malformed file can never
+# half-load.
+# ---------------------------------------------------------------------------
+REQUIRED_PRIMITIVE_FIELDS = {
+    "name", "function", "category", "role_fit", "purpose", "when_to_use",
+    "when_not", "key_params", "safety", "validation_risks", "example",
+    "combines_with", "music_fit",
+}
+REQUIRED_COMPOSITE_FIELDS = {
+    "name", "uses", "category", "role_fit", "music_fit", "visual_effect",
+    "constraints", "how_to_choose", "avoid_overuse", "example",
+}
+
+
+def load_function_names() -> set[str]:
+    """Lazily read function.py's __all__ (the set of legal primitive functions).
+
+    Only called when validating user skills — keeps module import free of any
+    function.py / pyfii dependency.
+    """
+    import importlib.util
+    from pathlib import Path
+
+    path = Path(__file__).resolve().parent.parent / "project_template" / "scripts" / "function.py"
+    spec = importlib.util.spec_from_file_location("template_function_for_skills", path)
+    module = importlib.util.module_from_spec(spec)
+    assert spec.loader is not None
+    spec.loader.exec_module(module)
+    return set(module.__all__)
+
+
+def validate_skill_entry(
+    entry: dict,
+    kind: str,
+    known_functions: set[str],
+    known_names: set[str] | None = None,
+) -> list[str]:
+    """Return a list of human-readable errors for one skill entry (empty = ok)."""
+    errors: list[str] = []
+    if not isinstance(entry, dict):
+        return [f"{kind} 技能必须是字典，得到 {type(entry).__name__}"]
+    name = entry.get("name", "<未命名>")
+    required = REQUIRED_PRIMITIVE_FIELDS if kind == "primitive" else REQUIRED_COMPOSITE_FIELDS
+    missing = required - set(entry)
+    if missing:
+        errors.append(f"技能 {name} 缺字段: {', '.join(sorted(missing))}")
+    if entry.get("category") not in VALID_CATEGORIES:
+        errors.append(f"技能 {name} category 非法: {entry.get('category')}（可用 {sorted(VALID_CATEGORIES)}）")
+    rf = entry.get("role_fit")
+    if not isinstance(rf, list) or not rf or not set(rf) <= VALID_ROLES:
+        errors.append(f"技能 {name} role_fit 非法: {rf}（须为 {sorted(VALID_ROLES)} 的非空子集）")
+    if known_names and name in known_names:
+        errors.append(f"技能名重复: {name}（与已有技能冲突）")
+    if kind == "primitive":
+        fn = entry.get("function")
+        if fn not in known_functions:
+            errors.append(
+                f"原语技能 {name} 的 function={fn!r} 不在 function.py __all__ 中——"
+                "用户技能不能引入新执行函数，只能包装已有原语"
+            )
+    else:
+        uses = entry.get("uses")
+        if not isinstance(uses, list) or not uses:
+            errors.append(f"组合技能 {name} 的 uses 必须是非空列表")
+        else:
+            unknown = [u for u in uses if u not in known_functions]
+            if unknown:
+                errors.append(f"组合技能 {name} 引用未知原语函数: {unknown}")
+    return errors
+
+
+def register_user_skills(data: dict, known_functions: set[str] | None = None) -> list[str]:
+    """Validate and atomically register user skills. Returns errors; on any
+    error nothing is registered. On success the skills join the effective lists
+    and show up in the menu/catalog/doc."""
+    if known_functions is None:
+        known_functions = load_function_names()
+    prims = list(data.get("primitives") or [])
+    comps = list(data.get("composites") or [])
+    # user primitives extend the known-function pool for composite validation
+    extended_funcs = set(known_functions) | {
+        p.get("function") for p in prims if isinstance(p, dict)
+    }
+    known_names = all_skill_names()
+    errors: list[str] = []
+    for p in prims:
+        errors += validate_skill_entry(p, "primitive", known_functions, known_names)
+    for c in comps:
+        errors += validate_skill_entry(c, "composite", extended_funcs, known_names)
+    if errors:
+        return errors
+    _USER_PRIMITIVE_SKILLS.extend(prims)
+    _USER_COMPOSITE_SKILLS.extend(comps)
+    return []
+
+
+def load_user_skills(path) -> list[str]:
+    """Load + register user skills from a JSON file. Returns errors (empty=ok);
+    a missing file is not an error (returns [])."""
+    import json
+    from pathlib import Path
+
+    p = Path(path)
+    if not p.exists():
+        return []
+    try:
+        data = json.loads(p.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError) as exc:
+        return [f"无法读取用户技能文件 {p}: {exc}"]
+    if not isinstance(data, dict):
+        return [f"用户技能文件 {p} 顶层必须是 {{'primitives':[...], 'composites':[...]}}"]
+    return register_user_skills(data)
+
+
+def clear_user_skills() -> None:
+    """Drop all registered user skills (used by tests and for reloads)."""
+    _USER_PRIMITIVE_SKILLS.clear()
+    _USER_COMPOSITE_SKILLS.clear()

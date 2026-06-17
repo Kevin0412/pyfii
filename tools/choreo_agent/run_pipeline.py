@@ -78,6 +78,15 @@ def run_full_flow(
     log_path = project_root / "agent_interaction.log"
     _append(log_path, f"\n\n# FULL FLOW START {time.strftime('%Y-%m-%d %H:%M:%S')}\n")
 
+    # Stage 4: load user-defined skills (global + per-project) so they flow into
+    # the segment menu / planner catalog. Atomic + metadata-only; a bad file is
+    # logged and ignored, never half-loaded.
+    from core import skills as _skills
+    _skills.clear_user_skills()
+    for _sk_path in (TOOL_ROOT / "user_skills.json", project_root / "user_skills.json"):
+        for _err in _skills.load_user_skills(_sk_path):
+            _append(log_path, f"# USER SKILL WARN ({_sk_path.name}): {_err}\n")
+
     records: list[dict] = []
     started_at = time.time()
     session = Session(project_root)
