@@ -316,6 +316,78 @@ targets = far_assign(prev, geo, min_path_cm=active_min_path_cm(2800))
 geo = custom_points([(280+170*cos(2*pi*i/9), 280+170*sin(2*pi*i/9), 160+25*sin(i)) for i in range(9)], n=9, min_xy_cm=90)
 ```
 
+### rotate-orbit  ·  `rotate_assign()`
+
+- **category**: composition
+- **role fit**: development, transition, expand
+- **purpose**: 旋转分配：按角序把每架机映射到沿环移动 steps 位的目标——整体漩涡/轨道旋转。
+- **when to use**: 同构队形（圆环/对称阵）想整体转动时；刚体旋转机间距离恒定，天然安全。
+- **when NOT**: 异构队形（旋转会让间距突变）；需要大幅换位时（用 far-assign）。
+- **key params**: rotate_assign(prev, geo, steps=±k)。steps 越大转动越剧烈，可负反向。geo 应与 prev 同构（同半径环）。
+- **safety**: 同构刚体旋转最小间距恒定——这是最安全的大幅运动之一；仍需 ripple_move 错峰让观感更顺。
+- **validation risks**: geo 与 prev 不同构时旋转路径可能交叉→碰撞门；纯旋转 Z 不变易触发固定高度退化，配合 Z 个性。
+- **combines with**: handwritten-geometry, wave-ripple-move
+- **music fit**: 回旋、盘旋、漩涡式律动。
+
+```python
+geo = custom_points([(280+170*cos(2*pi*i/9), 280+170*sin(2*pi*i/9), 150+30*sin(i)) for i in range(9)], n=9)
+prev = ripple_move(drones, rotate_assign(prev, geo, steps=2), 2600, ripple_delays(prev, mode='spiral', step_ms=120), colors=palette)
+```
+
+### mirror-cross  ·  `mirror_assign()`
+
+- **category**: composition
+- **role fit**: development, climax
+- **purpose**: 镜像对穿分配：每架机飞向自己关于构图质心的反射点附近——对称对穿。
+- **when to use**: 想要穿越中心的对称大动作、戏剧性交叉时。
+- **when NOT**: 不愿处理错峰时（同步对穿必撞）；密集队形（对穿空间不足）。
+- **key params**: mirror_assign(prev, geo)。**必须配错峰**：move2/ripple_move 前给 delays（如 ripple_delays 或 delay(i*150)），让各机不同时刻过中心。
+- **safety**: 错峰是对穿的安全机制（人类作品的对穿全部错峰）——不要为消碰撞丢掉对穿，要用错峰消碰撞。
+- **validation risks**: 同步对穿（delays 全 0）→ 中心碰撞门必炸；错峰不足→碰撞门。
+- **combines with**: handwritten-geometry, wave-delays, wave-ripple-move
+- **music fit**: 戏剧冲突、强烈交叉、对抗式乐句。
+
+```python
+geo = custom_points([...对称目标阵...], n=9)
+delays = [i*150 for i in range(9)]  # 错峰过中心
+prev = ripple_move(drones, mirror_assign(prev, geo), 2600, delays, colors=palette)
+```
+
+### half-swap  ·  `swap_assign()`
+
+- **category**: composition
+- **role fit**: development, buildup
+- **purpose**: 半场交换分配：左右(axis='x')或前后(axis='y')两半互换——组级换位叙事。
+- **when to use**: 两半场整体对调、交错换位时；每半场内部用 best_assign 保路径安全。
+- **when NOT**: 需要全队统一动作或精细个体路径时。
+- **key params**: swap_assign(prev, geo, axis='x'|'y')。奇数机时中位机守中。
+- **safety**: 半场内部 best_assign 保证路径间距；两半交叉穿越仍建议错峰。
+- **validation risks**: 两半同时穿越中线→碰撞门；配错峰缓解。
+- **combines with**: handwritten-geometry, wave-ripple-move, split-groups
+- **music fit**: 换位、对调、交错段。
+
+```python
+prev = ripple_move(drones, swap_assign(prev, geo, axis='x'), 2600, ripple_delays(prev, mode='sweep_x', step_ms=130), colors=palette)
+```
+
+### identity-keep  ·  `keep_assign()`
+
+- **category**: composition
+- **role fit**: any, development
+- **purpose**: 身份保持分配：drone i 固定走第 i 个目标，不重排——per-drone 叙事/色彩身份跟踪。
+- **when to use**: 需要观众跟踪个体（palette 色彩身份、焦点机连续剧情）时。
+- **when NOT**: 需要碰撞最优重排时（用 best_assign/far_assign）。
+- **key params**: keep_assign(prev, geo)。交叉风险自行用错峰处理，validator 逐帧兜底。
+- **safety**: 不做碰撞优化——必须自己保证 geo[i] 相对 prev[i] 的路径不交叉，或配足够错峰。
+- **validation risks**: 目标顺序与起点顺序交叉→碰撞门；需手动错峰或调整 geo 顺序。
+- **combines with**: handwritten-geometry, drone-fade
+- **music fit**: 个体叙事、色彩身份、焦点跟踪。
+
+```python
+palette = [...9 色...]
+prev = ripple_move(drones, keep_assign(prev, geo), 2600, [i*120 for i in range(9)], colors=palette)
+```
+
 
 ## Composite skill cards
 
@@ -447,6 +519,56 @@ prev = ripple_move(drones, best_assign(prev, tight_geo), 2600, ripple_delays(pre
 ```python
 step = beat_ms(bpm, 0.5)
 light_wave(drones, ripple_delays(prev, mode='sweep_x', step_ms=step), palette, hold_ticks=6, gradient_to=cool)
+```
+
+### orbit-rotate-phrase
+
+- **uses primitives**: `rotate_assign()`, `ripple_delays()`, `ripple_move()`
+- **category**: motion
+- **role fit**: development, transition, expand
+- **music fit**: 回旋、盘旋、连绵的圆周律动。
+- **visual effect**: 整个对称队形像星盘一样刚体转动，机间距离恒定、丝滑无碰撞，是大动作里最安全的一种。
+- **constraints**: geo 必须与 prev 同构（同半径/对称环）；steps 控转动量；配 spiral delays 让转动更顺；加 Z 个性避免固定高度退化。
+- **how to choose**: 已是圆环/对称队形、想要大幅但绝对安全的整体运动时。
+- **avoid overuse**: 连续旋转会单调——配合换半径或换轮廓。
+
+```python
+geo = custom_points([(280+170*cos(2*pi*i/9), 280+170*sin(2*pi*i/9), 150+30*sin(i)) for i in range(9)], n=9)
+prev = ripple_move(drones, rotate_assign(prev, geo, steps=2), 2600, ripple_delays(prev, mode='spiral', step_ms=120), colors=palette, gradient_to=cool)
+```
+
+### mirror-cross-phrase
+
+- **uses primitives**: `mirror_assign()`, `ripple_delays()`, `ripple_move()`, `split_groups()`
+- **category**: motion
+- **role fit**: development, climax
+- **music fit**: 戏剧冲突、强烈交叉、对抗式高潮。
+- **visual effect**: 两侧无人机依次穿越中心交叉而过，错峰让它们在不同时刻过心——惊险而安全的对穿。
+- **constraints**: **必须错峰**（mirror_assign 配非零 delays）；对穿空间要够（密集队形不要对穿）；错峰是安全机制不是可选项。
+- **how to choose**: 想要穿越中心的对称张力、戏剧性交叉时。
+- **avoid overuse**: 对穿很抓眼但用多了廉价——一场一两次。
+
+```python
+geo = custom_points([...关于质心对称的目标阵...], n=9)
+delays = [i*150 for i in range(9)]  # 错峰过中心
+prev = ripple_move(drones, mirror_assign(prev, geo), 2600, delays, colors=palette)
+```
+
+### center-migration
+
+- **uses primitives**: `custom_points()`, `far_assign()`, `ripple_move()`, `light_wave()`
+- **category**: motion
+- **role fit**: development, expand
+- **music fit**: 启程/抵达/迁徙叙事、空间方向感强的段落。
+- **visual effect**: 整个队形的质心从场地一侧迁移到另一侧（左→右/聚→散），是方向性空间叙事的核心手法。
+- **constraints**: 新 geo 的质心明显偏离 prev 质心（迁移≥120cm 才读得出）；用 far_assign 求大位移；保持队形可读不要散成噪声；光波同向扫强化方向。
+- **how to choose**: 音乐有明确的'出发→抵达'或方向推进时（人类作品的'新征程'叙事）。
+- **avoid overuse**: 质心来回迁移会晕——一个方向走到底，回归留给后段。
+
+```python
+geo = custom_points([...质心右移到 (400,280) 的造型...], n=9)
+prev = ripple_move(drones, far_assign(prev, geo, min_path_cm=active_min_path_cm(2800)), 2800, ripple_delays(prev, mode='sweep_x', step_ms=140), colors=palette)
+light_wave(drones, ripple_delays(prev, mode='sweep_x', step_ms=120), palette, hold_ticks=6)
 ```
 
 ## Future direction (out of scope for Stage 1)

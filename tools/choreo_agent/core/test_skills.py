@@ -89,6 +89,34 @@ def test_combines_with_references_real_skills():
         assert not bad, f"{s['name']} combines_with unknown skills: {bad}"
 
 
+_FORBIDDEN_IN_EXAMPLES = [
+    r"^\s*import\s", r"\binittime\s*\(", r"\.move2\s*\(", r"\.VelXY\s*\(",
+    r"\.VelZ\s*\(", r"\bgeo_wide_v\b", r"\bgeo_arrow\b", r"\bgeo_box\b",
+    r"\bgeo_diagonal\b", r"\bgeo_wave\b", r"\bgeo_grid\b", r"\bjitter_points\b",
+]
+
+
+def test_examples_teach_no_forbidden_patterns():
+    """Skill examples are templates the model imitates — they must not teach
+    anything preflight/validator rejects (bare API, imports, retired geo_*)."""
+    import re
+    for s in sk.PRIMITIVE_SKILLS + sk.COMPOSITE_SKILLS:
+        ex = s["example"]
+        for pat in _FORBIDDEN_IN_EXAMPLES:
+            assert not re.search(pat, ex, re.M), f"{s['name']} example teaches forbidden `{pat}`: {ex[:60]}"
+
+
+def test_examples_demonstrate_their_skill():
+    """Each primitive example must call its own function; each composite example
+    must reference at least one primitive it claims to compose."""
+    for s in sk.PRIMITIVE_SKILLS:
+        assert s["function"] + "(" in s["example"], f"{s['name']} example doesn't call {s['function']}"
+    for s in sk.COMPOSITE_SKILLS:
+        assert any(u + "(" in s["example"] for u in s["uses"]), (
+            f"composite {s['name']} example references none of its uses {s['uses']}"
+        )
+
+
 # ---------- SKILL.md ↔ registry ----------
 
 def test_skill_doc_in_sync_with_registry():
