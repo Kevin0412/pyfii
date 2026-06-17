@@ -101,7 +101,7 @@ prev = follow_chain(drones, wps, 700, lag_hops=1, colors=palette)
 - **when to use**: 左右/前后两组呼应、一问一答的乐句结构、对称交替的能量。
 - **when NOT**: 全队需要统一动作时；奇偶交替分组在视觉上读不出两组时。
 - **key params**: group_ids 用 split_groups(prev, mode=...) 算；flying_ms 单程时长；gap_ms 问答间隔；colors=(组0色,组1色)；gradient_to 可加渐变。
-- **safety**: 总时长=2*flying_ms+gap_ms，所有机段尾自动对齐；应答组等待期间持续亮灯，不会黑灯静止。targets 仍需安全分配。
+- **safety**: **每架机飞向自己的 targets[i]，gids 只决定先后时序，不是让两组飞向同一组点**——两组的目标必须在不同空间区域，否则两组先后穿过同一片空间会对穿碰撞。总时长=2*flying_ms+gap_ms，所有机段尾自动对齐；应答组等待期间持续亮灯。targets 仍需 best_assign/far_assign 安全分配。
 - **validation risks**: 两组路径交叉触发碰撞门；分组在空间上不可分时读作噪声。
 - **combines with**: split-groups, safe-assign
 - **music fit**: 对答式乐句、呼应段、交替强拍。
@@ -432,7 +432,7 @@ breathe_group(drones, base_color, cycles=1, period_ms=1400)
 - **role fit**: buildup, development
 - **music fit**: 对答乐句、左右呼应、交替强拍。
 - **visual effect**: 左组动、右组亮灯应答，再换手——两组色彩对话，读出问答结构。
-- **constraints**: 分组在空间上要可分（left_right/front_back 优先）；两组目标分别 best_assign；总时长=2*flying+gap 填满窗口。
+- **constraints**: 分组在空间上要可分（left_right/front_back 优先）；**两组的 targets 要在不同区域**（每机飞自己的 targets[i]，gids 只管时序）——别让两组飞向重叠点造成对穿碰撞；两组目标分别 best_assign；总时长=2*flying+gap 填满窗口。
 - **how to choose**: 音乐有明显一问一答/对称乐句时。
 - **avoid overuse**: 连续多段问答会单调——配合其他母题交替。
 

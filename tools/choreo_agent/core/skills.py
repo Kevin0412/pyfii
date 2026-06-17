@@ -74,7 +74,7 @@ PRIMITIVE_SKILLS = [
         "when_to_use": "左右/前后两组呼应、一问一答的乐句结构、对称交替的能量。",
         "when_not": "全队需要统一动作时；奇偶交替分组在视觉上读不出两组时。",
         "key_params": "group_ids 用 split_groups(prev, mode=...) 算；flying_ms 单程时长；gap_ms 问答间隔；colors=(组0色,组1色)；gradient_to 可加渐变。",
-        "safety": "总时长=2*flying_ms+gap_ms，所有机段尾自动对齐；应答组等待期间持续亮灯，不会黑灯静止。targets 仍需安全分配。",
+        "safety": "**每架机飞向自己的 targets[i]，gids 只决定先后时序，不是让两组飞向同一组点**——两组的目标必须在不同空间区域，否则两组先后穿过同一片空间会对穿碰撞。总时长=2*flying_ms+gap_ms，所有机段尾自动对齐；应答组等待期间持续亮灯。targets 仍需 best_assign/far_assign 安全分配。",
         "validation_risks": "两组路径交叉触发碰撞门；分组在空间上不可分时读作噪声。",
         "example": "gids = split_groups(prev, mode='left_right')\nprev = group_relay(drones, best_assign(prev, geo), gids, 2300, colors=('#ff6040','#4060ff'), gap_ms=250)",
         "combines_with": ["split-groups", "safe-assign"],
@@ -360,7 +360,7 @@ COMPOSITE_SKILLS = [
         "role_fit": ["buildup", "development"],
         "music_fit": "对答乐句、左右呼应、交替强拍。",
         "visual_effect": "左组动、右组亮灯应答，再换手——两组色彩对话，读出问答结构。",
-        "constraints": "分组在空间上要可分（left_right/front_back 优先）；两组目标分别 best_assign；总时长=2*flying+gap 填满窗口。",
+        "constraints": "分组在空间上要可分（left_right/front_back 优先）；**两组的 targets 要在不同区域**（每机飞自己的 targets[i]，gids 只管时序）——别让两组飞向重叠点造成对穿碰撞；两组目标分别 best_assign；总时长=2*flying+gap 填满窗口。",
         "how_to_choose": "音乐有明显一问一答/对称乐句时。",
         "avoid_overuse": "连续多段问答会单调——配合其他母题交替。",
         "example": "gids = split_groups(prev, mode='left_right')\nprev = group_relay(drones, best_assign(prev, geo), gids, 2300, colors=('#ff6040','#4060ff'), gap_ms=250)",
@@ -696,13 +696,29 @@ Place the file at `tools/choreo_agent/user_skills.json` (global) or
 `<project>/user_skills.json` (per-project); `run_pipeline.py` loads both at
 startup. See `user_skills.example.json` for a template.
 
+## Distilling human works (Stage 3)
+
+`core/distill.py` reads a finished work's trajectory (a `.fii` directory or any
+project's `output/`) and extracts a **choreography signature** → **technique
+labels** (e.g. *light-clock lighting*, *settled-with-lit-holds*,
+*center-migration arc*, *within-frame mirror symmetry*, *layered height*). Run:
+
+```bash
+python -m core.distill <fii_or_output_dir> "<name>"
+```
+
+The output is a *profile*: principles and measured parameters, **not**
+coordinates. A human reviews the profile and curates reusable principle-skills
+from it — we never replay a human work's point tables. This automates the
+hand-distillation in `doc/human_choreography_distillation.md`.
+
 ## Future direction (out of scope for the internal stages)
 
 The internal skill system is the foundation, not the endpoint. The roadmap:
 
-1. Internal skillization of `function.py` primitives.
-2. Build and harden higher-level composite choreography skills.
-3. Distill human-designed works (e.g. 大闹天宫) into reusable skills.
+1. **(done)** Internal skillization of `function.py` primitives.
+2. **(done)** Build and harden higher-level composite choreography skills.
+3. **(done)** Distill human-designed works into reusable principle-skills.
 4. **(done)** Support user-defined or user-composed skills.
 5. Only after the internal skill system is mature, expose the whole Pyfii
    choreography agent/environment as a tool or skill for external coding agents
