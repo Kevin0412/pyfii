@@ -399,3 +399,20 @@ readable_ratio 0.55 / settled readable 66% / mean_err 37cm（=dntg 水平）/ ce
 - composition 门：`gradient_to=` 计入 has_dynamic_lighting（满足高潮/S04 色彩门）。
 - prompt：母题段强烈推荐 gradient_to（"纯色保持会让色彩单一"），给暖→冷渐变示例。
 - 测试：test_motifs 新增 2 项（渐变富色+对齐保持、门识别），全套 160+12 绿。
+
+## 15.4 渐变验收运行 (2026-06-17)
+
+codex_9d_motif_grad_ygxy 9 机全流程通过（7 段全锁，76min/20 轮/0.79 CNY，零 kwarg TypeError——别名修复生效）。灯光回归确认修复：
+
+| 指标 | 渐变场 | 母题场(前) | 0611 标杆 |
+|---|---|---|---|
+| 轨迹 distinct RGB | **133** | 38 | 160 |
+| 代码声明色数 | 83 | 32 | 59 |
+| 灯光 tick | 126 | 123 | 109 |
+| keyframes | 25 | 27 | 18 |
+| readable_ratio | 0.22 | 0.32 | 0.64 |
+
+结论：
+1. **灯光色彩回归已修复**：真实 distinct RGB 38→133（3.5×），逼近标杆 160。关键——模型只用了 1 次 gradient_to（S01），其余靠 fade_group + flash_group(alt_color) 达成。说明 gradient_to 是充分非必要的工具，prompt 提示已足够，不需强制（强制=滑向 hardcode）。
+2. **readable_ratio 对异步母题的结构性偏置确认**：两场母题场 0.32/0.22 vs 标杆 0.64——波次/过渡态非定格帧多，settled-symmetric 帧占比天然被压低。该指标不能用于母题重场的横评，真实裁决靠人工目检。这是 readable 指标 wave-aware 化的待办依据。
+3. S05 仍磨段（并行候选 line-number 串扰使 preflight 反馈引用错候选的行号——模型代码其实已包裹 custom_points）。这是并行候选的已知摩擦，非代码 bug，但值得后续给 preflight 反馈加"按当前提交代码行号"校正。
