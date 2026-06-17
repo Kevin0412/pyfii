@@ -798,12 +798,32 @@ def split_groups(points, mode="left_right", origin=None, center=None):
 
 
 # ---------- 母题执行器：波次推进 / 链式跟随 / 分组问答 ----------
-def ripple_move(drones, targets, flying_ms, delays, colors="#ffffff", hold_ticks=4, tail_ms=0, palette=None):
+def _grad_at(gradient_to, index):
+    """gradient_to 为 None 时返回 None（=纯色保持），否则按索引取目标色。"""
+    return None if gradient_to is None else _color_at(gradient_to, index)
+
+
+def _emit_drone_light(drone, color_a, color_b, ticks, interval_ms=100):
+    """统一灯光发射：color_b 为 None 时纯色保持，否则 color_a→color_b 逐 tick 渐变。
+
+    两种写法都恰好消耗 ticks*interval_ms，因此可在母题执行器里透明替换、
+    不破坏段尾对齐。渐变需要至少 2 帧，ticks<2 时退回纯色。
+    """
+    if color_b is None or int(ticks) < 2:
+        apply_light(drone, color_a, int(ticks), interval_ms)
+    else:
+        fade_rgb(drone, color_a, color_b, steps=int(ticks), interval_ms=interval_ms)
+
+
+def ripple_move(drones, targets, flying_ms, delays, colors="#ffffff", hold_ticks=4,
+                tail_ms=0, palette=None, gradient_to=None):
     """波次推进：每架机等待自己的波次延迟后启动，启动瞬间点亮 —— 先动先亮。
 
     delays（毫秒表）用 ripple_delays(prev, mode=...) 从当前队形算出；
     所有机段尾自动对齐到 max(delays)+flying_ms+tail_ms，免回正算术。
-    palette 是 colors 的别名。返回标准化 targets，可直接赋给 prev。
+    palette 是 colors 的别名。给 gradient_to（与 colors 同形）则每架机在亮灯窗口内
+    colors[i]→gradient_to[i] 连续渐变（dntg 式飞行中持续变色，色彩更丰富）。
+    返回标准化 targets，可直接赋给 prev。
     """
     if palette is not None:
         colors = palette
@@ -820,20 +840,22 @@ def ripple_move(drones, targets, flying_ms, delays, colors="#ffffff", hold_ticks
             drone.delay(delays[i])
         target = _target3(targets[i])
         move2(drone, target, flying_ms)
-        apply_light(drone, _color_at(colors, i), ticks)
+        _emit_drone_light(drone, _color_at(colors, i), _grad_at(gradient_to, i), ticks)
         drone.delay(max(0, flying_ms - ticks * 100 + (span - delays[i]) + int(tail_ms)))
         normalized.append(target)
     return normalized
 
 
-def follow_chain(drones, waypoints, hop_ms, lag_hops=1, colors="#ffffff", min_xy_cm=51.0, hold_ticks=2, palette=None):
+def follow_chain(drones, waypoints, hop_ms, lag_hops=1, colors="#ffffff", min_xy_cm=51.0,
+                 hold_ticks=2, palette=None, gradient_to=None):
     """链式跟随（蛇形/领舞）：头机沿 waypoints 逐点推进，后机依次延迟 lag_hops 跳走同一路径。
 
     - 进链顺序按当前位置距 waypoints[0] 由近到远（自然蛇形），进链瞬间点亮 —— 先动先亮。
     - 需要 len(waypoints) ≥ (机数-1)*lag_hops + 1；结束时队伍停在路径末端连续 lag 间隔点上。
     - 安全由链上间距保证：任意相距 k*lag_hops 跳的波点对 XY 间距必须 ≥ min_xy_cm，否则直接抛错。
     - 每架机总耗时都等于 len(waypoints)*hop_ms，段尾天然对齐。
-    palette 是 colors 的别名。返回每架机的结束点（与 drones 同序），可直接赋给 prev。
+    palette 是 colors 的别名；gradient_to（按进链 rank 取）则进链亮灯做色相渐变。
+    返回每架机的结束点（与 drones 同序），可直接赋给 prev。
     """
     if palette is not None:
         colors = palette
@@ -872,7 +894,7 @@ def follow_chain(drones, waypoints, hop_ms, lag_hops=1, colors="#ffffff", min_xy
         if rank:
             drone.delay(rank * lag * hop_ms)
         move2(drone, wps[0], hop_ms)
-        apply_light(drone, _color_at(colors, rank), ticks)
+        _emit_drone_light(drone, _color_at(colors, rank), _grad_at(gradient_to, rank), ticks)
         drone.delay(hop_ms - ticks * 100)
         last = H - 1 - rank * lag
         for k in range(1, last + 1):
@@ -883,11 +905,12 @@ def follow_chain(drones, waypoints, hop_ms, lag_hops=1, colors="#ffffff", min_xy
 
 
 def group_relay(drones, targets, group_ids, flying_ms, colors=("#ff6040", "#4060ff"),
-                hold_ticks=4, gap_ms=200, lead_group=0, palette=None):
+                hold_ticks=4, gap_ms=200, lead_group=0, palette=None, gradient_to=None):
     """分组问答接力：lead 组先动（另一组原地亮灯应答），到位后另一组再动 —— 组色对话。
 
     group_ids 用 split_groups(prev, mode=...) 从当前队形算出；colors[g] 是 g 组色。
     总时长 = 2*flying_ms + gap_ms，所有机段尾自动对齐。palette 是 colors 的别名。
+    给 gradient_to（与 colors 同形的两组色）则每架机亮灯做组色→目标色渐变。
     返回标准化 targets。
     """
     if palette is not None:
@@ -899,20 +922,24 @@ def group_relay(drones, targets, group_ids, flying_ms, colors=("#ff6040", "#4060
     gap = max(0, int(round(gap_ms)))
     ticks = max(1, min(int(hold_ticks), max(1, flying_ms // 100)))
     resp_ticks = max(1, (flying_ms + gap) // 100)
+    two_group = lambda spec, g: (
+        spec[g] if isinstance(spec, (list, tuple)) and len(spec) >= 2 else spec
+    )
     normalized = []
     for i, drone in enumerate(drones):
         g = int(group_ids[i]) % 2
         target = _target3(targets[i])
-        color = _color_at(colors[g] if isinstance(colors, (list, tuple)) and len(colors) >= 2 else colors, i)
+        color = _color_at(two_group(colors, g), i)
+        color_b = None if gradient_to is None else _color_at(two_group(gradient_to, g), i)
         if g == int(lead_group) % 2:
             move2(drone, target, flying_ms)
-            apply_light(drone, color, ticks)
+            _emit_drone_light(drone, color, color_b, ticks)
             drone.delay(flying_ms - ticks * 100 + gap + flying_ms)
         else:
-            apply_light(drone, color, resp_ticks)
+            _emit_drone_light(drone, color, color_b, resp_ticks)
             drone.delay(max(0, flying_ms + gap - resp_ticks * 100))
             move2(drone, target, flying_ms)
-            apply_light(drone, color, ticks)
+            _emit_drone_light(drone, color, color_b, ticks)
             drone.delay(flying_ms - ticks * 100)
         normalized.append(target)
     return normalized
@@ -937,12 +964,13 @@ def _rgb(color):
     raise ValueError(f"无法解析颜色: {color!r}（支持 '#rrggbb' 或 (r,g,b)）")
 
 
-def light_wave(drones, delays, colors=None, hold_ticks=6, tail_ms=0, palette=None):
+def light_wave(drones, delays, colors=None, hold_ticks=6, tail_ms=0, palette=None, gradient_to=None):
     """静止队形上的灯光涟漪：按 delays 依次点亮，段尾对齐（不移动）。
 
     与 ripple_delays 配合：用与动作同一份 delays（或定格段单独算）即光波扫过队形。
     每架机总耗时 = max(delays) + hold_ticks*100 + tail_ms。palette 是 colors 的别名。
-    返回消耗的毫秒数。
+    给 gradient_to（与 colors 同形）则光波过处每架机 colors[i]→gradient_to[i] 渐变
+    （定格队形上的流光溢彩）。返回消耗的毫秒数。
     """
     if palette is not None:
         colors = palette
@@ -956,7 +984,7 @@ def light_wave(drones, delays, colors=None, hold_ticks=6, tail_ms=0, palette=Non
     for i, drone in enumerate(drones):
         if delays[i]:
             drone.delay(delays[i])
-        apply_light(drone, _color_at(colors, i), ticks)
+        _emit_drone_light(drone, _color_at(colors, i), _grad_at(gradient_to, i), ticks)
         drone.delay(span - delays[i] + max(0, int(tail_ms)))
     return span + ticks * 100 + max(0, int(tail_ms))
 

@@ -388,3 +388,14 @@ readable_ratio 0.55 / settled readable 66% / mean_err 37cm（=dntg 水平）/ ce
 
 9 机 ygxy 全流程通过（S01-S06+LAND 全锁，无需 S07 填充——填充门让时间线首次与窗口严格一致）。锁定代码母题census：ripple_move×10、group_relay×2、split_groups×2、flash_group×2、breathe_group×1。S04 仍是磨段（两次耗尽后第三次 2 cycle 通过）；烧轮主因依次：碰撞（多轮 48-50cm 贴线）> 模型自写 bug（IndexError/重复点）> kwarg 猜测（已修：move2 flying_ms=、母题 palette=、波次 center= 别名——函数参数必须接受文档词汇）。
 9v9 对照（vs 0611 ygxy 0.64 标杆场）：keyframes 27 vs 18，灯光 tick 123 vs 109，错峰段 6/6 持平；但 distinct RGB 38 vs 160、变色事件 592 vs 1071（旧场 sin/cos 逐机渐变更密），readable_ratio 0.32 vs 0.64（波次过渡态天然压低 settled 对称帧占比，指标对异步有结构性偏置——但也可能是真实构图差距，待人工目检裁决）。已知后续方向：把 fade_rgb/逐机渐变重新引导回母题用法（光波+渐变叠加），以及 readable 指标的 wave-aware 化。
+
+## 15.3 灯光色彩回归修复：渐变绑定动作母题 (2026-06-13)
+
+§15.2 暴露的灯光短板：母题执行器内部用 apply_light 发纯色保持，9 机母题场 distinct RGB 38 vs 0611 标杆 160——0611 重度用逐机 sin/cos 连续渐变（dntg "100ms 级持续变色"），母题场退化成离散调色板。
+
+修复（绑定，不是新 hack）：
+- `_emit_drone_light(drone, color_a, color_b, ticks)`：color_b=None 纯色保持，否则 fade_rgb 逐 tick 渐变；两条路径都恰好消耗 ticks*100ms，可在执行器里透明替换、不破坏段尾对齐。
+- ripple_move/follow_chain/group_relay/light_wave 全部加 `gradient_to=`（与 colors 同形）：每架机在亮灯窗口内 colors[i]→gradient_to[i] 渐变 = 飞行中持续变色，绑定到动作。验证：纯色 1 色 → 渐变 8 色（hold_ticks=8），耗时不变。
+- composition 门：`gradient_to=` 计入 has_dynamic_lighting（满足高潮/S04 色彩门）。
+- prompt：母题段强烈推荐 gradient_to（"纯色保持会让色彩单一"），给暖→冷渐变示例。
+- 测试：test_motifs 新增 2 项（渐变富色+对齐保持、门识别），全套 160+12 绿。

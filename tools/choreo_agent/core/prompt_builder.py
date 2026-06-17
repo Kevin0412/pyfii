@@ -226,6 +226,7 @@ def build_segment_prompt(
   `prev = ripple_move(drones, targets, flying_ms, delays, colors=palette, hold_ticks=4)` 波次推进，先动先亮，总时长 max(delays)+flying_ms；
   `prev = follow_chain(drones, waypoints, hop_ms, lag_hops=1, colors=palette)` 链式跟随/蛇形——头机沿 waypoints 逐点推进，后机依次延迟跟进同一路径，进链顺序自动按离 waypoints[0] 远近；需要 len(waypoints) ≥ (机数-1)*lag_hops+1，相距 lag 的波点 XY ≥51cm（函数校验报数），总时长 = len(waypoints)*hop_ms；
   `prev = group_relay(drones, targets, gids, flying_ms, colors=('#ff6040','#4060ff'), gap_ms=200)` 分组问答——0 组先动、1 组原地亮灯应答再动，组色对话，总时长 = 2*flying_ms+gap_ms
+- 飞行中持续变色（dntg 灯光精髓，强烈推荐——纯色保持会让色彩单一）：给上述任一执行器加 `gradient_to=palette2`（与 colors 同形的第二组色），每架机在亮灯窗口内 colors[i]→palette2[i] 逐 tick 渐变，不增加耗时、不破坏对齐；如 `ripple_move(drones, targets, flying_ms, delays, colors=warm, hold_ticks=12, gradient_to=cool)` 让无人机边飞边从暖色渐变到冷色。light_wave 同样支持 gradient_to（定格队形上的流光）
 - 灯光母题（灯光绑定编舞意图：扩张配中心光波、问答配双色、收尾配齐闪/渐隐；同一份 delays 喂 ripple_move 和 light_wave 就是"先动的先亮"）：
   `light_wave(drones, delays, palette, hold_ticks=6)` 静止队形上的光波涟漪（定格展示首选，耗时 max(delays)+hold*100）；
   `fade_group(drones, c1, c2, duration_ms)` 全队渐变 / `fade_rgb(drone, c1, c2, steps)` 单机渐变（dntg 式持续变色）；

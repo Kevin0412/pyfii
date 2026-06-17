@@ -268,9 +268,12 @@ def extract_code_features(code: str) -> dict:
                     rgb_tuple_colors.add(triple)
     rgb_tuple_colors = sorted(rgb_tuple_colors)
     # 计算式灯光（渐变/呼吸）：TurnOnAll 参数含 int()/sin()/cos()，或灯光母题执行器
+    # gradient_to= 把动作母题的灯光变成逐 tick 渐变（dntg 式持续变色），算动态灯光。
+    uses_gradient = bool(re.search(r"\bgradient_to\s*=", code))
     has_dynamic_lighting = bool(
         re.search(r"TurnOnAll\s*\([^)]*(?:int\s*\(|sin\s*\(|cos\s*\()", code)
         or motif_light_calls
+        or uses_gradient
     )
     geo_template_calls = {
         name: len(re.findall(rf"\b{name}\s*\(", code))
@@ -300,6 +303,7 @@ def extract_code_features(code: str) -> dict:
             + motif_move_calls + motif_light_calls
         ),
         "has_dynamic_lighting": has_dynamic_lighting,
+        "uses_gradient": uses_gradient,
         "delay_calls": delay_calls,
         "uses_group_only_execution": (
             (move_group_calls + staggered_group_calls) > 0

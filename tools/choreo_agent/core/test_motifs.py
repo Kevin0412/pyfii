@@ -173,6 +173,45 @@ def test_follow_chain_rejects_bad_paths():
         raise AssertionError("链上间距不足应当抛错")
 
 
+def test_gradient_to_enriches_color_without_breaking_alignment():
+    """gradient_to 让执行器在同一耗时内逐 tick 渐变（dntg 持续变色），保持段尾对齐。"""
+    fn = _load_fn()
+    # 纯色基线
+    a = [FakeDrone(100, 280), FakeDrone(250, 280)]
+    fn.ripple_move(a, [(150, 200, 140), (350, 200, 160)], 2000, [0, 200],
+                   colors=["#ff0000", "#0000ff"], hold_ticks=8)
+    solid_colors = len({c for _, c in a[0].lights})
+    # 同参数 + gradient_to
+    b = [FakeDrone(100, 280), FakeDrone(250, 280)]
+    fn.ripple_move(b, [(150, 200, 140), (350, 200, 160)], 2000, [0, 200],
+                   colors=["#ff0000", "#0000ff"], hold_ticks=8, gradient_to=["#ffff00", "#00ffff"])
+    grad_colors = {c for _, c in b[0].lights}
+    assert solid_colors == 1, "纯色应只有一种颜色"
+    assert len(grad_colors) > solid_colors, "渐变必须产生更多颜色"
+    assert [d.time for d in a] == [d.time for d in b], "渐变不得改变段尾对齐"
+    assert b[0].lights[0][1] == (255, 0, 0) and b[0].lights[-1][1] == (255, 255, 0), "渐变端点精确"
+
+    # light_wave 与 group_relay 也接受 gradient_to
+    w = [FakeDrone(), FakeDrone()]
+    fn.light_wave(w, [0, 150], colors=["#ff0000", "#00ff00"], hold_ticks=6,
+                  gradient_to=["#0000ff", "#ffff00"])
+    assert w[0].lights[-1][1] == (0, 0, 255), "light_wave 渐变端点"
+    g = [FakeDrone(100, 100), FakeDrone(300, 100)]
+    fn.group_relay(g, [(100, 300, 140), (300, 300, 160)], [0, 1], 1000,
+                   colors=("#aa0000", "#0000aa"), gradient_to=("#ffaa00", "#00aaff"))
+    assert [d.time for d in g] == [2200, 2200], "group_relay 渐变保持两段对齐"
+
+
+def test_composition_gate_counts_gradient_as_dynamic_lighting():
+    code = """\
+delays = ripple_delays(prev, mode="spiral", step_ms=150)
+prev = ripple_move(drones, targets, 2600, delays, colors=warm, hold_ticks=12, gradient_to=cool)
+"""
+    features = extract_code_features(code)
+    assert features["uses_gradient"]
+    assert features["has_dynamic_lighting"], "gradient_to= 必须算动态灯光"
+
+
 # ---------- 灯光母题 ----------
 
 def test_fade_breathe_flash_and_beat():
