@@ -187,7 +187,10 @@ def build_segment_prompt(
         f"- 大动作要一次到位安全（避免碰撞反复打回）：大幅交换用 `far_assign`（时间同步采样保证全程路径间距）而非 best_assign；"
         f"对穿/交叉必须错峰（`ripple_delays` 或 `delay(i*150)` 让各机不同时刻过中心，同步对穿必撞）；"
         f"分组问答两组目标放在不同空间区域（每机飞自己的 targets[i]，gids 只管时序）；"
-        f"单个 keyframe 路径控制在 ≤360cm（2.6-3.2s 可完成），跨场大迁移拆成多个 keyframe"
+        f"单个 keyframe 路径控制在 ≤360cm（2.6-3.2s 可完成），跨场大迁移拆成多个 keyframe\n"
+        f"- 避免刚性圆退化（圆/放射/中心/辐射主题尤其注意，否则 degradation 门反复打回）：不要让多数 keyframe 保持同一圆形且同一角序——"
+        f"至少一个主体 keyframe 换非圆轮廓（直线/V/弧/星/双排/十字/署名造型），或用 `swap_assign`/`mirror_assign`/分组重组打乱角序；"
+        f"**单纯扩缩半径或整体旋转(`rotate_assign`)仍是同序圆，不算变化**——圆形主题也要在 keyframe 之间真正换形或换序"
     )
 
     if is_land:

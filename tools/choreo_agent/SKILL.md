@@ -528,9 +528,9 @@ light_wave(drones, ripple_delays(prev, mode='sweep_x', step_ms=step), palette, h
 - **role fit**: development, transition, expand
 - **music fit**: 回旋、盘旋、连绵的圆周律动。
 - **visual effect**: 整个对称队形像星盘一样刚体转动，机间距离恒定、丝滑无碰撞，是大动作里最安全的一种。
-- **constraints**: geo 必须与 prev 同构（同半径/对称环）；steps 控转动量；配 spiral delays 让转动更顺；加 Z 个性避免固定高度退化。
-- **how to choose**: 已是圆环/对称队形、想要大幅但绝对安全的整体运动时。
-- **avoid overuse**: 连续旋转会单调——配合换半径或换轮廓。
+- **constraints**: geo 必须与 prev 同构（同半径/对称环）；steps 控转动量；配 spiral delays 让转动更顺；加 Z 个性避免固定高度退化。**注意：旋转保持同一圆形且同一角序，单独用会触发刚性圆退化门**——前后 keyframe 必须换非圆轮廓或用 swap_assign/mirror 打乱角序。
+- **how to choose**: 已是圆环/对称队形、想要一个大幅但绝对安全的过渡动作时；只作整段的一环，不能是全部。
+- **avoid overuse**: 连续旋转/扩缩半径都逃不出刚性圆退化（同序圆）——必须在相邻 keyframe 换形(非圆几何)或换序(swap/mirror/重组)。
 
 ```python
 geo = custom_points([(280+170*cos(2*pi*i/9), 280+170*sin(2*pi*i/9), 150+30*sin(i)) for i in range(9)], n=9)

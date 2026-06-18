@@ -202,6 +202,8 @@ def test_segment_prompt_includes_quality_budget():
     assert f"≥{mins['min_median_path_cm']:.0f}cm" in user, "median path target missing"
     # safe-big-motion recipe (the round-reduction fix for collisions)
     assert "far_assign" in user and "错峰" in user, "collision-avoidance recipe missing"
+    # anti-rigid-circle recipe (the fix for radial-theme segments failing to lock)
+    assert "刚性圆退化" in user and "rotate_assign" in user, "anti-rigid-circle recipe missing"
     # LAND has no choreography quality demand
     _s, land = build_segment_prompt(
         "LAND", 67.0, 72.0, "降落", [[280, 280, 160]] * 9, "", drone_count=9,
