@@ -442,3 +442,14 @@ codex_9d_motif_grad_ygxy 9 机全流程通过（7 段全锁，76min/20 轮/0.79 
 - prompt_builder 段 prompt 注入「动作质量预算」块：把确定性下限（≥7/9 离位>30cm、中位路径≥80cm、中位位移≥45cm、最大展开≥90cm、长段主体用 far_assign+ripple_move、Z range≥90cm）提前告诉模型，第一次就设计到位。封顶时长取门的下限值，达到即过。
 - skills.py：breathing-transition 标注"不能当长段(≥10s)主体"，引导长段用 density-expand-contract/far_assign。
 - 测试 +2（预算匹配门下限、LAND 无预算）；176 core + 12 integration 全绿。
+
+# 18. Anthropic-compatible 协议支持 (2026-06-19)
+
+llm_client.py 增加 `api_style` 开关，让同一套客户端能同时讲 OpenAI 和 Anthropic 两种线协议——「连任意模型」。
+- `api_style="anthropic"`：POST {base_url}/v1/messages；header 用 x-api-key + anthropic-version（非 Authorization Bearer）；system 是顶层字段、messages 仅 user/assistant、max_tokens 必填、temperature 保留（DeepSeek 模型非 Fable/Opus，采样参数有效）。
+- 流式 SSE 解析器 `_chat_stream_anthropic`：按 data 行 JSON 的 type 分派 message_start(input_tokens/model)、content_block_delta(text_delta/thinking_delta)、message_delta(output_tokens)、message_stop(结束)、ping、error(抛 LlmRequestError)；非流式 `_chat_once_anthropic` 解析 content[] 文本/思考块 + usage。两者归一化成同一个 LlmResponse，复用既有的墙钟/重试/SIGALRM/worker 软墙包裹（协议无关）。
+- 默认 OpenAI 路径行为零变化（payload/stream_options/Authorization/url/dispatch 分支隔离）。
+- 配置：新增 `deepseek_anthropic` provider（复用 DeepSeek key，base_url=https://api.deepseek.com/anthropic，model=deepseek-v4-flash）；模板见 ai_providers.example.json。
+- 实测：对 api.deepseek.com/anthropic 真机验证通过——流式返回文本、DeepSeek 思考经 thinking_delta 解析（92 字符）、token 用量正确；非流式亦通过。
+- 测试 core/test_anthropic_client.py（5 项，离线 mock）：请求线格式、SSE 解析、error 事件、OpenAI 无回归、token 映射。全套 209 core + 12 integration 绿。
+- 备注：ultracode 对抗评审 workflow 因 claude-opus-4-8 配额 429 未能跑（5 个 reviewer 全被拒），改为人工自审 + 真机验证 + 单测覆盖。

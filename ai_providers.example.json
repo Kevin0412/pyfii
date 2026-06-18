@@ -62,6 +62,18 @@
       "retry_backoff_s": 2,
       "supports_prefix_completion": false,
       "supports_stream": true
+    },
+    "deepseek_anthropic": {
+      "api_style": "anthropic",
+      "base_url": "https://api.deepseek.com/anthropic",
+      "anthropic_version": "2023-06-01",
+      "api_key": "",
+      "model": "deepseek-v4-flash",
+      "stream": true,
+      "no_content_timeout_s": 240,
+      "max_retries": 2,
+      "retry_backoff_s": 2,
+      "supports_prefix_completion": false
     }
   }
 }

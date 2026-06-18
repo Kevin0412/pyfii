@@ -65,31 +65,53 @@ def chat(
     """发送 chat completion 请求"""
     cfg = load_config(provider)
 
-    payload = {
-        "model": cfg["model"],
-        "messages": [
-            {"role": "system", "content": system},
-            {"role": "user", "content": user},
-        ],
-        "temperature": temperature,
-        "max_tokens": cfg.get("max_output_tokens", 16384),
-    }
-    payload.update(cfg.get("extra_body", {}))
+    # 协议风格：openai（/chat/completions，默认）或 anthropic（/v1/messages）。
+    # 两者共用下面的墙钟/重试/SIGALRM 包裹，只是 url/headers/payload 和流式解析不同。
+    api_style = str(cfg.get("api_style", "openai")).lower()
     # CLI/debug callers pass callbacks specifically because they need live visibility.
     # In that case force streaming even if an older local config still has stream=false.
     use_stream = bool(cfg.get("stream", True) or on_delta or on_reasoning_delta or on_heartbeat)
-    if use_stream:
-        payload["stream"] = True
-        stream_options = cfg.get("stream_options")
-        if stream_options is None and _should_request_stream_usage(cfg):
-            stream_options = {"include_usage": True}
-        if stream_options:
-            payload["stream_options"] = stream_options
 
-    headers = {
-        "Authorization": f"Bearer {cfg['api_key']}",
-        "Content-Type": "application/json",
-    }
+    if api_style == "anthropic":
+        # Anthropic Messages API：system 是顶层字段（不是一条消息），messages 只有
+        # user/assistant，max_tokens 必填，鉴权用 x-api-key + anthropic-version。
+        payload = {
+            "model": cfg["model"],
+            "max_tokens": cfg.get("max_output_tokens", 16384),
+            "system": system,
+            "messages": [{"role": "user", "content": user}],
+            "temperature": temperature,
+        }
+        payload.update(cfg.get("extra_body", {}))
+        if use_stream:
+            payload["stream"] = True
+        headers = {
+            "x-api-key": cfg["api_key"],
+            "anthropic-version": cfg.get("anthropic_version", "2023-06-01"),
+            "content-type": "application/json",
+        }
+    else:
+        payload = {
+            "model": cfg["model"],
+            "messages": [
+                {"role": "system", "content": system},
+                {"role": "user", "content": user},
+            ],
+            "temperature": temperature,
+            "max_tokens": cfg.get("max_output_tokens", 16384),
+        }
+        payload.update(cfg.get("extra_body", {}))
+        if use_stream:
+            payload["stream"] = True
+            stream_options = cfg.get("stream_options")
+            if stream_options is None and _should_request_stream_usage(cfg):
+                stream_options = {"include_usage": True}
+            if stream_options:
+                payload["stream_options"] = stream_options
+        headers = {
+            "Authorization": f"Bearer {cfg['api_key']}",
+            "Content-Type": "application/json",
+        }
 
     wall_timeout_s = float(cfg.get("timeout_s", DEFAULT_WALL_TIMEOUT_S))
     read_timeout_s = float(cfg.get("read_timeout_s", min(DEFAULT_READ_TIMEOUT_S, wall_timeout_s)))
@@ -116,7 +138,14 @@ def chat(
         signal.setitimer(signal.ITIMER_REAL, wall_timeout_s)
     started_at = time.monotonic()
     try:
-        url = f"{cfg['base_url'].rstrip('/')}/chat/completions"
+        if api_style == "anthropic":
+            url = f"{cfg['base_url'].rstrip('/')}/v1/messages"
+            stream_fn = _chat_stream_anthropic
+            once_fn = _chat_once_anthropic
+        else:
+            url = f"{cfg['base_url'].rstrip('/')}/chat/completions"
+            stream_fn = _chat_stream
+            once_fn = _chat_once
         attempts = max(1, int(cfg.get("max_retries", DEFAULT_MAX_RETRIES)) + 1)
         retry_backoff_s = float(cfg.get("retry_backoff_s", DEFAULT_RETRY_BACKOFF_S))
         last_exc: Exception | None = None
@@ -128,7 +157,7 @@ def chat(
                 )
             try:
                 if use_stream:
-                    response = _chat_stream(
+                    response = stream_fn(
                         url=url,
                         payload=payload,
                         headers=headers,
@@ -140,7 +169,7 @@ def chat(
                         no_content_timeout_s=no_content_timeout_s,
                     )
                 else:
-                    response = _chat_once(
+                    response = once_fn(
                         url=url,
                         payload=payload,
                         headers=headers,
@@ -282,6 +311,148 @@ def _chat_stream(
         total_tokens=usage.get("total_tokens"),
         raw_usage=dict(usage) if usage else None,
         reasoning_text="".join(reasoning_chunks),
+    )
+
+
+# ---------------------------------------------------------------------------
+# Anthropic Messages API (/v1/messages) — used by providers with
+# api_style="anthropic" (e.g. DeepSeek's https://api.deepseek.com/anthropic).
+# Same request once/stream contract as the OpenAI path (url/payload/headers/
+# timeout in, LlmResponse out) so the shared retry/wall-timeout wrapper above
+# works unchanged; only the wire format differs.
+# ---------------------------------------------------------------------------
+def _anthropic_response(
+    text: str,
+    reasoning: str,
+    model: str,
+    usage: dict,
+) -> LlmResponse:
+    in_tokens = usage.get("input_tokens")
+    out_tokens = usage.get("output_tokens")
+    total = (in_tokens or 0) + (out_tokens or 0)
+    return LlmResponse(
+        text=text,
+        model=model,
+        input_tokens=in_tokens,
+        output_tokens=out_tokens,
+        # Anthropic usage names cache tokens differently than DeepSeek's OpenAI
+        # endpoint; map what's present, keep the rest in raw_usage.
+        prompt_cache_hit_tokens=usage.get("cache_read_input_tokens"),
+        prompt_cache_miss_tokens=usage.get("cache_creation_input_tokens"),
+        total_tokens=total or None,
+        raw_usage=dict(usage) if usage else None,
+        reasoning_text=reasoning,
+    )
+
+
+def _chat_once_anthropic(
+    url: str,
+    payload: dict,
+    headers: dict,
+    timeout: httpx.Timeout,
+) -> LlmResponse:
+    resp = httpx.post(url, json=payload, headers=headers, timeout=timeout)
+    resp.raise_for_status()
+    data = resp.json()
+    content = data.get("content") or []
+    text = "".join(b.get("text", "") for b in content if b.get("type") == "text")
+    reasoning = "".join(b.get("thinking", "") for b in content if b.get("type") == "thinking")
+    return _anthropic_response(text, reasoning, data.get("model", ""), data.get("usage") or {})
+
+
+def _chat_stream_anthropic(
+    url: str,
+    payload: dict,
+    headers: dict,
+    timeout: httpx.Timeout,
+    fallback_model: str,
+    on_delta: Callable[[str], None] | None,
+    on_reasoning_delta: Callable[[str], None] | None,
+    on_heartbeat: Callable[[], None] | None,
+    no_content_timeout_s: float = STREAM_NO_CONTENT_TIMEOUT_S,
+) -> LlmResponse:
+    """Parse the Anthropic Messages SSE stream.
+
+    Events (each `data:` line is JSON with a `type`): message_start (usage.input_tokens),
+    content_block_start, content_block_delta (text_delta.text / thinking_delta.thinking),
+    content_block_stop, message_delta (usage.output_tokens), message_stop, ping.
+    The `event:` line mirrors the data `type`, so we switch on the JSON `type`.
+    """
+    chunks: list[str] = []
+    reasoning_chunks: list[str] = []
+    model = fallback_model
+    usage: dict = {}
+    last_semantic_at = time.monotonic()
+
+    with httpx.stream(
+        "POST",
+        url,
+        json=payload,
+        headers=headers,
+        timeout=timeout,
+    ) as resp:
+        resp.raise_for_status()
+        for line in resp.iter_lines():
+            if not line:
+                continue
+            if line.startswith("event:"):
+                continue  # redundant with the data payload's `type`
+            if line.startswith("data:"):
+                line = line[5:].strip()
+            if not line:
+                continue
+
+            try:
+                event = json.loads(line)
+            except json.JSONDecodeError:
+                if on_heartbeat:
+                    on_heartbeat()
+                continue
+
+            etype = event.get("type")
+            if etype == "message_start":
+                msg = event.get("message") or {}
+                model = msg.get("model") or model
+                u = msg.get("usage") or {}
+                usage.update(u)
+            elif etype == "content_block_delta":
+                delta = event.get("delta") or {}
+                dtype = delta.get("type")
+                if dtype == "text_delta":
+                    text = delta.get("text") or ""
+                    if text:
+                        chunks.append(text)
+                        last_semantic_at = time.monotonic()
+                        if on_delta:
+                            on_delta(text)
+                elif dtype == "thinking_delta":
+                    think = delta.get("thinking") or ""
+                    if think:
+                        reasoning_chunks.append(think)
+                        last_semantic_at = time.monotonic()
+                        if on_reasoning_delta:
+                            on_reasoning_delta(think)
+                else:
+                    if on_heartbeat:
+                        on_heartbeat()
+            elif etype == "message_delta":
+                u = event.get("usage") or {}
+                usage.update(u)
+            elif etype in ("error",):
+                err = event.get("error") or {}
+                raise LlmRequestError(
+                    f"anthropic stream error: {err.get('type')}: {str(err.get('message'))[:300]}"
+                )
+            elif etype == "message_stop":
+                break
+            else:
+                # ping / content_block_start / content_block_stop / unknown
+                if on_heartbeat:
+                    on_heartbeat()
+                _raise_if_no_semantic_delta(last_semantic_at, no_content_timeout_s)
+
+    return _anthropic_response(
+        "".join(chunks), "".join(reasoning_chunks), model, usage
     )
 
 
