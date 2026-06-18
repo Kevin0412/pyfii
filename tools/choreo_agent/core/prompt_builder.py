@@ -183,7 +183,11 @@ def build_segment_prompt(
         f"最大展开 ≥{_qm['min_max_excursion_cm']:.0f}cm（长段更高，建议设计到 110-150cm 留余量）\n"
         f"- 长段(≥10s)主体用大动作母题：`far_assign(prev, geo, min_path_cm=active_min_path_cm(flying_ms))` + ripple_move；"
         f"gentle 技能(breathing-transition/呼吸)只配短过渡或定格点缀，不能当长段主体\n"
-        f"- 真实高度层：整段 Z range ≥90cm、每个主体 keyframe ≥3 个 Z 层（避免固定高度/车道退化）"
+        f"- 真实高度层：整段 Z range ≥90cm、每个主体 keyframe ≥3 个 Z 层（避免固定高度/车道退化）\n"
+        f"- 大动作要一次到位安全（避免碰撞反复打回）：大幅交换用 `far_assign`（时间同步采样保证全程路径间距）而非 best_assign；"
+        f"对穿/交叉必须错峰（`ripple_delays` 或 `delay(i*150)` 让各机不同时刻过中心，同步对穿必撞）；"
+        f"分组问答两组目标放在不同空间区域（每机飞自己的 targets[i]，gids 只管时序）；"
+        f"单个 keyframe 路径控制在 ≤360cm（2.6-3.2s 可完成），跨场大迁移拆成多个 keyframe"
     )
 
     if is_land:

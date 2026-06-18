@@ -200,6 +200,8 @@ def test_segment_prompt_includes_quality_budget():
     mins = motion_quality_minimums(6.0, 9)
     assert f"{mins['min_moving']}/9" in user, "min_moving not surfaced"
     assert f"≥{mins['min_median_path_cm']:.0f}cm" in user, "median path target missing"
+    # safe-big-motion recipe (the round-reduction fix for collisions)
+    assert "far_assign" in user and "错峰" in user, "collision-avoidance recipe missing"
     # LAND has no choreography quality demand
     _s, land = build_segment_prompt(
         "LAND", 67.0, 72.0, "降落", [[280, 280, 160]] * 9, "", drone_count=9,
