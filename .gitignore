@@ -6,6 +6,8 @@ __token__
 *.local.json
 ai_providers.json
 ai_providers.*.json
+ai_providers.local.json.*
+*.broken.bak
 !ai_providers.example.json
 api_keys*.json
 apikey*.json
