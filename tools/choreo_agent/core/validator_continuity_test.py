@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Continuity gate regression tests."""
-from validator import (
+from core.validator import (
     ValidationResult,
     _check_effective_motion,
     _check_degradation,
@@ -50,8 +50,11 @@ def test_takeoff_landing_exempt_from_continuity_gate():
 
 
 def test_motion_envelope_for_5_to_13_segment():
+    # Start within SEGMENT_EDGE_BUFFER_S (1.3s) of the window start is on time.
     assert _check_motion_envelope((5, 13), 5.8, 12.4) == []
-    assert _check_motion_envelope((5, 13), 6.0, 12.4)
+    assert _check_motion_envelope((5, 13), 6.2, 12.4) == []  # 6.2 < 5+1.3 deadline
+    # Clearly past the start deadline (6.3s) is flagged late.
+    assert _check_motion_envelope((5, 13), 7.0, 12.4)
     # Early finish is no longer a hard gate; auto_init can compress the next segment.
     assert _check_motion_envelope((5, 13), 5.8, 10.0) == []
 
