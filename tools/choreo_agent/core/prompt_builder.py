@@ -190,7 +190,7 @@ def build_segment_prompt(
         f"    `geo = custom_points([...9 个点：左组 y 偏大、右组 y 偏小，整体大展开...], n=len(drones), min_xy_cm=70)`\n"
         f"    `targets = far_assign(prev, geo, min_path_cm=active_min_path_cm(2800))`  # 取最大间距的无碰撞排列\n"
         f"    `prev = ripple_move(drones, targets, 2800, ripple_delays(prev, mode='by_index'), colors=palette)`\n"
-        f"  大动作一律走 route-around；穿过中心的真对穿只在 mirror-cross 母题里做（那个母题自带错峰配方）。单 keyframe 路径 ≤360cm，跨场拆多个 keyframe\n"
+        f"  穿过同一中心区的真对穿是**少数刻意情况，仅当 motif 明确是 mirror-cross 时**才做：用 `group_relay` 顺序飞或错峰 `delay≥单程飞行时长`，小步 `delay(i*150)` 清不开必撞。其余大动作一律 route-around。单 keyframe 路径 ≤360cm，跨场拆多个 keyframe\n"
         f"- 避免刚性圆退化（圆/放射/中心/辐射主题尤其注意，否则 degradation 门反复打回）：不要让多数 keyframe 保持同一圆形且同一角序——"
         f"至少一个主体 keyframe 换非圆轮廓（直线/V/弧/星/双排/十字/署名造型），或用 `swap_assign`/`mirror_assign`/分组重组打乱角序；"
         f"**单纯扩缩半径或整体旋转(`rotate_assign`)仍是同序圆，不算变化**——圆形主题也要在 keyframe 之间真正换形或换序"
@@ -252,7 +252,7 @@ def build_segment_prompt(
 - 如果段长需要覆盖，不要拉长单个 move2；用多个可完成的快 keyframe、分组错峰、高度切层，或**亮灯定格**承接——图形到位后保持灯亮定格 0.8-2s 让观众读图（dntg 节奏=移动→定格→移动，dntg 全片 57% 时间是定格展示）；黑灯静止才算低活动
 - 3s 以上 keyframe 不要写 `min_path_cm=90/100`；用 `flying_ms = 3000` 后 `targets = far_assign(prev, geo, min_path_cm=active_min_path_cm(flying_ms))`
 - 安全距离按 XY 看：不要把同一 XY 的不同 Z 当成安全分离；XY 间距硬下限 51cm（pyfii core 碰撞线，检查器精确验证），密集造型配合短路径慢速；复杂交换交给 `far_assign`
-- 错峰 `delay(i * 150)` 是**波次**工具（各机先后起步、飞向不重叠目标），用于节奏门；大动作的安全见上方“大动作安全”一条（默认 route-around）
+- 错峰 `delay(i * 150)` 是**波次**工具（各机飞向不重叠目标、先后起步），不是对穿安全工具——对穿/大动作的安全见上方“大动作安全”一条（默认 route-around，刻意对穿才用 group_relay/大错峰）
 - 分配函数家族（转场即编舞，按叙事意图选映射，不只有一个最优解）：`best_assign(prev, geo)` 就近收束 / `far_assign(prev, geo, min_path_cm=...)` 大幅交换 / `rotate_assign(prev, geo, steps=1)` 整体漩涡旋转（同构环形刚体旋转天然安全，steps 可负；非环形/对齐两列旋转会贴 51cm 同步路径门）/ `mirror_assign(prev, geo)` 镜像对穿（**无 axis 参数**；必须配错峰，免同步路径门）/ `swap_assign(prev, geo, axis='x'|'y')` 半场互换（有 axis；同步直线检查，对齐两列会贴硬下限）/ `keep_assign(prev, geo)` 身份保持（drone i 固定走第 i 个目标，palette 叙事用）。左右对答/换位默认 route-around（两组不同带同时飞，见“大动作安全”），只有刻意要中心对穿才 mirror_assign+大错峰
 - 波次计算器（从当前队形推导时间编排，动序即光序）：`delays = ripple_delays(prev, mode='center_out'|'sweep_x'|'sweep_y'|'spiral'|'by_index', step_ms=120-250, reverse=False)` 波次延迟表；`spatial_ranks(prev, mode=...)` 波次序号（可按 rank 配色）；`gids = split_groups(prev, mode='left_right'|'front_back'|'inner_outer'|'alternate')` 0/1 分组。注意：环形/等距队形上 center_out 全员同距=同一波（退化为同步起步），想要可见波次改用 spiral/sweep_x/sweep_y/by_index
 - 动作母题执行器（内部已做 per-drone 灯光+段尾自动对齐，免回正算术，计入时间错峰门）：
