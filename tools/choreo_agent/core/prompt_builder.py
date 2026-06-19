@@ -191,6 +191,7 @@ def build_segment_prompt(
         f"    `targets = far_assign(prev, geo, min_path_cm=active_min_path_cm(2800))`  # 取最大间距的无碰撞排列\n"
         f"    `prev = ripple_move(drones, targets, 2800, ripple_delays(prev, mode='by_index'), colors=palette)`\n"
         f"  穿过同一中心区的真对穿是**少数刻意情况，仅当 motif 明确是 mirror-cross 时**才做：用 `group_relay` 顺序飞或错峰 `delay≥单程飞行时长`，小步 `delay(i*150)` 清不开必撞。其余大动作一律 route-around。单 keyframe 路径 ≤360cm，跨场拆多个 keyframe\n"
+        f"  **碰撞门多半来自点表太密**：几何点要铺开占场（相邻点目标 ≥90cm、用满场地宽度），far_assign 才有间距可挑出无碰撞排列；硬塞密集点表后指望 far_assign 救是没用的（点本身太近时连最优排列也 <51cm）。密集造型留给短促/慢速小动作，大迁移用铺开的几何\n"
         f"- 避免刚性圆退化（圆/放射/中心/辐射主题尤其注意，否则 degradation 门反复打回）：不要让多数 keyframe 保持同一圆形且同一角序——"
         f"至少一个主体 keyframe 换非圆轮廓（直线/V/弧/星/双排/十字/署名造型），或用 `swap_assign`/`mirror_assign`/分组重组打乱角序；"
         f"**单纯扩缩半径或整体旋转(`rotate_assign`)仍是同序圆，不算变化**——圆形主题也要在 keyframe 之间真正换形或换序"
