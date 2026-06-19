@@ -125,9 +125,9 @@ def build_segment_prompt(
 - 不要直接写 `inittime()`；跨段对齐由 `auto_init` 处理"""
 
     if segment_upper in {"S04", "S05"}:
-        assign_rule = "- S04/S05 需要大动作或反馈出现路径太短时，用 `targets = far_assign(prev, geo, min_path_cm=active_min_path_cm(flying_ms))`；其他承接/收束可用 `best_assign(prev, geo)`。返回值都是 targets 列表，不要拆 `perm/min_d`"
+        assign_rule = "- S04/S05 大动作直接 `targets = far_assign(prev, geo, min_path_cm=active_min_path_cm(flying_ms))`（取最大间距的无碰撞排列）；就近承接才用 `best_assign(prev, geo)`。同步转场路径 <51cm 时：best 已是最优排列、改点表救不了——能换排列就改 far_assign，点本身太近（对穿/密集）就 `mirror_assign(prev, geo)`+错峰。每个 keyframe 最长路径有确定性上限（speed×时长内能飞完），规划报告会给精确 `[下限,上限]` 带——别设计飞不完的大动作。返回值都是 targets 列表，不要拆 `perm/min_d`"
     else:
-        assign_rule = "- `targets = best_assign(prev, geo)`；若反馈说路径太短/小范围抖动，可改用 `far_assign(prev, geo, min_path_cm=active_min_path_cm(flying_ms))`。prev/geo 用完整 `(x,y,z)`，返回值就是重排后的 targets 列表，不要拆 `perm/min_d`"
+        assign_rule = "- `targets = best_assign(prev, geo)` 就近承接；同步转场路径 <51cm 时 best 改点表无效（已是最优排列）：能换排列改 `far_assign(prev, geo, min_path_cm=active_min_path_cm(flying_ms))`，点本身太近（对穿/密集）改 `mirror_assign(prev, geo)`+错峰。prev/geo 用完整 `(x,y,z)`，返回值就是重排后的 targets 列表，不要拆 `perm/min_d`"
 
     segment_duration = float(end_time - start_time)
     if segment_upper == "S06":

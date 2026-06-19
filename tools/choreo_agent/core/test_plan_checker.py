@@ -5,6 +5,7 @@ from core.planning_pass import (
     build_planning_prompt,
     evaluate_plan_safety,
 )
+from core.validator import motion_quality_minimums
 
 
 def _kf(targets, start_s=13.0, duration_s=3.2, speed=170, accel=320):
@@ -93,10 +94,10 @@ def test_path_spacing_conflict_violates():
     assert "转场路径最小间距" in report
 
 
-def test_rotate_floor_names_exchange_escape():
-    # An aligned 2-column rotate(steps=1) sends drones straight through each other
-    # (synced path ~0cm < 51cm). The violation must name the exchange-safe escape
-    # primitives so the model stops thrashing (the S03 12-round root cause).
+def test_salvageable_floor_directs_far_assign():
+    # rotate(steps=1) forces a crossing, BUT best_assign keeps the two drones 300cm
+    # apart (identity) — a collision-free permutation EXISTS (opt_md>=51). The directive
+    # must name far_assign (switch the mapping), NOT mirror (points are not too close).
     prev = [[100, 100, 120], [400, 100, 120]]
     targets = [[100, 100, 120], [400, 100, 120]]
     kf = _kf(targets, duration_s=4.0)
@@ -105,20 +106,42 @@ def test_rotate_floor_names_exchange_escape():
     ok, report = evaluate_plan_safety({"keyframes": [kf]}, prev, drone_count=2)
     assert not ok
     assert "转场路径最小间距" in report
-    assert "mirror_assign" in report
+    assert "最优排列可达" in report
     assert "far_assign" in report
-    assert "错峰" in report
+    assert "mirror_assign" not in report, "a salvageable permutation must not be sent to mirror"
 
 
-def test_swap_floor_names_exchange_escape():
-    # swap on an aligned pair likewise grazes the floor; same escape hint applies.
+def test_unsalvageable_floor_directs_mirror():
+    # Two drones must converge onto two targets only 52cm apart: NO permutation clears
+    # 51cm (opt_md<51). far_assign cannot help (best already maximizes clearance) — the
+    # directive must say so and route to mirror+错峰 / spread-the-points.
     prev = [[100, 100, 120], [100, 200, 120]]
     targets = [[400, 100, 120], [452, 100, 120]]
-    kf = _kf(targets, duration_s=4.0)
-    kf["assign"] = "swap"
+    kf = _kf(targets, duration_s=4.0)  # default assign=best
     ok, report = evaluate_plan_safety({"keyframes": [kf]}, prev, drone_count=2)
     assert not ok
-    assert "mirror_assign" in report and "far_assign" in report
+    assert "连最优排列" in report
+    assert "mirror_assign" in report and "错峰" in report
+    assert "far_assign 都无效" in report, "must tell the model far_assign cannot help here"
+
+
+def test_feasible_path_band_printed_on_pass():
+    # Every keyframe gets a readout band [motion-min, flight-max] to kill the climax
+    # too-big<->too-small oscillation. Lower bound == motion_quality_minimums (no new gate).
+    ok, report = evaluate_plan_safety({"keyframes": [_kf(_SPREAD_9)]}, _PREV_9, drone_count=9)
+    assert ok, report
+    assert "可行路径带" in report
+    lo = int(motion_quality_minimums(3.2, 9)["min_max_excursion_cm"])
+    assert f"[{lo}," in report, "band lower bound must be the motion-quality minimum"
+
+
+def test_feasible_band_inversion_message():
+    # A 0.6s keyframe cannot fit even the minimum motion-quality move at clamped speed:
+    # report must direct raising duration/speed, never relax the floor.
+    kf = _kf(_SPREAD_9, duration_s=0.6)
+    _ok, report = evaluate_plan_safety({"keyframes": [kf]}, _PREV_9, drone_count=9)
+    assert "窗口太短" in report
+    assert "提高 duration_s 或 speed" in report
 
 
 def test_infeasible_flight_time_violates():

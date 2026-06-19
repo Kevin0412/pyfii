@@ -292,22 +292,33 @@ def evaluate_plan_safety(
         if path_md is None:
             lines.append(f"- {kind_note}")
         elif path_md < PLAN_PATH_SPACING_FLOOR_CM:
-            if assign_kind in ("rotate", "swap"):
+            # opt_md = best_assign（最大化间距）能达到的最优转场间距上限。
+            # best/far/swap 的 path_md 本身已是该最优值（_intent_assignment 走 best_assign）；
+            # keep/rotate 的声明映射可能比最优差，单独探一次最优才能区分两种处方：
+            #   opt_md ≥ 51 → 存在无碰撞排列，换 far_assign 即可救（点表不动）。
+            #   opt_md < 51 → 连最优排列都不过硬下限，点本身太近，far/换排列都无效，
+            #                 只能 mirror+错峰（对穿，免同步路径门）或显著拉开点表。
+            from .best_assign import best_assign as _best
+            if assign_kind in ("best", "far", "swap"):
+                opt_md = path_md
+            else:
+                prev_xy = [(p[0], p[1]) for p in current_prev]
+                pts_xy = [(t[0], t[1]) for t in pts]
+                opt_md = _best(prev_xy, pts_xy)[1]
+            if opt_md >= PLAN_PATH_SPACING_FLOOR_CM:
                 hint = (
-                    "交换/旋转的同步直线在交叉点贴近硬下限。若意图是左右对答/对穿，"
-                    "改用 `mirror_assign(prev, geo)`+错峰（对穿专用，免同步路径门，"
-                    "validator 逐帧保安全）或 "
-                    "`far_assign(prev, geo, min_path_cm=active_min_path_cm(flying_ms))`+错峰"
-                    "（自动取最大间距排列）；rotate 仅同构环形刚体旋转才天然安全，"
-                    "对齐两列别用 rotate/swap"
-                )
-            elif assign_kind in ("best", "far"):
-                hint = (
-                    "这组 targets 与上个位置冲突，重写本 keyframe 点表，"
-                    "或换 `far_assign(prev, geo, min_path_cm=active_min_path_cm(flying_ms))` 取最大间距排列"
+                    f"最优排列可达 {opt_md:.0f}cm≥51（当前 {assign_kind} 映射只有 {path_md:.0f}cm，"
+                    "不是最优）——把本次转场改成 "
+                    "`far_assign(prev, geo, min_path_cm=active_min_path_cm(flying_ms))` "
+                    "并在 JSON 声明 assign:\"far\"（取最大间距的无碰撞排列，大动作首选）；点表不动"
                 )
             else:
-                hint = "改用错峰、换 assign 类型或调整 targets"
+                hint = (
+                    f"连最优排列也只有 {opt_md:.0f}cm<51——这些点本身太近，换排列/far_assign 都无效。"
+                    "若是左右对答/对穿，改用 `mirror_assign(prev, geo)`+错峰"
+                    "（免同步路径门，validator 逐帧保安全）；"
+                    "否则显著拉开本 keyframe 点表间距，或用 by_index 错峰让各机不同时刻过交叉点"
+                )
             msg = (
                 f"k{kf_i}: {kind_note}转场路径最小间距只有 {path_md:.0f}cm "
                 f"< {PLAN_PATH_SPACING_FLOOR_CM:.0f}cm — " + hint
@@ -336,6 +347,30 @@ def evaluate_plan_safety(
             lines.append(f"- 违规: {msg}")
         else:
             lines.append(f"- 最长飞行 {max_ft:.0f}ms ≤ 时长 {duration_ms:.0f}ms OK")
+
+        # 可行路径带（只读提示，不是新门）：消除高潮段"动作太大→飞不完/碰撞 ↔ 太小→动作质量门"
+        # 的来回震荡。下限=动作质量门的最大展开下限；上限=本 speed/accel 在本时长内能完成的最长路径
+        # （反解既有 flight_time_ms≤duration*1.02 的可行性检查，同一夹紧速度/加速度，不改任何门）。
+        from .validator import motion_quality_minimums
+        band_lo = float(motion_quality_minimums(duration_ms / 1000.0, drone_count)["min_max_excursion_cm"])
+        lo_d, hi_d = 0.0, 850.0
+        for _ in range(22):
+            mid = (lo_d + hi_d) / 2.0
+            if flight_time_ms(mid, speed, accel) <= duration_ms * 1.02:
+                lo_d = mid
+            else:
+                hi_d = mid
+        band_hi = lo_d
+        if band_lo > band_hi:
+            lines.append(
+                f"- k{kf_i} 可行路径带: 窗口太短/速度太低，装不下最低动作量"
+                f"（下限 {band_lo:.0f} > 上限 {band_hi:.0f}cm）——提高 duration_s 或 speed"
+            )
+        else:
+            lines.append(
+                f"- k{kf_i} 可行路径带: 把最长路径放在 [{band_lo:.0f},{band_hi:.0f}]cm"
+                f"（≤{band_hi:.0f} 才能在 {duration_ms:.0f}ms@speed={speed:g} 完成，≥{band_lo:.0f} 满足动作质量门）"
+            )
 
         current_prev = assigned
 
