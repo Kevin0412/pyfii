@@ -80,8 +80,11 @@ def chat(
             "max_tokens": cfg.get("max_output_tokens", 16384),
             "system": system,
             "messages": [{"role": "user", "content": user}],
-            "temperature": temperature,
         }
+        # 新版 Claude（Opus 4.x 等）弃用 temperature——provider 配 omit_temperature:true 时不发送；
+        # 其它 anthropic 端点（如 DeepSeek anthropic）默认仍带 temperature，行为不变。
+        if not cfg.get("omit_temperature", False):
+            payload["temperature"] = temperature
         payload.update(cfg.get("extra_body", {}))
         if use_stream:
             payload["stream"] = True

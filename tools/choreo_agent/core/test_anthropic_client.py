@@ -97,6 +97,29 @@ def test_anthropic_request_shape():
     assert p["temperature"] == 0.3
 
 
+def test_anthropic_omit_temperature_drops_field():
+    # Newer Claude models (Opus 4.x) deprecate `temperature` and 400 if it is sent.
+    # omit_temperature:true must drop the field; the default keeps it (tested above).
+    captured = {}
+
+    def fake_post(url, json=None, headers=None, timeout=None):
+        captured.update(payload=json)
+        return _FakeOnceResp({"model": "m", "content": [{"type": "text", "text": "x"}],
+                              "usage": {"input_tokens": 1, "output_tokens": 1}})
+
+    real_cfg = _with_config(dict(_ANTHROPIC_CFG, omit_temperature=True))
+    real_post = lc.httpx.post
+    lc.httpx.post = fake_post
+    try:
+        lc.chat("SYS", "USER", provider="custom_claude", temperature=0.3)
+    finally:
+        lc.load_config = real_cfg
+        lc.httpx.post = real_post
+
+    assert "temperature" not in captured["payload"], "omit_temperature must drop the field"
+    assert captured["payload"]["system"] == "SYS"  # rest of the shape intact
+
+
 def test_openai_request_shape_unchanged():
     captured = {}
 

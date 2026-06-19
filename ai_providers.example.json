@@ -87,7 +87,8 @@
       "max_retries": 2,
       "retry_backoff_s": 2,
       "supports_prefix_completion": false,
-      "_note": "Generic Anthropic-style provider. Point base_url at api.anthropic.com (real Claude) or any Claude-compatible gateway; set api_key + model. For extended thinking add extra_body, e.g. {\"thinking\": {\"type\": \"adaptive\"}} (real Anthropic requires temperature=1 with thinking)."
+      "_note": "Generic Anthropic-style provider. Point base_url at api.anthropic.com (real Claude) or any Claude-compatible gateway; set api_key + model. For extended thinking add extra_body, e.g. {\"thinking\": {\"type\": \"adaptive\"}} (real Anthropic requires temperature=1 with thinking).",
+      "omit_temperature": true
     }
   }
 }
