@@ -30,6 +30,57 @@ def test_hover_blocks_formal_segment():
     assert "整体悬停" in result.repair_feedback()
 
 
+def test_crossing_collision_directs_group_relay_recipe():
+    # A <20cm mid-flight min-distance = two flight paths crossing (对穿). The repair
+    # feedback must diagnose the crossing and name the strongest safe recipe
+    # (group_relay sequential) so the model stops re-deriving it across rounds.
+    result = ValidationResult(
+        compile_ok=True,
+        run_ok=True,
+        read_fii_ok=True,
+        distance_warnings=3,
+        action_warnings=0,
+        dense_min_distance_cm=1.4,
+        min_distance_cm=1.4,
+        collision_intervals=[
+            {"start_s": 25.0, "end_s": 29.0, "min_time_s": 25.3,
+             "min_distance_cm": 1.4, "pair": (0, 5)},
+        ],
+        continuity_required=True,
+        hover_check_ok=True,
+        motion_envelope_ok=True,
+        motion_quality_ok=True,
+    )
+    fb = result.repair_feedback()
+    assert not result.passed
+    assert "对穿" in fb and "航线交叉" in fb
+    assert "group_relay" in fb, "must name the zero-crossing recipe"
+
+
+def test_endpoint_proximity_does_not_trigger_crossing_diagnosis():
+    # A collision interval whose min-distance is >=20cm is endpoint-proximity, not a
+    # crossing — must NOT emit the group_relay crossing prescription (avoid over-firing).
+    result = ValidationResult(
+        compile_ok=True,
+        run_ok=True,
+        read_fii_ok=True,
+        distance_warnings=1,
+        action_warnings=0,
+        dense_min_distance_cm=44.0,
+        min_distance_cm=44.0,
+        collision_intervals=[
+            {"start_s": 30.0, "end_s": 31.0, "min_time_s": 30.5,
+             "min_distance_cm": 44.0, "pair": (3, 6)},
+        ],
+        continuity_required=True,
+        hover_check_ok=True,
+        motion_envelope_ok=True,
+        motion_quality_ok=True,
+    )
+    fb = result.repair_feedback()
+    assert "group_relay" not in fb, "endpoint proximity must not trigger the crossing recipe"
+
+
 def test_takeoff_landing_exempt_from_continuity_gate():
     result = ValidationResult(
         compile_ok=True,

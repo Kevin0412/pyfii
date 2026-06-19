@@ -192,6 +192,17 @@ class ValidationResult:
                     f"- {item['start_s']:.2f}-{item['end_s']:.2f}s, "
                     f"min={item['min_distance_cm']:.1f}cm, pair={pair}"
                 )
+            # 极近间距(<20cm)出现在飞行途中 = 两机航线交叉(对穿)，小步错峰清不开。
+            # 点名模型反复重新发现却不落地的安全配方，按强到弱给确定性处方（只改反馈，不动碰撞门）。
+            if any((it.get("min_distance_cm") or 99.0) < 20.0 for it in self.collision_intervals):
+                lines.append(
+                    "诊断：上面极近间距(<20cm)发生在飞行途中=两机航线交叉(对穿)，"
+                    "小步错峰(step_ms 120-150)清不开。按强到弱选一种重构本段，别只微调点表："
+                    "①`group_relay(drones, targets, gids, flying_ms, gap_ms=...)` 分组顺序飞——"
+                    "一组动另一组静，零交叉，最稳；"
+                    "②两组目标走不同 y 带（左组目标偏上、右组偏下），航线上下绕开中心、互不相交；"
+                    "③真要同时对穿，错峰加大到 delay≥单程飞行时长（先飞的清场后再放第二批）。"
+                )
         if self.distance_warnings != 0:
             lines.append("距离风险：当前路径存在过近或对穿。请增大几何点间距、减少交叉换位、使用更保守的扇区保持或排队错峰。")
         if self.action_warnings != 0:
