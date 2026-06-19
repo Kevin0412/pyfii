@@ -74,6 +74,20 @@
       "max_retries": 2,
       "retry_backoff_s": 2,
       "supports_prefix_completion": false
+    },
+    "custom_claude": {
+      "api_style": "anthropic",
+      "base_url": "https://api.anthropic.com",
+      "anthropic_version": "2023-06-01",
+      "api_key": "",
+      "model": "claude-opus-4-8",
+      "max_output_tokens": 16384,
+      "stream": true,
+      "no_content_timeout_s": 240,
+      "max_retries": 2,
+      "retry_backoff_s": 2,
+      "supports_prefix_completion": false,
+      "_note": "Generic Anthropic-style provider. Point base_url at api.anthropic.com (real Claude) or any Claude-compatible gateway; set api_key + model. For extended thinking add extra_body, e.g. {\"thinking\": {\"type\": \"adaptive\"}} (real Anthropic requires temperature=1 with thinking)."
     }
   }
 }
