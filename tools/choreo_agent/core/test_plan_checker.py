@@ -93,6 +93,34 @@ def test_path_spacing_conflict_violates():
     assert "转场路径最小间距" in report
 
 
+def test_rotate_floor_names_exchange_escape():
+    # An aligned 2-column rotate(steps=1) sends drones straight through each other
+    # (synced path ~0cm < 51cm). The violation must name the exchange-safe escape
+    # primitives so the model stops thrashing (the S03 12-round root cause).
+    prev = [[100, 100, 120], [400, 100, 120]]
+    targets = [[100, 100, 120], [400, 100, 120]]
+    kf = _kf(targets, duration_s=4.0)
+    kf["assign"] = "rotate"
+    kf["rotate_steps"] = 1
+    ok, report = evaluate_plan_safety({"keyframes": [kf]}, prev, drone_count=2)
+    assert not ok
+    assert "转场路径最小间距" in report
+    assert "mirror_assign" in report
+    assert "far_assign" in report
+    assert "错峰" in report
+
+
+def test_swap_floor_names_exchange_escape():
+    # swap on an aligned pair likewise grazes the floor; same escape hint applies.
+    prev = [[100, 100, 120], [100, 200, 120]]
+    targets = [[400, 100, 120], [452, 100, 120]]
+    kf = _kf(targets, duration_s=4.0)
+    kf["assign"] = "swap"
+    ok, report = evaluate_plan_safety({"keyframes": [kf]}, prev, drone_count=2)
+    assert not ok
+    assert "mirror_assign" in report and "far_assign" in report
+
+
 def test_infeasible_flight_time_violates():
     prev = [[0, 100, 120], [0, 300, 120]]
     targets = [[540, 100, 120], [540, 300, 120]]

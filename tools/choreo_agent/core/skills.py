@@ -360,7 +360,7 @@ COMPOSITE_SKILLS = [
         "role_fit": ["buildup", "development"],
         "music_fit": "对答乐句、左右呼应、交替强拍。",
         "visual_effect": "左组动、右组亮灯应答，再换手——两组色彩对话，读出问答结构。",
-        "constraints": "分组在空间上要可分（left_right/front_back 优先）；**两组的 targets 要在不同区域**（每机飞自己的 targets[i]，gids 只管时序）——别让两组飞向重叠点造成对穿碰撞；两组目标分别 best_assign；总时长=2*flying+gap 填满窗口。",
+        "constraints": "分组在空间上要可分（left_right/front_back 优先）；**两组的 targets 要在不同区域**（每机飞自己的 targets[i]，gids 只管时序）——别让两组飞向重叠点造成对穿碰撞；两组目标分别 best_assign；总时长=2*flying+gap 填满窗口。若把问答做成左右**位置对换**而非 group_relay：用 `mirror_assign(prev, geo)`+错峰 或 `far_assign(prev, geo, min_path_cm=active_min_path_cm(flying_ms))`+错峰——别用 rotate_assign(steps=1)/swap_assign 做对齐两列互换，同步直线会贴 51cm 硬下限反复返工。",
         "how_to_choose": "音乐有明显一问一答/对称乐句时。",
         "avoid_overuse": "连续多段问答会单调——配合其他母题交替。",
         "example": "gids = split_groups(prev, mode='left_right')\nprev = group_relay(drones, best_assign(prev, geo), gids, 2300, colors=('#ff6040','#4060ff'), gap_ms=250)",

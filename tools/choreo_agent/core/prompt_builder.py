@@ -250,7 +250,7 @@ def build_segment_prompt(
 - 3s 以上 keyframe 不要写 `min_path_cm=90/100`；用 `flying_ms = 3000` 后 `targets = far_assign(prev, geo, min_path_cm=active_min_path_cm(flying_ms))`
 - 安全距离按 XY 看：不要把同一 XY 的不同 Z 当成安全分离；XY 间距硬下限 51cm（pyfii core 碰撞线，检查器精确验证），密集造型配合短路径慢速；复杂交换交给 `far_assign`
 - 镜像换位/对穿的安全机制就是错峰：`drone.delay(i * 150)` 让各机在不同时刻过中心——同步对穿必撞，错峰对穿安全且好看（人类作品的对穿全部错峰）。不要为了消碰撞而丢掉错峰，应该反过来用错峰消碰撞
-- 分配函数家族（转场即编舞，按叙事意图选映射，不只有一个最优解）：`best_assign(prev, geo)` 就近收束 / `far_assign(prev, geo, min_path_cm=...)` 大幅交换 / `rotate_assign(prev, geo, steps=1)` 整体漩涡旋转（同构队形刚体旋转天然安全，steps 可负）/ `mirror_assign(prev, geo)` 镜像对穿（必须配错峰）/ `swap_assign(prev, geo, axis='x'|'y')` 半场互换 / `keep_assign(prev, geo)` 身份保持（drone i 固定走第 i 个目标，palette 叙事用）
+- 分配函数家族（转场即编舞，按叙事意图选映射，不只有一个最优解）：`best_assign(prev, geo)` 就近收束 / `far_assign(prev, geo, min_path_cm=...)` 大幅交换 / `rotate_assign(prev, geo, steps=1)` 整体漩涡旋转（同构环形刚体旋转天然安全，steps 可负；非环形/对齐两列旋转会贴 51cm 同步路径门）/ `mirror_assign(prev, geo)` 镜像对穿（**无 axis 参数**；必须配错峰，免同步路径门）/ `swap_assign(prev, geo, axis='x'|'y')` 半场互换（有 axis；同步直线检查，对齐两列会贴硬下限）/ `keep_assign(prev, geo)` 身份保持（drone i 固定走第 i 个目标，palette 叙事用）。左右对答/对穿优先 mirror_assign+错峰 或 far_assign+错峰
 - 波次计算器（从当前队形推导时间编排，动序即光序）：`delays = ripple_delays(prev, mode='center_out'|'sweep_x'|'sweep_y'|'spiral'|'by_index', step_ms=120-250, reverse=False)` 波次延迟表；`spatial_ranks(prev, mode=...)` 波次序号（可按 rank 配色）；`gids = split_groups(prev, mode='left_right'|'front_back'|'inner_outer'|'alternate')` 0/1 分组。注意：环形/等距队形上 center_out 全员同距=同一波（退化为同步起步），想要可见波次改用 spiral/sweep_x/sweep_y/by_index
 - 动作母题执行器（内部已做 per-drone 灯光+段尾自动对齐，免回正算术，计入时间错峰门）：
   `prev = ripple_move(drones, targets, flying_ms, delays, colors=palette, hold_ticks=4)` 波次推进，先动先亮，总时长 max(delays)+flying_ms；

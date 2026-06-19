@@ -292,14 +292,25 @@ def evaluate_plan_safety(
         if path_md is None:
             lines.append(f"- {kind_note}")
         elif path_md < PLAN_PATH_SPACING_FLOOR_CM:
+            if assign_kind in ("rotate", "swap"):
+                hint = (
+                    "交换/旋转的同步直线在交叉点贴近硬下限。若意图是左右对答/对穿，"
+                    "改用 `mirror_assign(prev, geo)`+错峰（对穿专用，免同步路径门，"
+                    "validator 逐帧保安全）或 "
+                    "`far_assign(prev, geo, min_path_cm=active_min_path_cm(flying_ms))`+错峰"
+                    "（自动取最大间距排列）；rotate 仅同构环形刚体旋转才天然安全，"
+                    "对齐两列别用 rotate/swap"
+                )
+            elif assign_kind in ("best", "far"):
+                hint = (
+                    "这组 targets 与上个位置冲突，重写本 keyframe 点表，"
+                    "或换 `far_assign(prev, geo, min_path_cm=active_min_path_cm(flying_ms))` 取最大间距排列"
+                )
+            else:
+                hint = "改用错峰、换 assign 类型或调整 targets"
             msg = (
                 f"k{kf_i}: {kind_note}转场路径最小间距只有 {path_md:.0f}cm "
-                f"< {PLAN_PATH_SPACING_FLOOR_CM:.0f}cm — "
-                + (
-                    "这组 targets 与上个位置冲突，重写本 keyframe 点表"
-                    if assign_kind in ("best", "far", "swap")
-                    else "改用错峰、换 assign 类型或调整 targets"
-                )
+                f"< {PLAN_PATH_SPACING_FLOOR_CM:.0f}cm — " + hint
             )
             violations.append(msg)
             lines.append(f"- 违规: {msg}")
