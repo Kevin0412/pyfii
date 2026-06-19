@@ -184,13 +184,13 @@ def build_segment_prompt(
         f"- 长段(≥10s)主体用大动作母题：`far_assign(prev, geo, min_path_cm=active_min_path_cm(flying_ms))` + ripple_move；"
         f"gentle 技能(breathing-transition/呼吸)只配短过渡或定格点缀，不能当长段主体\n"
         f"- 真实高度层：整段 Z range ≥90cm、每个主体 keyframe ≥3 个 Z 层（避免固定高度/车道退化）\n"
-        f"- 大动作要一次到位安全（避免碰撞反复打回）：大幅交换用 `far_assign`（时间同步采样保证全程路径间距）而非 best_assign；"
-        f"穿过同一中心区的对穿别用小步错峰——`delay(i*150)` 只够做不交叉的波次（各机去不重叠的目标），"
-        f"真对穿时 9 机 2800ms 里只错开 1200ms 仍同时在中心必撞；密集对穿三选一："
-        f"① `group_relay` 分组顺序飞（一组动一组静，零交叉，最稳）；② 两组走不同 y 带绕开中心、航线不相交；"
-        f"③ 真要同时对穿就把错峰加大到 delay≥单程飞行时长（先飞的清场再放第二批）；"
-        f"分组问答两组目标放在不同空间区域（每机飞自己的 targets[i]，gids 只管时序）；"
-        f"单个 keyframe 路径控制在 ≤360cm（2.6-3.2s 可完成），跨场大迁移拆成多个 keyframe\n"
+        f"- 大动作安全 = 碰撞门 + 动作质量门 + 活动门**一次同时满足**（别顾此失彼来回磨）。默认用**绕行 route-around**："
+        f"9 机分两组，两组目标放在不同空间带（一组偏上/左、另一组偏下/右），两组**同时**飞向各自区域、航线天生不相交——"
+        f"大动作过质量门、全员在动过活动门、无交叉过碰撞门，一次到位。"
+        f"只有刻意要穿过同一中心区的对穿才特殊处理：小步错峰 `delay(i*150)` 清不开（9 机 2800ms 才错开 1200ms 仍同挤中心必撞），"
+        f"改 `group_relay` 分组顺序飞（零交叉，但别让静止组把活动量拖到门下）或把错峰加大到 `delay≥单程飞行时长`。"
+        f"大幅交换统一 `far_assign`（时间同步采样保证全程间距）而非 best_assign；分组问答两组目标放不同区域（每机飞自己的 targets[i]，gids 只管时序）；"
+        f"单 keyframe 路径 ≤360cm，跨场迁移拆多个 keyframe\n"
         f"- 避免刚性圆退化（圆/放射/中心/辐射主题尤其注意，否则 degradation 门反复打回）：不要让多数 keyframe 保持同一圆形且同一角序——"
         f"至少一个主体 keyframe 换非圆轮廓（直线/V/弧/星/双排/十字/署名造型），或用 `swap_assign`/`mirror_assign`/分组重组打乱角序；"
         f"**单纯扩缩半径或整体旋转(`rotate_assign`)仍是同序圆，不算变化**——圆形主题也要在 keyframe 之间真正换形或换序"
@@ -252,8 +252,8 @@ def build_segment_prompt(
 - 如果段长需要覆盖，不要拉长单个 move2；用多个可完成的快 keyframe、分组错峰、高度切层，或**亮灯定格**承接——图形到位后保持灯亮定格 0.8-2s 让观众读图（dntg 节奏=移动→定格→移动，dntg 全片 57% 时间是定格展示）；黑灯静止才算低活动
 - 3s 以上 keyframe 不要写 `min_path_cm=90/100`；用 `flying_ms = 3000` 后 `targets = far_assign(prev, geo, min_path_cm=active_min_path_cm(flying_ms))`
 - 安全距离按 XY 看：不要把同一 XY 的不同 Z 当成安全分离；XY 间距硬下限 51cm（pyfii core 碰撞线，检查器精确验证），密集造型配合短路径慢速；复杂交换交给 `far_assign`
-- 错峰分两种，别混用：小步错峰 `delay(i * 150)` 只让**不交叉的波次**先后起步（各机飞向不重叠的目标，路径本就不相交）——它**不能**让真正穿过同一中心区的对穿变安全（飞行 2800ms 里 9 机才错开 1200ms，仍同时挤在中心，必撞）。真对穿/交叉三选一：① `group_relay(drones, targets, gids, ...)` 分组顺序飞（一组动一组静，零交叉，最稳）；② 两组目标走不同 y 带（左偏上、右偏下），航线绕开中心互不相交；③ 真要同时对穿，错峰加大到 `delay≥单程飞行时长`（先飞的飞完清场再放第二批）。人类作品的对穿要么分组顺序、要么大错峰，不是小步错峰硬穿
-- 分配函数家族（转场即编舞，按叙事意图选映射，不只有一个最优解）：`best_assign(prev, geo)` 就近收束 / `far_assign(prev, geo, min_path_cm=...)` 大幅交换 / `rotate_assign(prev, geo, steps=1)` 整体漩涡旋转（同构环形刚体旋转天然安全，steps 可负；非环形/对齐两列旋转会贴 51cm 同步路径门）/ `mirror_assign(prev, geo)` 镜像对穿（**无 axis 参数**；必须配错峰，免同步路径门）/ `swap_assign(prev, geo, axis='x'|'y')` 半场互换（有 axis；同步直线检查，对齐两列会贴硬下限）/ `keep_assign(prev, geo)` 身份保持（drone i 固定走第 i 个目标，palette 叙事用）。左右对答/对穿优先 mirror_assign+错峰 或 far_assign+错峰
+- 错峰 `delay(i * 150)` 是**波次**工具（各机飞向不重叠目标、先后起步），不是对穿安全工具——对穿/大动作的安全见上方“大动作安全”一条（默认 route-around，刻意对穿才用 group_relay/大错峰）
+- 分配函数家族（转场即编舞，按叙事意图选映射，不只有一个最优解）：`best_assign(prev, geo)` 就近收束 / `far_assign(prev, geo, min_path_cm=...)` 大幅交换 / `rotate_assign(prev, geo, steps=1)` 整体漩涡旋转（同构环形刚体旋转天然安全，steps 可负；非环形/对齐两列旋转会贴 51cm 同步路径门）/ `mirror_assign(prev, geo)` 镜像对穿（**无 axis 参数**；必须配错峰，免同步路径门）/ `swap_assign(prev, geo, axis='x'|'y')` 半场互换（有 axis；同步直线检查，对齐两列会贴硬下限）/ `keep_assign(prev, geo)` 身份保持（drone i 固定走第 i 个目标，palette 叙事用）。左右对答/换位默认 route-around（两组不同带同时飞，见“大动作安全”），只有刻意要中心对穿才 mirror_assign+大错峰
 - 波次计算器（从当前队形推导时间编排，动序即光序）：`delays = ripple_delays(prev, mode='center_out'|'sweep_x'|'sweep_y'|'spiral'|'by_index', step_ms=120-250, reverse=False)` 波次延迟表；`spatial_ranks(prev, mode=...)` 波次序号（可按 rank 配色）；`gids = split_groups(prev, mode='left_right'|'front_back'|'inner_outer'|'alternate')` 0/1 分组。注意：环形/等距队形上 center_out 全员同距=同一波（退化为同步起步），想要可见波次改用 spiral/sweep_x/sweep_y/by_index
 - 动作母题执行器（内部已做 per-drone 灯光+段尾自动对齐，免回正算术，计入时间错峰门）：
   `prev = ripple_move(drones, targets, flying_ms, delays, colors=palette, hold_ticks=4)` 波次推进，先动先亮，总时长 max(delays)+flying_ms；

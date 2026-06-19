@@ -197,11 +197,11 @@ class ValidationResult:
             if any((it.get("min_distance_cm") or 99.0) < 20.0 for it in self.collision_intervals):
                 lines.append(
                     "诊断：上面极近间距(<20cm)发生在飞行途中=两机航线交叉(对穿)，"
-                    "小步错峰(step_ms 120-150)清不开。按强到弱选一种重构本段，别只微调点表："
-                    "①`group_relay(drones, targets, gids, flying_ms, gap_ms=...)` 分组顺序飞——"
-                    "一组动另一组静，零交叉，最稳；"
-                    "②两组目标走不同 y 带（左组目标偏上、右组偏下），航线上下绕开中心、互不相交；"
-                    "③真要同时对穿，错峰加大到 delay≥单程飞行时长（先飞的清场后再放第二批）。"
+                    "小步错峰(step_ms 120-150)清不开。重构本段（别只微调点表），按优先级："
+                    "①**绕行 route-around**：两组目标放不同空间带（一组偏上/左、另一组偏下/右），两组同时飞、航线不相交"
+                    "——同时过碰撞门+活动门+动作质量门，最优；"
+                    "②`group_relay(drones, targets, gids, flying_ms, gap_ms=...)` 分组顺序飞（零交叉，但注意静止组别拖低活动量）；"
+                    "③真要同时穿中心，错峰加大到 delay≥单程飞行时长（先飞的清场后再放第二批）。"
                 )
         if self.distance_warnings != 0:
             lines.append("距离风险：当前路径存在过近或对穿。请增大几何点间距、减少交叉换位、使用更保守的扇区保持或排队错峰。")
