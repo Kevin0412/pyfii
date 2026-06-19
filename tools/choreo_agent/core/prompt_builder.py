@@ -234,7 +234,7 @@ def build_segment_prompt(
 - {keyframe_rule}
 - {coordinate_hint}
 - {assign_rule}
-- 几何主路径：整数坐标表或 math 表达式都必须包进 custom_points：`geo = custom_points([(280+170*cos(2*pi*i/len(drones)), 280+170*sin(2*pi*i/len(drones)), 160+25*sin(i)) for i in range(len(drones))], n=len(drones), min_xy_cm=90)`（sin/cos/pi 已导出；custom_points 负责裁剪+间距校验，comprehension 直接传给 best_assign/move2 会被打回），再 `best_assign/far_assign`；9 机圆形 R≥150（弦距≈116cm），R<150 间距必小于 90 会被拒；S02-S05 必须至少一个主体 keyframe 使用手写坐标表或 math 几何，禁止调用 `geo_wide_v/geo_arrow/geo_box/geo_diagonal/geo_wave/geo_grid`
+- 几何主路径：整数坐标表或 math 表达式都必须包进 custom_points：`geo = custom_points([(280+170*cos(2*pi*i/len(drones)), 280+170*sin(2*pi*i/len(drones)), 160+25*sin(i)) for i in range(len(drones))], n=len(drones), min_xy_cm=90)`（sin/cos/pi 已导出；custom_points 负责裁剪+间距校验，comprehension 直接传给 best_assign/move2 会被打回），再 `best_assign/far_assign`；`min_xy_cm` 是你要的间距下限（硬底线 51）——按造型密度设：密集/紧凑造型用 51-70，**别照抄 90**，否则点挤不下 custom_points 会直接报 ValueError 白费一轮；松散大展开才用 90+。9 机圆形 R≥150（弦距≈116cm），R<150 间距必小于 90 会被拒；S02-S05 必须至少一个主体 keyframe 使用手写坐标表或 math 几何，禁止调用 `geo_wide_v/geo_arrow/geo_box/geo_diagonal/geo_wave/geo_grid`
 - 正式段默认展开 per-drone loop，不要用 `move_group` 作为整段主结构：`move2(drone, target, flying_ms)` → `apply_light(drone, color, ticks)` → `drone.delay(flying_ms-ticks*100+100)`
 - S02-S05 每段至少一个 keyframe 必须打破时间同步（同起同停会被节奏门打回），三选一：
   母题执行器 `prev = ripple_move(drones, targets, flying_ms, ripple_delays(prev), colors=palette)`（最省事，自动对齐）；
