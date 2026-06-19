@@ -444,7 +444,7 @@ COMPOSITE_SKILLS = [
         "role_fit": ["development", "climax"],
         "music_fit": "戏剧冲突、强烈交叉、对抗式高潮。",
         "visual_effect": "两侧无人机依次穿越中心交叉而过，错峰让它们在不同时刻过心——惊险而安全的对穿。",
-        "constraints": "**必须错峰**（mirror_assign 配非零 delays）；对穿空间要够（密集队形不要对穿）；错峰是安全机制不是可选项。",
+        "constraints": "**错峰必须够大**：小步 `delay(i*150)` 清不开真对穿（9 机 2800ms 才错开 1200ms，仍同时挤中心必撞）——穿过同一中心区时要 `delay≥单程飞行时长`，或改 `group_relay` 分组顺序飞（一组动一组静，零交叉，最稳）/两组走不同 y 带绕开中心。9 机密集队形别做同时对穿。",
         "how_to_choose": "想要穿越中心的对称张力、戏剧性交叉时。",
         "avoid_overuse": "对穿很抓眼但用多了廉价——一场一两次。",
         "example": "geo = custom_points([...关于质心对称的目标阵...], n=9)\ndelays = [i*150 for i in range(9)]  # 错峰过中心\nprev = ripple_move(drones, mirror_assign(prev, geo), 2600, delays, colors=palette)",
