@@ -307,7 +307,7 @@ targets = far_assign(prev, geo, min_path_cm=active_min_path_cm(2800))
 - **when to use**: 凡是配错峰/分组/波次(ripple_move/group_relay/delay 波)的大动作——错峰段的首选分配。best/far_assign 假设全员同步锁步直线，错峰段会“算着安全、实跑相撞”，这正是密集段反复碰撞返工的根因。
 - **when NOT**: 完全同步、不错峰的瞬时大交换可用 far_assign；纯就近承接用 best_assign。
 - **key params**: safe_assign(prev, geo, delays=delays, flying_ms=2800)。顺序：先 `delays=ripple_delays(prev,...)`，再 safe_assign，再用**同一 delays** 做 ripple_move。返回 targets 列表。
-- **safety**: 按验证器的分时 XY 模型(忽略 Z、floor 51cm)评分，选出的排列实跑也安全；仍受单 keyframe 可完成路径长度约束。配 `verify_timed_clearance(prev, targets, delays=delays, flying_ms=...)` 在组完时序后自检 `{'ok','min_cm','pair'}`，省一轮验证器。
+- **safety**: 按验证器的分时 XY 模型(忽略 Z、floor 51cm)评分，选出的排列实跑也安全；仍受单 keyframe 可完成路径长度约束。组完时序后用 `ok, min_cm, pair = verify_timed_clearance(prev, targets, delays=delays, flying_ms=...)` 自检（直接解包 3 元组），省一轮验证器。
 - **validation risks**: delays 必须是实际传给 ripple_move 的同一份；几何本身太密(最优排列也<51)时它只返回最优、仍会贴门——这时要把几何铺开。
 - **combines with**: wave-ripple-move, center-out-climax, call-and-response
 - **music fit**: 错峰大动作、分组问答、波次展开、高潮。

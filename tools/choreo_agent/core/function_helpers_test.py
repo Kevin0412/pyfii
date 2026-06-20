@@ -324,12 +324,13 @@ def test_safe_assign_timed_model_distinguishes_staggered_cross():
     module = _load_template_function_module()
     prev = [(100, 100, 150), (100, 300, 150)]
     targets = [(400, 300, 150), (400, 100, 150)]  # paths form an X
+    # returns a 3-tuple (ok, min_cm, pair) so `ok, min_cm, pair = verify_...` unpacks cleanly
     # synced: both at the centre together -> collides
-    synced = module.verify_timed_clearance(prev, targets, delays=[0, 0], flying_ms=2800)
-    assert synced["ok"] is False and synced["min_cm"] < 5
+    ok, min_cm, pair = module.verify_timed_clearance(prev, targets, delays=[0, 0], flying_ms=2800)
+    assert ok is False and min_cm < 5 and pair is not None
     # staggered: cross the centre at different times -> safe
-    stag = module.verify_timed_clearance(prev, targets, delays=[0, 1600], flying_ms=2800)
-    assert stag["ok"] is True and stag["min_cm"] >= 51
+    ok2, min_cm2, _pair2 = module.verify_timed_clearance(prev, targets, delays=[0, 1600], flying_ms=2800)
+    assert ok2 is True and min_cm2 >= 51
     print("PASSED: timed model separates synced collide from staggered-safe cross")
 
 

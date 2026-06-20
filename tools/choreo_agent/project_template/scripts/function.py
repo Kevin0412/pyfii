@@ -558,14 +558,15 @@ def _norm_schedule(n, delays, flying_ms):
     return delays_ms, flying_list
 
 
-def _timed_min_xy(starts_xyz, targets_xyz, delays_ms, flying_list, samples=48):
-    """真实分时轨迹的两两最小 XY 间距（镜像验证器 _add_dense_distance_report 的逐帧 XY 检查）。
+def _timed_min_xy(starts_xyz, targets_xyz, delays_ms, flying_list, fps=60, max_samples=300):
+    """真实分时轨迹的两两最小 XY 间距（镜像验证器 _add_dense_distance_report 的逐帧 60fps XY 检查）。
     每架机 i：t<delay_i 停在起点；delay_i..delay_i+flying_i 沿直线插值；之后停在终点。
-    Z 一律忽略（碰撞门就是 XY-only）。返回 (min_cm, worst_t_ms, (i,j))。"""
+    fps 控制采样密度——默认 60 与验证器一致；过疏会把短暂的近距离别(alias)过去，导致这里算
+    安全、验证器却测到碰撞。Z 一律忽略（碰撞门就是 XY-only）。返回 (min_cm, worst_t_ms, (i,j))。"""
     n = len(starts_xyz)
     spans = [delays_ms[i] + flying_list[i] for i in range(n)]
     tmax = max(spans) if spans else 0.0
-    steps = max(2, int(samples))
+    steps = max(8, min(int(max_samples), int(tmax / 1000.0 * float(fps))))
     min_d, worst_t, worst_pair = 1e9, 0.0, None
     sx = [s[0] for s in starts_xyz]; sy = [s[1] for s in starts_xyz]
     tx = [t[0] for t in targets_xyz]; ty = [t[1] for t in targets_xyz]
@@ -605,10 +606,13 @@ def safe_assign(starts, targets, delays=None, flying_ms=2800):
     targets_xyz = [_xyz(_target3(t)) for t in targets]
     target_items = [_target3(t) for t in targets]
     delays_ms, flying_list = _norm_schedule(n, delays, flying_ms)
+    # 排列搜索只需"排序"用粗采样(快)；选定排列后再用满 60fps 硬校验（见下方地板）做安全判定，
+    # 所以排序略糙不影响最终是否抛错。n<=8 是全排列、评估次数多→更粗。
+    search_fps = 18 if n > 8 else 12
 
     def evaluate(perm):
         tt = [targets_xyz[i] for i in perm]
-        md, _, _ = _timed_min_xy(starts_xyz, tt, delays_ms, flying_list)
+        md, _, _ = _timed_min_xy(starts_xyz, tt, delays_ms, flying_list, fps=search_fps)
         # 可达性：每架机路径不要超过本飞行时长能完成的距离(≈170cm/s×flying×0.9)，
         # 否则段尾“动作未完成”、实跑还会因没飞到位而相撞。超长按平方惩罚。
         overlong = 0.0
@@ -630,7 +634,7 @@ def safe_assign(starts, targets, delays=None, flying_ms=2800):
     # 像 custom_points/follow_chain 一样直接抛错，在 preflight 快速失败、给可执行信息，
     # 而不是把一个自己都算出会撞的排列丢给 ripple_move（S02 反复返工的直接原因之一）。
     best_md, best_t, best_pair = _timed_min_xy(
-        starts_xyz, [_xyz(t) for t in best], delays_ms, flying_list, samples=64
+        starts_xyz, [_xyz(t) for t in best], delays_ms, flying_list, fps=60
     )
     if best_md < 51.0 and best_pair is not None:
         raise ValueError(
@@ -642,16 +646,20 @@ def safe_assign(starts, targets, delays=None, flying_ms=2800):
 
 
 def verify_timed_clearance(starts, targets, delays=None, flying_ms=2800):
-    """按真实错峰时序回放轨迹，报告全程最小 XY 间距（镜像逐帧验证器）。组合完
+    """按真实错峰时序回放轨迹，报告全程最小 XY 间距（镜像逐帧 60fps 验证器）。组合完
     ripple_move/分组时序后调用，拿到 go/no-go，省一轮验证器。targets 是最终每机目标
-    （drone i → targets[i]）。返回 {'min_cm', 't_ms', 'pair', 'ok'}；ok=min_cm>=51。"""
+    （drone i → targets[i]）。
+
+    返回 **3 元组** `(ok, min_cm, pair)`：ok=min_cm>=51(bool)，min_cm=全程最小 XY 间距(cm)，
+    pair=最近的一对 (i,j)（无则 None）。直接解包用：
+        `ok, min_cm, pair = verify_timed_clearance(prev, targets, delays=delays, flying_ms=2800)`"""
     n = len(starts)
     _assert_target_count(starts, targets)
     starts_xyz = [_xyz(p) for p in starts]
     targets_xyz = [_xyz(_target3(t)) for t in targets]
     delays_ms, flying_list = _norm_schedule(n, delays, flying_ms)
-    md, t, pair = _timed_min_xy(starts_xyz, targets_xyz, delays_ms, flying_list, samples=64)
-    return {"min_cm": round(md, 1), "t_ms": round(t), "pair": pair, "ok": md >= 51.0}
+    md, _t, pair = _timed_min_xy(starts_xyz, targets_xyz, delays_ms, flying_list, fps=60)
+    return (md >= 51.0, round(md, 1), pair)
 
 
 # ---------- 意图分配家族：转场即编舞，按叙事意图选映射 ----------
