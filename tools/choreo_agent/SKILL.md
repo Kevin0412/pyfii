@@ -299,7 +299,7 @@ targets = best_assign(prev, geo)
 targets = far_assign(prev, geo, min_path_cm=active_min_path_cm(2800))
 ```
 
-### safe-assign  ·  `safe_assign()`
+### timed-safe-assign  ·  `safe_assign()`
 
 - **category**: composition
 - **role fit**: expand, climax, development, transition

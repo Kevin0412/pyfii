@@ -246,7 +246,7 @@ PRIMITIVE_SKILLS = [
         "music_fit": "高潮、大展开、强能量段。",
     },
     {
-        "name": "safe-assign",
+        "name": "timed-safe-assign",
         "function": "safe_assign",
         "category": "composition",
         "role_fit": ["expand", "climax", "development", "transition"],
