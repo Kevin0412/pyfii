@@ -125,7 +125,7 @@ def build_segment_prompt(
 - 不要直接写 `inittime()`；跨段对齐由 `auto_init` 处理"""
 
     if segment_upper in {"S04", "S05"}:
-        assign_rule = "- S04/S05 大动作直接 `targets = far_assign(prev, geo, min_path_cm=active_min_path_cm(flying_ms))`（取最大间距的无碰撞排列）；就近承接才用 `best_assign(prev, geo)`。同步转场路径 <51cm 时：best 已是最优排列、改点表救不了——能换排列就改 far_assign，点本身太近（对穿/密集）就 `mirror_assign(prev, geo)`+错峰。每个 keyframe 最长路径有确定性上限（speed×时长内能飞完），规划报告会给精确 `[下限,上限]` 带——别设计飞不完的大动作。返回值都是 targets 列表，不要拆 `perm/min_d`"
+        assign_rule = "- S04/S05 大动作配错峰/分组时**优先** `delays = ripple_delays(prev, ...)` 后 `targets = safe_assign(prev, geo, delays=delays, flying_ms=...)`（按真实分时轨迹选无碰撞排列，避免“算着安全实跑撞”反复返工）；不错峰的同步大交换才用 `far_assign(prev, geo, min_path_cm=active_min_path_cm(flying_ms))`；就近承接用 `best_assign(prev, geo)`。同步转场路径 <51cm 时：best 已是最优排列、改点表救不了——能换排列就改 far_assign，点本身太近（对穿/密集）就 `mirror_assign(prev, geo)`+错峰。每个 keyframe 最长路径有确定性上限（speed×时长内能飞完），规划报告会给精确 `[下限,上限]` 带——别设计飞不完的大动作。返回值都是 targets 列表，不要拆 `perm/min_d`"
     else:
         assign_rule = "- `targets = best_assign(prev, geo)` 就近承接；同步转场路径 <51cm 时 best 改点表无效（已是最优排列）：能换排列改 `far_assign(prev, geo, min_path_cm=active_min_path_cm(flying_ms))`，点本身太近（对穿/密集）改 `mirror_assign(prev, geo)`+错峰。prev/geo 用完整 `(x,y,z)`，返回值就是重排后的 targets 列表，不要拆 `perm/min_d`"
 
@@ -188,8 +188,9 @@ def build_segment_prompt(
         f"    `gids = split_groups(prev, mode='left_right')`  # 0=左组 1=右组\n"
         f"    `# 左组去对侧但目标集中在 y 上带、右组去对侧但集中在 y 下带 → 左右互换的张力，两条航线分居上下不相交`\n"
         f"    `geo = custom_points([...9 个点：左组 y 偏大、右组 y 偏小，整体大展开...], n=len(drones), min_xy_cm=70)`\n"
-        f"    `targets = far_assign(prev, geo, min_path_cm=active_min_path_cm(2800))`  # 取最大间距的无碰撞排列\n"
-        f"    `prev = ripple_move(drones, targets, 2800, ripple_delays(prev, mode='by_index'), colors=palette)`\n"
+        f"    `delays = ripple_delays(prev, mode='by_index', step_ms=130)`\n"
+        f"    `targets = safe_assign(prev, geo, delays=delays, flying_ms=2800)`  # 按真实错峰时序选无碰撞排列（与逐帧验证器同模型，错峰大动作首选）\n"
+        f"    `prev = ripple_move(drones, targets, 2800, delays, colors=palette)`\n"
         f"  穿过同一中心区的真对穿是**少数刻意情况，仅当 motif 明确是 mirror-cross 时**才做：用 `group_relay` 顺序飞或错峰 `delay≥单程飞行时长`，小步 `delay(i*150)` 清不开必撞。其余大动作一律 route-around。单 keyframe 路径 ≤360cm，跨场拆多个 keyframe\n"
         f"  **碰撞门多半来自点表太密**：几何点要铺开占场（相邻点目标 ≥90cm、用满场地宽度），far_assign 才有间距可挑出无碰撞排列；硬塞密集点表后指望 far_assign 救是没用的（点本身太近时连最优排列也 <51cm）。密集造型留给短促/慢速小动作，大迁移用铺开的几何\n"
         f"- 避免刚性圆退化（圆/放射/中心/辐射主题尤其注意，否则 degradation 门反复打回）：不要让多数 keyframe 保持同一圆形且同一角序——"
@@ -254,7 +255,7 @@ def build_segment_prompt(
 - 3s 以上 keyframe 不要写 `min_path_cm=90/100`；用 `flying_ms = 3000` 后 `targets = far_assign(prev, geo, min_path_cm=active_min_path_cm(flying_ms))`
 - 安全距离按 XY 看：不要把同一 XY 的不同 Z 当成安全分离；XY 间距硬下限 51cm（pyfii core 碰撞线，检查器精确验证），密集造型配合短路径慢速；复杂交换交给 `far_assign`
 - 错峰 `delay(i * 150)` 是**波次**工具（各机飞向不重叠目标、先后起步），不是对穿安全工具——对穿/大动作的安全见上方“大动作安全”一条（默认 route-around，刻意对穿才用 group_relay/大错峰）
-- 分配函数家族（转场即编舞，按叙事意图选映射，不只有一个最优解）：`best_assign(prev, geo)` 就近收束 / `far_assign(prev, geo, min_path_cm=...)` 大幅交换 / `rotate_assign(prev, geo, steps=1)` 整体漩涡旋转（同构环形刚体旋转天然安全，steps 可负；非环形/对齐两列旋转会贴 51cm 同步路径门）/ `mirror_assign(prev, geo)` 镜像对穿（**无 axis 参数**；必须配错峰，免同步路径门）/ `swap_assign(prev, geo, axis='x'|'y')` 半场互换（有 axis；同步直线检查，对齐两列会贴硬下限）/ `keep_assign(prev, geo)` 身份保持（drone i 固定走第 i 个目标，palette 叙事用）。左右对答/换位默认 route-around（两组不同带同时飞，见“大动作安全”），只有刻意要中心对穿才 mirror_assign+大错峰
+- 分配函数家族（转场即编舞，按叙事意图选映射，不只有一个最优解）：`best_assign(prev, geo)` 就近收束 / `far_assign(prev, geo, min_path_cm=...)` 大幅交换（同步锁步模型）/ **`safe_assign(prev, geo, delays=delays, flying_ms=...)` 错峰/分组大动作首选**——按真实分时轨迹挑无碰撞排列，和逐帧验证器同模型（best/far 假设全员同步直线，错峰段会“算着安全、实跑相撞”，正是密集段反复碰撞返工的根因）；组完时序后用 `verify_timed_clearance(prev, targets, delays=delays, flying_ms=...)` 自检 `{'ok':bool,'min_cm':,'pair':}` 省一轮验证器 / `rotate_assign(prev, geo, steps=1)` 整体漩涡旋转（同构环形刚体旋转天然安全，steps 可负；非环形/对齐两列旋转会贴 51cm 同步路径门）/ `mirror_assign(prev, geo)` 镜像对穿（**无 axis 参数**；必须配错峰，免同步路径门）/ `swap_assign(prev, geo, axis='x'|'y')` 半场互换（有 axis；同步直线检查，对齐两列会贴硬下限）/ `keep_assign(prev, geo)` 身份保持（drone i 固定走第 i 个目标，palette 叙事用）。左右对答/换位默认 route-around（两组不同带同时飞，见“大动作安全”），只有刻意要中心对穿才 mirror_assign+大错峰
 - 波次计算器（从当前队形推导时间编排，动序即光序）：`delays = ripple_delays(prev, mode='center_out'|'sweep_x'|'sweep_y'|'spiral'|'by_index', step_ms=120-250, reverse=False)` 波次延迟表；`spatial_ranks(prev, mode=...)` 波次序号（可按 rank 配色）；`gids = split_groups(prev, mode='left_right'|'front_back'|'inner_outer'|'alternate')` 0/1 分组。注意：环形/等距队形上 center_out 全员同距=同一波（退化为同步起步），想要可见波次改用 spiral/sweep_x/sweep_y/by_index
 - 动作母题执行器（内部已做 per-drone 灯光+段尾自动对齐，免回正算术，计入时间错峰门）：
   `prev = ripple_move(drones, targets, flying_ms, delays, colors=palette, hold_ticks=4)` 波次推进，先动先亮，总时长 max(delays)+flying_ms；

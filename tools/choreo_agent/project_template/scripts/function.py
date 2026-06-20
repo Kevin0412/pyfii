@@ -25,6 +25,8 @@ __all__ = [
     "clamp_z",
     "best_assign",
     "far_assign",
+    "safe_assign",
+    "verify_timed_clearance",
     "rotate_assign",
     "mirror_assign",
     "swap_assign",
@@ -536,6 +538,99 @@ def far_assign(starts, targets, min_path_cm=90, min_spacing_cm=140):
             best_score = score
             best = [target_items[i] for i in perm]
     return best
+
+
+# ---------- 时间感知安全分配：按真实错峰时序评估碰撞，与逐帧验证器同模型 ----------
+def _norm_schedule(n, delays, flying_ms):
+    """把 delays/flying_ms 规整成每架机的 (delay_ms, flying_ms)。delays=None → 全 0（同步）。"""
+    if delays is None:
+        delays_ms = [0.0] * n
+    else:
+        delays_ms = [max(0.0, float(v)) for v in delays]
+        if len(delays_ms) != n:
+            raise ValueError(f"delays count {len(delays_ms)} != {n}")
+    if isinstance(flying_ms, (list, tuple)):
+        flying_list = [max(1.0, float(v)) for v in flying_ms]
+        if len(flying_list) != n:
+            raise ValueError(f"flying_ms count {len(flying_list)} != {n}")
+    else:
+        flying_list = [max(1.0, float(flying_ms))] * n
+    return delays_ms, flying_list
+
+
+def _timed_min_xy(starts_xyz, targets_xyz, delays_ms, flying_list, samples=48):
+    """真实分时轨迹的两两最小 XY 间距（镜像验证器 _add_dense_distance_report 的逐帧 XY 检查）。
+    每架机 i：t<delay_i 停在起点；delay_i..delay_i+flying_i 沿直线插值；之后停在终点。
+    Z 一律忽略（碰撞门就是 XY-only）。返回 (min_cm, worst_t_ms, (i,j))。"""
+    n = len(starts_xyz)
+    spans = [delays_ms[i] + flying_list[i] for i in range(n)]
+    tmax = max(spans) if spans else 0.0
+    steps = max(2, int(samples))
+    min_d, worst_t, worst_pair = 1e9, 0.0, None
+    sx = [s[0] for s in starts_xyz]; sy = [s[1] for s in starts_xyz]
+    tx = [t[0] for t in targets_xyz]; ty = [t[1] for t in targets_xyz]
+    for s in range(steps + 1):
+        t = tmax * s / steps if steps else 0.0
+        px = [0.0] * n; py = [0.0] * n
+        for i in range(n):
+            if t <= delays_ms[i] or flying_list[i] <= 0:
+                r = 0.0
+            elif t >= spans[i]:
+                r = 1.0
+            else:
+                r = (t - delays_ms[i]) / flying_list[i]
+            px[i] = sx[i] + (tx[i] - sx[i]) * r
+            py[i] = sy[i] + (ty[i] - sy[i]) * r
+        for i in range(n):
+            for j in range(i + 1, n):
+                d = ((px[i] - px[j]) ** 2 + (py[i] - py[j]) ** 2) ** 0.5
+                if d < min_d:
+                    min_d, worst_t, worst_pair = d, t, (i, j)
+    return min_d, worst_t, worst_pair
+
+
+def safe_assign(starts, targets, delays=None, flying_ms=2800):
+    """时间感知的安全分配。在模型真正要用的错峰时序(delays)+飞行时长下，挑选让**真实分时
+    轨迹**两两 XY 间距最大的 targets 排列。
+
+    为什么需要它：best_assign/far_assign 假设全员同步直线（锁步），与逐帧验证器不一致——
+    错峰/分组段会“算着安全、实跑相撞”（验证器看真实分时轨迹）。safe_assign 直接按验证器的
+    分时 XY 模型评分，选出的排列实跑也安全，省去反复返工。
+    用法：先 `delays = ripple_delays(prev, ...)`，再 `targets = safe_assign(prev, geo, delays=delays,
+    flying_ms=2800)`，再用同一 delays 做 `ripple_move(drones, targets, 2800, delays, ...)`。
+    delays=None 时退化为同步（≈best_assign，不推荐——错峰段务必传 delays）。返回重排后的 targets。"""
+    n = len(starts)
+    _assert_target_count(starts, targets)
+    starts_xyz = [_xyz(p) for p in starts]
+    targets_xyz = [_xyz(_target3(t)) for t in targets]
+    target_items = [_target3(t) for t in targets]
+    delays_ms, flying_list = _norm_schedule(n, delays, flying_ms)
+
+    def evaluate(perm):
+        tt = [targets_xyz[i] for i in perm]
+        md, _, _ = _timed_min_xy(starts_xyz, tt, delays_ms, flying_list)
+        return md
+
+    best_score, best = -1e18, target_items
+    for perm in _assignment_permutations(n, starts_xyz, targets_xyz, evaluate):
+        score = evaluate(perm)
+        if score > best_score:
+            best_score = score
+            best = [target_items[i] for i in perm]
+    return best
+
+
+def verify_timed_clearance(starts, targets, delays=None, flying_ms=2800):
+    """按真实错峰时序回放轨迹，报告全程最小 XY 间距（镜像逐帧验证器）。组合完
+    ripple_move/分组时序后调用，拿到 go/no-go，省一轮验证器。targets 是最终每机目标
+    （drone i → targets[i]）。返回 {'min_cm', 't_ms', 'pair', 'ok'}；ok=min_cm>=51。"""
+    n = len(starts)
+    _assert_target_count(starts, targets)
+    starts_xyz = [_xyz(p) for p in starts]
+    targets_xyz = [_xyz(_target3(t)) for t in targets]
+    delays_ms, flying_list = _norm_schedule(n, delays, flying_ms)
+    md, t, pair = _timed_min_xy(starts_xyz, targets_xyz, delays_ms, flying_list, samples=64)
+    return {"min_cm": round(md, 1), "t_ms": round(t), "pair": pair, "ok": md >= 51.0}
 
 
 # ---------- 意图分配家族：转场即编舞，按叙事意图选映射 ----------
