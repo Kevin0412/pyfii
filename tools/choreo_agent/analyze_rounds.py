@@ -31,6 +31,8 @@ def _val(v):
         "comp_ok": v.get("composition_ok"),
         "codeq_ok": v.get("code_quality_ok"),
         "degr_ok": v.get("degradation_ok"),
+        "motion": v.get("motion"),            # [start_s, end_s] of detected motion
+        "window": v.get("quality_window"),    # [start_s, end_s] of the segment window
     }
 
 
@@ -57,6 +59,13 @@ def classify(vs):
         return "degradation"
     if vs.get("act"):
         return "action"
+    # window underfill: motion ends well before the segment window end (-1.0/+1.5s gate).
+    m, w = vs.get("motion"), vs.get("window")
+    if (isinstance(m, (list, tuple)) and isinstance(w, (list, tuple))
+            and len(m) == 2 and len(w) == 2
+            and isinstance(m[1], (int, float)) and isinstance(w[1], (int, float))
+            and m[1] < w[1] - 1.5):
+        return "window_fill"
     return "other_validation"
 
 
