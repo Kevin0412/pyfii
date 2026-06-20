@@ -609,7 +609,16 @@ def safe_assign(starts, targets, delays=None, flying_ms=2800):
     def evaluate(perm):
         tt = [targets_xyz[i] for i in perm]
         md, _, _ = _timed_min_xy(starts_xyz, tt, delays_ms, flying_list)
-        return md
+        # 可达性：每架机路径不要超过本飞行时长能完成的距离(≈170cm/s×flying×0.9)，
+        # 否则段尾“动作未完成”、实跑还会因没飞到位而相撞。超长按平方惩罚。
+        overlong = 0.0
+        for i in range(n):
+            cap = 170.0 * flying_list[i] / 1000.0 * 0.9
+            d = Distance(starts_xyz[i], tt[i])
+            if d > cap:
+                overlong += (d - cap) ** 2
+        # 间距奖励封顶 90cm（够安全即可，不为多挤间距换超长路径）
+        return min(md, 90.0) * 200.0 - overlong * 3.0
 
     best_score, best = -1e18, target_items
     for perm in _assignment_permutations(n, starts_xyz, targets_xyz, evaluate):
