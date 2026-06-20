@@ -271,7 +271,7 @@ class Session:
                     if plan:
                         self._record_attempt_update({"planning_parse_ok": True})
                         # Stage 1.5: deterministic checker + cheap revision rounds
-                        plan, check_report = self._refine_plan_with_checker(
+                        plan, check_report, plan_ok = self._refine_plan_with_checker(
                             seg=seg,
                             provider=provider,
                             plan=plan,
@@ -287,7 +287,20 @@ class Session:
                             previous_exit_state,
                             drone_count=self.state.drone_count,
                         )
-                        budget = f"{budget}\n\n{check_report}"
+                        # 确定性检查器若仍判定不可行（越界/最长飞行>窗口/同步间距<51），
+                        # 这是硬性事实而非建议：在编码 prompt 顶部把违规标成"必须修正"，
+                        # 否则模型会照着不可行的预算硬写（飞不完→实跑错位相撞，正是 S02 反复返工的根因）。
+                        if not plan_ok:
+                            budget = (
+                                "⚠️ 确定性检查器判定本规划仍有硬性违规（下方报告列出精确数字：坐标越界/"
+                                "最长飞行>keyframe时长/同步路径<51cm）。这些是物理事实，不是建议——"
+                                "写代码时必须逐条消除：飞行超时就缩短该 keyframe 的最长路径或降低位移幅度"
+                                "（别给 move2 一个装不下的 flying_ms），越界就把坐标拉回 0-560/80-250，"
+                                "间距不足就拉开点表或改 safe_assign。带着违规硬写必然碰撞返工。\n\n"
+                                f"{budget}\n\n{check_report}"
+                            )
+                        else:
+                            budget = f"{budget}\n\n{check_report}"
                         self._record_attempt_update({"budget_chars": len(budget)})
                         # Stage 3: budget → code
                         code_prompt = build_coding_prompt(
@@ -846,7 +859,7 @@ def {function_name}(drones: list):
         on_reasoning_delta: Callable[[str], None] | None = None,
         on_heartbeat: Callable[[], None] | None = None,
         max_revisions: int = 2,
-    ) -> tuple[dict, str]:
+    ) -> tuple[dict, str, bool]:
         """确定性检查器闭环：报告精确间距/路径/时长数字，违规则用小轮次让模型只改违规项。
 
         检查器代替模型做全部距离数学；修正轮 prompt 很短（旧 JSON + 报告），
@@ -890,7 +903,7 @@ def {function_name}(drones: list):
                 plan, prev_state, drone_count=self.state.drone_count
             )
             self._record_attempt_update({f"plan_check_rev{revision}_ok": ok})
-        return plan, report
+        return plan, report, ok
 
     def _chat_stage(
         self,

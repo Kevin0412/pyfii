@@ -626,6 +626,18 @@ def safe_assign(starts, targets, delays=None, flying_ms=2800):
         if score > best_score:
             best_score = score
             best = [target_items[i] for i in perm]
+    # 硬地板：选出的排列若在真实分时轨迹下仍 <51cm，不静默返回相撞排列——
+    # 像 custom_points/follow_chain 一样直接抛错，在 preflight 快速失败、给可执行信息，
+    # 而不是把一个自己都算出会撞的排列丢给 ripple_move（S02 反复返工的直接原因之一）。
+    best_md, best_t, best_pair = _timed_min_xy(
+        starts_xyz, [_xyz(t) for t in best], delays_ms, flying_list, samples=64
+    )
+    if best_md < 51.0 and best_pair is not None:
+        raise ValueError(
+            f"safe_assign 无法避撞：最优排列在分时轨迹下 d{best_pair[0]}-d{best_pair[1]} "
+            f"@{best_t:.0f}ms 仅 {best_md:.1f}cm < 51cm。这组几何+时序装不下该大动作——"
+            "请拉大错峰 step_ms、加长 flying_ms、或把目标点表铺开（相邻≥90cm）后重试。"
+        )
     return best
 
 

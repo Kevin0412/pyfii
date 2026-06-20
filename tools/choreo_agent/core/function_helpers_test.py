@@ -320,7 +320,43 @@ def test_geo_box_accepts_common_size_modifiers():
     assert min_xy >= 100
 
 
+def test_safe_assign_timed_model_distinguishes_staggered_cross():
+    module = _load_template_function_module()
+    prev = [(100, 100, 150), (100, 300, 150)]
+    targets = [(400, 300, 150), (400, 100, 150)]  # paths form an X
+    # synced: both at the centre together -> collides
+    synced = module.verify_timed_clearance(prev, targets, delays=[0, 0], flying_ms=2800)
+    assert synced["ok"] is False and synced["min_cm"] < 5
+    # staggered: cross the centre at different times -> safe
+    stag = module.verify_timed_clearance(prev, targets, delays=[0, 1600], flying_ms=2800)
+    assert stag["ok"] is True and stag["min_cm"] >= 51
+    print("PASSED: timed model separates synced collide from staggered-safe cross")
+
+
+def test_safe_assign_raises_when_no_permutation_clears_floor():
+    module = _load_template_function_module()
+    # 3 drones clustered ~0cm, synced -> no ordering can clear 51cm -> must RAISE (not return
+    # a colliding permutation silently)
+    prev = [(280, 280, 150), (285, 282, 150), (282, 285, 150)]
+    targets = [(283, 283, 150), (281, 284, 150), (284, 281, 150)]
+    raised = False
+    try:
+        module.safe_assign(prev, targets, delays=[0, 0, 0], flying_ms=2800)
+    except ValueError as exc:
+        raised = True
+        assert "51cm" in str(exc)
+    assert raised, "safe_assign must raise, not return a colliding permutation"
+    # a well-separated, staggered case returns normally
+    prev2 = [(80, 80, 150), (480, 480, 150)]
+    targets2 = [(120, 120, 150), (440, 440, 150)]
+    out = module.safe_assign(prev2, targets2, delays=[0, 400], flying_ms=2800)
+    assert len(out) == 2
+    print("PASSED: safe_assign raises on unavoidable collision, returns on safe geometry")
+
+
 if __name__ == "__main__":
+    test_safe_assign_timed_model_distinguishes_staggered_cross()
+    test_safe_assign_raises_when_no_permutation_clears_floor()
     test_star_import_surface_excludes_geo_templates()
     test_auto_init_uses_time_cursor_not_missing_init_time()
     test_auto_init_waits_for_last_move_without_delay()
