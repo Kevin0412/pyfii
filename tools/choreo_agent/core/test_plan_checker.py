@@ -144,6 +144,32 @@ def test_feasible_band_inversion_message():
     assert "提高 duration_s 或 speed" in report
 
 
+def test_timed_gate_catches_mirror_cross_synced_skips():
+    # mirror 对穿: the synced path check is skipped (path_md=None) for mirror, so a cross-through
+    # that collides at runtime used to reach the validator unflagged (the S05/S06 grind). The
+    # timed gate replays the standard 错峰 trajectory (same model the validator gates on) and must
+    # catch it at plan time. Here ends swap along a line through a stationary middle drone → 0cm.
+    prev = [[60, 100, 120], [500, 100, 120], [280, 100, 120]]
+    targets = [[500, 100, 150], [60, 100, 150], [280, 100, 150]]
+    kf = _kf(targets, duration_s=2.6)
+    kf["assign"] = "mirror"
+    ok, report = evaluate_plan_safety({"keyframes": [kf]}, prev, drone_count=3)
+    assert not ok
+    assert "分时轨迹" in report and "实跑会撞" in report
+    assert "safe_assign" in report  # prescription, not gate relaxation
+
+
+def test_timed_gate_passes_clean_spread_move():
+    # A well-separated move (no crossing) must clear the timed gate — no false rejects.
+    prev = [[80, 80, 120], [480, 80, 120], [80, 480, 120]]
+    targets = [[120, 460, 150], [440, 460, 150], [120, 120, 150]]
+    ok, report = evaluate_plan_safety(
+        {"keyframes": [_kf(targets, duration_s=3.0)]}, prev, drone_count=3
+    )
+    assert ok, report
+    assert "分时间距" in report and "OK" in report
+
+
 def test_infeasible_flight_time_violates():
     prev = [[0, 100, 120], [0, 300, 120]]
     targets = [[540, 100, 120], [540, 300, 120]]

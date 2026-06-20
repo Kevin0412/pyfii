@@ -289,6 +289,7 @@ def evaluate_plan_safety(
         )
         median_path = path_lengths[drone_count // 2]
         max_path = path_lengths[-1]
+        synced_flagged = False
         if path_md is None:
             lines.append(f"- {kind_note}")
         elif path_md < PLAN_PATH_SPACING_FLOOR_CM:
@@ -325,6 +326,7 @@ def evaluate_plan_safety(
             )
             violations.append(msg)
             lines.append(f"- 违规: {msg}")
+            synced_flagged = True
         else:
             lines.append(
                 f"- {kind_note}路径最小间距 {path_md:.0f}cm OK；路径长度 中位 {median_path:.0f}cm / 最长 {max_path:.0f}cm"
@@ -347,6 +349,32 @@ def evaluate_plan_safety(
             lines.append(f"- 违规: {msg}")
         else:
             lines.append(f"- 最长飞行 {max_ft:.0f}ms ≤ 时长 {duration_ms:.0f}ms OK")
+
+        # 分时碰撞门：按标准 by_index 错峰回放真实轨迹的两两最小 XY，与逐帧 validator 同模型。
+        # 同步检查(path_md)对 mirror 对穿被跳过、对错峰段偏乐观——"同步算安全、实跑相撞"正是密集段
+        # 反复返工的根因（碰撞在 validator 阶段才暴露）。这一步在规划阶段就用 validator 的分时模型挡下。
+        timed_md = _timed_path_min(
+            [(p[0], p[1]) for p in current_prev],
+            [(t[0], t[1]) for t in assigned],
+            duration_ms,
+        )
+        if timed_md >= PLAN_PATH_SPACING_FLOOR_CM:
+            lines.append(f"- {kind_note}分时间距 {timed_md:.0f}cm OK")
+        elif synced_flagged:
+            # 同步门已就同一处问题报违规；分时门只补充信息，不重复计违规。
+            lines.append(f"- (同步门已报违规) 分时间距同样只有 {timed_md:.0f}cm")
+        else:
+            # 分时门的独有价值：同步门跳过(mirror 对穿)或判安全、但真实错峰回放仍相撞的情形——
+            # "同步算安全、实跑相撞"正是密集段反复返工的根因，在规划阶段就用 validator 的分时模型挡下。
+            msg = (
+                f"k{kf_i}: 分时轨迹(标准错峰回放)最小间距只有 {timed_md:.0f}cm "
+                f"< {PLAN_PATH_SPACING_FLOOR_CM:.0f}cm — 默认/by_index 错峰下实跑会撞(validator 逐帧同此模型)。"
+                "要么改用 `safe_assign(prev, geo, delays=delays, flying_ms=...)`（按真实错峰挑无碰撞排列）；"
+                "要么让交叉的机体顺序错开（group_relay 或加大 step_ms，使每架在其镜像/对手到达交叉点前已离开）。"
+                "不要削门。"
+            )
+            violations.append(msg)
+            lines.append(f"- 违规: {msg}")
 
         # 可行路径带（只读提示，不是新门）：消除高潮段"动作太大→飞不完/碰撞 ↔ 太小→动作质量门"
         # 的来回震荡。下限=动作质量门的最大展开下限；上限=本 speed/accel 在本时长内能完成的最长路径
@@ -472,6 +500,45 @@ def _synced_path_min(prev_xy, target_xy, steps: int = 50) -> float:
                     (positions[i][0] - positions[j][0]) ** 2
                     + (positions[i][1] - positions[j][1]) ** 2
                 ) ** 0.5
+                if d < md:
+                    md = d
+    return md
+
+
+def _timed_path_min(prev_xy, target_xy, duration_ms, fps: int = 60) -> float:
+    """分时转场最小 XY 间距：假设标准 by_index 错峰(每机 delay=i*step)，各机在自己的飞行窗口内
+    沿直线推进，按 60fps 采样取两两最小——与 project_template/scripts/function.py._timed_min_xy
+    及 validator 的逐帧 XY 模型一致。用于规划阶段挡下"同步算安全、实跑相撞"的设计（尤其 mirror 对穿，
+    同步直线必撞、只靠错峰救——这里就按错峰回放验真）。"""
+    n = len(prev_xy)
+    if n < 2 or duration_ms <= 0:
+        return 1e9
+    # 标准错峰：总错峰跨度约占窗口 25%(上限 1200ms)，单机飞行占剩余窗口。
+    span = min(duration_ms * 0.25, 1200.0)
+    step = span / max(1, n - 1)
+    delays = [i * step for i in range(n)]
+    flying = max(1.0, duration_ms - span)
+    spans = [delays[i] + flying for i in range(n)]
+    tmax = max(spans)
+    steps = max(8, min(300, int(tmax / 1000.0 * float(fps))))
+    md = 1e9
+    for s in range(steps + 1):
+        t = tmax * s / steps
+        pos = []
+        for i in range(n):
+            if t <= delays[i] or flying <= 0:
+                r = 0.0
+            elif t >= spans[i]:
+                r = 1.0
+            else:
+                r = (t - delays[i]) / flying
+            pos.append((
+                prev_xy[i][0] + (target_xy[i][0] - prev_xy[i][0]) * r,
+                prev_xy[i][1] + (target_xy[i][1] - prev_xy[i][1]) * r,
+            ))
+        for i in range(n):
+            for j in range(i + 1, n):
+                d = ((pos[i][0] - pos[j][0]) ** 2 + (pos[i][1] - pos[j][1]) ** 2) ** 0.5
                 if d < md:
                     md = d
     return md

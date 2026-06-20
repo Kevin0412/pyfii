@@ -59,15 +59,22 @@ def _kf(targets, **kw):
     return base
 
 
-def test_checker_mirror_skips_path_check_with_stagger_note():
+def test_checker_mirror_skips_synced_gate_but_timed_gate_catches_collision():
+    # mirror 对穿 is exempt from the SYNCED straight-line gate (path_md=None → 错峰 note only,
+    # no "转场路径最小间距" violation). But a 2-drone collinear end-swap crosses head-on and
+    # collides under partial 错峰 — the validator would reject it at runtime. The TIMED gate
+    # (validator's own 60fps model) now catches it at plan time instead of grinding repair rounds.
+    # This is the materially-correct fix: "synced says safe, real run collides" was the root cause.
     prev = [[100, 280, 150], [460, 280, 150]]
-    targets = [[120, 280, 150], [440, 280, 150]]  # 对穿：同步直线间距趋零
+    targets = [[120, 280, 150], [440, 280, 150]]  # mirror reassigns to a full end-swap → cross-through
     ok, report = evaluate_plan_safety(
         {"keyframes": [_kf(targets, assign="mirror")]}, prev, drone_count=2
     )
-    assert ok, report  # mirror 不因同步路径判违规
-    assert "错峰" in report
-    # 同样的 targets 用默认 best 检查也 OK（best 会选不交叉的映射）
+    assert "错峰" in report                      # synced gate skipped → 错峰 note still emitted
+    assert "转场路径最小间距只有" not in report   # NOT flagged by the synced path gate (exemption intact)
+    assert not ok                                # but the timed gate catches the real collision
+    assert "分时轨迹" in report and "safe_assign" in report  # prescription, not gate relaxation
+    # 同样的 targets 用默认 best 检查 OK（best 选不交叉的恒等映射，真实轨迹也安全）
     ok2, _ = evaluate_plan_safety({"keyframes": [_kf(targets)]}, prev, drone_count=2)
     assert ok2
 
