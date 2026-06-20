@@ -360,16 +360,17 @@ prev = ripple_move(drones, rotate_assign(prev, geo, steps=2), 2600, ripple_delay
 - **purpose**: 镜像对穿分配：每架机飞向自己关于构图质心的反射点附近——对称对穿。
 - **when to use**: 想要穿越中心的对称大动作、戏剧性交叉时。
 - **when NOT**: 不愿处理错峰时（同步对穿必撞）；密集队形（对穿空间不足）。
-- **key params**: mirror_assign(prev, geo)。**必须配错峰**：move2/ripple_move 前给 delays（如 ripple_delays 或 delay(i*150)），让各机不同时刻过中心。
-- **safety**: 错峰是对穿的安全机制（人类作品的对穿全部错峰）——不要为消碰撞丢掉对穿，要用错峰消碰撞。
-- **validation risks**: 同步对穿（delays 全 0）→ 中心碰撞门必炸；错峰不足→碰撞门。
+- **key params**: mirror_assign(prev, geo)。**必须足量错峰**：错峰要大到一架先离开交叉点、另一架才到（小错峰如 i*150 救不了真交叉）；拿不准用 safe_assign(prev, geo, delays=delays, flying_ms=...) 按真实分时轨迹验真挑排列。
+- **safety**: 足量顺序错峰才是对穿的安全机制——不要为消碰撞丢掉对穿，但小错峰照撞；分时门与 validator 都逐帧核验，mirror 不是免检。
+- **validation risks**: 同步对穿（delays 全 0）→ 中心碰撞门必炸；错峰不足（如 i*150 但飞行远长于错峰跨度）→ 仍在交叉点重叠→碰撞门。
 - **combines with**: handwritten-geometry, wave-delays, wave-ripple-move
 - **music fit**: 戏剧冲突、强烈交叉、对抗式乐句。
 
 ```python
 geo = custom_points([...对称目标阵...], n=9)
-delays = [i*150 for i in range(9)]  # 错峰过中心
-prev = ripple_move(drones, mirror_assign(prev, geo), 2600, delays, colors=palette)
+# 足量错峰：分组顺序飞，一组先到位另一组再穿，零交叉（小错峰如 i*150 救不了真对穿）
+gids = split_groups(prev, mode='left_right')
+prev = group_relay(drones, mirror_assign(prev, geo), gids, 2600, colors=palette, gap_ms=300)
 ```
 
 ### half-swap  ·  `swap_assign()`
@@ -569,8 +570,9 @@ prev = ripple_move(drones, rotate_assign(prev, geo, steps=2), 2600, ripple_delay
 
 ```python
 geo = custom_points([...关于质心对称的目标阵...], n=9)
-delays = [i*150 for i in range(9)]  # 错峰过中心
-prev = ripple_move(drones, mirror_assign(prev, geo), 2600, delays, colors=palette)
+# 最稳：分组顺序飞，一组动一组静，零交叉
+gids = split_groups(prev, mode='left_right')
+prev = group_relay(drones, mirror_assign(prev, geo), gids, 2600, colors=palette, gap_ms=300)
 ```
 
 ### center-migration

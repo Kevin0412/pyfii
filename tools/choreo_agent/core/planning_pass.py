@@ -298,7 +298,7 @@ def evaluate_plan_safety(
             # keep/rotate 的声明映射可能比最优差，单独探一次最优才能区分两种处方：
             #   opt_md ≥ 51 → 存在无碰撞排列，换 far_assign 即可救（点表不动）。
             #   opt_md < 51 → 连最优排列都不过硬下限，点本身太近，far/换排列都无效，
-            #                 只能 mirror+错峰（对穿，免同步路径门）或显著拉开点表。
+            #                 只能显著拉开点表，或对穿用 safe_assign/足量顺序错峰验真（mirror 不是免检）。
             from .best_assign import best_assign as _best
             if assign_kind in ("best", "far", "swap"):
                 opt_md = path_md
@@ -316,9 +316,11 @@ def evaluate_plan_safety(
             else:
                 hint = (
                     f"连最优排列也只有 {opt_md:.0f}cm<51——这些点本身太近，换排列/far_assign 都无效。"
-                    "若是左右对答/对穿，改用 `mirror_assign(prev, geo)`+错峰"
-                    "（免同步路径门，validator 逐帧保安全）；"
-                    "否则显著拉开本 keyframe 点表间距，或用 by_index 错峰让各机不同时刻过交叉点"
+                    "首选显著拉开本 keyframe 点表间距；若叙事确实要对穿，"
+                    "用 `safe_assign(prev, geo, delays=delays, flying_ms=...)` 按真实分时轨迹挑无碰撞排列，"
+                    "或让交叉机体顺序错开（group_relay／错峰 step_ms 放大到一架先离开交叉点另一架才到）。"
+                    "注意 `mirror_assign` 对穿不是免检：同步必撞、错峰不足照撞，分时门与 validator 都逐帧核验——"
+                    "小错峰（如 i*150）救不了真正的交叉。"
                 )
             msg = (
                 f"k{kf_i}: {kind_note}转场路径最小间距只有 {path_md:.0f}cm "
