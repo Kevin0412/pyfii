@@ -18,7 +18,9 @@ STAGGER_WORDS = ("卡农", "错峰", "分组", "波次", "涟漪", "接力", "�
 CLIMAX_WORDS = ("高潮", "爆发", "爆点", "climax", "burst")
 GEO_TEMPLATE_NAMES = ("geo_wide_v", "geo_arrow", "geo_box", "geo_diagonal", "geo_wave", "geo_grid")
 # 母题执行器（function.py）：调用即真实时间错峰/动态灯光，门当作 per-drone 细节对待。
-MOTIF_MOVE_NAMES = ("ripple_move", "follow_chain", "group_relay")
+# safe_move 内部就是 ripple_move/group_relay（自带错峰），算真实时间错峰——否则推 safe_move 的
+# 提示与"必须有时间错峰"的构图门冲突，逼模型回去手搓 drone.delay（正是想消除的）。
+MOTIF_MOVE_NAMES = ("safe_move", "ripple_move", "follow_chain", "group_relay")
 MOTIF_LIGHT_NAMES = ("light_wave", "fade_rgb", "fade_group", "breathe_group", "flash_group")
 HANDWRITTEN_REQUIRED_SEGMENTS = {"S02", "S03", "S04", "S05"}
 PER_DRONE_REQUIRED_SEGMENTS = {"S01", "S02", "S03", "S04", "S05", "S06"}
@@ -88,8 +90,8 @@ def evaluate_composition(
     if needs_stagger and not features["has_time_stagger"]:
         errors.append(
             "当前段章法要求卡农/错峰/分组，但代码只有颜色分组、没有真正的时间错峰；"
-            "请加入起飞波次 `drone.delay(i * 120)`（move2 前，等待期间灯保持亮即可）或到达波次 "
-            "`move2(drone, t, flying_ms + (i % 3) * 250)`。"
+            "把移动改成 `prev = safe_move(drones, prev, geo, flying_ms, mode=\"wave\")`"
+            "（对穿/分组问答 mode=\"relay\"）——内部就是真实波次错峰、且自带避撞。"
         )
 
     needs_climax = _needs_climax_gate(segment_id, role_text, role_motifs)
@@ -163,10 +165,9 @@ def evaluate_composition(
     ):
         errors.append(
             f"{segment_id} 全段所有无人机同起同停 — 至少一个 keyframe 要打破时间同步："
-            "最简单是母题执行器 `prev = ripple_move(drones, targets, flying_ms, "
-            "ripple_delays(prev, mode='center_out'), colors=palette)`（自动段尾对齐+先动先亮）；"
-            "或手写起飞波次 `drone.delay(i * 120)`（move2 之前，等待期间灯保持亮即可），"
-            "或到达波次 `move2(drone, t, flying_ms + (i % 3) * 250)`。"
+            "把移动改成 `prev = safe_move(drones, prev, geo, flying_ms, mode=\"wave\")`"
+            "（对穿/分组问答 mode=\"relay\"）——内部真实波次错峰、自动段尾对齐+先动先亮、且自带避撞，"
+            "不用手搓 delay。"
         )
 
     if segment_id == "S04" and features["estimated_keyframe_count"] < 4:
@@ -285,7 +286,8 @@ def extract_code_features(code: str) -> dict:
     custom_points_calls = len(re.findall(r"\bcustom_points\s*\(", code))
     move2_durations = _extract_move2_durations(code)
     motif_keyframe_bonus = (
-        motif_move_counts["ripple_move"]
+        motif_move_counts["safe_move"]
+        + motif_move_counts["ripple_move"]
         + 2 * motif_move_counts["group_relay"]
         + 3 * motif_move_counts["follow_chain"]
     )
