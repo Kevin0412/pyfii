@@ -316,11 +316,11 @@ def evaluate_plan_safety(
             else:
                 hint = (
                     f"连最优排列也只有 {opt_md:.0f}cm<51——这些点本身太近，换排列/far_assign 都无效。"
-                    "首选显著拉开本 keyframe 点表间距；若叙事确实要对穿，"
-                    "用 `safe_assign(prev, geo, delays=delays, flying_ms=...)` 按真实分时轨迹挑无碰撞排列，"
-                    "或让交叉机体顺序错开（group_relay／错峰 step_ms 放大到一架先离开交叉点另一架才到）。"
-                    "注意 `mirror_assign` 对穿不是免检：同步必撞、错峰不足照撞，分时门与 validator 都逐帧核验——"
-                    "小错峰（如 i*150）救不了真正的交叉。"
+                    "首选显著拉开本 keyframe 点表间距；若叙事确实要对穿，编码时用 "
+                    "`safe_move(drones, prev, geo, flying_ms, mode=\"relay\")`（顺序接力，零跨组交叉），"
+                    "它内部安全分配+错峰+执行同一份时序，清不开会自己抛错让你铺开点表。"
+                    "注意 `mirror_assign` 对穿不是免检：同步必撞、小错峰（如 i*150）也救不了真交叉——"
+                    "别手搓 move2+delay 凑错峰。"
                 )
             msg = (
                 f"k{kf_i}: {kind_note}转场路径最小间距只有 {path_md:.0f}cm "
@@ -371,9 +371,10 @@ def evaluate_plan_safety(
             msg = (
                 f"k{kf_i}: 分时轨迹(标准错峰回放)最小间距只有 {timed_md:.0f}cm "
                 f"< {PLAN_PATH_SPACING_FLOOR_CM:.0f}cm — 默认/by_index 错峰下实跑会撞(validator 逐帧同此模型)。"
-                "要么改用 `safe_assign(prev, geo, delays=delays, flying_ms=...)`（按真实错峰挑无碰撞排列）；"
-                "要么让交叉的机体顺序错开（group_relay 或加大 step_ms，使每架在其镜像/对手到达交叉点前已离开）。"
-                "不要削门。"
+                "本 keyframe 的 JSON 保持不动（不要加 step_ms、不要改点表/assign）——这是编码阶段的实现要求："
+                "编码时用 `safe_move(drones, prev, geo, flying_ms, mode=\"relay\")`（对穿/大交叉，顺序接力零跨组交叉），"
+                "一般错峰大动作用 `mode=\"wave\"`；safe_move 内部安全分配+错峰+执行同一份时序，过不了会自己抛错让你铺开点表。"
+                "切勿手搓 move2+drone.delay 凑错峰（会撞）。不要削门。"
             )
             violations.append(msg)
             lines.append(f"- 违规: {msg}")
@@ -614,14 +615,38 @@ def plan_to_budget_table(plan: dict, prev_state: list, drone_count: int = 7) -> 
             f"planning_speed={v} planning_accel={a} light={light_color} ticks={light_ticks} "
             "(speed/accel are already absorbed into fly_ms; final code must not set speed/accel)"
         )
+        # 分时碰撞预判：按声明 assign 的映射 + 标准错峰回放，若会撞就不给可照抄的 delay_ms——
+        # 模型若把朴素 delay_ms 抄进手搓 move2 做错峰/对穿，正是"算着安全、实跑相撞"的直接来源。
+        colliding, collide_md = False, None
+        try:
+            pts = [(float(t[0]), float(t[1]), float(t[2])) for t in targets]
+            assign_kind = str(kf.get("assign", "best") or "best").lower()
+            assigned, _pmd, _note = _intent_assignment(assign_kind, current_prev, pts, kf)
+            duration_ms = _positive_float(kf.get("duration_s"), 3.0) * 1000.0
+            collide_md = _timed_path_min(
+                [(p[0], p[1]) for p in current_prev],
+                [(t[0], t[1]) for t in assigned],
+                duration_ms,
+            )
+            colliding = collide_md < PLAN_PATH_SPACING_FLOOR_CM
+        except Exception:
+            colliding, collide_md = False, None
+        if colliding:
+            lines.append(
+                f"⚠ 本 keyframe 朴素错峰下分时间距仅 {collide_md:.0f}cm<51——会撞。"
+                "必须用 `safe_move(drones, prev, geo, flying_ms, mode=\"wave\")`"
+                "（对穿/大交叉用 mode=\"relay\"）一次完成安全分配+错峰+执行；"
+                "勿照抄下面 delay_ms 手搓 move2/drone.delay（delay_ms 仅供时长参考）。"
+            )
         lines.append(f"drone  target(x,y,z)  dist3(cm)  fly_ms  delay_ms")
         for i in range(drone_count):
             t = targets[i]
             dist = dist3(current_prev[i], t)
             ft = flight_time_ms(dist, v, a)
             delay_ms = max(0, ft - light_ticks * 100)
+            delay_cell = "用safe_move" if colliding else str(delay_ms)
             lines.append(
-                f"d{i}     ({t[0]:.0f},{t[1]:.0f},{t[2]:.0f})  {dist:.0f}  {ft}  {delay_ms}"
+                f"d{i}     ({t[0]:.0f},{t[1]:.0f},{t[2]:.0f})  {dist:.0f}  {ft}  {delay_cell}"
             )
         current_prev = [(float(t[0]), float(t[1]), float(t[2])) for t in targets]
 

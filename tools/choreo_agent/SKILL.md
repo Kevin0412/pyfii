@@ -75,6 +75,25 @@ delays = ripple_delays(prev, mode='spiral', step_ms=150)
 prev = ripple_move(drones, best_assign(prev, geo), 2600, delays, colors=palette, hold_ticks=8, gradient_to=cool)
 ```
 
+### safe-move  ·  `safe_move()`
+
+- **category**: motion
+- **role fit**: buildup, development, expand, climax, any
+- **purpose**: 错峰/分组/对穿大动作的一站式安全执行：把安全分配+错峰+执行绑成一次调用——用来验证无碰撞的时序就是真正飞的时序，杜绝“算着安全实跑撞”。
+- **when to use**: 任何错峰大动作、密集承接、对穿/大交叉。mode='wave' 一般错峰；mode='relay' 对穿（顺序接力，零跨组交叉）。
+- **when NOT**: 无交叉的就近承接（直接 best_assign + per-drone loop 更轻）；纯灯光不移动。
+- **key params**: prev=当前队形, geo=custom_points 目标点表, flying_ms 飞行时长；mode='wave'|'relay'；step_ms 错峰步长；gap_ms relay 两组间隔；gradient_to= 飞行变色。返回飞完的新 prev。
+- **safety**: 内部 safe_assign 在真实错峰下 60fps 硬校验并用同一份 delays 执行，保证不被参数错配破坏；wave 装不下自动降级 relay；彻底清不开（同 XY 巷对穿等）会抛 ValueError 让你铺开点表/改 route-around——绝不静默返回相撞排列。
+- **validation risks**: 几何本身太密（相邻<90cm）或同 XY 巷大量对穿时会抛错（这是正确行为，需改几何）；Z 不参与避撞（间距门是 XY）。
+- **combines with**: handwritten-geometry, wave-delays, safe-assign, group-call-response
+- **music fit**: 高潮大开大合、展开/回卷、戏剧性交叉对穿。
+
+```python
+geo = custom_points([...展开/对称目标阵...], n=9, min_xy_cm=90)
+prev = safe_move(drones, prev, geo, 2800, mode='wave', step_ms=160, colors=palette, gradient_to=cool)
+# 对穿/大交叉：prev = safe_move(drones, prev, geo, 2600, mode='relay', gap_ms=300, colors=palette)
+```
+
 ### chain-follow  ·  `follow_chain()`
 
 - **category**: motion

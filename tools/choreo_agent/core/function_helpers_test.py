@@ -355,9 +355,54 @@ def test_safe_assign_raises_when_no_permutation_clears_floor():
     print("PASSED: safe_assign raises on unavoidable collision, returns on safe geometry")
 
 
+def _drones_at(prev):
+    ds = [FakeDrone(0) for _ in prev]
+    for d, p in zip(ds, prev):
+        d.x, d.y, d.z = p
+    return ds
+
+
+def test_safe_move_wave_executes_and_clearance_matches_verified():
+    # safe_move(wave) must (a) execute a real move on every drone, (b) return the
+    # geo points (a permutation), and (c) the returned arrangement is collision-free
+    # under the SAME by_index schedule it used — the un-voidable guarantee (verified
+    # timing == flown timing), unlike hand-rolled safe_assign+move2 with mismatched delays.
+    module = _load_template_function_module()
+    prev = [(60, 100, 120), (500, 100, 120), (280, 300, 150)]
+    geo = module.custom_points([(120, 460, 150), (440, 460, 150), (120, 120, 150)],
+                               n=3, min_xy_cm=90)
+    ds = _drones_at(prev)
+    out = module.safe_move(ds, prev, geo, 2800, mode="wave")
+    assert len(out) == 3 and all(len(d.moves) >= 1 for d in ds)
+    assert sorted(tuple(p[:2]) for p in out) == sorted(tuple(g[:2]) for g in geo)
+    delays = module.ripple_delays(prev, step_ms=150)
+    ok, min_cm, _pair = module.verify_timed_clearance(prev, out, delays=delays, flying_ms=2800)
+    assert ok and min_cm >= 51, f"safe_move(wave) flew a config it did not verify: {min_cm}cm"
+    print("PASSED: safe_move(wave) executes and flies exactly the verified-clear schedule")
+
+
+def test_safe_move_raises_on_unsalvageable_crossing():
+    # A 2-drone collinear same-XY-lane swap cannot clear at any stagger/relay (the
+    # resting drone blocks the moving drone's XY path). safe_move must RAISE with
+    # actionable guidance (spread the points), never silently fly a collision.
+    module = _load_template_function_module()
+    prev = [(100, 100, 120), (120, 100, 120)]
+    geo = [(120, 100, 150), (100, 100, 150)]  # 20cm apart, head-on swap
+    raised = False
+    try:
+        module.safe_move(_drones_at(prev), prev, geo, 2600, mode="wave")
+    except ValueError as exc:
+        raised = True
+        assert "safe_move" in str(exc)
+    assert raised, "safe_move must raise on an unsalvageable crossing, not fly it"
+    print("PASSED: safe_move raises (with guidance) when geometry can't be made safe")
+
+
 if __name__ == "__main__":
     test_safe_assign_timed_model_distinguishes_staggered_cross()
     test_safe_assign_raises_when_no_permutation_clears_floor()
+    test_safe_move_wave_executes_and_clearance_matches_verified()
+    test_safe_move_raises_on_unsalvageable_crossing()
     test_star_import_surface_excludes_geo_templates()
     test_auto_init_uses_time_cursor_not_missing_init_time()
     test_auto_init_waits_for_last_move_without_delay()

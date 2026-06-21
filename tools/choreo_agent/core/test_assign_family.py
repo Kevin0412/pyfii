@@ -73,7 +73,7 @@ def test_checker_mirror_skips_synced_gate_but_timed_gate_catches_collision():
     assert "错峰" in report                      # synced gate skipped → 错峰 note still emitted
     assert "转场路径最小间距只有" not in report   # NOT flagged by the synced path gate (exemption intact)
     assert not ok                                # but the timed gate catches the real collision
-    assert "分时轨迹" in report and "safe_assign" in report  # prescription, not gate relaxation
+    assert "分时轨迹" in report and "safe_move" in report  # code-stage prescription, not gate relaxation
     # 同样的 targets 用默认 best 检查 OK（best 选不交叉的恒等映射，真实轨迹也安全）
     ok2, _ = evaluate_plan_safety({"keyframes": [_kf(targets)]}, prev, drone_count=2)
     assert ok2

@@ -156,7 +156,24 @@ def test_timed_gate_catches_mirror_cross_synced_skips():
     ok, report = evaluate_plan_safety({"keyframes": [kf]}, prev, drone_count=3)
     assert not ok
     assert "分时轨迹" in report and "实跑会撞" in report
-    assert "safe_assign" in report  # prescription, not gate relaxation
+    assert "safe_move" in report  # code-stage prescription, not gate relaxation
+
+
+def test_budget_table_directs_to_safe_move_on_colliding_keyframe():
+    # A mirror cross-through whose naive 错峰 collides must NOT print copy-able per-drone
+    # delay_ms (the model hand-rolls those into colliding move2). The budget replaces the
+    # delay column with a safe_move directive; a clean keyframe keeps numeric delays.
+    from core.planning_pass import plan_to_budget_table
+    prev = [[60, 100, 120], [500, 100, 120], [280, 100, 120]]
+    kf = _kf([[500, 100, 150], [60, 100, 150], [280, 100, 150]], duration_s=2.6)
+    kf["assign"] = "mirror"
+    bt = plan_to_budget_table({"keyframes": [kf]}, prev, drone_count=3)
+    assert "safe_move" in bt and "用safe_move" in bt
+
+    clean_prev = [[80, 80, 120], [480, 80, 120], [80, 480, 120]]
+    clean = _kf([[120, 460, 150], [440, 460, 150], [120, 120, 150]], duration_s=3.0)
+    bt_clean = plan_to_budget_table({"keyframes": [clean]}, clean_prev, drone_count=3)
+    assert "用safe_move" not in bt_clean  # numeric delay_ms retained for safe moves
 
 
 def test_timed_gate_passes_clean_spread_move():

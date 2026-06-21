@@ -37,6 +37,7 @@ __all__ = [
     "ripple_move",
     "follow_chain",
     "group_relay",
+    "safe_move",
     "apply_light",
     "light_wave",
     "fade_rgb",
@@ -1067,6 +1068,65 @@ def group_relay(drones, targets, group_ids, flying_ms, colors=("#ff6040", "#4060
             drone.delay(flying_ms - ticks * 100)
         normalized.append(target)
     return normalized
+
+
+def safe_move(drones, prev, geo, flying_ms, mode="wave", step_ms=150,
+              colors="#ffffff", gradient_to=None, hold_ticks=4, gap_ms=250,
+              relay_split="left_right"):
+    """融合「安全分配 + 错峰 + 执行」为一次调用：用来验证无碰撞的错峰时序，就是真正飞的时序——
+    safe_assign 的保证不会被「手搓 move2 用了别的 delay」或「分配后又改时序」破坏（密集/对穿段
+    反复返工的直接原因）。prev=当前队形，geo=目标点表（custom_points 产物），返回飞完后的新 prev，
+    可直接赋给 prev。
+
+    mode="wave"（默认，错峰大动作/密集承接首选）：
+      delays = ripple_delays(prev, step_ms) → targets = safe_assign(prev, geo, delays, flying_ms)
+      → ripple_move(drones, targets, flying_ms, delays)（同一 delays）。
+      若该几何 + 该错峰装不下（safe_assign 抛错）→ 自动降级到 relay。
+    mode="relay"（对穿/大交叉首选）：
+      gids = split_groups(prev, relay_split)，far_assign 取交叉排列，group_relay 顺序飞
+      （lead 组清场后另一组再动 = 零跨组交叉）；按真实接力时序自检，必要时自动放大 gap。
+    彻底装不下则抛 ValueError（附最近对/间距）——把目标点表铺开（相邻≥90cm）或减少同时交叉的机数。
+    勿再照抄预算表 delay_ms 手搓 move2 做错峰/对穿——那会「算着安全实跑撞」。"""
+    n = len(drones)
+    flying_ms = int(round(flying_ms))
+
+    def _do_relay():
+        # lead 组在 [0, flying]、另一组在 [flying+gap, 2*flying+gap] 飞（group_relay 的真实时序）。
+        # 用这份接力时序喂 safe_assign：它按真实分时轨迹挑无碰撞排列并 60fps 硬校验，
+        # 同一排列直接交给 group_relay 执行——验证的时序就是飞的时序。
+        gids = split_groups(prev, mode=relay_split)
+        lead = 0
+        last_err = None
+        for gap in (int(gap_ms), int(gap_ms) + 400, int(gap_ms) + 900):
+            relay_delays = [0 if (int(gids[i]) % 2) == (lead % 2) else (flying_ms + gap)
+                            for i in range(n)]
+            try:
+                targets = safe_assign(prev, geo, delays=relay_delays, flying_ms=flying_ms)
+            except ValueError as e:  # 这个 gap 下装不下，放大 gap 再试
+                last_err = e
+                continue
+            group_relay(drones, targets, gids, flying_ms, colors=colors,
+                        hold_ticks=hold_ticks, gap_ms=gap, lead_group=lead,
+                        gradient_to=gradient_to)
+            return [tuple(_target3(t)) for t in targets]
+        raise ValueError(
+            f"safe_move(relay) 仍相撞（已试到 gap≥{int(gap_ms) + 900}ms）："
+            f"{last_err}。顺序接力也清不开——多为静止组挡住移动组的 XY 航线（同 XY 巷的对穿）；"
+            "请改 route-around（两组走不同 XY 带）或把目标点表铺开（相邻≥90cm）。"
+        )
+
+    if str(mode) == "relay":
+        return _do_relay()
+    # wave（默认）：safe_assign 在所选错峰下 60fps 硬校验，过门即用同一 delays 执行
+    delays = ripple_delays(prev, step_ms=int(step_ms))
+    try:
+        targets = safe_assign(prev, geo, delays=delays, flying_ms=flying_ms)
+    except ValueError:
+        # by_index 错峰装不下该交叉 → 顺序接力（零跨组交叉）
+        return _do_relay()
+    ripple_move(drones, targets, flying_ms, delays, colors=colors,
+                hold_ticks=hold_ticks, gradient_to=gradient_to)
+    return [tuple(_target3(t)) for t in targets]
 
 
 # ---------- 灯光 ----------
