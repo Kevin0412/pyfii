@@ -676,14 +676,14 @@ def build_coding_prompt(
 - 代码开头必须写 5 行设计卡注释：`# role: ...`, `# motifs: ...`, `# beat: ...`, `# formation: ...`, `# lighting: ...`
 - 设计卡必须承接全局章法，尤其是 current role/current motifs；不要写随机队形说明
 - 几何主路径：整数坐标表或 math 表达式都必须包进 custom_points：`geo = custom_points([(280+170*cos(2*pi*i/len(drones)), 280+170*sin(2*pi*i/len(drones)), 160+25*sin(i)) for i in range(len(drones))], n=len(drones), min_xy_cm=90)`（sin/cos/pi 已导出，不要写 π；comprehension 直接传给 best_assign/move2 会被打回；9 机圆形 R≥150 弦距≈116cm），再 `best_assign` 或 `far_assign`；S02-S05 禁止调用 `geo_wide_v/geo_arrow/geo_box/geo_diagonal/geo_wave/geo_grid`
-- 正式段默认展开 per-drone loop：`move2(drone, target, flying_ms)` → `apply_light(drone, color, ticks)` → `drone.delay(delay_ms)`，让每架机保留自己的灯光/等待细节
-- S02-S05 每段至少一个 keyframe 必须打破时间同步（同起同停会被节奏门打回）：起飞波次 `drone.delay(i * 120)`（move2 前）或到达波次 `move2(drone, t, fly_ms + (i % 3) * 250)`
+- **移动一律用 `prev = safe_move(drones, prev, geo, flying_ms, mode="wave")`（对穿/大交叉 `mode="relay"`）**：一次完成安全分配+错峰+执行，验证的时序就是飞的时序，清不开会自己抛错让你铺开点表。**任何错峰/交叉/大动作都走它，切勿手搓 `move2`+`drone.delay` 凑错峰（会撞、反复返工的直接根因）**。仅「同步非交叉的就近小动作」或「原地灯光细节」才展开 per-drone loop：`move2(drone, target, flying_ms)` → `apply_light(drone, color, ticks)` → `drone.delay(delay_ms)`
+- S02-S05 每段至少一个 keyframe 必须打破时间同步（同起同停会被节奏门打回）：`safe_move(..., mode="wave", step_ms=120)` 内部错峰即破同步且安全；S01 起飞这种无交叉场景才可 `drone.delay(i * 120)`（move2 前）
 - 灯光时钟型写法可免时间算术：`apply_light(drone, color, fly_ms // 100)` 占满飞行窗口不写尾部 delay；错峰时 `(fly_ms - i*120) // 100` 自然回正
 - 个体色彩身份：群舞/交换 keyframe 每架机自己的色相（palette[i]），观众才能跟踪换位；统一色留给宣言时刻
-- 镜像换位/对穿必须错峰：`drone.delay(i * 150)` 各机不同时刻过中心——同步对穿必撞，错峰本身就是对穿的安全机制
-- 分配函数家族（按转场意图选）：`best_assign` 收束 / `far_assign` 大交换 / `rotate_assign(prev, geo, steps)` 漩涡 / `mirror_assign` 对穿（配错峰）/ `swap_assign(prev, geo, axis)` 半场互换 / `keep_assign` 身份保持
+- 镜像换位/对穿用 `safe_move(drones, prev, geo, flying_ms, mode="relay")`（顺序接力、零跨组交叉、自带 60fps 验证）——**别再写 `drone.delay(i*150)`+move2 手搓对穿：小错峰救不了真交叉，必撞返工**
+- 移动优先 `safe_move`（见上）；其底层分配函数（safe_move 内部已用，只有自己手动组合同步移动时才直接调）：`best_assign` 收束 / `far_assign` 大交换 / `rotate_assign(prev, geo, steps)` 漩涡 / `mirror_assign` 对穿 / `swap_assign(prev, geo, axis)` 半场互换 / `keep_assign` 身份保持
 - 定格 pose 合法（静止展示造型可超 1s），但定格期间必须灯亮；黑灯静止会被判低活动
-- `move_group/move_group_staggered` 只作为 smoke/兜底工具；S01-S06 纯 helper 执行会被 composition gate 打回。卡农/错峰请在 per-drone loop 内按 `i % group_mod` 写小 delay
+- `move_group/move_group_staggered` 只作为 smoke/兜底工具；S01-S06 纯 helper 执行会被 composition gate 打回。卡农/分组问答用 `safe_move(mode="wave")` 或 `group_relay`，别在 loop 里手搓小 delay 凑错峰交叉
 - 3s 以上 keyframe 若用 `far_assign`，写 `min_path_cm=active_min_path_cm(flying_ms)`；不要写 90/100cm 导致真实运动过早结束
 - 安全距离按 XY 看，不要把同一 XY 不同 Z 当成安全分离
 - 6-8s 中短窗口只写 2 个强 keyframe；若错峰，stagger_ms=60-90，避免第三个 keyframe 把段尾动作拖成未完成
