@@ -78,7 +78,7 @@ def build_planning_prompt(
 }}
 ```
 
-节奏目标: 动作更利落，不要用单个慢 move 拖满段落；按上面的 keyframe 数量填表，允许段尾保留 0.3-0.8s 收束，不要反复讨论“是否覆盖整段”。
+节奏目标: 动作更利落，不要用单个慢 move 拖满段落——但**必须铺满本段窗口**：各 keyframe 顺次排布，最后一个的 start_s+duration_s 要落在 {end_time-1.0:.1f}s 之后（窗口尾 {end_time}s 的 1.0s 以内）。这是 validator 硬门：欠填>1.0s 会把本段判“有效运动过短”，并把后续所有段与音乐 cue 整体推错（错误归因到无辜的下一段）。时长不够就多加一个 keyframe 或适当延长动作；段尾余量交给灯光定格（light_wave/breathe_group/fade_group 亮灯铺到窗口尾——亮灯定格是预算一等公民），别留黑灯空档。按此一次配齐，不要反复纠结覆盖问题。
 可完成性: 单个 keyframe 的 3D 路径通常控制在约 120-380cm；不要规划 500cm 级跨场短飞。
 约束: targets总数={drone_count}, shape=[{target_example}], XY 0-560cm, Z 80-250cm, target 点表 XY 间距硬下限 51cm（pyfii core 碰撞线，检查器精确验证）；密度是构图自由，不要为了凑大间距放弃造型。速度20-200, 加速度50-400, 推荐速度150-200、加速度260-400；light_ticks 两种语体：3-5（运动驱动型短提示）或 duration_s*10（灯光时钟型，灯光占满飞行窗口）。
 章法约束: JSON 里的 feel/targets/light_color 必须服务全局章法；不要随机换题，不要连续重复同一种退化队形。
