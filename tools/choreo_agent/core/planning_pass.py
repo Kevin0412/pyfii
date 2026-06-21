@@ -677,24 +677,23 @@ def build_coding_prompt(
 - 设计卡必须承接全局章法，尤其是 current role/current motifs；不要写随机队形说明
 - 几何主路径：整数坐标表或 math 表达式都必须包进 custom_points：`geo = custom_points([(280+170*cos(2*pi*i/len(drones)), 280+170*sin(2*pi*i/len(drones)), 160+25*sin(i)) for i in range(len(drones))], n=len(drones), min_xy_cm=90)`（sin/cos/pi 已导出，不要写 π；comprehension 直接传给 best_assign/move2 会被打回；9 机圆形 R≥150 弦距≈116cm），再 `best_assign` 或 `far_assign`；S02-S05 禁止调用 `geo_wide_v/geo_arrow/geo_box/geo_diagonal/geo_wave/geo_grid`
 - **移动一律用 `prev = safe_move(drones, prev, geo, flying_ms, mode="wave")`（对穿/大交叉 `mode="relay"`）**：一次完成安全分配+错峰+执行，验证的时序就是飞的时序，清不开会自己抛错让你铺开点表。**任何错峰/交叉/大动作都走它，切勿手搓 `move2`+`drone.delay` 凑错峰（会撞、反复返工的直接根因）**。仅「同步非交叉的就近小动作」或「原地灯光细节」才展开 per-drone loop：`move2(drone, target, flying_ms)` → `apply_light(drone, color, ticks)` → `drone.delay(delay_ms)`
-- safe_move 签名只有 `(drones, prev, geo, flying_ms, mode=, step_ms=, colors=, gradient_to=, gap_ms=)`：灯光用 `colors=`/`gradient_to=`，**不要给它传 `delays=`/`light=`/`ticks=`/`speed=`（它自己算安全时序）**。每段函数**首行**必须先 `auto_init(drones)` 再 `prev = [(d.x, d.y, d.z) for d in drones]`，之后才能把 prev 传给 safe_move（否则 prev 未定义直接报错）
+- 每段函数**首行**必须先 `auto_init(drones)` 再 `prev = [(d.x, d.y, d.z) for d in drones]`，之后才能把 prev 传给 safe_move/best_assign 等（否则 prev 未定义直接报错）
 - S02-S05 每段至少一个 keyframe 必须打破时间同步（同起同停会被节奏门打回）：`safe_move(..., mode="wave", step_ms=120)` 内部错峰即破同步且安全；S01 起飞这种无交叉场景才可 `drone.delay(i * 120)`（move2 前）
 - 灯光时钟型写法可免时间算术：`apply_light(drone, color, fly_ms // 100)` 占满飞行窗口不写尾部 delay；错峰时 `(fly_ms - i*120) // 100` 自然回正
 - 个体色彩身份：群舞/交换 keyframe 每架机自己的色相（palette[i]），观众才能跟踪换位；统一色留给宣言时刻
 - 镜像换位/对穿用 `safe_move(drones, prev, geo, flying_ms, mode="relay")`（顺序接力、零跨组交叉、自带 60fps 验证）——**别再写 `drone.delay(i*150)`+move2 手搓对穿：小错峰救不了真交叉，必撞返工**
-- 移动优先 `safe_move`（见上）。底层分配函数 `best_assign`/`far_assign`/`mirror_assign`/`swap_assign`/`keep_assign`/`rotate_assign` **只在「同步、无 delays」的就近移动里直接配 `move2` 用**——**`far_assign`/`best_assign`/`keep_assign` + 错峰(`delays`/`ripple_move`) 会撞**（它们是同步锁步模型，错峰段「算着安全实跑撞」）；要错峰就交给 `safe_move(mode="wave")`（它内部按真实错峰挑安全排列）。环形刚体旋转 `rotate_assign` 天然安全可直接用
+- 移动优先 `safe_move`（对穿/大交叉/密集承接必须用）。`best_assign(prev, geo)` + `ripple_move(drones, targets, flying_ms, delays)` 组合在**不交叉的展开/承接**时仍然安全好用（它们用同步锁步模型，非交叉时一致）；**交叉/对穿才必须 safe_move**（同步模型会把交叉的路径算安全但实跑撞）。环形刚体旋转 `rotate_assign` 天然安全可直接用
 - 定格 pose 合法（静止展示造型可超 1s），但定格期间必须灯亮；黑灯静止会被判低活动
 - `move_group/move_group_staggered` 只作为 smoke/兜底工具；S01-S06 纯 helper 执行会被 composition gate 打回。卡农/分组问答用 `safe_move(mode="wave")` 或 `group_relay`，别在 loop 里手搓小 delay 凑错峰交叉
 - 3s 以上 keyframe 若用 `far_assign`，写 `min_path_cm=active_min_path_cm(flying_ms)`；不要写 90/100cm 导致真实运动过早结束
 - 安全距离按 XY 看，不要把同一 XY 不同 Z 当成安全分离
 - 6-8s 中短窗口只写 2 个强 keyframe；若错峰，stagger_ms=60-90，避免第三个 keyframe 把段尾动作拖成未完成
 - S04 抒情展开段要写 4-5 个短 keyframe，至少 3 种颜色/灯光变化；S06 尾声要写两段式收尾（中继点 + 最终署名），不能单 keyframe 小挪动
-- 编舞词汇（每段至少用一种）：交错启动 (safe_move mode="wave" 内部错峰), Z 个性 (geo 点表里 +dz*sin(i)), 分组对比 (safe_move mode="relay"/group_relay), 焦点机, 中心迁移, 密度呼吸, 灯光渐变 (gradient_to= / range()+TurnOnAll((r,g,b)))；S01-S05 全段匀速单色无差异会被节奏门打回
+- 编舞词汇（每段至少用一种）：交错启动 (safe_move/ripple_move + delays), Z 个性 (move2 内 +dz*sin(i)), 分组对比 (safe_move relay/group_relay), 焦点机, 中心迁移, 密度呼吸, 灯光渐变 (gradient_to= / range()+TurnOnAll((r,g,b)))；S01-S05 全段匀速单色无差异会被节奏门打回
 - 渐变灯光必须塞进飞行窗口：keyframe 内 `ticks*100 + delay_ms ≈ fly_ms`；动作完成后原地亮灯 >1s 会被判低活动打回
-- **段尾必须铺满窗口**：若最后一个 move 早于窗口结束 >1s，**函数最后一句必须真的发出补尾的亮灯定格**（`light_wave(drones, ripple_delays(prev, step_ms=150), palette, hold_ticks=N)` 或 `breathe_group`/`fade_group`）铺到窗口尾——计划里写了的灯光尾不要漏掉只写到 ripple_move 就结束（欠填>1s 会被窗口门打回并连累后续段）
 - 每个 keyframe 完成后更新 `prev = [(t[0], t[1], t[2]) for t in targets]`
 - `planning_speed/planning_accel` 只用于预算 fly_ms；final 代码不要写 set_speed/set_accel/VelXY/VelZ，也不要写 `drone[d]`
-- 如需错峰，只能在同一个 per-drone loop 里对当前 `drone.delay(i * 60)`，但不要改变表格里的 fly_ms/delay_ms
+- 如需错峰，优先 `safe_move(mode="wave")` 或 `ripple_move`（它们自动对齐段尾），只有同步小挪动才手动 `drone.delay(i * 60)` + `move2`
 - 段尾：prev = [(t[0],t[1],t[2]) for t in targets_last]
 - 禁止 import/def/markdown/inittime/VelXY
 
