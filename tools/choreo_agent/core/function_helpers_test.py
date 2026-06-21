@@ -398,11 +398,30 @@ def test_safe_move_raises_on_unsalvageable_crossing():
     print("PASSED: safe_move raises (with guidance) when geometry can't be made safe")
 
 
+def test_safe_move_tolerates_misused_kwargs():
+    # The model often throws apply_light/ripple_move-style kwargs at safe_move (light=, ticks=,
+    # delays=, speed=). These previously crashed with TypeError -> a wasted code_run repair round.
+    # safe_move must map known aliases (light/color/palette->colors, ticks->hold_ticks) and ignore
+    # the rest (it computes its own safe timing), never crash on them.
+    module = _load_template_function_module()
+    prev = [(60, 100, 120), (500, 100, 120), (280, 300, 150)]
+    geo = module.custom_points([(120, 460, 150), (440, 460, 150), (120, 120, 150)],
+                               n=3, min_xy_cm=90)
+    for kwargs in (dict(delays=[0, 100, 200]),
+                   dict(light="#44aaff", ticks=3),
+                   dict(palette=["#f00", "#0f0", "#00f"]),
+                   dict(mode="relay", light="#fff", speed_cm_s=170, accel_cm_s2=320)):
+        out = module.safe_move(_drones_at(prev), prev, geo, 2800, **kwargs)
+        assert len(out) == 3
+    print("PASSED: safe_move tolerates misused kwargs (no TypeError crash)")
+
+
 if __name__ == "__main__":
     test_safe_assign_timed_model_distinguishes_staggered_cross()
     test_safe_assign_raises_when_no_permutation_clears_floor()
     test_safe_move_wave_executes_and_clearance_matches_verified()
     test_safe_move_raises_on_unsalvageable_crossing()
+    test_safe_move_tolerates_misused_kwargs()
     test_star_import_surface_excludes_geo_templates()
     test_auto_init_uses_time_cursor_not_missing_init_time()
     test_auto_init_waits_for_last_move_without_delay()

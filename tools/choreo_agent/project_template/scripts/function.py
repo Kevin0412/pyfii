@@ -1072,11 +1072,15 @@ def group_relay(drones, targets, group_ids, flying_ms, colors=("#ff6040", "#4060
 
 def safe_move(drones, prev, geo, flying_ms, mode="wave", step_ms=150,
               colors="#ffffff", gradient_to=None, hold_ticks=4, gap_ms=250,
-              relay_split="left_right"):
+              relay_split="left_right", light=None, color=None, palette=None,
+              ticks=None, light_ticks=None, **_ignored):
     """融合「安全分配 + 错峰 + 执行」为一次调用：用来验证无碰撞的错峰时序，就是真正飞的时序——
     safe_assign 的保证不会被「手搓 move2 用了别的 delay」或「分配后又改时序」破坏（密集/对穿段
     反复返工的直接原因）。prev=当前队形，geo=目标点表（custom_points 产物），返回飞完后的新 prev，
     可直接赋给 prev。
+
+    宽容签名：灯光用 colors/gradient_to（light/color/palette 是 colors 别名，ticks/light_ticks 是
+    hold_ticks 别名）；safe_move 自己算错峰，传入的 delays/speed/accel 等会被忽略（自带安全时序）。
 
     mode="wave"（默认，错峰大动作/密集承接首选）：
       delays = ripple_delays(prev, step_ms) → targets = safe_assign(prev, geo, delays, flying_ms)
@@ -1087,6 +1091,16 @@ def safe_move(drones, prev, geo, flying_ms, mode="wave", step_ms=150,
       （lead 组清场后另一组再动 = 零跨组交叉）；按真实接力时序自检，必要时自动放大 gap。
     彻底装不下则抛 ValueError（附最近对/间距）——把目标点表铺开（相邻≥90cm）或减少同时交叉的机数。
     勿再照抄预算表 delay_ms 手搓 move2 做错峰/对穿——那会「算着安全实跑撞」。"""
+    # 宽容别名：模型常把 light/color/palette、ticks/light_ticks 当 kwargs 传进来（来自 apply_light/
+    # ripple_move 的习惯）——映射而非崩溃，让 safe_move 难以被误用。
+    for _alias in (palette, color, light):
+        if _alias is not None:
+            colors = _alias
+            break
+    if ticks is not None:
+        hold_ticks = ticks
+    elif light_ticks is not None:
+        hold_ticks = light_ticks
     n = len(drones)
     flying_ms = int(round(flying_ms))
 
