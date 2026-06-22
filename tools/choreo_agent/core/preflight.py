@@ -46,10 +46,10 @@ def preflight_check(
     #     `drone.X = drone.x = ...` 是合法协议，其他段直接改坐标属性
     #     会破坏 move2 的速度反算。
     _check_no_position_writes(code, r, segment_id)
-    # 13. Math-geometry static evaluation — comprehension 算出的点表
-    #     在 preflight 就按 custom_points 同样的裁剪+间距规则验一遍，
-    #     违规直接回报精确数字，省掉一轮运行期 ValueError。
-    _check_computed_geometry(code, r, drone_count)
+    # 13. (removed) — geometry spacing is validated by custom_points() at
+    #     runtime; static preflight evaluation caused false-positive grinds
+    #     (opus S04: 12 no_validation rounds from repair-loop deadlocks).
+    #     Let the code run; runtime ValueError gives clearer feedback.
     # 14. S01 起飞布局静态验算：任意构图都行，但 XY 间距必须 ≥51cm。
     _check_start_positions(code, r, segment_id, drone_count)
     # 15. LAND 协议硬门：必须 d.land()，不得 move2。
@@ -411,7 +411,7 @@ def _check_computed_geometry(code, r, drone_count):
             continue
         r.add(
             f"computed 点表(line {getattr(node, 'lineno', '?')})没有经过 custom_points 包裹 — "
-            "math 几何必须写 `geo = custom_points([...公式...], n=len(drones), min_xy_cm=90)`，"
+            "math 几何必须写 `geo = custom_points([...公式...], n=len(drones))`，"
             "由它统一裁剪坐标并校验间距；不要把 comprehension 直接传给 best_assign/far_assign/move2"
         )
 
@@ -543,13 +543,13 @@ def _check_no_geo_templates(code, r):
     leaked = tokens & FORBIDDEN_GEO_TEMPLATES
     for name in sorted(leaked):
         r.add(
-            f"几何模板已下线: {name}() — 改用 custom_points([...], n=len(drones), min_xy_cm=90) "
+            f"几何模板已下线: {name}() — 改用 custom_points([...], n=len(drones)) "
             "手写目标点表，再用 best_assign/far_assign 做路径分配"
         )
     if "jitter_points(" in code:
         r.add(
             "禁止 jitter_points() 出现在 final segment — 它会在 custom_points 校验后再次扰动坐标，"
-            "可能绕过安全点表检查；请直接手写最终 numeric targets，并使用 custom_points(..., min_xy_cm=90 或刻意密集时 51-90 字面量)"
+            "可能绕过安全点表检查；请直接手写最终 numeric targets，并使用 custom_points([...], n=len(drones))"
         )
 
 
@@ -567,15 +567,9 @@ def _check_custom_points_contract(code, r):
             if keyword.arg != "min_xy_cm":
                 continue
             value = _literal_number(keyword.value)
-            if value is None:
+            if value is not None and value < 51.0:
                 r.add(
-                    "custom_points 的 min_xy_cm 必须是 51-90 之间的字面量；不要写变量或表达式"
-                )
-            elif not (51.0 <= value <= 90.0):
-                r.add(
-                    f"custom_points min_xy_cm={value:g} — 必须是 51-90 之间的字面量："
-                    "90 是开阔队形默认值，51 是 pyfii core 碰撞警告硬下限；"
-                    "刻意密集造型可用 55-75，不要调高到 90 以上导致可用点表被拒"
+                    f"custom_points min_xy_cm={value:g} — 不能低于 51（pyfii core 碰撞硬下限）"
                 )
 
 

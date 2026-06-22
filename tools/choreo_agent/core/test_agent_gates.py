@@ -62,18 +62,28 @@ prev = move_group(drones, targets, 3000, "#4488ff", 4)
     print("PASSED: preflight blocks deprecated geo templates")
 
 
-def test_preflight_blocks_jitter_points_and_nonstandard_min_xy():
+def test_preflight_blocks_jitter_points_and_sub51_min_xy():
+    # jitter_points is blocked
     r = preflight_check("""
 geo = custom_points([
     (60, 60, 120), (280, 60, 210), (500, 60, 120)
-], n=3, min_xy_cm=110)
+], n=3)
 geo = jitter_points(geo, xy=10, seed=7)
 """)
     assert not r
-    joined = " ".join(r.errors)
-    assert "min_xy_cm=110" in joined
-    assert "jitter_points" in joined
-    print("PASSED: preflight blocks jitter_points + nonstandard min_xy")
+    assert any("jitter_points" in e for e in r.errors)
+    # min_xy_cm < 51 is blocked (below pyfii collision floor)
+    r2 = preflight_check("""
+geo = custom_points([(100, 100, 120), (130, 120, 180)], n=2, min_xy_cm=40)
+""")
+    assert not r2
+    assert any("51" in e for e in r2.errors)
+    # min_xy_cm >= 51 is allowed (any value the model chooses)
+    r3 = preflight_check("""
+geo = custom_points([(100, 100, 120), (300, 300, 180)], n=2, min_xy_cm=110)
+""")
+    assert r3, f"min_xy_cm=110 should pass preflight: {r3.errors}"
+    print("PASSED: preflight blocks jitter_points + sub-51 min_xy")
 
 
 def test_preflight_blocks_position_writes_outside_s01():
@@ -89,44 +99,23 @@ def test_preflight_blocks_position_writes_outside_s01():
     print("PASSED: preflight blocks position writes outside S01")
 
 
-def test_preflight_evaluates_math_geometry():
-    # R=170 九机圆：弦距 ~116cm ≥ 90 → 放行
-    good = (
-        "geo = custom_points([(280+170*cos(2*pi*i/len(drones)), "
-        "280+170*sin(2*pi*i/len(drones)), 160+25*sin(i)) "
-        "for i in range(len(drones))], n=len(drones), min_xy_cm=90)\n"
-    )
-    assert preflight_check(good, segment_id="S02", drone_count=9)
-    # R=100：弦距 ~68cm < 90 → preflight 直接报精确数字，省一轮运行期 ValueError
-    bad = good.replace("170", "100")
-    r = preflight_check(bad, segment_id="S02", drone_count=9)
-    assert not r
-    assert any("68cm" in e for e in r.errors), r.errors
-    # 变量半径同样能静态求值
-    var = (
-        "R = 100\n"
-        "geo = custom_points([(280+R*cos(2*pi*i/9), 280+R*sin(2*pi*i/9), 160) "
+def test_preflight_passes_geometry_to_runtime():
+    """Geometry spacing is now validated at runtime by custom_points(), not preflight."""
+    # R=100 circle: spacing ~68cm < 90 — preflight no longer rejects this
+    code = (
+        "geo = custom_points([(280+100*cos(2*pi*i/9), 280+100*sin(2*pi*i/9), 160) "
         "for i in range(9)], n=9, min_xy_cm=90)\n"
     )
-    assert not preflight_check(var, segment_id="S02", drone_count=9)
-    print("PASSED: preflight evaluates math geometry statically")
-
-
-def test_preflight_requires_custom_points_wrap_for_comprehensions():
+    r = preflight_check(code, segment_id="S02", drone_count=9)
+    assert r, f"geometry spacing should pass preflight (runtime validates): {r.errors}"
+    # Unwrapped comprehension also passes preflight now
     raw = (
         "geo = [(280+170*cos(2*pi*i/9), 280+170*sin(2*pi*i/9), 160) for i in range(9)]\n"
         "targets = best_assign(prev, geo)\n"
     )
-    r = preflight_check(raw, segment_id="S02", drone_count=9)
-    assert not r
-    assert any("custom_points 包裹" in e for e in r.errors), r.errors
-    # 先赋值再包进 custom_points 是合法的
-    named = (
-        "pts = [(280+170*cos(2*pi*i/9), 280+170*sin(2*pi*i/9), 160+25*sin(i)) for i in range(9)]\n"
-        "geo = custom_points(pts, n=9, min_xy_cm=90)\n"
-    )
-    assert preflight_check(named, segment_id="S02", drone_count=9)
-    print("PASSED: preflight requires custom_points wrap for comprehensions")
+    r2 = preflight_check(raw, segment_id="S02", drone_count=9)
+    assert r2, f"unwrapped comprehension should pass preflight: {r2.errors}"
+    print("PASSED: preflight passes geometry to runtime")
 
 
 def test_preflight_verifies_start_positions_spacing():
@@ -267,10 +256,9 @@ if __name__ == "__main__":
     test_preflight_blocks_def()
     test_preflight_blocks_tool_leak()
     test_preflight_blocks_geo_templates()
-    test_preflight_blocks_jitter_points_and_nonstandard_min_xy()
+    test_preflight_blocks_jitter_points_and_sub51_min_xy()
     test_preflight_blocks_position_writes_outside_s01()
-    test_preflight_evaluates_math_geometry()
-    test_preflight_requires_custom_points_wrap_for_comprehensions()
+    test_preflight_passes_geometry_to_runtime()
     test_preflight_verifies_start_positions_spacing()
     test_preflight_enforces_land_protocol()
     test_preflight_blocks_bare_api()

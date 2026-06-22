@@ -17,7 +17,7 @@ move_group_staggered(drones, targets, flying_ms, color="#ffffff", ticks=4, group
 pulse_group(drones, color="#ffffff", ticks=3)
 # 全队短灯光脉冲；不能用它凑长时间。
 
-custom_points(points, n=None, min_xy_cm=90)
+custom_points(points, n=None)
 # 手写目标点表的标准化和安全检查。正式编舞主路径：
 # 先写有叙事意图的 n 个 (x,y,z)，再 best_assign/far_assign。
 
@@ -74,7 +74,7 @@ geo = custom_points([
     (45, 65, 100), (185, 45, 170), (340, 75, 230),
     (505, 55, 130), (75, 260, 210), (280, 230, 150),
     (505, 275, 240), (150, 500, 120), (405, 485, 190),
-], n=len(drones), min_xy_cm=90)
+], n=len(drones))
 targets = best_assign(prev, geo)
 flying_ms = 3000
 ticks = 4
@@ -88,7 +88,7 @@ geo = custom_points([
     (80, 500, 230), (120, 300, 150), (70, 110, 100),
     (250, 70, 210), (330, 240, 120), (500, 90, 180),
     (530, 330, 240), (390, 500, 140), (220, 430, 200),
-], n=len(drones), min_xy_cm=90)
+], n=len(drones))
 targets = far_assign(prev, geo, min_path_cm=active_min_path_cm(3000))
 flying_ms = 3000
 ticks = 4

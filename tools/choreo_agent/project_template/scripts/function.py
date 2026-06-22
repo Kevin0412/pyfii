@@ -203,7 +203,7 @@ def clamp_z(v):
     return max(80, min(250, int(round(v))))
 
 # ---------- 手写几何辅助 ----------
-def custom_points(points, n=None, min_xy_cm=90):
+def custom_points(points, n=None, min_xy_cm=51):
     """标准化手写坐标表，并在运行时检查 keyframe 内 XY 间距。
 
     这是正式编舞的主路径：agent 应先写出有叙事意图的坐标表，再用
