@@ -96,6 +96,8 @@ def move2(d, p, t_ms=None, T=100, flying_ms=None):
     """
     if t_ms is None:
         t_ms = flying_ms
+    if isinstance(t_ms, (list, tuple)):
+        t_ms = max(t_ms)
     if t_ms is None:
         raise ValueError("move2 需要时长参数：move2(drone, target, flying_ms)")
     start_ms = int(getattr(d, "time", 0))
@@ -871,17 +873,19 @@ def spatial_ranks(points, mode="center_out", origin=None, reverse=False, quantiz
     return ranks
 
 
-def ripple_delays(points, mode="center_out", step_ms=150, origin=None, reverse=False, quantize_cm=30, center=None):
+def ripple_delays(points, mode="center_out", step_ms=150, origin=None, reverse=False, quantize_cm=30, center=None, step=None):
     """波次延迟表(ms)：rank * step_ms。直接喂给 ripple_move / light_wave。
 
     同一份 delays 同时用于动作和灯光，即"先动的先亮"；reverse 反向（边缘先动=收拢）。
-    center 是 origin 的别名。
+    center 是 origin 的别名。step 是 step_ms 的别名。
     """
+    if step is not None:
+        step_ms = step
     ranks = spatial_ranks(
         points, mode=mode, origin=origin, reverse=reverse, quantize_cm=quantize_cm, center=center
     )
-    step = max(0, int(round(step_ms)))
-    return [r * step for r in ranks]
+    _step = max(0, int(round(step_ms)))
+    return [r * _step for r in ranks]
 
 
 def split_groups(points, mode="left_right", origin=None, center=None):
@@ -940,8 +944,8 @@ def _emit_drone_light(drone, color_a, color_b, ticks, interval_ms=100):
         fade_rgb(drone, color_a, color_b, steps=int(ticks), interval_ms=interval_ms)
 
 
-def ripple_move(drones, targets, flying_ms, delays, colors="#ffffff", hold_ticks=4,
-                tail_ms=0, palette=None, gradient_to=None):
+def ripple_move(drones, targets, flying_ms, delays=None, colors="#ffffff", hold_ticks=4,
+                tail_ms=0, palette=None, gradient_to=None, **_ignored):
     """波次推进：每架机等待自己的波次延迟后启动，启动瞬间点亮 —— 先动先亮。
 
     delays（毫秒表）用 ripple_delays(prev, mode=...) 从当前队形算出；
@@ -953,6 +957,10 @@ def ripple_move(drones, targets, flying_ms, delays, colors="#ffffff", hold_ticks
     if palette is not None:
         colors = palette
     _assert_target_count(drones, targets)
+    if isinstance(flying_ms, (list, tuple)):
+        flying_ms = max(flying_ms)
+    if delays is None:
+        delays = [0] * len(drones)
     if len(delays) != len(drones):
         raise ValueError(f"delays count {len(delays)} != drones count {len(drones)}")
     delays = [max(0, int(round(v))) for v in delays]
