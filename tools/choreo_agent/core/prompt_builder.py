@@ -277,8 +277,8 @@ def build_segment_prompt(
 - 渐变必须塞进飞行窗口：每个 keyframe 内 `灯光 ticks*100 + delay_ms ≈ flying_ms`；动作完成后不要再原地长亮灯（无人机静止亮灯 >1s 会被判低活动打回）。30-tick 渐变只配 3000ms 以上的 keyframe
 - LAND 前如果整体真实动作还没超过 60s，系统会追加 S07/S08 等正式段继续编舞；不要靠当前段硬等待
 - {prev_update_rule}
-- ## 时间预算
-段长: {end_time - start_time}s。`move2 飞行 + 亮灯定格` 之和必须≥ {(end_time - start_time - 1) * 1000:.0f}ms——**亮灯定格是预算的一等公民**（dntg 全片 57% 时间是定格展示图形）
+- ## 时间预算（不填满直接打回！）
+段长: {end_time - start_time}s（{start_time}-{end_time}s）。`move2 飞行 + 亮灯定格 + delay` 之和必须≈ {(end_time - start_time - 0.5) * 1000:.0f}ms。写完所有 keyframe 后**自己加总时长**，不够就追加亮灯定格或短 keyframe——**不要写完 2-3 个 keyframe 就收手**
 **窗口必须填满**（验证器硬校验）：段尾时间游标要落在窗口尾 ±（-1.0s/+1.5s）内；欠填会把后续段推离音乐 cue 直接打回
 母题耗时是确定的，直接加总贴满窗口：ripple_move=max(delays)+flying_ms / follow_chain=len(waypoints)*hop_ms / group_relay=2*flying_ms+gap_ms / light_wave=max(delays)+hold_ticks*100 / fade_group=duration_ms / breathe_group=cycles*period_ms / flash_group=times*(on_ms+off_ms)
 示例: 2个move2各2800ms + 每次到位后亮灯定格1700ms → 9000ms，观众有时间读图 ✓；3个move2各3000ms 全程飞不停 → 覆盖但观众读不到任何图形 △

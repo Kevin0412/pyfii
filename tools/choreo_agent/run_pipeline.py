@@ -28,7 +28,7 @@ from core import Session
 from core.token_usage import summarize_usage
 
 
-DEFAULT_MAX_CYCLES_PER_SEGMENT = 3
+DEFAULT_MAX_CYCLES_PER_SEGMENT = 4
 DEFAULT_MAX_ATTEMPTS_PER_CYCLE = 5
 
 
