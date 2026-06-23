@@ -1102,6 +1102,8 @@ def safe_move(drones, prev, geo, flying_ms, mode="wave", step_ms=150,
     elif light_ticks is not None:
         hold_ticks = light_ticks
     n = len(drones)
+    if isinstance(flying_ms, (list, tuple)):
+        flying_ms = max(flying_ms)
     flying_ms = int(round(flying_ms))
 
     def _do_relay():

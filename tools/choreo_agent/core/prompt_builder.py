@@ -187,12 +187,12 @@ def build_segment_prompt(
         f"- 大动作安全 = 碰撞门+动作质量门+活动门**一次同时满足**：默认**绕行 route-around**——两组换边但走不同空间带、同时飞、航线不相交（大动作+全员在动+无交叉，一次到位）。照这个范例改：\n"
         f"    `gids = split_groups(prev, mode='left_right')`  # 0=左组 1=右组\n"
         f"    `# 左组去对侧但目标集中在 y 上带、右组去对侧但集中在 y 下带 → 左右互换的张力，两条航线分居上下不相交`\n"
-        f"    `geo = custom_points([...9 个点：左组 y 偏大、右组 y 偏小，整体大展开...], n=len(drones), min_xy_cm=70)`\n"
+        f"    `geo = custom_points([...9 个点：左组 y 偏大、右组 y 偏小，整体大展开...], n=len(drones))`\n"
         f"    `delays = ripple_delays(prev, mode='by_index', step_ms=130)`\n"
         f"    `targets = safe_assign(prev, geo, delays=delays, flying_ms=2800)`  # 按真实错峰时序选无碰撞排列（与逐帧验证器同模型，错峰大动作首选）\n"
         f"    `prev = ripple_move(drones, targets, 2800, delays, colors=palette)`\n"
         f"  穿过同一中心区的真对穿是**少数刻意情况，仅当 motif 明确是 mirror-cross 时**才做：用 `group_relay` 顺序飞或错峰 `delay≥单程飞行时长`，小步 `delay(i*150)` 清不开必撞。其余大动作一律 route-around。单 keyframe 路径 ≤360cm，跨场拆多个 keyframe\n"
-        f"  **碰撞门多半来自点表太密**：几何点要铺开占场（相邻点目标 ≥90cm、用满场地宽度），far_assign 才有间距可挑出无碰撞排列；硬塞密集点表后指望 far_assign 救是没用的（点本身太近时连最优排列也 <51cm）。密集造型留给短促/慢速小动作，大迁移用铺开的几何\n"
+        f"  **碰撞门多半来自点表太密**：几何点要铺开占场（圆形 R≥85，两排同行≥70/行距≥120，散点任意两点 x差或y差≥60），far_assign 才有间距可挑出无碰撞排列；硬塞密集点表后指望 far_assign 救是没用的（点本身太近时连最优排列也 <51cm）。密集造型留给短促/慢速小动作，大迁移用铺开的几何\n"
         f"- 避免刚性圆退化（圆/放射/中心/辐射主题尤其注意，否则 degradation 门反复打回）：不要让多数 keyframe 保持同一圆形且同一角序——"
         f"至少一个主体 keyframe 换非圆轮廓（直线/V/弧/星/双排/十字/署名造型），或用 `swap_assign`/`mirror_assign`/分组重组打乱角序；"
         f"**单纯扩缩半径或整体旋转(`rotate_assign`)仍是同序圆，不算变化**——圆形主题也要在 keyframe 之间真正换形或换序"
@@ -236,7 +236,7 @@ def build_segment_prompt(
 - {keyframe_rule}
 - {coordinate_hint}
 - {assign_rule}
-- 几何主路径：整数坐标表或 math 表达式都必须包进 custom_points：`geo = custom_points([...], n=len(drones))`（sin/cos/pi 已导出；custom_points 负责裁剪+间距校验，comprehension 直接传给 best_assign/move2 会被打回），再 `best_assign/far_assign`；硬底线 51cm（pyfii core 碰撞下限），不需要额外传 min_xy_cm；S02-S05 必须至少一个主体 keyframe 使用手写坐标表或 math 几何，禁止调用 `geo_wide_v/geo_arrow/geo_box/geo_diagonal/geo_wave/geo_grid`
+- 几何主路径：整数坐标表或 math 表达式都必须包进 custom_points：`geo = custom_points([...], n=len(drones))`（sin/cos/pi 已导出；custom_points 负责裁剪+间距校验，comprehension 直接传给 best_assign/move2 会被打回），再 `best_assign/far_assign`；间距硬下限 51cm，写点时直接保证（圆形 R≥85，两排同行≥70/行距≥120，散点任意两点 x差或y差≥60）；S02-S05 必须至少一个主体 keyframe 使用手写坐标表或 math 几何，禁止调用 `geo_wide_v/geo_arrow/geo_box/geo_diagonal/geo_wave/geo_grid`
 - 正式段默认展开 per-drone loop，不要用 `move_group` 作为整段主结构：`move2(drone, target, flying_ms)` → `apply_light(drone, color, ticks)` → `drone.delay(flying_ms-ticks*100+100)`
 - S02-S05 每段至少一个 keyframe 必须打破时间同步（同起同停会被节奏门打回），三选一：
   母题执行器 `prev = ripple_move(drones, targets, flying_ms, ripple_delays(prev), colors=palette)`（最省事，自动对齐）；
@@ -306,8 +306,8 @@ def _format_coordinate_hint(drone_count: int, segment_id: str) -> str:
 
     discipline = (
         "9机手写坐标表：坐标任意整数即可，不要凑 50 的倍数（场地 560x560，中心是 280——50 网格永远写不出对称构图）；构图锚点自己定：对称构图围绕 (280,280) 写 280±k，偏心/迁移构图把重心放任意位置都可以；XY 0-560，Z 在 80-250 内至少 3 层；"
-        "不要手算两两距离——间距/路径安全由规划检查器和 validator 用精确数字回报；"
-        "禁止 jitter_points；custom_points 默认 min_xy_cm=51（pyfii 碰撞硬下限），不需要手动传 min_xy_cm"
+        "间距经验法则（custom_points 硬下限 51cm，写点时直接保证）：圆形 R≥85（弦距≥58cm）；两排/多排 同行间距≥70、行距≥120；散点 任意两点 x差 或 y差 ≥60；"
+        "禁止 jitter_points；不需要手动传 min_xy_cm"
     )
     if start_hint:
         return f"{start_hint}；{discipline}"

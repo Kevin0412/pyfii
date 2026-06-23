@@ -675,7 +675,7 @@ def build_coding_prompt(
 - `drones` 是 {int(drone_count)} 架无人机对象列表；循环写 `for i, drone in enumerate(drones):`
 - 代码开头必须写 5 行设计卡注释：`# role: ...`, `# motifs: ...`, `# beat: ...`, `# formation: ...`, `# lighting: ...`
 - 设计卡必须承接全局章法，尤其是 current role/current motifs；不要写随机队形说明
-- 几何主路径：整数坐标表或 math 表达式都必须包进 custom_points：`geo = custom_points([...], n=len(drones))`（sin/cos/pi 已导出，不要写 π；comprehension 直接传给 best_assign/move2 会被打回），再 `best_assign` 或 `far_assign`；S02-S05 禁止调用 `geo_wide_v/geo_arrow/geo_box/geo_diagonal/geo_wave/geo_grid`
+- 几何主路径：整数坐标表或 math 表达式都必须包进 custom_points：`geo = custom_points([...], n=len(drones))`（sin/cos/pi 已导出，不要写 π；comprehension 直接传给 best_assign/move2 会被打回），再 `best_assign` 或 `far_assign`；间距硬下限 51cm，写点时直接保证（圆形 R≥85，两排同行≥70/行距≥120，散点任意两点 x差或y差≥60）；S02-S05 禁止调用 `geo_wide_v/geo_arrow/geo_box/geo_diagonal/geo_wave/geo_grid`
 - **移动一律用 `prev = safe_move(drones, prev, geo, flying_ms, mode="wave")`（对穿/大交叉 `mode="relay"`）**：一次完成安全分配+错峰+执行，验证的时序就是飞的时序，清不开会自己抛错让你铺开点表。**任何错峰/交叉/大动作都走它，切勿手搓 `move2`+`drone.delay` 凑错峰（会撞、反复返工的直接根因）**。仅「同步非交叉的就近小动作」或「原地灯光细节」才展开 per-drone loop：`move2(drone, target, flying_ms)` → `apply_light(drone, color, ticks)` → `drone.delay(delay_ms)`
 - 每段函数**首行**必须先 `auto_init(drones)` 再 `prev = [(d.x, d.y, d.z) for d in drones]`，之后才能把 prev 传给 safe_move/best_assign 等（否则 prev 未定义直接报错）
 - S02-S05 每段至少一个 keyframe 必须打破时间同步（同起同停会被节奏门打回）：`safe_move(..., mode="wave", step_ms=120)` 内部错峰即破同步且安全；S01 起飞这种无交叉场景才可 `drone.delay(i * 120)`（move2 前）
