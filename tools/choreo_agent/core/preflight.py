@@ -71,6 +71,8 @@ def preflight_check(
     _check_syntax(code, r)
     # 8. Bare API calls (d.move2 / d.VelXY)
     _check_no_bare_api(code, r)
+    # 8b. Common runtime NameError/TypeError patterns
+    _check_common_runtime_mistakes(code, r)
     # 9. inittime calls
     _check_no_inittime(code, r)
     # 10. Single-drone timing after group move
@@ -590,6 +592,62 @@ def _check_no_bare_api(code, r):
     bare_vel = re.findall(r'(\w+)\.Vel(XY|Z)\(', code)
     if bare_vel:
         r.add(f"裸调 VelXY/VelZ: {', '.join([f'{m[0]}.Vel{m[1]}' for m in bare_vel[:3]])} — 用 move2 包装器")
+
+
+def _check_common_runtime_mistakes(code, r):
+    """Catch recurring model mistakes that otherwise survive until full script execution."""
+    try:
+        tree = ast.parse(code)
+    except SyntaxError:
+        return
+
+    for node in ast.walk(tree):
+        if (
+            isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Name)
+            and node.func.id == "TurnOnAll"
+        ):
+            r.add(
+                "裸调 TurnOnAll(...) 会 NameError — 它是 drone 方法；"
+                "在 per-drone loop 中写 d.TurnOnAll(color)，或用 apply_light/flash_group"
+            )
+            break
+
+    split_group_names = set()
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Assign) or len(node.targets) != 1:
+            continue
+        target = node.targets[0]
+        value = node.value
+        if (
+            isinstance(target, ast.Name)
+            and isinstance(value, ast.Call)
+            and isinstance(value.func, ast.Name)
+            and value.func.id == "split_groups"
+        ):
+            split_group_names.add(target.id)
+
+    for node in ast.walk(tree):
+        if not isinstance(node, (ast.For, ast.comprehension)):
+            continue
+        iterable = node.iter
+        if not isinstance(iterable, ast.Subscript):
+            continue
+        source = iterable.value
+        assigned_result = isinstance(source, ast.Name) and source.id in split_group_names
+        direct_result = (
+            isinstance(source, ast.Call)
+            and isinstance(source.func, ast.Name)
+            and source.func.id == "split_groups"
+        )
+        if assigned_result or direct_result:
+            r.add(
+                "split_groups() 返回的是逐机 group_id 列表（如 [0,1,0,...]），"
+                "gids[1] 是单个 int，不能 for 遍历；"
+                "用 `for i, gid in enumerate(gids): if gid == 1: ...`，"
+                "或直接调用 group_relay(..., group_ids=gids)"
+            )
+            break
 
 
 def _check_no_inittime(code, r):

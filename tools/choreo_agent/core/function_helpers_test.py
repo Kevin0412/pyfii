@@ -255,6 +255,84 @@ def test_move_group_staggered_adds_group_delay_and_color_cycle():
     assert drones[1].lights == ["#ffcc44"] * 4
 
 
+def test_ripple_move_tolerates_safe_move_shaped_extra_prev():
+    module = _load_template_function_module()
+    prev = [(60, 100, 120), (280, 300, 150), (500, 100, 180)]
+    targets = [(120, 460, 150), (280, 120, 200), (440, 460, 170)]
+    flying_ms = [900, 1000, 950]
+    delays = [0, 100, 200]
+    palette = ["#ff8800", "#ffee44", "#ffffff"]
+    drones = _drones_at(prev)
+
+    out = module.ripple_move(
+        drones,
+        prev,
+        targets,
+        flying_ms,
+        delays,
+        colors=palette,
+        hold_ticks=2,
+    )
+
+    assert out == targets
+    assert [d.moves[-1] for d in drones] == targets
+    assert [d.lights[-1] for d in drones] == palette
+    assert [d.time for d in drones] == [1200, 1200, 1200]
+
+
+def test_ripple_move_tolerates_duplicate_positional_and_keyword_timing():
+    module = _load_template_function_module()
+    prev = [(60, 100, 120), (280, 300, 150), (500, 100, 180)]
+    targets = [(120, 460, 150), (280, 120, 200), (440, 460, 170)]
+    delays = [0, 100, 200]
+    drones = _drones_at(prev)
+
+    out = module.ripple_move(
+        drones,
+        targets,
+        900,
+        delays,
+        flying_ms=1000,
+        colors="#44aaff",
+        hold_ticks=2,
+    )
+
+    assert out == targets
+    assert [d.time for d in drones] == [1200, 1200, 1200]
+    assert all(d.lights[-1] == "#44aaff" for d in drones)
+
+
+def test_ripple_move_preserves_keyword_targets_and_positional_style():
+    module = _load_template_function_module()
+    prev = [(60, 100, 120), (280, 300, 150), (500, 100, 180)]
+    targets = [(120, 460, 150), (280, 120, 200), (440, 460, 170)]
+    delays = [0, 100, 200]
+
+    keyword_drones = _drones_at(prev)
+    keyword_out = module.ripple_move(
+        keyword_drones,
+        targets=targets,
+        flying_ms=1000,
+        delays=delays,
+        colors="#44aaff",
+    )
+
+    positional_drones = _drones_at(prev)
+    positional_out = module.ripple_move(
+        positional_drones,
+        targets,
+        1000,
+        delays,
+        "#44aaff",
+        3,
+        100,
+    )
+
+    assert keyword_out == targets
+    assert positional_out == targets
+    assert [d.time for d in positional_drones] == [1300, 1300, 1300]
+
+
 def test_geometry_primitives_return_safe_points_for_7_and_9():
     module = _load_template_function_module()
     builders = [
@@ -435,6 +513,9 @@ if __name__ == "__main__":
     test_jitter_points_preserves_count_and_bounds()
     test_move_group_returns_targets_and_records_motion_end()
     test_move_group_staggered_adds_group_delay_and_color_cycle()
+    test_ripple_move_tolerates_safe_move_shaped_extra_prev()
+    test_ripple_move_tolerates_duplicate_positional_and_keyword_timing()
+    test_ripple_move_preserves_keyword_targets_and_positional_style()
     test_geometry_primitives_return_safe_points_for_7_and_9()
     test_geometry_primitives_accept_reverse_and_spread_modifiers()
     test_geo_box_accepts_common_size_modifiers()

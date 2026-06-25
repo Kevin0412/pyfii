@@ -177,6 +177,36 @@ def test_preflight_blocks_bare_api():
     print("PASSED: preflight blocks drone.move2()")
 
 
+def test_preflight_blocks_common_runtime_mistakes():
+    bare_light = preflight_check('TurnOnAll("#44aaff")')
+    assert not bare_light
+    assert any("NameError" in error and "TurnOnAll" in error for error in bare_light.errors)
+
+    bad_groups = preflight_check("""
+gids = split_groups(prev, mode="left_right")
+for i in gids[1]:
+    apply_light(drones[i], "#ffaa00", 3)
+""")
+    assert not bad_groups
+    assert any("逐机 group_id" in error for error in bad_groups.errors)
+
+    direct_bad_groups = preflight_check("""
+for i in split_groups(prev, mode="alternate")[0]:
+    drones[i].delay(100)
+""")
+    assert not direct_bad_groups
+    assert any("逐机 group_id" in error for error in direct_bad_groups.errors)
+
+    good_groups = preflight_check("""
+gids = split_groups(prev, mode="left_right")
+for i, gid in enumerate(gids):
+    if gid == 1:
+        apply_light(drones[i], "#ffaa00", 3)
+""")
+    assert good_groups, good_groups.errors
+    print("PASSED: preflight blocks recurring TurnOnAll/split_groups runtime mistakes")
+
+
 def test_preflight_blocks_inittime():
     r = preflight_check("drone.inittime(13)\nmove2(d,(100,120,150),3000)")
     assert not r
@@ -262,6 +292,7 @@ if __name__ == "__main__":
     test_preflight_verifies_start_positions_spacing()
     test_preflight_enforces_land_protocol()
     test_preflight_blocks_bare_api()
+    test_preflight_blocks_common_runtime_mistakes()
     test_preflight_blocks_inittime()
     test_preflight_blocks_single_drone_timing()
     test_preflight_blocks_out_of_range_coordinate_literals()

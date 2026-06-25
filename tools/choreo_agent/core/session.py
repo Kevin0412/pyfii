@@ -918,6 +918,8 @@ def {function_name}(drones: list):
         on_reasoning_delta: Callable[[str], None] | None = None,
         on_heartbeat: Callable[[], None] | None = None,
     ) -> LlmResponse:
+        if _is_mimo_provider(provider):
+            user = _mimo_output_contract(stage) + "\n\n" + user
         try:
             response = chat(
                 system=system,
@@ -1204,6 +1206,31 @@ def _compact_validation_feedback(result: ValidationResult) -> str:
         "无长悬停/低活动；优先改目标几何、飞行预算和 per-drone delay，不要输出解释。"
     )
     return _limit_text("\n".join(lines), 2400)
+
+
+def _is_mimo_provider(provider: str) -> bool:
+    return str(provider or "").lower().startswith("mimo")
+
+
+def _mimo_output_contract(stage: str) -> str:
+    """Provider-specific output discipline.
+
+    MiMo v2.5 Pro tends to spend tens of thousands of tokens re-evaluating its
+    own plan. That is useful for free-form reasoning, but toxic for this agent:
+    every stage already contains deterministic validators, so the model's job is
+    to emit the requested artifact quickly and let the checker give feedback.
+    """
+    if "planning_json" in stage or "planning_check_revision" in stage:
+        artifact = "JSON 对象"
+    else:
+        artifact = "Python 代码片段"
+    return (
+        "## MIMO 输出纪律（硬要求）\n"
+        f"- 直接输出最终{artifact}；不要写长篇分析、不要逐条复述约束、不要反复说“再检查一下”。\n"
+        "- 最多先写 3 行内部计划摘要；随后立刻给最终内容。\n"
+        "- 如果不确定，选择最保守可验证写法并输出，让 validator 反馈修正。\n"
+        "- 不要把大段推理放在回答前面；输出过长导致超时/截断会视为失败。"
+    )
 
 
 def _preflight_repair_feedback(result, code: str) -> str:

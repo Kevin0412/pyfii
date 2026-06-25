@@ -944,19 +944,79 @@ def _emit_drone_light(drone, color_a, color_b, ticks, interval_ms=100):
         fade_rgb(drone, color_a, color_b, steps=int(ticks), interval_ms=interval_ms)
 
 
-def ripple_move(drones, targets, flying_ms, delays=None, colors="#ffffff", hold_ticks=4,
-                tail_ms=0, palette=None, gradient_to=None, **_ignored):
+_RIPPLE_UNSET = object()
+
+
+def _looks_like_target_table(value, n):
+    """Best-effort discriminator for the legacy ``(drones, prev, targets, ...)`` call shape."""
+    try:
+        return len(value) == n and all(len(point) >= 2 for point in value)
+    except (TypeError, ValueError):
+        return False
+
+
+def ripple_move(drones, targets_or_prev=_RIPPLE_UNSET, *args, targets=_RIPPLE_UNSET,
+                flying_ms=None, delays=None, colors=_RIPPLE_UNSET,
+                hold_ticks=_RIPPLE_UNSET, tail_ms=_RIPPLE_UNSET,
+                palette=_RIPPLE_UNSET, gradient_to=_RIPPLE_UNSET, **_ignored):
     """波次推进：每架机等待自己的波次延迟后启动，启动瞬间点亮 —— 先动先亮。
 
     delays（毫秒表）用 ripple_delays(prev, mode=...) 从当前队形算出；
     所有机段尾自动对齐到 max(delays)+flying_ms+tail_ms，免回正算术。
     palette 是 colors 的别名。给 gradient_to（与 colors 同形）则每架机在亮灯窗口内
     colors[i]→gradient_to[i] 连续渐变（dntg 式飞行中持续变色，色彩更丰富）。
+    宽容接受模型常写错的 safe_move 形状：
+    ``ripple_move(drones, prev, targets, flying_ms, delays, ...)``，其中 prev 会被忽略。
+    位置参数与同名 keyword 重复时以 keyword 为准，避免在 Python 参数绑定阶段浪费一轮。
     返回标准化 targets，可直接赋给 prev。
     """
+    positional = list(args)
+    resolved_targets = targets if targets is not _RIPPLE_UNSET else targets_or_prev
+    if (
+        targets is _RIPPLE_UNSET
+        and positional
+        and _looks_like_target_table(positional[0], len(drones))
+    ):
+        resolved_targets = positional.pop(0)
+
+    if positional:
+        positional_flying_ms = positional.pop(0)
+        if flying_ms is None:
+            flying_ms = positional_flying_ms
+    if positional:
+        positional_delays = positional.pop(0)
+        if delays is None:
+            delays = positional_delays
+    if positional and colors is _RIPPLE_UNSET:
+        colors = positional.pop(0)
+    if positional and hold_ticks is _RIPPLE_UNSET:
+        hold_ticks = positional.pop(0)
+    if positional and tail_ms is _RIPPLE_UNSET:
+        tail_ms = positional.pop(0)
+    if positional and palette is _RIPPLE_UNSET:
+        palette = positional.pop(0)
+    if positional and gradient_to is _RIPPLE_UNSET:
+        gradient_to = positional.pop(0)
+
+    if flying_ms is None:
+        flying_ms = _ignored.get("t_ms", _ignored.get("duration_ms"))
+    if flying_ms is None:
+        raise ValueError("ripple_move 需要 flying_ms")
+    if resolved_targets is _RIPPLE_UNSET:
+        raise ValueError("ripple_move 需要 targets")
+    if colors is _RIPPLE_UNSET:
+        colors = "#ffffff"
+    if hold_ticks is _RIPPLE_UNSET:
+        hold_ticks = 4
+    if tail_ms is _RIPPLE_UNSET:
+        tail_ms = 0
+    if palette is _RIPPLE_UNSET:
+        palette = None
+    if gradient_to is _RIPPLE_UNSET:
+        gradient_to = None
     if palette is not None:
         colors = palette
-    _assert_target_count(drones, targets)
+    _assert_target_count(drones, resolved_targets)
     if isinstance(flying_ms, (list, tuple)):
         flying_ms = max(flying_ms)
     if delays is None:
@@ -971,7 +1031,7 @@ def ripple_move(drones, targets, flying_ms, delays=None, colors="#ffffff", hold_
     for i, drone in enumerate(drones):
         if delays[i]:
             drone.delay(delays[i])
-        target = _target3(targets[i])
+        target = _target3(resolved_targets[i])
         move2(drone, target, flying_ms)
         _emit_drone_light(drone, _color_at(colors, i), _grad_at(gradient_to, i), ticks)
         drone.delay(max(0, flying_ms - ticks * 100 + (span - delays[i]) + int(tail_ms)))

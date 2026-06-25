@@ -45,9 +45,11 @@
       "base_url": "https://token-plan-cn.xiaomimimo.com/v1",
       "api_key": "your-mimo-api-key",
       "model": "mimo-v2.5-pro",
+      "max_output_tokens": 65536,
       "stream": true,
-      "no_content_timeout_s": 240,
-      "max_retries": 2,
+      "timeout_s": 1800,
+      "no_content_timeout_s": 600,
+      "max_retries": 0,
       "retry_backoff_s": 2,
       "supports_prefix_completion": false,
       "supports_stream": true

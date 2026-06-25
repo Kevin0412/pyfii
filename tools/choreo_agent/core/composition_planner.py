@@ -333,6 +333,8 @@ def generate_composition_plan(
         from .llm_client import chat
 
         def chat_fn(prompt: str) -> str:  # type: ignore[misc]
+            if str(provider or "").lower().startswith("mimo"):
+                prompt = _mimo_planner_contract() + "\n\n" + prompt
             return chat(system="", user=prompt, provider=provider, temperature=0.4).text
 
     prompt = build_planner_prompt(
@@ -363,3 +365,12 @@ def generate_composition_plan(
     if not ok:
         raise ValueError(f"composition plan validation failed: {report}")
     return {"plan": plan, "legacy": to_legacy_plan(plan), "brief": brief}
+
+
+def _mimo_planner_contract() -> str:
+    return (
+        "## MIMO 输出纪律（硬要求）\n"
+        "- 直接输出最终 JSON 对象；不要写长篇分析、不要复述音乐证据、不要反复自审。\n"
+        "- 最多先写 3 行内部计划摘要；随后立刻给 JSON。\n"
+        "- JSON 必须能被 parse；不要 markdown fence。输出过长导致超时/截断会视为失败。"
+    )
