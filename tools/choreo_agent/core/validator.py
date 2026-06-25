@@ -228,7 +228,9 @@ class ValidationResult:
             lines.extend(f"- {item}" for item in self.window_fill_errors)
             lines.append(
                 "修复：段内容必须贴满本段窗口，否则后续段与音乐 cue 全部错位。"
-                "母题执行器耗时是确定的：ripple_move=max(delays)+flying_ms；follow_chain=len(waypoints)*hop_ms；"
+                "母题执行器耗时是确定的：ripple_move=max(delays)+flying_ms；"
+                "chain_follow_safe=((len(drones)-1)*lag_hops+1+extra_hops)*hop_ms；"
+                "follow_chain=len(waypoints)*hop_ms；"
                 "group_relay=2*flying_ms+gap_ms；light_wave=max(delays)+hold_ticks*100；"
                 "fade_group=duration_ms；breathe_group=cycles*period_ms；flash_group=times*(on_ms+off_ms)。"
                 "把各调用耗时加总到窗口长度；缺口用亮灯定格补（light_wave/breathe_group/fade_group——亮灯定格是预算的一等公民）。"

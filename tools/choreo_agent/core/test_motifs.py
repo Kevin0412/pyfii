@@ -173,6 +173,39 @@ def test_follow_chain_rejects_bad_paths():
         raise AssertionError("链上间距不足应当抛错")
 
 
+def test_chain_follow_safe_expands_control_points_and_aligns():
+    fn = _load_fn()
+    drones = [
+        FakeDrone(520, 520),
+        FakeDrone(470, 500),
+        FakeDrone(420, 480),
+        FakeDrone(370, 460),
+        FakeDrone(320, 440),
+        FakeDrone(270, 420),
+        FakeDrone(220, 400),
+        FakeDrone(170, 380),
+        FakeDrone(120, 360),
+    ]
+    ctrl = [(40, 520, 180), (280, 300, 160), (540, 40, 190)]
+
+    ends = fn.chain_follow_safe(drones, ctrl, hop_ms=580, lag_hops=1, spacing_cm=65, colors="#66ccff")
+
+    assert [d.time for d in drones] == [5800] * 9, "默认 10 个波点，9 机总耗时 10*hop_ms"
+    assert len(ends) == 9
+    assert all(len(d.moves) >= 1 for d in drones)
+    assert all(d.lights and d.lights[0][1] == "#66ccff" for d in drones)
+
+
+def test_chain_lane_rejects_short_control_path():
+    fn = _load_fn()
+    try:
+        fn.chain_lane([(100, 100, 150), (180, 100, 150)], count=10, spacing_cm=65)
+    except ValueError as exc:
+        assert "路径太短" in str(exc)
+    else:
+        raise AssertionError("太短的 control path 应当抛错")
+
+
 def test_gradient_to_enriches_color_without_breaking_alignment():
     """gradient_to 让执行器在同一耗时内逐 tick 渐变（dntg 持续变色），保持段尾对齐。"""
     fn = _load_fn()
@@ -296,14 +329,24 @@ light_wave(drones, delays, palette, hold_ticks=6)
 
 # ---------- preflight 适配 ----------
 
-def test_preflight_passes_follow_chain_to_runtime():
-    """follow_chain spacing/count is now validated at runtime, not preflight."""
+def test_preflight_rejects_static_follow_chain_too_dense():
+    """Static raw follow_chain paths are now rejected before expensive runtime."""
     code = """\
 wps = [(80 + 50 * k, 280, 150) for k in range(9)]
 prev = follow_chain(drones, wps, 700, lag_hops=1)
 """
     r = preflight_check(code, segment_id="S03", drone_count=9)
-    assert r, f"follow_chain spacing should pass preflight (runtime validates): {r.errors}"
+    assert not r
+    assert any("follow_chain 链上间距不足" in e for e in r.errors), r.errors
+
+
+def test_preflight_accepts_chain_follow_safe_control_points():
+    code = """\
+ctrl = [(40,520,180), (280,300,160), (540,40,190)]
+prev = chain_follow_safe(drones, ctrl, hop_ms=580, lag_hops=1, spacing_cm=65)
+"""
+    r = preflight_check(code, segment_id="S03", drone_count=9)
+    assert r, r.errors
 
 
 def test_preflight_rgb_tuples_are_not_coordinates():

@@ -84,6 +84,13 @@ def test_api_exception_writes_partial_result():
         assert result_path.exists(), "partial result not written"
         data = json.loads(result_path.read_text())
         assert not data["summary"]["completed"]
+        assert data["summary"]["run"]["status"] == "failed"
+        assert data["summary"]["attempt_counts"]["exceptions"] >= 1
+        assert "validation_rounds" in data["summary"]["attempt_counts"]
+        assert data["summary"]["convergence"]["round_limit_per_segment"] == 5
+        state = json.loads((proj / "state.json").read_text())
+        assert state["last_run"]["provider"] == "mock"
+        assert state["last_run"]["status"] == "failed"
         records = data["summary"]["records"]
         assert len(records) >= 1
         seg = records[0]
@@ -124,6 +131,11 @@ def test_exception_then_pass_continues():
 
         assert call_count[0] == 2, f"expected 2 calls, got {call_count[0]}"
         assert result["summary"]["completed"], f"should complete: {result['summary']}"
+        assert result["summary"]["attempt_counts"]["validation_rounds"] == 1
+        assert result["summary"]["convergence"]["converged"]
+        state = json.loads((proj / "state.json").read_text())
+        assert state["last_run"]["status"] == "completed"
+        assert state["last_run"]["convergence"]["converged"]
         print("PASSED: exception_then_pass_continues")
     finally:
         shutil.rmtree(proj)

@@ -29,6 +29,7 @@ class ProjectState:
     provider: str = "deepseek"
     drone_count: int = 7
     composition_plan: dict = field(default_factory=dict)
+    last_run: dict = field(default_factory=dict)
     segments: list[SegmentState] = field(default_factory=list)
     current_segment_index: int = 0
     locked_segment_ids: list[str] = field(default_factory=list)
@@ -49,6 +50,7 @@ class ProjectState:
             "provider": self.provider,
             "drone_count": self.drone_count,
             "composition_plan": self.composition_plan,
+            "last_run": self.last_run,
             "segments": [
                 {
                     "id": s.id,
@@ -100,6 +102,7 @@ class ProjectState:
             provider=data.get("provider", "deepseek"),
             drone_count=_normalize_drone_count(data.get("drone_count", 7)),
             composition_plan=_normalize_composition_plan(data.get("composition_plan", {})),
+            last_run=_normalize_dict(data.get("last_run", {})),
             segments=segments,
             current_segment_index=data.get("current_segment_index", 0),
             locked_segment_ids=data.get("locked_segment_ids", []),
@@ -122,6 +125,10 @@ def _normalize_drone_count(value) -> int:
 
 
 def _normalize_composition_plan(value) -> dict:
+    return _normalize_dict(value)
+
+
+def _normalize_dict(value) -> dict:
     if isinstance(value, dict):
         return value
     return {}

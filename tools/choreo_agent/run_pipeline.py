@@ -15,9 +15,11 @@ import argparse
 import json
 import os
 import shutil
+import subprocess
 import sys
 import time
 import traceback
+import uuid
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -30,6 +32,7 @@ from core.token_usage import summarize_usage
 
 DEFAULT_MAX_CYCLES_PER_SEGMENT = 4
 DEFAULT_MAX_ATTEMPTS_PER_CYCLE = 5
+CONVERGENCE_ROUND_LIMIT = 5
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -90,7 +93,18 @@ def run_full_flow(
     records: list[dict] = []
     started_at = time.time()
     session = Session(project_root)
-    _write_partial_result(project_root, records, session, started_at, provider=provider or session.state.provider)
+    run_provider = provider or session.state.provider
+    run_meta = _build_run_metadata(
+        project_root=project_root,
+        provider=run_provider,
+        max_cycles_per_segment=max_cycles_per_segment,
+        max_attempts_per_cycle=max_attempts_per_cycle,
+        use_planning_pass=use_planning_pass,
+        parallel_candidates=parallel_candidates,
+        review_segments=review_segments,
+        max_api_exceptions_per_segment=max_api_exceptions_per_segment,
+    )
+    _write_partial_result(project_root, records, session, started_at, provider=run_provider, run_meta=run_meta)
 
     while True:
         session = Session(project_root)
@@ -98,7 +112,6 @@ def run_full_flow(
         if seg is None:
             break
 
-        run_provider = provider or session.state.provider
         segment_record = {
             "segment": seg.id,
             "start_time": seg.start_time,
@@ -117,12 +130,12 @@ def run_full_flow(
                 f"# FEEDBACK\n{feedback}\n"
             ),
         )
-        _write_partial_result(project_root, records, session, started_at, provider=run_provider)
+        _write_partial_result(project_root, records, session, started_at, provider=run_provider, run_meta=run_meta)
 
         locked = False
         for cycle in range(1, max_cycles_per_segment + 1):
             _append(log_path, f"\n# {seg.id} CYCLE {cycle} START\n")
-            _write_partial_result(project_root, records, session, started_at, provider=run_provider)
+            _write_partial_result(project_root, records, session, started_at, provider=run_provider, run_meta=run_meta)
             stream = _StreamLog(log_path, seg.id, cycle)
             try:
                 rounds = session.generate_until_safe_with_llm(
@@ -161,6 +174,7 @@ def run_full_flow(
                     provider=run_provider,
                     last_failure_category=category,
                     last_exception=cycle_record["exception"],
+                    run_meta=run_meta,
                 )
                 # Count API exceptions per segment
                 api_exc_count = sum(1 for c in segment_record["cycles"] if c.get("failure_category") == "api_network")
@@ -177,7 +191,7 @@ def run_full_flow(
                 "rounds": [_round_summary(round_item) for round_item in rounds],
             }
             segment_record["cycles"].append(cycle_record)
-            _write_partial_result(project_root, records, session, started_at, provider=run_provider)
+            _write_partial_result(project_root, records, session, started_at, provider=run_provider, run_meta=run_meta)
             _append(
                 log_path,
                 f"\n# {seg.id} CYCLE {cycle} SUMMARY\n"
@@ -221,12 +235,13 @@ def run_full_flow(
                     provider=run_provider,
                     last_failure_category=None if approval.locked else "lock_failed",
                     last_exception=None if approval.locked else (approval.reason or "lock failed"),
+                    run_meta=run_meta,
                 )
                 if approval.locked:
                     segment_record["locked"] = True
                     segment_record["final_validation"] = lock_summary["validation"]
                     locked = True
-                    _write_partial_result(project_root, records, session, started_at, provider=run_provider)
+                    _write_partial_result(project_root, records, session, started_at, provider=run_provider, run_meta=run_meta)
                     break
                 segment_record["failure_category"] = "lock_failed"
                 feedback = feedback + "\n\n验证通过但锁定失败：" + (approval.reason or "unknown")
@@ -244,13 +259,19 @@ def run_full_flow(
 
     session = Session(project_root)
     completed = session.state.current_segment is None
+    convergence = _convergence_summary(records, completed)
+    attempt_counts = _attempt_counts(records)
     summary = {
         "project": str(project_root),
-        "provider": provider or session.state.provider,
+        "provider": run_provider,
         "completed": completed,
+        "converged": convergence["converged"],
         "locked_segment_ids": session.state.locked_segment_ids,
         "elapsed_s": round(time.time() - started_at, 1),
         "failed_segment": None if completed else session.state.current_segment.id,
+        "run": _run_status(run_meta, "completed" if completed else "failed", started_at),
+        "attempt_counts": attempt_counts,
+        "convergence": convergence,
         "token_usage": _token_usage_summary(records),
         "records": records,
     }
@@ -266,6 +287,7 @@ def run_full_flow(
             _dm_record(project_root, "session_verdict", verdict)
     result = {"summary": summary}
     _write_json_atomic(project_root / "stability_result.json", result)
+    _write_state_last_run(project_root, session, summary["run"], attempt_counts, convergence)
     _append(
         log_path,
         "\n# FULL FLOW RESULT\n" + json.dumps(summary, ensure_ascii=False, indent=2) + "\n",
@@ -335,6 +357,163 @@ def _token_usage_summary(records: list[dict]) -> dict:
                 if round_record.get("model") or round_record.get("response_chars") or round_record.get("reasoning_chars"):
                     items.append(round_record)
     return summarize_usage(items)
+
+
+def _build_run_metadata(
+    project_root: Path,
+    provider: str,
+    max_cycles_per_segment: int,
+    max_attempts_per_cycle: int,
+    use_planning_pass: bool,
+    parallel_candidates: int,
+    review_segments: bool,
+    max_api_exceptions_per_segment: int,
+) -> dict:
+    now = time.time()
+    return {
+        "run_id": f"{time.strftime('%Y%m%d_%H%M%S', time.localtime(now))}_{uuid.uuid4().hex[:8]}",
+        "started_at": _iso_ts(now),
+        "project": str(project_root),
+        "provider": provider,
+        "git_head": _git_head(),
+        "max_cycles_per_segment": int(max_cycles_per_segment),
+        "max_attempts_per_cycle": int(max_attempts_per_cycle),
+        "convergence_round_limit": CONVERGENCE_ROUND_LIMIT,
+        "use_planning_pass": bool(use_planning_pass),
+        "parallel_candidates": int(parallel_candidates),
+        "review_segments": bool(review_segments),
+        "max_api_exceptions_per_segment": int(max_api_exceptions_per_segment),
+    }
+
+
+def _run_status(run_meta: dict | None, status: str, started_at: float) -> dict:
+    now = time.time()
+    payload = dict(run_meta or {})
+    payload.update(
+        {
+            "status": status,
+            "elapsed_s": round(now - started_at, 1),
+            "updated_at": _iso_ts(now),
+        }
+    )
+    return payload
+
+
+def _attempt_counts(records: list[dict]) -> dict:
+    cycles = 0
+    validation_rounds = 0
+    llm_rounds = 0
+    exceptions = 0
+    rounds_by_segment: dict[str, int] = {}
+    cycles_by_segment: dict[str, int] = {}
+    exceptions_by_segment: dict[str, int] = {}
+    failure_categories: dict[str, int] = {}
+
+    for segment_record in records:
+        sid = str(segment_record.get("segment") or "?")
+        seg_rounds = 0
+        seg_cycles = 0
+        seg_exceptions = 0
+        category = segment_record.get("failure_category")
+        if category:
+            failure_categories[str(category)] = failure_categories.get(str(category), 0) + 1
+        for cycle_record in segment_record.get("cycles", []):
+            cycles += 1
+            seg_cycles += 1
+            if cycle_record.get("exception"):
+                exceptions += 1
+                seg_exceptions += 1
+                category = cycle_record.get("failure_category") or "exception"
+                failure_categories[str(category)] = failure_categories.get(str(category), 0) + 1
+            rounds = cycle_record.get("rounds") or []
+            validation_rounds += len(rounds)
+            seg_rounds += len(rounds)
+            for round_record in rounds:
+                if (
+                    round_record.get("model")
+                    or round_record.get("response_chars")
+                    or round_record.get("reasoning_chars")
+                    or round_record.get("input_tokens") is not None
+                    or round_record.get("output_tokens") is not None
+                ):
+                    llm_rounds += 1
+        rounds_by_segment[sid] = seg_rounds
+        cycles_by_segment[sid] = seg_cycles
+        if seg_exceptions:
+            exceptions_by_segment[sid] = seg_exceptions
+
+    return {
+        "segments_started": len(records),
+        "cycles": cycles,
+        "validation_rounds": validation_rounds,
+        "llm_rounds": llm_rounds,
+        "exceptions": exceptions,
+        "rounds_by_segment": rounds_by_segment,
+        "cycles_by_segment": cycles_by_segment,
+        "exceptions_by_segment": exceptions_by_segment,
+        "failure_categories": failure_categories,
+    }
+
+
+def _convergence_summary(records: list[dict], completed: bool,
+                         round_limit: int = CONVERGENCE_ROUND_LIMIT) -> dict:
+    rounds_by_segment = {
+        str(segment_record.get("segment") or "?"): sum(
+            len(cycle_record.get("rounds") or [])
+            for cycle_record in segment_record.get("cycles", [])
+        )
+        for segment_record in records
+    }
+    over_limit = {
+        sid: rounds
+        for sid, rounds in rounds_by_segment.items()
+        if rounds > int(round_limit)
+    }
+    locked_segments = [
+        str(segment_record.get("segment"))
+        for segment_record in records
+        if segment_record.get("locked")
+    ]
+    return {
+        "converged": bool(completed and not over_limit),
+        "round_limit_per_segment": int(round_limit),
+        "rounds_by_segment": rounds_by_segment,
+        "over_limit_segments": over_limit,
+        "locked_segments": locked_segments,
+        "definition": "completed 且每段 validator/LLM round 数不超过 round_limit_per_segment",
+    }
+
+
+def _write_state_last_run(project_root: Path, session, run_status: dict,
+                          attempt_counts: dict, convergence: dict) -> None:
+    try:
+        session.state.last_run = {
+            **run_status,
+            "attempt_counts": attempt_counts,
+            "convergence": convergence,
+        }
+        session.state.save(project_root)
+    except Exception:
+        pass
+
+
+def _git_head() -> str | None:
+    try:
+        result = subprocess.run(
+            ["git", "rev-parse", "--short", "HEAD"],
+            cwd=REPO_ROOT,
+            check=True,
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+    except Exception:
+        return None
+    return result.stdout.strip() or None
+
+
+def _iso_ts(value: float) -> str:
+    return time.strftime("%Y-%m-%dT%H:%M:%S%z", time.localtime(value))
 
 
 def _optional_int(value) -> int | None:
@@ -595,23 +774,32 @@ def _write_partial_result(project_root: Path, records: list, session, started_at
                           failed_segment: str | None = None,
                           provider: str | None = None,
                           last_failure_category: str | None = None,
-                          last_exception: str | None = None) -> None:
+                          last_exception: str | None = None,
+                          run_meta: dict | None = None) -> None:
     """Write intermediate stability_result.json after each cycle."""
     try:
+        attempt_counts = _attempt_counts(records)
+        convergence = _convergence_summary(records, completed=False)
+        run_status = _run_status(run_meta, "running", started_at)
         summary = {
             "project": str(project_root),
             "provider": provider or session.state.provider,
             "completed": False,
+            "converged": False,
             "current_segment": session.state.current_segment.id if session.state.current_segment else None,
             "locked_segment_ids": session.state.locked_segment_ids,
             "elapsed_s": round(time.time() - started_at, 1),
             "failed_segment": failed_segment or (session.state.current_segment.id if session.state.current_segment else None),
             "last_failure_category": last_failure_category,
             "last_exception": last_exception,
+            "run": run_status,
+            "attempt_counts": attempt_counts,
+            "convergence": convergence,
             "token_usage": _token_usage_summary(records),
             "records": records,
         }
         _write_json_atomic(project_root / "stability_result.json", {"summary": summary})
+        _write_state_last_run(project_root, session, run_status, attempt_counts, convergence)
     except Exception:
         pass
 

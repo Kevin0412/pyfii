@@ -67,6 +67,11 @@ def preflight_check(
     _check_no_geo_templates(code, r)
     # 6. Handwritten geometry contract
     _check_custom_points_contract(code, r)
+    # 6b. Narrow static check for raw follow_chain waypoint tables.
+    #     This keeps the old broad computed-geometry preflight disabled, while
+    #     catching the exact cannon failure mode: statically visible chain
+    #     waypoints that are too dense for simultaneous occupancy.
+    _check_follow_chain_waypoints(code, r, drone_count)
     # 7. Syntax / indentation
     _check_syntax(code, r)
     # 8. Bare API calls (d.move2 / d.VelXY)
@@ -416,6 +421,87 @@ def _check_computed_geometry(code, r, drone_count):
             "math 几何必须写 `geo = custom_points([...公式...], n=len(drones))`，"
             "由它统一裁剪坐标并校验间距；不要把 comprehension 直接传给 best_assign/far_assign/move2"
         )
+
+
+def _check_follow_chain_waypoints(code, r, drone_count):
+    """Statically reject raw follow_chain(...) waypoint lists when we can evaluate them.
+
+    We intentionally do not revive the old broad computed-geometry preflight:
+    custom_points and the runtime validator remain responsible for general point
+    tables. Raw follow_chain is special because its safety rule is path-semantic
+    (waypoint j and j-k*lag can be occupied simultaneously), and current cannon
+    runs repeatedly fail only after expensive execution with this exact error.
+    """
+    try:
+        tree = ast.parse(code)
+    except SyntaxError:
+        return
+    env = _build_geometry_env(tree, drone_count)
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Call):
+            continue
+        if not isinstance(node.func, ast.Name) or node.func.id != "follow_chain":
+            continue
+        if len(node.args) < 2:
+            continue
+
+        arg = node.args[1]
+        lag = 1.0
+        min_xy_cm = 51.0
+        if len(node.args) >= 4:
+            value = _literal_number(node.args[3])
+            if value is not None:
+                lag = value
+        for keyword in node.keywords:
+            if keyword.arg == "lag_hops":
+                value = _literal_number(keyword.value)
+                if value is not None:
+                    lag = value
+            elif keyword.arg == "min_xy_cm":
+                value = _literal_number(keyword.value)
+                if value is not None:
+                    min_xy_cm = value
+
+        if isinstance(arg, ast.Name):
+            raw = env.get(arg.id)
+        else:
+            try:
+                raw = _safe_eval(arg, env)
+            except _UnsafeExpression:
+                raw = None
+        points = _coerce_points(raw)
+        if not points:
+            continue  # dynamic path: runtime follow_chain still validates
+
+        wps = [_clamp_point(p) for p in points]
+        lag = max(1, int(lag))
+        if drone_count:
+            need = (int(drone_count) - 1) * lag + 1
+            if len(wps) < need:
+                r.add(
+                    f"follow_chain 波点不足(line {getattr(node, 'lineno', '?')})："
+                    f"{int(drone_count)} 机 lag_hops={lag} 需要至少 {need} 个波点，目前 {len(wps)} 个"
+                )
+                continue
+
+        n_chain = int(drone_count) if drone_count else 2
+        worst, pair = 1e9, (0, 0)
+        for k in range(1, max(2, n_chain)):
+            gap = k * lag
+            for j in range(gap, len(wps)):
+                d = (
+                    (wps[j][0] - wps[j - gap][0]) ** 2
+                    + (wps[j][1] - wps[j - gap][1]) ** 2
+                ) ** 0.5
+                if d < worst:
+                    worst, pair = d, (j - gap, j)
+        if worst < float(min_xy_cm):
+            r.add(
+                f"follow_chain 链上间距不足(line {getattr(node, 'lineno', '?')})："
+                f"波点{pair[0]}-波点{pair[1]} XY 距离 {worst:.0f}cm < {float(min_xy_cm):g}cm，"
+                "两机会同时占据这两点，运行期会直接抛错 — 增大相邻波点间距或改用 "
+                "chain_follow_safe(control_points, spacing_cm=65)"
+            )
 
 
 # 起飞间距硬下限与全场一致：51cm 以下 pyfii core 报碰撞。构图密度是设计自由。

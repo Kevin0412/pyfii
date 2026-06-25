@@ -20,7 +20,7 @@ GEO_TEMPLATE_NAMES = ("geo_wide_v", "geo_arrow", "geo_box", "geo_diagonal", "geo
 # 母题执行器（function.py）：调用即真实时间错峰/动态灯光，门当作 per-drone 细节对待。
 # safe_move 内部就是 ripple_move/group_relay（自带错峰），算真实时间错峰——否则推 safe_move 的
 # 提示与"必须有时间错峰"的构图门冲突，逼模型回去手搓 drone.delay（正是想消除的）。
-MOTIF_MOVE_NAMES = ("safe_move", "ripple_move", "follow_chain", "group_relay")
+MOTIF_MOVE_NAMES = ("safe_move", "ripple_move", "follow_chain", "chain_follow_safe", "group_relay")
 MOTIF_LIGHT_NAMES = ("light_wave", "fade_rgb", "fade_group", "breathe_group", "flash_group")
 HANDWRITTEN_REQUIRED_SEGMENTS = {"S02", "S03", "S04", "S05"}
 PER_DRONE_REQUIRED_SEGMENTS = {"S01", "S02", "S03", "S04", "S05", "S06"}
@@ -290,6 +290,7 @@ def extract_code_features(code: str) -> dict:
         + motif_move_counts["ripple_move"]
         + 2 * motif_move_counts["group_relay"]
         + 3 * motif_move_counts["follow_chain"]
+        + 3 * motif_move_counts["chain_follow_safe"]
     )
     features = {
         "move2_calls": move2_calls,
@@ -460,7 +461,7 @@ def _has_time_stagger(code: str) -> bool:
     认定为时间错峰的写法：
     - `drone.delay(<含循环变量的表达式>)`：起飞波次 / 尾部回正
     - `move2(drone, target, <含循环变量的时长>)`：到达波次（每架机不同 flying_ms）
-    - 母题执行器 `ripple_move/follow_chain/group_relay/move_group_staggered`：内部真实错峰
+    - 母题执行器 `ripple_move/follow_chain/chain_follow_safe/group_relay/move_group_staggered`：内部真实错峰
     `targets[i]` 这种下标用法不算 — 那只是取目标点，时间仍然同步。
     """
     try:
@@ -572,6 +573,8 @@ def _motif_light_ticks(code: str) -> int:
             ticks += arg_num(node, 5, "hold_ticks", 4)
         elif name == "follow_chain":
             ticks += arg_num(node, 6, "hold_ticks", 2)
+        elif name == "chain_follow_safe":
+            ticks += arg_num(node, 8, "hold_ticks", 2)
         elif name == "group_relay":
             ticks += 12
     return int(round(ticks))

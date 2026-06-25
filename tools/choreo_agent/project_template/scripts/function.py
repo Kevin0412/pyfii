@@ -35,7 +35,9 @@ __all__ = [
     "ripple_delays",
     "split_groups",
     "ripple_move",
+    "chain_lane",
     "follow_chain",
+    "chain_follow_safe",
     "group_relay",
     "safe_move",
     "apply_light",
@@ -1095,6 +1097,118 @@ def follow_chain(drones, waypoints, hop_ms, lag_hops=1, colors="#ffffff", min_xy
             drone.delay(hop_ms)
         ends[di] = wps[last]
     return ends
+
+
+def _chain_worst_spacing(wps, lag_hops=1, n=None):
+    """Return the worst XY spacing among wavepoints that can be occupied together."""
+    lag = max(1, int(lag_hops))
+    count = int(n) if n is not None else len(wps)
+    worst, pair = 1e9, (0, 0)
+    for k in range(1, max(2, count)):
+        gap = k * lag
+        for j in range(gap, len(wps)):
+            d = ((wps[j][0] - wps[j - gap][0]) ** 2 + (wps[j][1] - wps[j - gap][1]) ** 2) ** 0.5
+            if d < worst:
+                worst, pair = d, (j - gap, j)
+    return worst, pair
+
+
+def chain_lane(control_points, count=None, spacing_cm=65.0, min_xy_cm=51.0, lag_hops=1):
+    """把少量控制点扩展为安全链式跟随波点。
+
+    LLM 不擅长手写 9-12 个蛇形 waypoints，常把相邻/回折点写到 40cm 内导致
+    `follow_chain` 运行期抛错。chain_lane 只让它给 2-5 个控制点，本函数按固定
+    间距重采样出波点，并在返回前用 follow_chain 同一套「同时占位」XY 间距规则检查。
+
+    参数：
+    - control_points: [(x,y,z), ...]，至少 2 个；可以是起点→中继→终点。
+    - count: 需要的波点数；不传则尽量返回控制点数，但 chain_follow_safe 会自动计算。
+    - spacing_cm: 相邻波点目标间距，默认 65cm，建议不要低于 60。
+    - min_xy_cm: 硬下限，默认 51cm。
+    - lag_hops: 跟随间隔；用于检查可能同时占位的波点对。
+    """
+    cps = [_target3(p) for p in control_points]
+    if len(cps) < 2:
+        raise ValueError("chain_lane 至少需要 2 个 control_points")
+    need = int(count) if count is not None else len(cps)
+    if need < 2:
+        raise ValueError("chain_lane count 至少为 2")
+    step = max(float(spacing_cm), float(min_xy_cm) + 4.0)
+    if step < 1:
+        raise ValueError("chain_lane spacing_cm 必须为正数")
+
+    out = [cps[0]]
+    cur = cps[0]
+    remaining_to_next = step
+    for nxt in cps[1:]:
+        seg_len = ((nxt[0] - cur[0]) ** 2 + (nxt[1] - cur[1]) ** 2) ** 0.5
+        if seg_len <= 1e-6:
+            cur = nxt
+            continue
+        while seg_len + 1e-6 >= remaining_to_next and len(out) < need:
+            ratio = remaining_to_next / seg_len
+            point = _target3((
+                cur[0] + (nxt[0] - cur[0]) * ratio,
+                cur[1] + (nxt[1] - cur[1]) * ratio,
+                cur[2] + (nxt[2] - cur[2]) * ratio,
+            ))
+            out.append(point)
+            cur = point
+            seg_len = ((nxt[0] - cur[0]) ** 2 + (nxt[1] - cur[1]) ** 2) ** 0.5
+            remaining_to_next = step
+        remaining_to_next -= seg_len
+        cur = nxt
+        if len(out) >= need:
+            break
+
+    if len(out) < need:
+        raise ValueError(
+            f"chain_lane 路径太短：需要 {need} 个波点（约 {(need - 1) * step:.0f}cm 路径），"
+            f"目前只生成 {len(out)} 个；请拉长 control_points 或降低 spacing_cm（但不得低于 51cm）"
+        )
+
+    worst, pair = _chain_worst_spacing(out, lag_hops=lag_hops, n=min(need, len(out)))
+    if worst < float(min_xy_cm):
+        raise ValueError(
+            f"chain_lane 波点回折过近：波点{pair[0]}-波点{pair[1]} XY 距离 {worst:.1f}cm"
+            f" < {float(min_xy_cm):.0f}cm；请把控制点改成更开阔的单向路径或增大 spacing_cm"
+        )
+    return out
+
+
+def chain_follow_safe(drones, control_points, hop_ms, lag_hops=1, colors="#ffffff",
+                      min_xy_cm=51.0, spacing_cm=65.0, extra_hops=1,
+                      hold_ticks=2, palette=None, gradient_to=None):
+    """安全链式跟随：控制点 → 安全波点 → follow_chain。
+
+    这是 chain-follow-phrase 的首选入口。它保持「领机起步、后机按 hop_ms 间隔
+    跟随同一路径」语义，但不要求 LLM 手写每个 waypoint。默认比最低需求多 1 个
+    extra_hop，让头机真正向前游走，9 机 hop_ms=580 时总耗时约 5.8s。
+    返回值与 follow_chain 一样：每架机结束点（可赋给 prev）。
+    """
+    if palette is not None:
+        colors = palette
+    n = len(drones)
+    lag = max(1, int(lag_hops))
+    extra = max(0, int(extra_hops))
+    need = (n - 1) * lag + 1 + extra
+    wps = chain_lane(
+        control_points,
+        count=need,
+        spacing_cm=max(float(spacing_cm), float(min_xy_cm) + 4.0),
+        min_xy_cm=min_xy_cm,
+        lag_hops=lag,
+    )
+    return follow_chain(
+        drones,
+        wps,
+        hop_ms,
+        lag_hops=lag,
+        colors=colors,
+        min_xy_cm=min_xy_cm,
+        hold_ticks=hold_ticks,
+        gradient_to=gradient_to,
+    )
 
 
 def group_relay(drones, targets, group_ids, flying_ms, colors=("#ff6040", "#4060ff"),

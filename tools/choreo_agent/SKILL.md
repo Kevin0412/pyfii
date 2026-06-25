@@ -98,18 +98,36 @@ prev = safe_move(drones, prev, geo, 2800, mode='wave', step_ms=160, colors=palet
 
 - **category**: motion
 - **role fit**: development, transition, expand
-- **purpose**: 链式跟随/蛇形：头机沿 waypoints 逐点推进，后机依次延迟 lag_hops 跳走同一路径。
+- **purpose**: 底层链式跟随/蛇形：头机沿 waypoints 逐点推进，后机依次延迟 lag_hops 跳走同一路径。
 - **when to use**: 蛇形游走、领舞带队、长线条流动；想要单一清晰路径而非整体平移。
-- **when NOT**: 需要全场铺开的对称构图；机数多且路径弯折密集（链上间距易不足）。
+- **when NOT**: LLM 临时手写 9-12 个密集 waypoints 时（容易把链上间距写到 51cm 以下）；这种情况优先用 chain_follow_safe。
 - **key params**: waypoints 路径点（≥(机数-1)*lag_hops+1 个）；hop_ms 每跳时长；lag_hops 跟随间隔；进链顺序自动按离 waypoints[0] 远近。
-- **safety**: 函数自校验：相距 lag 的波点对 XY 必须 ≥min_xy_cm(默认51)，否则抛错；preflight 也会静态预检报数。每机总耗时=len(waypoints)*hop_ms，天然对齐。
-- **validation risks**: 波点不足或链上间距不足直接运行期抛错；waypoints 过密触发碰撞门。
-- **combines with**: handwritten-geometry
+- **safety**: 函数自校验：相距 lag 的波点对 XY 必须 ≥min_xy_cm(默认51)，否则抛错；preflight 会对静态 waypoints 提前报数。每机总耗时=len(waypoints)*hop_ms，天然对齐。
+- **validation risks**: 波点不足或链上间距不足直接运行期抛错；waypoints 过密触发碰撞门。除非路径点很明确，否则使用 chain_follow_safe。
+- **combines with**: chain-follow-safe, handwritten-geometry
 - **music fit**: 流动的旋律线、行进段、过渡段。
 
 ```python
-wps = custom_points([...一条蛇形路径...], min_xy_cm=60)
+wps = [(80,280,150), (150,280,160), (220,280,170), (290,280,160), (360,280,150), (430,280,150), (500,280,150), (560,280,150), (560,350,150), (560,420,150)]
 prev = follow_chain(drones, wps, 700, lag_hops=1, colors=palette)
+```
+
+### chain-follow-safe  ·  `chain_follow_safe()`
+
+- **category**: motion
+- **role fit**: development, transition, expand
+- **purpose**: LLM 友好的安全链式跟随：只写 2-5 个 control_points，本地扩成安全波点后执行 follow_chain。
+- **when to use**: 蛇形/领舞/卡农式流动，但不想手写长 waypoint 表；尤其适合 cannon 这类连续旋律段。
+- **when NOT**: 需要精确卡到每个中间点的手工轨迹；或者 control path 太短，容不下机队链条。
+- **key params**: control_points 起点→中继→终点；hop_ms 每跳时长；lag_hops 跟随间隔；spacing_cm 推荐60-80；extra_hops 默认1。
+- **safety**: 先用 chain_lane 等距重采样，再用 follow_chain 同一套同时占位规则检查；相距 lag 的波点 XY 必须 ≥min_xy_cm(默认51)。
+- **validation risks**: 控制路径太短或回折太近会抛错；修法是拉长/拉开 control_points 或增大 spacing_cm，而不是降低 min_xy_cm。
+- **combines with**: chain-follow, handwritten-geometry
+- **music fit**: 流动的旋律线、行进段、过渡段。
+
+```python
+ctrl = [(60,520,180), (280,300,160), (540,40,190)]
+prev = chain_follow_safe(drones, ctrl, hop_ms=700, lag_hops=1, spacing_cm=65, colors=palette)
 ```
 
 ### group-call-response  ·  `group_relay()`
@@ -482,18 +500,18 @@ prev = group_relay(drones, best_assign(prev, geo), gids, 2300, colors=('#ff6040'
 
 ### chain-follow-phrase
 
-- **uses primitives**: `custom_points()`, `follow_chain()`
+- **uses primitives**: `chain_follow_safe()`
 - **category**: motion
 - **role fit**: development, transition
 - **music fit**: 流动旋律线、行进、连绵乐句。
 - **visual effect**: 全队像一条蛇沿设计路径鱼贯游走，头亮尾随，线条清晰。
-- **constraints**: waypoints 写成 custom_points（min_xy_cm 可 55-60）；相距 lag 的波点间距≥51cm（函数自校验）；路径要有叙事方向。
+- **constraints**: 优先写 2-5 个 control_points 给 chain_follow_safe；spacing_cm 推荐60-80；控制路径太短/回折太近会被函数拒绝。只有很确定时才手写 follow_chain waypoints。
 - **how to choose**: 想要单一清晰路径而非整体平移时。
 - **avoid overuse**: 蛇形看多会腻——一场一两次为宜。
 
 ```python
-wps = custom_points([...一条贯穿场地的蛇形折线...], min_xy_cm=60)
-prev = follow_chain(drones, wps, 700, lag_hops=1, colors=palette)
+ctrl = [(90,420,180), (260,330,150), (500,120,190)]
+prev = chain_follow_safe(drones, ctrl, hop_ms=700, lag_hops=1, spacing_cm=65, colors=palette)
 ```
 
 ### static-pose-active-light
