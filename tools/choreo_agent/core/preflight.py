@@ -699,6 +699,19 @@ def _check_common_runtime_mistakes(code, r):
             )
             break
 
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Call):
+            continue
+        if not isinstance(node.func, ast.Name):
+            continue
+        if node.func.id == "light_wave" and len(node.args) >= 2:
+            if any(keyword.arg == "delays" for keyword in node.keywords):
+                r.add(
+                    "light_wave 参数重复：签名是 light_wave(drones, delays, colors/palette, hold_ticks=...)；"
+                    "不要写 light_wave(drones, prev, delays=...)。改成 "
+                    "`light_wave(drones, delays3, palette=golden_palette, hold_ticks=8)`"
+                )
+
     split_group_names = set()
     for node in ast.walk(tree):
         if not isinstance(node, ast.Assign) or len(node.targets) != 1:

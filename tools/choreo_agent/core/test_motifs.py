@@ -136,6 +136,17 @@ def test_group_relay_two_phase_alignment():
     assert drones[1].lights[0][1] == "#0000aa" and drones[0].lights[0][1] == "#aa0000", "组色对话"
 
 
+def test_group_relay_accepts_gids_keyword_alias():
+    fn = _load_fn()
+    drones = [FakeDrone(100, 100), FakeDrone(200, 100), FakeDrone(300, 100), FakeDrone(400, 100)]
+    targets = [(100, 300, 140), (200, 300, 150), (300, 300, 160), (400, 300, 170)]
+
+    prev = fn.group_relay(drones, targets, gids=[0, 1, 0, 1], flying_ms=900)
+
+    assert prev == targets
+    assert [d.time for d in drones] == [2000] * 4
+
+
 def test_follow_chain_alignment_order_and_ends():
     fn = _load_fn()
     drones = [FakeDrone(300, 280), FakeDrone(100, 280), FakeDrone(200, 280)]
@@ -347,6 +358,18 @@ prev = chain_follow_safe(drones, ctrl, hop_ms=580, lag_hops=1, spacing_cm=65)
 """
     r = preflight_check(code, segment_id="S03", drone_count=9)
     assert r, r.errors
+
+
+def test_preflight_rejects_light_wave_duplicate_delays():
+    code = """\
+prev = [(d.x, d.y, d.z) for d in drones]
+delays3 = ripple_delays(prev, mode="by_index", step_ms=150)
+golden_palette = ["#ffd080"] * len(drones)
+light_wave(drones, prev, delays=delays3, palette=golden_palette, hold_ticks=8)
+"""
+    r = preflight_check(code, segment_id="S02", drone_count=9)
+    assert not r
+    assert any("light_wave 参数重复" in e for e in r.errors), r.errors
 
 
 def test_preflight_rgb_tuples_are_not_coordinates():

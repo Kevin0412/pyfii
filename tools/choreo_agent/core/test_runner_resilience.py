@@ -6,7 +6,7 @@ from unittest.mock import patch, MagicMock
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from run_pipeline import run_full_flow, _failure_category_from_exception
+from run_pipeline import run_full_flow, _failure_category_from_exception, _failure_category_from_validation
 from core.script_editor import lock_segment
 
 
@@ -154,6 +154,15 @@ def test_failure_category_from_exception():
     print("PASSED: failure_category_from_exception")
 
 
+def test_failure_category_from_window_fill():
+    v = _fake_round(passed=False).validation
+    v.window_fill_ok = False
+    v.window_fill_errors = ["段尾时间 15.5s 早于窗口尾 19.8s"]
+
+    assert _failure_category_from_validation(v) == "window_fill"
+    print("PASSED: failure_category_from_window_fill")
+
+
 def test_no_bad_patterns():
     """Runner has no force lock/fallback/static segments."""
     code = Path(__file__).resolve().parent.parent / "run_pipeline.py"
@@ -168,5 +177,6 @@ if __name__ == "__main__":
     test_api_exception_writes_partial_result()
     test_exception_then_pass_continues()
     test_failure_category_from_exception()
+    test_failure_category_from_window_fill()
     test_no_bad_patterns()
     print("\nALL RUNNER RESILIENCE TESTS PASSED")

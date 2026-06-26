@@ -1211,8 +1211,9 @@ def chain_follow_safe(drones, control_points, hop_ms, lag_hops=1, colors="#fffff
     )
 
 
-def group_relay(drones, targets, group_ids, flying_ms, colors=("#ff6040", "#4060ff"),
-                hold_ticks=4, gap_ms=200, lead_group=0, palette=None, gradient_to=None):
+def group_relay(drones, targets, group_ids=None, flying_ms=None, colors=("#ff6040", "#4060ff"),
+                hold_ticks=4, gap_ms=200, lead_group=0, palette=None, gradient_to=None,
+                gids=None):
     """分组问答接力：lead 组先动（另一组原地亮灯应答），到位后另一组再动 —— 组色对话。
 
     group_ids 用 split_groups(prev, mode=...) 从当前队形算出；colors[g] 是 g 组色。
@@ -1220,6 +1221,12 @@ def group_relay(drones, targets, group_ids, flying_ms, colors=("#ff6040", "#4060
     给 gradient_to（与 colors 同形的两组色）则每架机亮灯做组色→目标色渐变。
     返回标准化 targets。
     """
+    if group_ids is None:
+        group_ids = gids
+    if group_ids is None:
+        raise ValueError("group_relay 需要 group_ids/gids")
+    if flying_ms is None:
+        raise ValueError("group_relay 需要 flying_ms")
     if palette is not None:
         colors = palette
     _assert_target_count(drones, targets)

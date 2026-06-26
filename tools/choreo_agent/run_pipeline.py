@@ -553,6 +553,7 @@ def _validation_summary(validation) -> dict | None:
         "dense_minD": validation.dense_min_distance_cm,
         "motion": [validation.motion_start_s, validation.motion_end_s],
         "effective": [validation.effective_motion_start_s, validation.effective_motion_end_s],
+        "window_fill_ok": _optional_bool(getattr(validation, "window_fill_ok", True)),
         "motion_quality_ok": validation.motion_quality_ok,
         "degradation_ok": validation.degradation_ok,
         "composition_ok": _optional_bool(getattr(validation, "composition_ok", True)),
@@ -562,6 +563,7 @@ def _validation_summary(validation) -> dict | None:
         "errors": {
             "motion": validation.motion_envelope_errors[:3],
             "effective": validation.effective_motion_errors[:3],
+            "window": _optional_list(getattr(validation, "window_fill_errors", []))[:3],
             "quality": validation.motion_quality_errors[:3],
             "degradation": validation.degradation_errors[:3],
             "composition": _optional_list(getattr(validation, "composition_errors", []))[:3],
@@ -610,6 +612,8 @@ def _failure_category_from_validation(validation) -> str:
         return "collision"
     if validation.motion_envelope_errors or validation.effective_motion_errors:
         return "hover_or_low_activity"
+    if getattr(validation, "window_fill_errors", []) or getattr(validation, "window_fill_ok", True) is False:
+        return "window_fill"
     if validation.motion_quality_errors:
         return "motion_quality"
     if getattr(validation, "composition_errors", []):
