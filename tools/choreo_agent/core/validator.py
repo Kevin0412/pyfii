@@ -34,8 +34,10 @@ MIN_EFFECTIVE_ACTIVE_DRONES = 2
 MAX_GLOBAL_HOVER_S = 1.0
 # 错峰启动是 sanctioned 词汇（delay(i*120) 最多 ~960ms），起步缓冲给足余量。
 SEGMENT_EDGE_BUFFER_S = 1.3
-# 窗口填充硬门：段时间游标允许的欠填/溢出（秒）。欠填会让后续段与音乐 cue 错位。
-SEGMENT_FILL_TOLERANCE_S = 1.0
+# 窗口填充粗门：段时间游标允许的欠填/溢出（秒）。
+# 欠填不应要求 LLM 精确贴边；auto_init 会把小段尾空白压缩给下一段接续。
+# 这里只拦截明显缺口，防止整段音乐 cue 大幅漂移。
+SEGMENT_FILL_TOLERANCE_S = 3.0
 SEGMENT_OVERFLOW_TOLERANCE_S = 1.5
 # 定格合法化（语料库铁证，PLAN 11.9）：全队静止但灯亮 ≥ 该占比 = 合法定格/留白；
 # 黑灯静止才是真空洞。dntg 24% 片长是亮灯定格。
@@ -225,10 +227,11 @@ class ValidationResult:
                 "会由 auto_init/下一段接续压缩。"
             )
         if self.window_fill_errors:
-            lines.append("窗口填充失败（音乐对齐硬门）：")
+            lines.append("窗口填充失败（音乐对齐粗门）：")
             lines.extend(f"- {item}" for item in self.window_fill_errors)
             lines.append(
-                "修复：段内容必须贴满本段窗口，否则后续段与音乐 cue 全部错位。"
+                f"修复：小于 {SEGMENT_FILL_TOLERANCE_S:.1f}s 的段尾空白会由 auto_init/下一段压缩；"
+                "这里只需要修复明显欠填或溢出。"
                 "母题执行器耗时是确定的：ripple_move=max(delays)+flying_ms；"
                 "chain_follow_safe=((len(drones)-1)*lag_hops+1+extra_hops)*hop_ms；"
                 "follow_chain=len(waypoints)*hop_ms；"
@@ -861,10 +864,10 @@ def _check_window_fill(
     segment_id: str,
     cursor_end_s: float | None,
 ) -> list[str]:
-    """段内容（移动+灯光+等待的时间游标）必须贴满本段窗口。
+    """段内容（移动+灯光+等待的时间游标）不应明显偏离本段窗口。
 
-    欠填的段会把后续所有段往前推，音乐 cue 全部错位，而且下一段会在
-    错误的窗口里被判"有效运动过短"——错误归因到无辜的段。
+    小幅欠填由 auto_init/下一段接续压缩；LLM 很难精确控制到 1s 以内，
+    所以这里仅拦截明显欠填/溢出，避免音乐 cue 大幅错位。
     旧模板没有 SEGCURSOR 标记时（cursor_end_s=None）不阻塞。
     """
     if cursor_end_s is None:

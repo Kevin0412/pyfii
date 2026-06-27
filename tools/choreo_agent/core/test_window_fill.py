@@ -35,6 +35,8 @@ junk SEGCURSOR S03 not-a-number
 
 def test_check_window_fill_underfill_and_overflow():
     window = (4.0, 12.5)
+    assert _check_window_fill(window, "S01", 10.5) == []  # 2.0s 小缺口交给 auto_init 压缩
+
     errors = _check_window_fill(window, "S01", 9.0)
     assert len(errors) == 1
     assert "段未填满窗口" in errors[0] and "9.00s" in errors[0] and "12.50s" in errors[0]
@@ -64,7 +66,7 @@ def test_window_fill_gates_passed():
 
     result.window_fill_ok = False
     result.window_fill_errors = ["段未填满窗口：S01 ..."]
-    assert not result.passed, "欠填段必须挡住锁定"
+    assert not result.passed, "大幅欠填段必须挡住锁定"
     feedback = result.repair_feedback()
     assert "窗口填充失败" in feedback and "ripple_move=max(delays)+flying_ms" in feedback
 

@@ -421,6 +421,17 @@ for d in drones:
     assert any("apply_light 第三个参数是 ticks" in e for e in r.errors), r.errors
 
 
+def test_preflight_rejects_apply_light_ticks_times_50():
+    code = """\
+ticks_k2 = 32
+for d in drones:
+    apply_light(d, '#ffaa44', ticks_k2 * 50)
+"""
+    r = preflight_check(code, segment_id="S06", drone_count=9)
+    assert not r
+    assert any("ticks * 50" in e for e in r.errors), r.errors
+
+
 def test_preflight_rejects_fade_group_unknown_color_keywords():
     code = """\
 fade_group(drones, color1="#ffe4b5", color2="#303030", duration_ms=800)
@@ -439,6 +450,18 @@ for i, drone in enumerate(drones):
     apply_light(drone, '#ffcc66', ticks1)
 """
     r = preflight_check(code, segment_id="S06", drone_count=9)
+    assert not r
+    assert any("动作预算翻倍" in e for e in r.errors), r.errors
+
+
+def test_preflight_rejects_apply_light_same_subscript_duration_before_move():
+    code = """\
+fly_ms_k1 = [999, 2406]
+for i, drone in enumerate(drones):
+    apply_light(drone, '#44aaff', fly_ms_k1[i] // 100)
+    move2(drone, targets_k1[i], fly_ms_k1[i])
+"""
+    r = preflight_check(code, segment_id="S05", drone_count=2)
     assert not r
     assert any("动作预算翻倍" in e for e in r.errors), r.errors
 

@@ -86,6 +86,32 @@ geo = custom_points([(100, 100, 120), (300, 300, 180)], n=2, min_xy_cm=110)
     print("PASSED: preflight blocks jitter_points + sub-51 min_xy")
 
 
+def test_preflight_blocks_static_custom_points_runtime_errors():
+    too_close = preflight_check("""
+geo = custom_points([(100, 100, 120), (130, 120, 180)], n=2)
+""", segment_id="S02", drone_count=2)
+    assert not too_close, "static custom_points table below 51cm should fail preflight"
+    assert any("custom_points 静态点表" in e for e in too_close.errors), too_close.errors
+
+    stricter_than_default = preflight_check("""
+geo = custom_points([(100, 100, 120), (170, 100, 180)], n=len(drones), min_xy_cm=90)
+""", segment_id="S02", drone_count=2)
+    assert not stricter_than_default, "explicit min_xy_cm=90 should be enforced statically"
+    assert any("min_xy_cm=90" in e for e in stricter_than_default.errors), stricter_than_default.errors
+
+    legal_default = preflight_check("""
+geo = custom_points([(100, 100, 120), (170, 100, 180)], n=len(drones))
+""", segment_id="S02", drone_count=2)
+    assert legal_default, f"default 51cm custom_points table should pass: {legal_default.errors}"
+
+    raw_geo_for_helper = preflight_check("""
+geo = [(100, 100, 120), (140, 100, 180)]
+prev = call_response_safe(drones, prev, geo, 3000)
+""", segment_id="S02", drone_count=2)
+    assert not raw_geo_for_helper, "call_response_safe raw geo below its default 51cm should fail preflight"
+    assert any("call_response_safe 静态点表" in e for e in raw_geo_for_helper.errors), raw_geo_for_helper.errors
+
+
 def test_preflight_blocks_position_writes_outside_s01():
     teleport = "drones[3].x = 400\nfor d in drones:\n    move2(d, (100, 100, 120), 3000)\n    d.delay(3000)\n"
     r = preflight_check(teleport, segment_id="S02")
@@ -100,14 +126,14 @@ def test_preflight_blocks_position_writes_outside_s01():
 
 
 def test_preflight_passes_geometry_to_runtime():
-    """Geometry spacing is now validated at runtime by custom_points(), not preflight."""
-    # R=100 circle: spacing ~68cm < 90 — preflight no longer rejects this
+    """Broad computed geometry policing stays disabled; only exact custom_points errors are gated."""
+    # R=100 circle: spacing ~68cm, above the current default 51cm — this remains legal.
     code = (
         "geo = custom_points([(280+100*cos(2*pi*i/9), 280+100*sin(2*pi*i/9), 160) "
-        "for i in range(9)], n=9, min_xy_cm=90)\n"
+        "for i in range(9)], n=9)\n"
     )
     r = preflight_check(code, segment_id="S02", drone_count=9)
-    assert r, f"geometry spacing should pass preflight (runtime validates): {r.errors}"
+    assert r, f"default-legal custom_points geometry should pass preflight: {r.errors}"
     # Unwrapped comprehension also passes preflight now
     raw = (
         "geo = [(280+170*cos(2*pi*i/9), 280+170*sin(2*pi*i/9), 160) for i in range(9)]\n"
@@ -296,6 +322,7 @@ if __name__ == "__main__":
     test_preflight_blocks_tool_leak()
     test_preflight_blocks_geo_templates()
     test_preflight_blocks_jitter_points_and_sub51_min_xy()
+    test_preflight_blocks_static_custom_points_runtime_errors()
     test_preflight_blocks_position_writes_outside_s01()
     test_preflight_passes_geometry_to_runtime()
     test_preflight_verifies_start_positions_spacing()

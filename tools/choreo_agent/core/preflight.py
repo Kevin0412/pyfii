@@ -46,10 +46,9 @@ def preflight_check(
     #     `drone.X = drone.x = ...` 是合法协议，其他段直接改坐标属性
     #     会破坏 move2 的速度反算。
     _check_no_position_writes(code, r, segment_id)
-    # 13. (removed) — geometry spacing is validated by custom_points() at
-    #     runtime; static preflight evaluation caused false-positive grinds
-    #     (opus S04: 12 no_validation rounds from repair-loop deadlocks).
-    #     Let the code run; runtime ValueError gives clearer feedback.
+    # 13. Narrow static geometry gate: only custom_points(...) inputs that can
+    #     be evaluated exactly are checked here. Keep broad computed-geometry
+    #     policing disabled to avoid the old repair-loop false positives.
     # 14. S01 起飞布局静态验算：任意构图都行，但 XY 间距必须 ≥51cm。
     _check_start_positions(code, r, segment_id, drone_count)
     # 15. LAND 协议硬门：必须 d.land()，不得 move2。
@@ -67,6 +66,9 @@ def preflight_check(
     _check_no_geo_templates(code, r)
     # 6. Handwritten geometry contract
     _check_custom_points_contract(code, r)
+    # 6a. Statically visible custom_points tables: catch exact runtime
+    #     ValueErrors before pyfii execution.
+    _check_static_custom_points(code, r, drone_count)
     # 6b. Narrow static check for raw follow_chain waypoint tables.
     #     This keeps the old broad computed-geometry preflight disabled, while
     #     catching the exact cannon failure mode: statically visible chain
@@ -295,7 +297,7 @@ def _check_computed_geometry(code, r, drone_count):
         wrapped_nodes.add(id(arg))
         if isinstance(arg, ast.Name):
             wrapped_names.add(arg.id)
-        min_xy_cm = 90.0
+        min_xy_cm = 51.0
         for keyword in node.keywords:
             if keyword.arg == "min_xy_cm":
                 value = _literal_number(keyword.value)
@@ -661,6 +663,86 @@ def _check_custom_points_contract(code, r):
                 )
 
 
+def _check_static_custom_points(code, r, drone_count):
+    """Reject custom_points(...) calls whose point table is statically invalid.
+
+    This intentionally checks only data that is already wrapped in
+    custom_points, matching runtime semantics. It does not reject raw computed
+    comprehensions, because the old broad geometry gate created false-positive
+    repair loops.
+    """
+    try:
+        tree = ast.parse(code)
+    except SyntaxError:
+        return
+    env = _build_geometry_env(tree, drone_count)
+
+    checked_calls = {
+        "custom_points": {"arg": 0, "min_xy_cm": 51.0, "n_arg": 1},
+        "safe_move": {"arg": 2, "min_xy_cm": 51.0, "n_arg": None},
+        "call_response_safe": {"arg": 2, "min_xy_cm": 51.0, "n_arg": None},
+    }
+
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Call):
+            continue
+        if not isinstance(node.func, ast.Name) or node.func.id not in checked_calls:
+            continue
+        spec = checked_calls[node.func.id]
+        arg = _call_arg(node, int(spec["arg"]), "geo" if node.func.id != "custom_points" else "points")
+        if arg is None:
+            continue
+
+        raw = env.get(arg.id) if isinstance(arg, ast.Name) else None
+        if raw is None:
+            try:
+                raw = _safe_eval(arg, env)
+            except _UnsafeExpression:
+                raw = None
+        points = _coerce_points(raw)
+        if not points:
+            continue
+
+        min_xy_cm = float(spec["min_xy_cm"])
+        n_arg = spec["n_arg"]
+        if n_arg is not None and len(node.args) > int(n_arg) + 1:
+            value = _literal_number(node.args[int(n_arg) + 1])
+            if value is not None:
+                min_xy_cm = value
+        for keyword in node.keywords:
+            if keyword.arg == "min_xy_cm":
+                value = _literal_number(keyword.value)
+                if value is not None:
+                    min_xy_cm = value
+
+        expected_n = None
+        if n_arg is not None:
+            if len(node.args) > int(n_arg):
+                expected_n = _static_number(node.args[int(n_arg)], env)
+            for keyword in node.keywords:
+                if keyword.arg == "n":
+                    expected_n = _static_number(keyword.value, env)
+        if expected_n is None and drone_count:
+            expected_n = int(drone_count)
+        if expected_n is not None and len(points) != int(expected_n):
+            r.add(
+                f"{node.func.id} 静态点表有 {len(points)} 个点 != 期望 {int(expected_n)} "
+                f"(line {getattr(node, 'lineno', '?')})"
+            )
+            continue
+
+        clamped = [_clamp_point(point) for point in points]
+        if len(clamped) >= 2:
+            md, pair = _static_min_xy(clamped)
+            if md < float(min_xy_cm):
+                r.add(
+                    f"{node.func.id} 静态点表(line {getattr(node, 'lineno', '?')}) "
+                    f"最小 XY 间距 {md:.0f}cm (点{pair[0]}-点{pair[1]}) "
+                    f"< min_xy_cm={float(min_xy_cm):g}；运行期会直接抛错，"
+                    "请拉开点表或降低到不低于 51cm 的明确 min_xy_cm。"
+                )
+
+
 def _check_syntax(code, r):
     try:
         ast.parse(code)
@@ -732,14 +814,14 @@ def _check_common_runtime_mistakes(code, r):
             if (
                 isinstance(ticks_arg, ast.BinOp)
                 and isinstance(ticks_arg.op, ast.Mult)
-                and (
-                    _literal_number(ticks_arg.left) == 100
-                    or _literal_number(ticks_arg.right) == 100
-                )
+                and max(
+                    _literal_number(ticks_arg.left) or 0,
+                    _literal_number(ticks_arg.right) or 0,
+                ) >= 10
             ):
                 r.add(
                     "apply_light 第三个参数是 ticks 数，不是毫秒；"
-                    "不要写 `ticks * 100` 或 `duration_ms`。例如 800ms 写 "
+                    "不要写 `ticks * 100` / `ticks * 50` 或 `duration_ms`。例如 800ms 写 "
                     "`apply_light(d, color, 8)`"
                 )
                 break
@@ -779,23 +861,35 @@ def _check_common_runtime_mistakes(code, r):
                 if not isinstance(call.func, ast.Name):
                     continue
                 if call.func.id == "move2" and len(call.args) >= 3:
-                    duration_arg = call.args[2]
-                    if isinstance(duration_arg, ast.Name):
-                        move_duration_names.add(duration_arg.id)
+                    duration_key = _duration_expr_key(call.args[2])
+                    if duration_key:
+                        move_duration_names.add(duration_key)
+        if not move_duration_names:
+            continue
+        for stmt in node.body:
+            for call in ast.walk(stmt):
+                if not isinstance(call, ast.Call):
                     continue
-                if call.func.id != "apply_light" or len(call.args) < 3:
+                if not isinstance(call.func, ast.Name):
                     continue
-                light_duration_source = _duration_source_from_ticks_expr(
-                    call.args[2], tick_duration_sources
-                )
-                if light_duration_source and light_duration_source in move_duration_names:
-                    r.add(
-                        "同一循环里 `move2(..., flying_ms)` 后又用 "
-                        "`apply_light(..., flying_ms//100)` 会把移动和灯效串行，"
-                        "几乎等于把动作预算翻倍；短尾段请把 apply_light 改成 2-4 ticks、"
-                        "或用 flash_group/fade_group 的短时灯效。"
+                if call.func.id == "apply_light" and len(call.args) >= 3:
+                    light_duration_source = _duration_source_from_ticks_expr(
+                        call.args[2], tick_duration_sources
                     )
-                    return
+                    if light_duration_source and light_duration_source in move_duration_names:
+                        r.add(
+                            "同一循环里 `move2(..., flying_ms)` 又用 "
+                            "`apply_light(..., flying_ms//100)` 会把移动和灯效串行，"
+                            "几乎等于把动作预算翻倍；请把 apply_light 改成 2-4 ticks、"
+                            "或用 flash_group/fade_group 的短时灯效。"
+                        )
+                        return
+                    continue
+                if call.func.id == "move2" and len(call.args) >= 3:
+                    # Already collected above. Keeping this branch explicit
+                    # avoids accidentally treating move2 as a light call when
+                    # future helpers add similarly shaped signatures.
+                    continue
 
     sync_assign_names = set()
     sync_assign_funcs = {
@@ -1028,9 +1122,38 @@ def _duration_source_from_ticks_expr(node, known_sources=None):
         return None
     if _literal_number(node.right) != 100:
         return None
-    if isinstance(node.left, ast.Name):
-        return node.left.id
+    return _duration_expr_key(node.left)
+
+
+def _duration_expr_key(node):
+    if isinstance(node, ast.Name):
+        return node.id
+    if isinstance(node, ast.Subscript):
+        try:
+            return ast.unparse(node)
+        except Exception:
+            return ast.dump(node, include_attributes=False)
     return None
+
+
+def _call_arg(call, pos: int, keyword_name: str):
+    if len(call.args) > pos:
+        return call.args[pos]
+    for keyword in call.keywords:
+        if keyword.arg == keyword_name:
+            return keyword.value
+    return None
+
+
+def _static_number(node, env):
+    value = _literal_number(node)
+    if value is not None:
+        return value
+    try:
+        value = _safe_eval(node, env)
+    except (_UnsafeExpression, ValueError, TypeError, ZeroDivisionError, OverflowError):
+        return None
+    return value if isinstance(value, (int, float)) else None
 
 
 def _literal_number(node):

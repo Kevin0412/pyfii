@@ -8,6 +8,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from run_pipeline import run_full_flow, _failure_category_from_exception, _failure_category_from_validation
 from core.script_editor import lock_segment
+from core.session import _compact_validation_feedback, _validation_snapshot
+from core.validator import ValidationResult
 
 
 def _fresh_project() -> Path:
@@ -163,6 +165,20 @@ def test_failure_category_from_window_fill():
     print("PASSED: failure_category_from_window_fill")
 
 
+def test_window_fill_feedback_is_visible_to_llm_and_state():
+    v = ValidationResult()
+    v.window_fill_ok = False
+    v.window_fill_errors = ["段未填满窗口：S03 内容止于 30.2s，窗口到 35.0s"]
+
+    feedback = _compact_validation_feedback(v)
+    assert "window:" in feedback
+    assert "段未填满窗口" in feedback
+
+    snapshot = _validation_snapshot(v)
+    assert snapshot["window_fill_ok"] is False
+    assert snapshot["window_fill_errors"] == v.window_fill_errors
+
+
 def test_no_bad_patterns():
     """Runner has no force lock/fallback/static segments."""
     code = Path(__file__).resolve().parent.parent / "run_pipeline.py"
@@ -178,5 +194,6 @@ if __name__ == "__main__":
     test_exception_then_pass_continues()
     test_failure_category_from_exception()
     test_failure_category_from_window_fill()
+    test_window_fill_feedback_is_visible_to_llm_and_state()
     test_no_bad_patterns()
     print("\nALL RUNNER RESILIENCE TESTS PASSED")

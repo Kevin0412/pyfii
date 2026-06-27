@@ -1337,7 +1337,7 @@ def safe_move(drones, prev, geo, flying_ms, mode="wave", step_ms=150,
 
 def call_response_safe(drones, prev, geo, flying_ms, colors=("#ff6040", "#4060ff"),
                        gap_ms=250, relay_split="left_right", hold_ticks=4,
-                       gradient_to=None, palette=None, min_xy_cm=70,
+                       gradient_to=None, palette=None, min_xy_cm=51,
                        light=None, color=None, ticks=None, light_ticks=None,
                        **_ignored):
     """LLM 友好的安全分组问答：只写目标几何，安全分配+接力执行交给本地。
