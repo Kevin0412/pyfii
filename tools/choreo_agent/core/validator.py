@@ -186,6 +186,11 @@ class ValidationResult:
         lines.append(f"minD: {self.min_distance_cm}cm")
         lines.append(f"dense minD: {self.dense_min_distance_cm}cm")
         lines.append(f"XY span: {self.xy_span}")
+        if self.dense_min_distance_cm is not None and self.dense_min_distance_cm <= 51:
+            lines.append(
+                f"密采样距离硬门失败：dense minD 必须 >51cm，当前 {self.dense_min_distance_cm:.1f}cm。"
+                "这通常是擦边路径或目标点过近；请拉开对应轨迹/点表，避免贴线。"
+            )
         if self.collision_intervals:
             lines.append("密采样危险区间（必须优先修复）：")
             for item in self.collision_intervals[:8]:

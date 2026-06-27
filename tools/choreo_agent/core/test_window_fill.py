@@ -71,6 +71,26 @@ def test_window_fill_gates_passed():
     assert "窗口填充失败" in feedback and "ripple_move=max(delays)+flying_ms" in feedback
 
 
+def test_dense_min_distance_boundary_feedback_is_explicit():
+    result = ValidationResult()
+    result.compile_ok = result.run_ok = result.read_fii_ok = True
+    result.distance_warnings = 0
+    result.action_warnings = 0
+    result.dense_min_distance_cm = 51.0
+    result.min_distance_cm = 51.0
+    result.code_quality_ok = True
+    result.hover_check_ok = True
+    result.continuity_required = True
+    result.expected_drone_count = 2
+    result.exit_state = [[100, 100, 120], [300, 300, 120]]
+
+    assert not result.passed
+    feedback = result.repair_feedback()
+    assert "dense minD 必须 >51cm" in feedback
+    assert "当前 51.0cm" in feedback
+    assert "≥53" not in feedback
+
+
 def test_template_main_flow_prints_cursors():
     content = (TEMPLATE / "scripts" / "design.py").read_text(encoding="utf-8")
     assert "def _segcursor(" in content
