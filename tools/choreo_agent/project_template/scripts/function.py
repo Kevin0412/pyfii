@@ -40,6 +40,7 @@ __all__ = [
     "chain_follow_safe",
     "group_relay",
     "safe_move",
+    "call_response_safe",
     "apply_light",
     "light_wave",
     "fade_rgb",
@@ -595,7 +596,7 @@ def _timed_min_xy(starts_xyz, targets_xyz, delays_ms, flying_list, fps=60, max_s
     return min_d, worst_t, worst_pair
 
 
-def safe_assign(starts, targets, delays=None, flying_ms=2800):
+def safe_assign(starts, targets, delays=None, flying_ms=2800, **_ignored):
     """时间感知的安全分配。在模型真正要用的错峰时序(delays)+飞行时长下，挑选让**真实分时
     轨迹**两两 XY 间距最大的 targets 排列。
 
@@ -1332,6 +1333,46 @@ def safe_move(drones, prev, geo, flying_ms, mode="wave", step_ms=150,
     ripple_move(drones, targets, flying_ms, delays, colors=colors,
                 hold_ticks=hold_ticks, gradient_to=gradient_to)
     return [tuple(_target3(t)) for t in targets]
+
+
+def call_response_safe(drones, prev, geo, flying_ms, colors=("#ff6040", "#4060ff"),
+                       gap_ms=250, relay_split="left_right", hold_ticks=4,
+                       gradient_to=None, palette=None, min_xy_cm=70,
+                       light=None, color=None, ticks=None, light_ticks=None,
+                       **_ignored):
+    """LLM 友好的安全分组问答：只写目标几何，安全分配+接力执行交给本地。
+
+    这是 `safe_move(..., mode="relay")` 的语义别名，专门给左右/前后问答乐句用。
+    与裸 `group_relay` 的关键区别：这里会先按真实接力时序调用 safe_assign，挑出
+    无碰撞 targets，再用同一时序执行；不会让模型手写 `best_assign + group_relay`
+    后出现“算着安全、实跑相撞”。
+
+    总时长通常 = 2*flying_ms + gap_ms（若第一 gap 清不开，safe_move 会自动放大 gap
+    再试；想精确贴窗时请把几何铺开，让首选 gap 能过）。返回飞完后的新 prev。
+    """
+    if palette is not None:
+        colors = palette
+    for _alias in (color, light):
+        if _alias is not None:
+            colors = _alias
+            break
+    if ticks is not None:
+        hold_ticks = ticks
+    elif light_ticks is not None:
+        hold_ticks = light_ticks
+    points = custom_points(geo, n=len(drones), min_xy_cm=min_xy_cm)
+    return safe_move(
+        drones,
+        prev,
+        points,
+        flying_ms,
+        mode="relay",
+        colors=colors,
+        gap_ms=gap_ms,
+        relay_split=relay_split,
+        hold_ticks=hold_ticks,
+        gradient_to=gradient_to,
+    )
 
 
 # ---------- 灯光 ----------

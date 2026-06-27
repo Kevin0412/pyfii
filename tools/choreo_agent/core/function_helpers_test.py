@@ -494,12 +494,25 @@ def test_safe_move_tolerates_misused_kwargs():
     print("PASSED: safe_move tolerates misused kwargs (no TypeError crash)")
 
 
+def test_safe_assign_tolerates_far_assign_style_kwargs():
+    module = _load_template_function_module()
+    prev = [(60, 100, 120), (500, 100, 120), (280, 300, 150)]
+    geo = module.custom_points([(120, 460, 150), (440, 460, 150), (120, 120, 150)],
+                               n=3, min_xy_cm=90)
+
+    out = module.safe_assign(prev, geo, delays=[0, 120, 240], flying_ms=2800, min_path_cm=120)
+
+    assert len(out) == 3
+    print("PASSED: safe_assign tolerates far_assign-style kwargs")
+
+
 if __name__ == "__main__":
     test_safe_assign_timed_model_distinguishes_staggered_cross()
     test_safe_assign_raises_when_no_permutation_clears_floor()
     test_safe_move_wave_executes_and_clearance_matches_verified()
     test_safe_move_raises_on_unsalvageable_crossing()
     test_safe_move_tolerates_misused_kwargs()
+    test_safe_assign_tolerates_far_assign_style_kwargs()
     test_star_import_surface_excludes_geo_templates()
     test_auto_init_uses_time_cursor_not_missing_init_time()
     test_auto_init_waits_for_last_move_without_delay()

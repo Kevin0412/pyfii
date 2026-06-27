@@ -681,15 +681,15 @@ def build_coding_prompt(
 - S02-S05 每段至少一个 keyframe 必须打破时间同步（同起同停会被节奏门打回）：`safe_move(..., mode="wave", step_ms=120)` 内部错峰即破同步且安全；S01 起飞这种无交叉场景才可 `drone.delay(i * 120)`（move2 前）
 - 灯光时钟型写法可免时间算术：`apply_light(drone, color, fly_ms // 100)` 占满飞行窗口不写尾部 delay；错峰时 `(fly_ms - i*120) // 100` 自然回正
 - 个体色彩身份：群舞/交换 keyframe 每架机自己的色相（palette[i]），观众才能跟踪换位；统一色留给宣言时刻
-- 镜像换位/对穿用 `safe_move(drones, prev, geo, flying_ms, mode="relay")`（顺序接力、零跨组交叉、自带 60fps 验证）——**别再写 `drone.delay(i*150)`+move2 手搓对穿：小错峰救不了真交叉，必撞返工**
+- 镜像换位/对穿用 `safe_move(drones, prev, geo, flying_ms, mode="relay")`；左右/前后问答优先 `call_response_safe(drones, prev, geo, flying_ms, gap_ms=...)`（顺序接力、零跨组交叉、自带 60fps 验证）——**别再写 `drone.delay(i*150)`+move2 手搓对穿：小错峰救不了真交叉，必撞返工**
 - 移动优先 `safe_move`（对穿/大交叉/密集承接必须用）。`best_assign(prev, geo)` + `ripple_move(drones, targets, flying_ms, delays)` 组合在**不交叉的展开/承接**时仍然安全好用（它们用同步锁步模型，非交叉时一致）；**交叉/对穿才必须 safe_move**（同步模型会把交叉的路径算安全但实跑撞）。环形刚体旋转 `rotate_assign` 天然安全可直接用
 - 定格 pose 合法（静止展示造型可超 1s），但定格期间必须灯亮；黑灯静止会被判低活动
-- `move_group/move_group_staggered` 只作为 smoke/兜底工具；S01-S06 纯 helper 执行会被 composition gate 打回。卡农/分组问答用 `safe_move(mode="wave")` 或 `group_relay`，别在 loop 里手搓小 delay 凑错峰交叉
+- `move_group/move_group_staggered` 只作为 smoke/兜底工具；S01-S06 纯 helper 执行会被 composition gate 打回。卡农/错峰用 `safe_move(mode="wave")` 或 `chain_follow_safe`；分组问答用 `call_response_safe`。`group_relay` 只是底层执行器，只有 targets 已按同一接力 delays 走过 safe_assign 才直接调
 - 3s 以上 keyframe 若用 `far_assign`，写 `min_path_cm=active_min_path_cm(flying_ms)`；不要写 90/100cm 导致真实运动过早结束
 - 安全距离按 XY 看，不要把同一 XY 不同 Z 当成安全分离
 - 6-8s 中短窗口只写 2 个强 keyframe；若错峰，stagger_ms=60-90，避免第三个 keyframe 把段尾动作拖成未完成
 - S04 抒情展开段要写 4-5 个短 keyframe，至少 3 种颜色/灯光变化；S06 尾声要写两段式收尾（中继点 + 最终署名），不能单 keyframe 小挪动
-- 编舞词汇（每段至少用一种）：交错启动 (safe_move/ripple_move + delays), Z 个性 (move2 内 +dz*sin(i)), 分组对比 (safe_move relay/group_relay), 焦点机, 中心迁移, 密度呼吸, 灯光渐变 (gradient_to= / range()+TurnOnAll((r,g,b)))；S01-S05 全段匀速单色无差异会被节奏门打回
+- 编舞词汇（每段至少用一种）：交错启动 (safe_move/ripple_move + delays), 安全分组问答 (call_response_safe), Z 个性 (move2 内 +dz*sin(i)), 分组对比 (safe_move relay/call_response_safe), 焦点机, 中心迁移, 密度呼吸, 灯光渐变 (gradient_to= / range()+TurnOnAll((r,g,b)))；S01-S05 全段匀速单色无差异会被节奏门打回
 - 渐变灯光必须塞进飞行窗口：keyframe 内 `ticks*100 + delay_ms ≈ fly_ms`；动作完成后原地亮灯 >1s 会被判低活动打回
 - 每个 keyframe 完成后更新 `prev = [(t[0], t[1], t[2]) for t in targets]`
 - `planning_speed/planning_accel` 只用于预算 fly_ms；final 代码不要写 set_speed/set_accel/VelXY/VelZ，也不要写 `drone[d]`

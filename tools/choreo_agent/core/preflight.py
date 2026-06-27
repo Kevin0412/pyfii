@@ -687,6 +687,17 @@ def _check_common_runtime_mistakes(code, r):
     except SyntaxError:
         return
 
+    tick_duration_sources: dict[str, str] = {}
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Assign) or len(node.targets) != 1:
+            continue
+        target = node.targets[0]
+        if not isinstance(target, ast.Name):
+            continue
+        duration_name = _duration_source_from_ticks_expr(node.value)
+        if duration_name:
+            tick_duration_sources[target.id] = duration_name
+
     for node in ast.walk(tree):
         if (
             isinstance(node, ast.Call)
@@ -700,10 +711,55 @@ def _check_common_runtime_mistakes(code, r):
             break
 
     for node in ast.walk(tree):
+        if (
+            isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Attribute)
+            and node.func.attr == "turn_on"
+        ):
+            r.add(
+                "Drone 没有 turn_on(...) 方法 — 用 `d.TurnOnAll(color)`，"
+                "或优先用 `apply_light(d, color, ticks)` / `flash_group`"
+            )
+            break
+
+    for node in ast.walk(tree):
         if not isinstance(node, ast.Call):
             continue
         if not isinstance(node.func, ast.Name):
             continue
+        if node.func.id == "apply_light" and len(node.args) >= 3:
+            ticks_arg = node.args[2]
+            if (
+                isinstance(ticks_arg, ast.BinOp)
+                and isinstance(ticks_arg.op, ast.Mult)
+                and (
+                    _literal_number(ticks_arg.left) == 100
+                    or _literal_number(ticks_arg.right) == 100
+                )
+            ):
+                r.add(
+                    "apply_light 第三个参数是 ticks 数，不是毫秒；"
+                    "不要写 `ticks * 100` 或 `duration_ms`。例如 800ms 写 "
+                    "`apply_light(d, color, 8)`"
+                )
+                break
+        if node.func.id in {"apply_light", "fade_group", "flash_group"}:
+            allowed_keywords = {
+                "apply_light": {"interval_ms"},
+                "fade_group": {"duration_ms", "interval_ms"},
+                "flash_group": {"times", "on_ms", "off_ms", "alt_color"},
+            }[node.func.id]
+            bad_keywords = [
+                keyword.arg
+                for keyword in node.keywords
+                if keyword.arg is not None and keyword.arg not in allowed_keywords
+            ]
+            if bad_keywords:
+                r.add(
+                    f"{node.func.id} 不支持关键字参数 {', '.join(bad_keywords)}；"
+                    "按 helper 签名使用位置参数/合法关键字，避免运行时 TypeError。"
+                )
+                break
         if node.func.id == "light_wave" and len(node.args) >= 2:
             if any(keyword.arg == "delays" for keyword in node.keywords):
                 r.add(
@@ -711,6 +767,78 @@ def _check_common_runtime_mistakes(code, r):
                     "不要写 light_wave(drones, prev, delays=...)。改成 "
                     "`light_wave(drones, delays3, palette=golden_palette, hold_ticks=8)`"
                 )
+
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.For):
+            continue
+        move_duration_names: set[str] = set()
+        for stmt in node.body:
+            for call in ast.walk(stmt):
+                if not isinstance(call, ast.Call):
+                    continue
+                if not isinstance(call.func, ast.Name):
+                    continue
+                if call.func.id == "move2" and len(call.args) >= 3:
+                    duration_arg = call.args[2]
+                    if isinstance(duration_arg, ast.Name):
+                        move_duration_names.add(duration_arg.id)
+                    continue
+                if call.func.id != "apply_light" or len(call.args) < 3:
+                    continue
+                light_duration_source = _duration_source_from_ticks_expr(
+                    call.args[2], tick_duration_sources
+                )
+                if light_duration_source and light_duration_source in move_duration_names:
+                    r.add(
+                        "同一循环里 `move2(..., flying_ms)` 后又用 "
+                        "`apply_light(..., flying_ms//100)` 会把移动和灯效串行，"
+                        "几乎等于把动作预算翻倍；短尾段请把 apply_light 改成 2-4 ticks、"
+                        "或用 flash_group/fade_group 的短时灯效。"
+                    )
+                    return
+
+    sync_assign_names = set()
+    sync_assign_funcs = {
+        "best_assign", "far_assign", "mirror_assign", "swap_assign", "keep_assign",
+    }
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Assign) or len(node.targets) != 1:
+            continue
+        target = node.targets[0]
+        value = node.value
+        if (
+            isinstance(target, ast.Name)
+            and isinstance(value, ast.Call)
+            and isinstance(value.func, ast.Name)
+            and value.func.id in sync_assign_funcs
+        ):
+            sync_assign_names.add(target.id)
+
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Call):
+            continue
+        if not isinstance(node.func, ast.Name) or node.func.id != "group_relay":
+            continue
+        targets_arg = node.args[1] if len(node.args) >= 2 else None
+        for keyword in node.keywords:
+            if keyword.arg == "targets":
+                targets_arg = keyword.value
+                break
+        direct_sync_assign = (
+            isinstance(targets_arg, ast.Call)
+            and isinstance(targets_arg.func, ast.Name)
+            and targets_arg.func.id in sync_assign_funcs
+        )
+        named_sync_assign = isinstance(targets_arg, ast.Name) and targets_arg.id in sync_assign_names
+        if direct_sync_assign or named_sync_assign:
+            r.add(
+                "group_relay 只是底层接力执行器，不能搭配 best_assign/far_assign/mirror_assign "
+                "这类同步分配直接飞；这是 S02 “算着安全、实跑相撞”的高频根因。"
+                "问答段改用 `prev = call_response_safe(drones, prev, geo, flying_ms, gap_ms=...)`；"
+                "若必须裸用 group_relay，targets 必须先由 `safe_assign(prev, geo, delays=relay_delays, "
+                "flying_ms=flying_ms)` 产生。"
+            )
+            break
 
     split_group_names = set()
     for node in ast.walk(tree):
@@ -847,11 +975,25 @@ def _check_coordinate_literals(code, r):
         tree = ast.parse(code)
     except SyntaxError:
         return
+    parents = {
+        id(child): parent
+        for parent in ast.walk(tree)
+        for child in ast.iter_child_nodes(parent)
+    }
     light_tuple_ids = _collect_light_tuple_ids(tree)
     for node in ast.walk(tree):
         if not isinstance(node, (ast.Tuple, ast.List)) or len(node.elts) != 3:
             continue
         if id(node) in light_tuple_ids:
+            continue
+        parent = parents.get(id(node))
+        if (
+            isinstance(parent, ast.Assign)
+            and parent.value is node
+            and any(isinstance(target, (ast.Tuple, ast.List)) for target in parent.targets)
+        ):
+            # 标量解包（如 `cx, cy, R = 280, 280, 70`）不是坐标点；
+            # 真正的点表通常是 list 内的三元组，仍会被下面检查。
             continue
         values = [_literal_number(elt) for elt in node.elts]
         if any(value is None for value in values):
@@ -870,6 +1012,25 @@ def _check_coordinate_literals(code, r):
                 + ", ".join(errors)
                 + "；XY 必须在 0-560，Z 必须在 80-250，或显式使用 clamp_xy/clamp_z。"
             )
+
+
+def _duration_source_from_ticks_expr(node, known_sources=None):
+    """Return the duration variable name for expressions like flying_ms // 100."""
+    known_sources = known_sources or {}
+    if isinstance(node, ast.Name):
+        return known_sources.get(node.id)
+    if isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id in {"int", "round"}:
+        if len(node.args) == 1:
+            return _duration_source_from_ticks_expr(node.args[0], known_sources)
+    if not isinstance(node, ast.BinOp):
+        return None
+    if not isinstance(node.op, (ast.FloorDiv, ast.Div)):
+        return None
+    if _literal_number(node.right) != 100:
+        return None
+    if isinstance(node.left, ast.Name):
+        return node.left.id
+    return None
 
 
 def _literal_number(node):

@@ -200,7 +200,8 @@ class ValidationResult:
                     "小步错峰(step_ms 120-150)清不开。重构本段（别只微调点表），按优先级："
                     "①**绕行 route-around**：两组目标放不同空间带（一组偏上/左、另一组偏下/右），两组同时飞、航线不相交"
                     "——同时过碰撞门+活动门+动作质量门，最优；"
-                    "②`group_relay(drones, targets, gids, flying_ms, gap_ms=...)` 分组顺序飞（零交叉，但注意静止组别拖低活动量）；"
+                    "②问答/分组用 `call_response_safe(drones, prev, geo, flying_ms, gap_ms=...)` "
+                    "或 `safe_move(..., mode='relay')` 分组顺序飞（本地先按真实接力时序 safe_assign，再执行）；"
                     "③真要同时穿中心，错峰加大到 delay≥单程飞行时长（先飞的清场后再放第二批）。"
                 )
         if self.distance_warnings != 0:
@@ -231,7 +232,7 @@ class ValidationResult:
                 "母题执行器耗时是确定的：ripple_move=max(delays)+flying_ms；"
                 "chain_follow_safe=((len(drones)-1)*lag_hops+1+extra_hops)*hop_ms；"
                 "follow_chain=len(waypoints)*hop_ms；"
-                "group_relay=2*flying_ms+gap_ms；light_wave=max(delays)+hold_ticks*100；"
+                "call_response_safe=2*flying_ms+gap_ms；group_relay=2*flying_ms+gap_ms；light_wave=max(delays)+hold_ticks*100；"
                 "fade_group=duration_ms；breathe_group=cycles*period_ms；flash_group=times*(on_ms+off_ms)。"
                 "把各调用耗时加总到窗口长度；缺口用亮灯定格补（light_wave/breathe_group/fade_group——亮灯定格是预算的一等公民）。"
             )

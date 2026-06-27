@@ -191,7 +191,7 @@ def build_segment_prompt(
         f"    `delays = ripple_delays(prev, mode='by_index', step_ms=130)`\n"
         f"    `targets = safe_assign(prev, geo, delays=delays, flying_ms=2800)`  # 按真实错峰时序选无碰撞排列（与逐帧验证器同模型，错峰大动作首选）\n"
         f"    `prev = ripple_move(drones, targets, 2800, delays, colors=palette)`\n"
-        f"  穿过同一中心区的真对穿是**少数刻意情况，仅当 motif 明确是 mirror-cross 时**才做：用 `group_relay` 顺序飞或错峰 `delay≥单程飞行时长`，小步 `delay(i*150)` 清不开必撞。其余大动作一律 route-around。单 keyframe 路径 ≤360cm，跨场拆多个 keyframe\n"
+        f"  穿过同一中心区的真对穿是**少数刻意情况，仅当 motif 明确是 mirror-cross 时**才做：用 `safe_move(..., mode='relay')` / `call_response_safe` 顺序接力，或错峰 `delay≥单程飞行时长`，小步 `delay(i*150)` 清不开必撞。其余大动作一律 route-around。单 keyframe 路径 ≤360cm，跨场拆多个 keyframe\n"
         f"  **碰撞门多半来自点表太密**：几何点要铺开占场（圆形 R≥85，两排同行≥70/行距≥120，散点任意两点 x差或y差≥60），far_assign 才有间距可挑出无碰撞排列；硬塞密集点表后指望 far_assign 救是没用的（点本身太近时连最优排列也 <51cm）。密集造型留给短促/慢速小动作，大迁移用铺开的几何\n"
         f"- 避免刚性圆退化（圆/放射/中心/辐射主题尤其注意，否则 degradation 门反复打回）：不要让多数 keyframe 保持同一圆形且同一角序——"
         f"至少一个主体 keyframe 换非圆轮廓（直线/V/弧/星/双排/十字/署名造型），或用 `swap_assign`/`mirror_assign`/分组重组打乱角序；"
@@ -247,22 +247,23 @@ def build_segment_prompt(
 - 个体色彩身份（dntg 视觉语法）：群舞/交换 keyframe 给每架机（或每对镜像机）自己的色相，如 `palette = ["#ff4444","#ffaa00","#ffee44","#44ff88","#44ddff","#4466ff","#aa44ff","#ff44aa","#ffffff"]` 后 `apply_light(drone, palette[i], ...)` —— 观众才能跟踪个体换位；全队统一色只留给宣言时刻（高潮齐爆、署名定格）
 - 定格 pose 合法：飞到造型后保持静止展示（如署名/符号阵）可以超过 1s，**但定格期间必须灯亮**（apply_light 或 TurnOnAll 持续覆盖）；黑灯静止才会被判低活动
 - 不要重新质疑 `move2/apply_light/delay` 的语义，也不要在回答中推导 API；按上述顺序写代码即可，验证器会负责轨迹检查
-- `move_group/move_group_staggered` 只作为 smoke/兜底工具；S01-S06 纯 helper 执行会被打回。卡农/错峰用母题执行器（ripple_move/chain_follow_safe/follow_chain/group_relay 不算兜底，算正式编舞），或在 per-drone loop 内按 `i % group_mod` 写小 delay，并保留每架机自己的灯光/等待
+- `move_group/move_group_staggered` 只作为 smoke/兜底工具；S01-S06 纯 helper 执行会被打回。卡农/错峰用母题执行器（safe_move/call_response_safe/ripple_move/chain_follow_safe/follow_chain 不算兜底，算正式编舞），或在 per-drone loop 内按 `i % group_mod` 写小 delay，并保留每架机自己的灯光/等待
 - 禁止只给单架 `drones[i]` 操作；使用 `for d in drones:` 或等价 per-drone loop。但可以在 loop 内做差异化：如 `d.delay(i * stagger_ms)` 交错启动, `if i == 0: apply_light(d, special_color, t)` 焦点机, `move2(d, (tx, ty, tz + dz*sin(i)), t)` Z 个性——区别对待不等于跳过
 - 主体 move2 通常用 2600-3600ms；不要用 4500ms+ 超慢移动凑时长，段尾由 auto_init 压缩
 - 快节奏必须可完成：单个 2600-3200ms keyframe 的 3D 路径通常控制在约 180-360cm；不要用 2000-2400ms 硬飞 500cm 跨场路径
 - 如果段长需要覆盖，不要拉长单个 move2；用多个可完成的快 keyframe、分组错峰、高度切层，或**亮灯定格**承接——图形到位后保持灯亮定格 0.8-2s 让观众读图（dntg 节奏=移动→定格→移动，dntg 全片 57% 时间是定格展示）；黑灯静止才算低活动
 - 3s 以上 keyframe 不要写 `min_path_cm=90/100`；用 `flying_ms = 3000` 后 `targets = far_assign(prev, geo, min_path_cm=active_min_path_cm(flying_ms))`
 - 安全距离按 XY 看：不要把同一 XY 的不同 Z 当成安全分离；XY 间距硬下限 51cm（pyfii core 碰撞线，检查器精确验证），密集造型配合短路径慢速；复杂交换交给 `far_assign`
-- 错峰 `delay(i * 150)` 是**波次**工具（各机飞向不重叠目标、先后起步），不是对穿安全工具——对穿/大动作的安全见上方“大动作安全”一条（默认 route-around，刻意对穿才用 group_relay/大错峰）
+- 错峰 `delay(i * 150)` 是**波次**工具（各机飞向不重叠目标、先后起步），不是对穿安全工具——对穿/大动作的安全见上方“大动作安全”一条（默认 route-around，刻意对穿才用 safe_move(mode='relay') / call_response_safe / 大错峰）
 - **错峰/分组/对穿等大动作一律用 `prev = safe_move(drones, prev, geo, flying_ms, mode="wave")`（对穿/大交叉 `mode="relay"` 顺序接力零跨组交叉）**：融合安全分配+错峰+执行为一次调用，用来验证无碰撞的时序就是真正飞的时序——清不开会自己抛错让你铺开点表。**切勿手搓 `move2`+`drone.delay` 凑错峰或照抄预算表 delay_ms 做对穿**（“算着安全、实跑相撞”的直接来源）。
 - 分配函数家族（safe_move 内部已用；只有自己手动组合时序时才直接调）：`best_assign(prev, geo)` 就近收束 / `far_assign(prev, geo, min_path_cm=...)` 大幅交换（同步锁步模型）/ `safe_assign(prev, geo, delays=delays, flying_ms=...)` 按真实分时轨迹挑无碰撞排列（best/far 假设全员同步直线，错峰段会“算着安全、实跑相撞”）；组完时序后用 `ok, min_cm, pair = verify_timed_clearance(prev, targets, delays=delays, flying_ms=...)` 自检（直接解包 3 元组）/ `rotate_assign(prev, geo, steps=1)` 整体漩涡旋转（同构环形刚体旋转天然安全，steps 可负；非环形/对齐两列旋转会贴 51cm 同步路径门）/ `mirror_assign(prev, geo)` 镜像对穿（**无 axis 参数**；同步路径门跳过它，但对穿真的交叉——必须足量顺序错峰让一架先离开交叉点另一架才到，小错峰照撞，分时门与 validator 都逐帧核验，不是免检；拿不准就 safe_assign 验真）/ `swap_assign(prev, geo, axis='x'|'y')` 半场互换（有 axis；同步直线检查，对齐两列会贴硬下限）/ `keep_assign(prev, geo)` 身份保持（drone i 固定走第 i 个目标，palette 叙事用）。左右对答/换位默认 route-around（两组不同带同时飞，见“大动作安全”），只有刻意要中心对穿才 mirror_assign+大错峰
 - 波次计算器（从当前队形推导时间编排，动序即光序）：`delays = ripple_delays(prev, mode='center_out'|'sweep_x'|'sweep_y'|'spiral'|'by_index', step_ms=120-250, reverse=False)` 波次延迟表；`spatial_ranks(prev, mode=...)` 波次序号（可按 rank 配色）；`gids = split_groups(prev, mode='left_right'|'front_back'|'inner_outer'|'alternate')` 0/1 分组。注意：环形/等距队形上 center_out 全员同距=同一波（退化为同步起步），想要可见波次改用 spiral/sweep_x/sweep_y/by_index
 - 动作母题执行器（内部已做 per-drone 灯光+段尾自动对齐，免回正算术，计入时间错峰门）：
   `prev = ripple_move(drones, targets, flying_ms, delays, colors=palette, hold_ticks=4)` 波次推进，先动先亮，总时长 max(delays)+flying_ms；
+  `prev = call_response_safe(drones, prev, geo, flying_ms, gap_ms=700, relay_split='left_right', colors=('#ff6040','#4060ff'))` 安全分组问答——只写稀疏 geo，本地按真实接力时序 safe_assign 后执行；S02 8.7s 推荐 flying_ms=4000/gap_ms=700；
   `prev = chain_follow_safe(drones, control_points, hop_ms=650, lag_hops=1, spacing_cm=65, colors=palette)` 首选链式跟随/蛇形——只写 2-5 个 control_points（起点→中继→终点），本地扩成安全波点再执行 follow_chain；总时长 = ((len(drones)-1)*lag_hops+1+extra_hops)*hop_ms，默认 9 机约 10*hop_ms；
   `prev = follow_chain(drones, waypoints, hop_ms, lag_hops=1, colors=palette)` 底层链式跟随——只有在你已手写足够稀疏的 waypoints 时使用；需要 len(waypoints) ≥ (机数-1)*lag_hops+1，相距 lag 的波点 XY ≥51cm（preflight/函数校验报数），总时长 = len(waypoints)*hop_ms；
-  `prev = group_relay(drones, targets, gids, flying_ms, colors=('#ff6040','#4060ff'), gap_ms=200)` 分组问答——0 组先动、1 组原地亮灯应答再动，组色对话，总时长 = 2*flying_ms+gap_ms
+  `group_relay(...)` 是底层接力执行器：只有 targets 已用 matching relay_delays 走过 safe_assign 才直接调；普通问答请用 call_response_safe，别写 group_relay(best_assign(...))
 - 飞行中持续变色（dntg 灯光精髓，强烈推荐——纯色保持会让色彩单一）：给上述任一执行器加 `gradient_to=palette2`（与 colors 同形的第二组色），每架机在亮灯窗口内 colors[i]→palette2[i] 逐 tick 渐变，不增加耗时、不破坏对齐；如 `ripple_move(drones, targets, flying_ms, delays, colors=warm, hold_ticks=12, gradient_to=cool)` 让无人机边飞边从暖色渐变到冷色。light_wave 同样支持 gradient_to（定格队形上的流光）
 - 灯光母题（灯光绑定编舞意图：扩张配中心光波、问答配双色、收尾配齐闪/渐隐；同一份 delays 喂 ripple_move 和 light_wave 就是"先动的先亮"）：
   `light_wave(drones, delays, palette, hold_ticks=6)` 静止队形上的光波涟漪（定格展示首选，耗时 max(delays)+hold*100）；
@@ -273,7 +274,7 @@ def build_segment_prompt(
 - `beat_ms(bpm, beats)` 把时长贴到音乐拍：`flying_ms = beat_ms(bpm, 4)` 即 4 拍一个 keyframe，灯光/频闪用 beat_ms(bpm, 0.5/1) 跟拍
 - 高度层必须真实混合：每个主体 keyframe 至少 3 个 Z 层，整段 Z range ≥90cm；不要全队同一高度平面
 - 帧内可读构图（dntg 视觉语法）：每个 keyframe 的点表本身应当是观众一眼可读的图形——镜像对（点两两穿过构图中心配对，如 (cx+dx,cy+dy) 配 (cx-dx,cy-dy)）、点对称、或可辨轮廓（直线/V/弧/环/双排/点阵）；随机散点在 7-9 机规模下读作噪声。非对称与变奏放在 **keyframe 之间**（换轮廓、转方向、变密度），不放在帧内
-- 编舞词汇（每段至少用一种，并在 #beat/#formation 标明）：波次涟漪 (ripple_move/light_wave), 链式跟随 (chain_follow_safe/follow_chain), 分组问答 (group_relay), 交错启动 (delay(i*ms)), Z 个性 (move2 内 +dz*sin(i)), 分组对比 (两组不同几何/灯光), 焦点机 (1-2 架独立轨迹), 中心迁移, 密度呼吸, 灯光渐变 (fade_group/breathe_group 或 range()+TurnOnAll((r,g,b)) 呼吸), 同步频闪收尾 (flash_group)；全段匀速单色无差异会被节奏门打回
+- 编舞词汇（每段至少用一种，并在 #beat/#formation 标明）：波次涟漪 (ripple_move/light_wave), 链式跟随 (chain_follow_safe/follow_chain), 安全分组问答 (call_response_safe), 交错启动 (delay(i*ms)), Z 个性 (move2 内 +dz*sin(i)), 分组对比 (两组不同几何/灯光), 焦点机 (1-2 架独立轨迹), 中心迁移, 密度呼吸, 灯光渐变 (fade_group/breathe_group 或 range()+TurnOnAll((r,g,b)) 呼吸), 同步频闪收尾 (flash_group)；全段匀速单色无差异会被节奏门打回
 - `d.TurnOnAll((r,g,b))` 直接接受 RGB 三元组 (0-255)：`d.TurnOnAll((255,255,255))`=白色。可在 per-drone loop 内做灯光渐变呼吸: `for a in range(30): d.TurnOnAll((int(128+127*sin(a*pi/15)), int(60+50*sin(a*pi/10)), 40)); d.delay(100)` — 30 ticks = 3秒渐变（pi 已导出，不要写 π）
 - 渐变必须塞进飞行窗口：每个 keyframe 内 `灯光 ticks*100 + delay_ms ≈ flying_ms`；动作完成后不要再原地长亮灯（无人机静止亮灯 >1s 会被判低活动打回）。30-tick 渐变只配 3000ms 以上的 keyframe
 - LAND 前如果整体真实动作还没超过 60s，系统会追加 S07/S08 等正式段继续编舞；不要靠当前段硬等待
@@ -281,7 +282,7 @@ def build_segment_prompt(
 - ## 时间预算（不填满直接打回！）
 段长: {end_time - start_time}s（{start_time}-{end_time}s）。`move2 飞行 + 亮灯定格 + delay` 之和必须≈ {(end_time - start_time - 0.5) * 1000:.0f}ms。写完所有 keyframe 后**自己加总时长**，不够就追加亮灯定格或短 keyframe——**不要写完 2-3 个 keyframe 就收手**
 **窗口必须填满**（验证器硬校验）：段尾时间游标要落在窗口尾 ±（-1.0s/+1.5s）内；欠填会把后续段推离音乐 cue 直接打回
-母题耗时是确定的，直接加总贴满窗口：ripple_move=max(delays)+flying_ms / chain_follow_safe=((len(drones)-1)*lag_hops+1+extra_hops)*hop_ms / follow_chain=len(waypoints)*hop_ms / group_relay=2*flying_ms+gap_ms / light_wave=max(delays)+hold_ticks*100 / fade_group=duration_ms / breathe_group=cycles*period_ms / flash_group=times*(on_ms+off_ms)
+母题耗时是确定的，直接加总贴满窗口：ripple_move=max(delays)+flying_ms / call_response_safe=2*flying_ms+gap_ms / chain_follow_safe=((len(drones)-1)*lag_hops+1+extra_hops)*hop_ms / follow_chain=len(waypoints)*hop_ms / group_relay=2*flying_ms+gap_ms / light_wave=max(delays)+hold_ticks*100 / fade_group=duration_ms / breathe_group=cycles*period_ms / flash_group=times*(on_ms+off_ms)
 示例: 2个move2各2800ms + 每次到位后亮灯定格1700ms → 9000ms，观众有时间读图 ✓；3个move2各3000ms 全程飞不停 → 覆盖但观众读不到任何图形 △
 反例: 1个move2 8000ms 超慢飘移 ✗；黑灯静止凑时长 ✗（低活动打回）；keyframe 加完离窗口尾还差 3s 不管 ✗（窗口填充门打回）
 - 禁止 inittime/VelXY/import

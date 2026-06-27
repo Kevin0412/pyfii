@@ -94,6 +94,24 @@ prev = safe_move(drones, prev, geo, 2800, mode='wave', step_ms=160, colors=palet
 # 对穿/大交叉：prev = safe_move(drones, prev, geo, 2600, mode='relay', gap_ms=300, colors=palette)
 ```
 
+### call-response-safe  ·  `call_response_safe()`
+
+- **category**: motion
+- **role fit**: buildup, development, climax
+- **purpose**: 安全分组问答：LLM 只写目标几何，本地按真实接力时序做 safe_assign，再执行双色 group_relay。
+- **when to use**: 左右/前后两组一问一答、S02/S03 这类需要明显分组错峰但又经常被碰撞门打回的段。
+- **when NOT**: 只是无交叉的小幅就近承接（best_assign + per-drone loop 更轻）；纯链式旋律线用 chain_follow_safe。
+- **key params**: prev=当前队形；geo=custom_points 点表或坐标列表；flying_ms 单组飞行时长；gap_ms 两组问答间隔；relay_split='left_right'|'front_back'；colors=(组0色,组1色)。总时长≈2*flying_ms+gap_ms。
+- **safety**: 内部等价于 safe_move(mode='relay')：先按 lead 组/response 组真实 delays 调 safe_assign，再用同一组 targets 和时序执行，避免裸 group_relay + best_assign 的“算着安全、实跑相撞”。geo 推荐 min_xy_cm≈90；函数默认只硬卡 70，真正碰撞由 safe_assign/validator 逐帧验证。
+- **validation risks**: 若同一 XY 巷对穿、目标点过密或首选 gap 清不开，会抛错并要求铺开几何；想精确贴窗时让首选 gap 能过，例如 S02 8.7s 用 flying_ms=4000, gap_ms=700。
+- **combines with**: safe-move, handwritten-geometry, split-groups
+- **music fit**: 对答式乐句、交替强拍、卡农中段的分组呼应。
+
+```python
+geo = custom_points([...左右/前后两带稀疏问答点...], n=len(drones), min_xy_cm=90)
+prev = call_response_safe(drones, prev, geo, 4000, gap_ms=700, relay_split='left_right', colors=('#ff6040','#4060ff'), gradient_to=('#ffd166','#66e0ff'))
+```
+
 ### chain-follow  ·  `follow_chain()`
 
 - **category**: motion
@@ -134,18 +152,20 @@ prev = chain_follow_safe(drones, ctrl, hop_ms=700, lag_hops=1, spacing_cm=65, co
 
 - **category**: motion
 - **role fit**: buildup, development, climax
-- **purpose**: 分组问答接力：lead 组先动（另一组原地亮灯应答），到位后另一组再动——组色对话。
-- **when to use**: 左右/前后两组呼应、一问一答的乐句结构、对称交替的能量。
-- **when NOT**: 全队需要统一动作时；奇偶交替分组在视觉上读不出两组时。
-- **key params**: group_ids 用 split_groups(prev, mode=...) 算；flying_ms 单程时长；gap_ms 问答间隔；colors=(组0色,组1色)；gradient_to 可加渐变。
-- **safety**: **每架机飞向自己的 targets[i]，gids 只决定先后时序，不是让两组飞向同一组点**——两组的目标必须在不同空间区域，否则两组先后穿过同一片空间会对穿碰撞。总时长=2*flying_ms+gap_ms，所有机段尾自动对齐；应答组等待期间持续亮灯。targets 仍需 best_assign/far_assign 安全分配。
-- **validation risks**: 两组路径交叉触发碰撞门；分组在空间上不可分时读作噪声。
-- **combines with**: split-groups, safe-assign
+- **purpose**: 底层分组问答执行器：lead 组先动、response 组亮灯应答后再动。
+- **when to use**: 你已经手动用 safe_assign 按完全相同的接力 delays 验过 targets；或作为 call_response_safe/safe_move 的内部执行器。
+- **when NOT**: 普通 LLM 生成问答段时不要直接用；尤其不要写 group_relay(best_assign(...)) / group_relay(far_assign(...))，那只验证同步路径，不验证真实接力时序。
+- **key params**: targets 必须已经是按真实接力时序安全分配后的排列；group_ids 用 split_groups(prev, mode=...) 算；flying_ms 单程时长；gap_ms 问答间隔；colors=(组0色,组1色)。
+- **safety**: 它只负责执行两阶段时序，不负责挑安全 targets。要让它安全，必须先构造 relay_delays=[0 或 flying_ms+gap_ms]，再调用 safe_assign(prev, geo, delays=relay_delays, flying_ms=flying_ms)。更推荐直接用 call_response_safe。
+- **validation risks**: 裸 group_relay + best_assign/far_assign/mirror_assign 是 S02 碰撞反复返工的高频根因；几何/分配没按接力时序验证会撞。
+- **combines with**: call-response-safe, split-groups, safe-assign
 - **music fit**: 对答式乐句、呼应段、交替强拍。
 
 ```python
 gids = split_groups(prev, mode='left_right')
-prev = group_relay(drones, best_assign(prev, geo), gids, 2300, colors=('#ff6040','#4060ff'), gap_ms=250)
+relay_delays = [0 if g == 0 else 3000 for g in gids]
+targets = safe_assign(prev, geo, delays=relay_delays, flying_ms=2800)
+prev = group_relay(drones, targets, gids, 2800, colors=('#ff6040','#4060ff'), gap_ms=200)
 ```
 
 ### light-wave  ·  `light_wave()`
@@ -484,18 +504,18 @@ breathe_group(drones, base_color, cycles=1, period_ms=1400)
 
 ### call-and-response
 
-- **uses primitives**: `split_groups()`, `group_relay()`, `best_assign()`
+- **uses primitives**: `call_response_safe()`, `safe_move()`
 - **category**: grouping
 - **role fit**: buildup, development
 - **music fit**: 对答乐句、左右呼应、交替强拍。
-- **visual effect**: 左组动、右组亮灯应答，再反过来——两组各在自己空间带里对话、色彩呼应，读出问答结构（不穿心交叉）。
-- **constraints**: 分组要可分（left_right/front_back）；**两组始终待在各自空间带**（每机飞自己的 targets[i]，gids 只管时序），两组 targets 放不同区域/不同 y 带，让两束航线天生不相交。问答的“换位/换手”用**绕行 route-around**：两组在各自带内移动、或整条带平移，看着像对话交换但航线不交叉（`far_assign` 取最大间距排列）。**真要穿过中心的对穿是 mirror-cross-phrase 母题的事，不在 call-and-response 里做**——这里别用 mirror_assign/对穿。总时长=2*flying+gap 填满窗口。
+- **visual effect**: 左组先动、右组亮灯应答，再由右组接上；两组色彩呼应，读出问答结构，同时路线由本地 safe_assign 保底。
+- **constraints**: 首选 `call_response_safe`。分组要可分（left_right/front_back）；geo 写稀疏的两带/弧形/route-around 点表，min_xy_cm≈90。总时长=2*flying+gap 填满窗口；例如 S02 8.7s 写 flying_ms=4000, gap_ms=700。不要裸写 `group_relay(best_assign(...))`，那是旧坑。
 - **how to choose**: 音乐有明显一问一答/对称乐句时。
 - **avoid overuse**: 连续多段问答会单调——配合其他母题交替。
 
 ```python
-gids = split_groups(prev, mode='left_right')
-prev = group_relay(drones, best_assign(prev, geo), gids, 2300, colors=('#ff6040','#4060ff'), gap_ms=250)
+geo = custom_points([...两带/弧形 route-around 问答点...], n=len(drones), min_xy_cm=90)
+prev = call_response_safe(drones, prev, geo, 4000, gap_ms=700, relay_split='left_right', colors=('#ff6040','#4060ff'), gradient_to=('#ffd166','#66e0ff'))
 ```
 
 ### chain-follow-phrase

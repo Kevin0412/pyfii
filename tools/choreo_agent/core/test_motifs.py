@@ -147,6 +147,33 @@ def test_group_relay_accepts_gids_keyword_alias():
     assert [d.time for d in drones] == [2000] * 4
 
 
+def test_call_response_safe_wraps_safe_relay_alignment():
+    fn = _load_fn()
+    drones = [
+        FakeDrone(60, 120, 140),
+        FakeDrone(500, 120, 150),
+        FakeDrone(60, 440, 160),
+        FakeDrone(500, 440, 170),
+    ]
+    prev = [(d.x, d.y, d.z) for d in drones]
+    geo = fn.custom_points(
+        [(120, 120, 150), (440, 120, 180), (120, 440, 160), (440, 440, 200)],
+        n=len(drones),
+        min_xy_cm=90,
+    )
+
+    out = fn.call_response_safe(
+        drones, prev, geo, 1000, gap_ms=200,
+        relay_split="left_right", colors=("#aa0000", "#0000aa"),
+    )
+
+    assert sorted(tuple(p[:2]) for p in out) == sorted(tuple(g[:2]) for g in geo)
+    assert [d.time for d in drones] == [2200] * 4, "总时长 2*fly+gap 全员对齐"
+    delays = [0 if g == 0 else 1200 for g in fn.split_groups(prev, mode="left_right")]
+    ok, min_cm, _pair = fn.verify_timed_clearance(prev, out, delays=delays, flying_ms=1000)
+    assert ok and min_cm >= 51, f"call_response_safe flew an unverified relay: {min_cm}cm"
+
+
 def test_follow_chain_alignment_order_and_ends():
     fn = _load_fn()
     drones = [FakeDrone(300, 280), FakeDrone(100, 280), FakeDrone(200, 280)]
@@ -370,6 +397,64 @@ light_wave(drones, prev, delays=delays3, palette=golden_palette, hold_ticks=8)
     r = preflight_check(code, segment_id="S02", drone_count=9)
     assert not r
     assert any("light_wave 参数重复" in e for e in r.errors), r.errors
+
+
+def test_preflight_rejects_nonexistent_drone_turn_on():
+    code = """\
+for d in drones:
+    d.turn_on('#44aaff')
+    d.delay(200)
+"""
+    r = preflight_check(code, segment_id="S03", drone_count=9)
+    assert not r
+    assert any("turn_on" in e for e in r.errors), r.errors
+
+
+def test_preflight_rejects_apply_light_ticks_times_100():
+    code = """\
+ticks1 = 3
+for d in drones:
+    apply_light(d, '#ffaa44', ticks1 * 100)
+"""
+    r = preflight_check(code, segment_id="S06", drone_count=9)
+    assert not r
+    assert any("apply_light 第三个参数是 ticks" in e for e in r.errors), r.errors
+
+
+def test_preflight_rejects_fade_group_unknown_color_keywords():
+    code = """\
+fade_group(drones, color1="#ffe4b5", color2="#303030", duration_ms=800)
+"""
+    r = preflight_check(code, segment_id="S06", drone_count=9)
+    assert not r
+    assert any("fade_group 不支持关键字参数" in e for e in r.errors), r.errors
+
+
+def test_preflight_rejects_apply_light_same_duration_as_move():
+    code = """\
+flying_ms1 = 1800
+ticks1 = flying_ms1 // 100
+for i, drone in enumerate(drones):
+    move2(drone, targets1[i], flying_ms1)
+    apply_light(drone, '#ffcc66', ticks1)
+"""
+    r = preflight_check(code, segment_id="S06", drone_count=9)
+    assert not r
+    assert any("动作预算翻倍" in e for e in r.errors), r.errors
+
+
+def test_preflight_rejects_group_relay_with_sync_assignment():
+    code = """\
+prev = [(d.x, d.y, d.z) for d in drones]
+geo = custom_points([(80,120,140),(180,120,150),(280,120,160),(380,120,170),(480,120,180),
+                     (80,440,140),(180,440,150),(280,440,160),(380,440,170)], n=len(drones))
+gids = split_groups(prev, mode="left_right")
+targets = best_assign(prev, geo)
+prev = group_relay(drones, targets, gids, 2800, colors=("#ff6040","#4060ff"), gap_ms=250)
+"""
+    r = preflight_check(code, segment_id="S02", drone_count=9)
+    assert not r
+    assert any("group_relay 只是底层接力执行器" in e for e in r.errors), r.errors
 
 
 def test_preflight_rgb_tuples_are_not_coordinates():

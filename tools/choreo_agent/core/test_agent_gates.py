@@ -245,6 +245,15 @@ prev = move_group(drones, targets, 3000, "#4488ff", 4)
     print("PASSED: preflight blocks out-of-range coordinate literals")
 
 
+def test_preflight_allows_scalar_unpack_that_looks_like_xyz():
+    r = preflight_check("""
+cx, cy, R = 280, 280, 70
+geo = [(100, 120, 150), (200, 180, 160), (300, 240, 140)]
+targets = best_assign(prev, geo)
+""")
+    assert not any("坐标常量超出" in e for e in r.errors), r.errors
+
+
 def test_preflight_accepts_clean():
     r = preflight_check("""prev = [(d.x,d.y,d.z) for d in drones]
 geo1 = [(100,120,150),(200,180,160),(300,240,140),(400,200,170),(500,160,130),(350,400,150),(150,380,140)]

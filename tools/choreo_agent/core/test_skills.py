@@ -17,7 +17,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 # The primitives the brief explicitly requires to be documented.
 REQUIRED_PRIMITIVES = {
-    "ripple_move", "follow_chain", "chain_follow_safe", "group_relay",
+    "ripple_move", "follow_chain", "chain_follow_safe", "call_response_safe", "group_relay",
     "light_wave", "fade_group", "breathe_group", "flash_group",
     "spatial_ranks", "ripple_delays", "split_groups", "beat_ms",
 }
