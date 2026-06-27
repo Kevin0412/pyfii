@@ -243,7 +243,7 @@ def build_segment_prompt(
   起飞波次 `drone.delay(i * 120)` 写在 move2 之前；或到达波次 `move2(drone, target, flying_ms + (i % 3) * 250)`
 - 灯光两种语体，按段落角色选一（也可混用）：
   (a) 运动驱动型：`apply_light(drone, color, 3-5)` 短提示 + `drone.delay(余量)` —— 灯光稀疏、动作主导；
-  (b) 灯光时钟型（dntg 式，免时间算术）：`apply_light(drone, color, flying_ms // 100)` 灯光循环本身占满飞行窗口，**不写尾部 delay**；错峰时 `apply_light(drone, color, (flying_ms - i*120) // 100)` 自然回正。渐变/呼吸归这一型
+  (b) 定格/呼吸灯光型（dntg 式）：先把移动 keyframe 安全飞完，再用 `light_wave`/`breathe_group`/`fade_group` 在造型上铺灯光时间。**不要在同一个 `move2(..., flying_ms)` 循环里写 `apply_light(..., flying_ms // 100)`**；在本 API 里这会被串行计算成超预算，preflight 会拒绝。
 - 个体色彩身份（dntg 视觉语法）：群舞/交换 keyframe 给每架机（或每对镜像机）自己的色相，如 `palette = ["#ff4444","#ffaa00","#ffee44","#44ff88","#44ddff","#4466ff","#aa44ff","#ff44aa","#ffffff"]` 后 `apply_light(drone, palette[i], ...)` —— 观众才能跟踪个体换位；全队统一色只留给宣言时刻（高潮齐爆、署名定格）
 - 定格 pose 合法：飞到造型后保持静止展示（如署名/符号阵）可以超过 1s，**但定格期间必须灯亮**（apply_light 或 TurnOnAll 持续覆盖）；黑灯静止才会被判低活动
 - 不要重新质疑 `move2/apply_light/delay` 的语义，也不要在回答中推导 API；按上述顺序写代码即可，验证器会负责轨迹检查

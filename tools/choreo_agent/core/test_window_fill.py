@@ -96,6 +96,73 @@ def test_appended_segment_gets_cursor_marker():
         shutil.rmtree(tmp, ignore_errors=True)
 
 
+def test_pre_land_segment_not_inserted_without_nominal_gap():
+    from core.session import Session
+
+    tmp = Path(tempfile.mkdtemp(prefix="pre_land_gap_test_"))
+    project = tmp / "proj"
+    shutil.copytree(TEMPLATE, project)
+    try:
+        session = Session(project)
+        for seg in session.state.segments:
+            if seg.id != "LAND":
+                seg.locked = True
+        session.state.locked_segment_ids = [seg.id for seg in session.state.segments if seg.id != "LAND"]
+        session.state.current_segment_index = 6
+
+        s06 = session.state.segments[5]
+        land = session.state.segments[6]
+        s06.start_time = 48.0
+        s06.end_time = 64.0
+        s06.attempts = [{"validation": {"motion_end_s": 51.7}}]
+        land.start_time = 64.0
+        land.end_time = 68.0
+
+        assert not session._ensure_pre_land_formal_segment()
+        assert [seg.id for seg in session.state.segments] == [
+            "S01", "S02", "S03", "S04", "S05", "S06", "LAND"
+        ]
+        content = (project / "scripts" / "design.py").read_text(encoding="utf-8")
+        assert "def s07(" not in content
+        assert '_segcursor("S07")' not in content
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
+def test_pre_land_segment_uses_nominal_gap_only():
+    from core.session import Session
+
+    tmp = Path(tempfile.mkdtemp(prefix="pre_land_gap_test_"))
+    project = tmp / "proj"
+    shutil.copytree(TEMPLATE, project)
+    try:
+        session = Session(project)
+        for seg in session.state.segments:
+            if seg.id != "LAND":
+                seg.locked = True
+        session.state.locked_segment_ids = [seg.id for seg in session.state.segments if seg.id != "LAND"]
+        session.state.current_segment_index = 6
+
+        s06 = session.state.segments[5]
+        land = session.state.segments[6]
+        s06.start_time = 48.0
+        s06.end_time = 58.0
+        s06.attempts = [{"validation": {"motion_end_s": 51.7}}]
+        land.start_time = 64.0
+        land.end_time = 68.0
+
+        assert session._ensure_pre_land_formal_segment()
+        inserted = session.state.segments[6]
+        assert inserted.id == "S07"
+        assert inserted.start_time >= s06.end_time
+        assert inserted.end_time <= land.start_time
+        assert inserted.end_time - inserted.start_time >= 4.0
+        content = (project / "scripts" / "design.py").read_text(encoding="utf-8")
+        assert 's07(drones); _segcursor("S07")' in content
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
 if __name__ == "__main__":
     for name, fn in sorted(globals().items()):
         if name.startswith("test_") and callable(fn):

@@ -576,9 +576,30 @@ class Session:
         return None
 
     def _ensure_pre_land_formal_segment(self) -> bool:
-        """Insert S07/S08/... before LAND when the compressed work has not crossed 60s."""
+        """Insert S07/S08/... before LAND when there is real scheduled room.
+
+        The trigger is based on compressed/actual motion time, but the inserted
+        segment still lives in the formal segment schedule.  Never place an
+        extra segment inside the previous locked segment's nominal window:
+        validators judge by the segment window, and doing so makes the next
+        round chase an impossible target (the code executes after the previous
+        segment, while the quality window points back inside it).
+        """
         current = self.state.current_segment
         if current is None or current.id.upper() != "LAND":
+            return False
+
+        land_index = self.state.current_segment_index
+        if land_index <= 0:
+            return False
+
+        previous = self.state.segments[land_index - 1]
+        land_start = float(current.start_time)
+        previous_end = float(previous.end_time)
+
+        # No formal gap before LAND: S06 already owns the whole window up to
+        # landing.  Appending S07 here would overlap a locked segment.
+        if previous_end >= land_start - 1e-6:
             return False
 
         last_motion_end = self._previous_locked_motion_end_s()
@@ -589,13 +610,19 @@ class Session:
         if segment_id is None:
             return False
 
-        land_index = self.state.current_segment_index
         music_end = float(self.state.music_duration or 68.0)
-        formal_latest_end = max(60.5, music_end - 5.0)
-        start = max(0.0, math.floor((last_motion_end or 0.0) + 1.0))
+        formal_latest_end = min(land_start, max(60.5, music_end - 5.0))
+        if formal_latest_end <= previous_end + 1e-6:
+            return False
+
+        actual_based_start = math.floor((last_motion_end or previous_end) + 1.0)
+        start = max(0.0, previous_end, float(actual_based_start))
         end = min(start + 8.0, formal_latest_end)
         if end - start < 4.0:
-            start = max(0.0, end - 5.0)
+            start = max(previous_end, formal_latest_end - 5.0)
+            end = formal_latest_end
+        if end - start < 4.0:
+            return False
 
         segment = SegmentState(
             id=segment_id,

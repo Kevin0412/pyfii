@@ -173,7 +173,43 @@ def test_budget_table_directs_to_safe_move_on_colliding_keyframe():
     clean_prev = [[80, 80, 120], [480, 80, 120], [80, 480, 120]]
     clean = _kf([[120, 460, 150], [440, 460, 150], [120, 120, 150]], duration_s=3.0)
     bt_clean = plan_to_budget_table({"keyframes": [clean]}, clean_prev, drone_count=3)
-    assert "用safe_move" not in bt_clean  # numeric delay_ms retained for safe moves
+    table_body = bt_clean.split("编码说明", 1)[0]
+    assert "用safe_move" not in table_body  # numeric delay_ms retained for safe moves
+
+
+def test_budget_table_no_longer_says_to_blindly_copy_violations():
+    from core.planning_pass import plan_to_budget_table
+
+    prev = [[60, 100, 120], [500, 100, 120], [280, 100, 120]]
+    kf = _kf([[500, 100, 150], [60, 100, 150], [280, 100, 150]], duration_s=2.6)
+    kf["assign"] = "mirror"
+    bt = plan_to_budget_table({"keyframes": [kf]}, prev, drone_count=3)
+
+    assert "不是无条件照抄" in bt
+    assert "若 delay_ms 栏是“用safe_move”，必须用 safe_move" in bt
+    assert "把上表直接翻译" not in bt
+
+
+def test_coding_prompt_does_not_recommend_fly_ms_light_clock_in_move_loop():
+    from core.planning_pass import build_coding_prompt
+
+    prompt = build_coding_prompt("budget", "S03", 19.8, 30.5, drone_count=9)
+
+    assert "不要在同一循环写 `apply_light(..., fly_ms // 100)`" in prompt
+    assert "apply_light(drone, color, fly_ms // 100)` 占满飞行窗口" not in prompt
+
+
+def test_prompts_do_not_recommend_long_light_ticks_inside_move_loop():
+    from core.planning_pass import build_planning_prompt
+    from core.prompt_builder import build_segment_prompt
+
+    planning = build_planning_prompt("S03", 19.8, 30.5, "transition", [[100, 100, 150]] * 9, drone_count=9)
+    assert "duration_s*10" not in planning
+    assert "不要规划成每机 move2 循环里的长 ticks" in planning
+
+    _system, direct = build_segment_prompt("S01", 4.0, 11.1, "opening", None, "", drone_count=9)
+    assert "不要在同一个 `move2(..., flying_ms)` 循环里写" in direct
+    assert "apply_light(drone, color, flying_ms // 100)` 灯光循环本身占满" not in direct
 
 
 def test_timed_gate_passes_clean_spread_move():

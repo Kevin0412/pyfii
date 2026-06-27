@@ -80,7 +80,7 @@ def build_planning_prompt(
 
 节奏目标: 动作更利落，不要用单个慢 move 拖满段落——但**必须铺满本段窗口**：各 keyframe 顺次排布，最后一个的 start_s+duration_s 要落在 {end_time-1.0:.1f}s 之后（窗口尾 {end_time}s 的 1.0s 以内）。这是 validator 硬门：欠填>1.0s 会把本段判“有效运动过短”，并把后续所有段与音乐 cue 整体推错（错误归因到无辜的下一段）。时长不够就多加一个 keyframe 或适当延长动作；段尾余量交给灯光定格（light_wave/breathe_group/fade_group 亮灯铺到窗口尾——亮灯定格是预算一等公民），别留黑灯空档。按此一次配齐，不要反复纠结覆盖问题。
 可完成性: 单个 keyframe 的 3D 路径通常控制在约 120-380cm；不要规划 500cm 级跨场短飞。
-约束: targets总数={drone_count}, shape=[{target_example}], XY 0-560cm, Z 80-250cm, target 点表 XY 间距硬下限 51cm（pyfii core 碰撞线，检查器精确验证）；密度是构图自由，不要为了凑大间距放弃造型。速度20-200, 加速度50-400, 推荐速度150-200、加速度260-400；light_ticks 两种语体：3-5（运动驱动型短提示）或 duration_s*10（灯光时钟型，灯光占满飞行窗口）。
+约束: targets总数={drone_count}, shape=[{target_example}], XY 0-560cm, Z 80-250cm, target 点表 XY 间距硬下限 51cm（pyfii core 碰撞线，检查器精确验证）；密度是构图自由，不要为了凑大间距放弃造型。速度20-200, 加速度50-400, 推荐速度150-200、加速度260-400；light_ticks 用 2-5 的运动短提示，长灯光/呼吸/渐变应在编码阶段用 light_wave/breathe_group/fade_group 单独铺时，不要规划成每机 move2 循环里的长 ticks。
 章法约束: JSON 里的 feel/targets/light_color 必须服务全局章法；不要随机换题，不要连续重复同一种退化队形。
 assign 字段（可选，默认 best）: "best"收束 / "far"大交换 / "rotate"漩涡(可加 "rotate_steps") / "mirror"对穿(检查器会提醒错峰) / "swap"半场互换 / "keep"身份保持——转场即编舞，按意图声明，检查器按声明的映射验算。
 输出纪律: 直接给 JSON；不要写距离证明、不要手算两两间距、不要自问自答。规划检查器会回报精确间距/路径/时长数字，如有违规你会收到报告再修正。
@@ -651,7 +651,14 @@ def plan_to_budget_table(plan: dict, prev_state: list, drone_count: int = 7) -> 
         current_prev = [(float(t[0]), float(t[1]), float(t[2])) for t in targets]
 
     lines.append("```")
-    lines.append("\n把上表直接翻译为 Python 代码，只使用 target/fly_ms/delay_ms/light/ticks，不要写 speed/accel API。")
+    lines.append(
+        "\n编码说明：上表是预算参考，不是无条件照抄。"
+        "若前面有“违规”报告，先修正 targets/duration/assign；"
+        "若 delay_ms 栏是“用safe_move”，必须用 safe_move/call_response_safe/ripple_move 等安全执行器，"
+        "不要把 delay_ms 手搓成 move2+drone.delay。"
+        "只有无违规且 delay_ms 是数字的同步/非交叉小动作，才可按 target/fly_ms/delay_ms/light/ticks 展开。"
+        "planning_speed/planning_accel 只用于预算，final code 不要写 speed/accel API。"
+    )
     return "\n".join(lines)
 
 
@@ -679,7 +686,7 @@ def build_coding_prompt(
 - **移动一律用 `prev = safe_move(drones, prev, geo, flying_ms, mode="wave")`（对穿/大交叉 `mode="relay"`）**：一次完成安全分配+错峰+执行，验证的时序就是飞的时序，清不开会自己抛错让你铺开点表。**任何错峰/交叉/大动作都走它，切勿手搓 `move2`+`drone.delay` 凑错峰（会撞、反复返工的直接根因）**。仅「同步非交叉的就近小动作」或「原地灯光细节」才展开 per-drone loop：`move2(drone, target, flying_ms)` → `apply_light(drone, color, ticks)` → `drone.delay(delay_ms)`
 - 每段函数**首行**必须先 `auto_init(drones)` 再 `prev = [(d.x, d.y, d.z) for d in drones]`，之后才能把 prev 传给 safe_move/best_assign 等（否则 prev 未定义直接报错）
 - S02-S05 每段至少一个 keyframe 必须打破时间同步（同起同停会被节奏门打回）：`safe_move(..., mode="wave", step_ms=120)` 内部错峰即破同步且安全；S01 起飞这种无交叉场景才可 `drone.delay(i * 120)`（move2 前）
-- 灯光时钟型写法可免时间算术：`apply_light(drone, color, fly_ms // 100)` 占满飞行窗口不写尾部 delay；错峰时 `(fly_ms - i*120) // 100` 自然回正
+- 在 per-drone `move2(..., flying_ms)` 循环里，灯光必须是短提示 + 尾部等待：`ticks = 2..4; apply_light(drone, color, ticks); drone.delay(max(0, flying_ms - ticks*100 + 100))`。不要在同一循环写 `apply_light(..., fly_ms // 100)`，这会把飞行和灯效串行成超预算；长亮/渐变/呼吸放到 keyframe 之后用 `light_wave`/`breathe_group`/`fade_group`。
 - 个体色彩身份：群舞/交换 keyframe 每架机自己的色相（palette[i]），观众才能跟踪换位；统一色留给宣言时刻
 - 镜像换位/对穿用 `safe_move(drones, prev, geo, flying_ms, mode="relay")`；左右/前后问答优先 `call_response_safe(drones, prev, geo, flying_ms, gap_ms=...)`（顺序接力、零跨组交叉、自带 60fps 验证）——**别再写 `drone.delay(i*150)`+move2 手搓对穿：小错峰救不了真交叉，必撞返工**
 - 移动优先 `safe_move`（对穿/大交叉/密集承接必须用）。`best_assign(prev, geo)` + `ripple_move(drones, targets, flying_ms, delays)` 组合在**不交叉的展开/承接**时仍然安全好用（它们用同步锁步模型，非交叉时一致）；**交叉/对穿才必须 safe_move**（同步模型会把交叉的路径算安全但实跑撞）。环形刚体旋转 `rotate_assign` 天然安全可直接用
