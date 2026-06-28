@@ -96,7 +96,10 @@ def _format_keyframe_contract(segment_id: str, start_time: float, end_time: floa
         note = "S04 是抒情展开/蓄力段，必须 4 个短 keyframes，至少 3 种 light_color。"
     elif segment == "S06":
         count = 2
-        note = "S06 是尾声收束，必须 2 个 keyframes：中继 echo pose + 最终 signature pose。"
+        note = (
+            "S06 是尾声收束，必须 2 个 keyframes：中继 echo pose + 最终 signature pose；"
+            "至少一个 keyframe duration_s≥3.0 且路径 90-140cm，避免有效运动短于2.5s。"
+        )
     elif duration >= 9.0:
         count = 3
         note = "长窗口用 3 个强 keyframes；不要把 10 秒压成两个 5 秒慢动作。"
@@ -316,9 +319,10 @@ def evaluate_plan_safety(
             else:
                 hint = (
                     f"连最优排列也只有 {opt_md:.0f}cm<51——这些点本身太近，换排列/far_assign 都无效。"
-                    "首选显著拉开本 keyframe 点表间距；若叙事确实要对穿，编码时用 "
-                    "`safe_move(drones, prev, geo, flying_ms, mode=\"relay\")`（顺序接力，零跨组交叉），"
-                    "它内部安全分配+错峰+执行同一份时序，清不开会自己抛错让你铺开点表。"
+                    "首选显著拉开本 keyframe 点表间距，并改成 route-around（两组走不同 XY 带）。"
+                    "编码时优先用 `safe_move(drones, prev, geo, flying_ms, mode=\"wave\")`；"
+                    "只有 motif 明确 mirror-cross 且点表稀疏时才试 `mode=\"relay\"`，"
+                    "relay 抛错就说明本几何装不下，必须绕行/铺开点表。"
                     "注意 `mirror_assign` 对穿不是免检：同步必撞、小错峰（如 i*150）也救不了真交叉——"
                     "别手搓 move2+delay 凑错峰。"
                 )
@@ -371,9 +375,10 @@ def evaluate_plan_safety(
             msg = (
                 f"k{kf_i}: 分时轨迹(标准错峰回放)最小间距只有 {timed_md:.0f}cm "
                 f"< {PLAN_PATH_SPACING_FLOOR_CM:.0f}cm — 默认/by_index 错峰下实跑会撞(validator 逐帧同此模型)。"
-                "本 keyframe 的 JSON 保持不动（不要加 step_ms、不要改点表/assign）——这是编码阶段的实现要求："
-                "编码时用 `safe_move(drones, prev, geo, flying_ms, mode=\"relay\")`（对穿/大交叉，顺序接力零跨组交叉），"
-                "一般错峰大动作用 `mode=\"wave\"`；safe_move 内部安全分配+错峰+执行同一份时序，过不了会自己抛错让你铺开点表。"
+                "这是编码阶段的实现要求：优先改成 route-around 点表并用 "
+                "`safe_move(drones, prev, geo, flying_ms, mode=\"wave\")`，"
+                "或 `safe_assign(..., delays=..., flying_ms=...) + ripple_move(...)`。"
+                "只有明确 mirror-cross 才试 `mode=\"relay\"`；relay 清不开就改点表/绕行，不要反复硬凑。"
                 "切勿手搓 move2+drone.delay 凑错峰（会撞）。不要削门。"
             )
             violations.append(msg)
@@ -635,7 +640,8 @@ def plan_to_budget_table(plan: dict, prev_state: list, drone_count: int = 7) -> 
             lines.append(
                 f"⚠ 本 keyframe 朴素错峰下分时间距仅 {collide_md:.0f}cm<51——会撞。"
                 "必须用 `safe_move(drones, prev, geo, flying_ms, mode=\"wave\")`"
-                "（对穿/大交叉用 mode=\"relay\"）一次完成安全分配+错峰+执行；"
+                "配合 route-around 点表一次完成安全分配+错峰+执行；"
+                "只有明确 mirror-cross 才试 mode=\"relay\"，relay 抛错就改点表/绕行；"
                 "勿照抄下面 delay_ms 手搓 move2/drone.delay（delay_ms 仅供时长参考）。"
             )
         lines.append(f"drone  target(x,y,z)  dist3(cm)  fly_ms  delay_ms")
@@ -683,20 +689,20 @@ def build_coding_prompt(
 - 代码开头必须写 5 行设计卡注释：`# role: ...`, `# motifs: ...`, `# beat: ...`, `# formation: ...`, `# lighting: ...`
 - 设计卡必须承接全局章法，尤其是 current role/current motifs；不要写随机队形说明
 - 几何主路径：整数坐标表或 math 表达式都必须包进 custom_points：`geo = custom_points([...], n=len(drones))`（sin/cos/pi 已导出，不要写 π；comprehension 直接传给 best_assign/move2 会被打回），再 `best_assign` 或 `far_assign`；间距硬下限 51cm，写点时直接保证（圆形 R≥85，两排同行≥70/行距≥120，散点任意两点 x差或y差≥60）；不要手动传 `min_xy_cm=90`，preflight 会按你写的高阈值精确拒绝；S02-S05 禁止调用 `geo_wide_v/geo_arrow/geo_box/geo_diagonal/geo_wave/geo_grid`
-- **移动一律用 `prev = safe_move(drones, prev, geo, flying_ms, mode="wave")`（对穿/大交叉 `mode="relay"`）**：一次完成安全分配+错峰+执行，验证的时序就是飞的时序，清不开会自己抛错让你铺开点表。**任何错峰/交叉/大动作都走它，切勿手搓 `move2`+`drone.delay` 凑错峰（会撞、反复返工的直接根因）**。仅「同步非交叉的就近小动作」或「原地灯光细节」才展开 per-drone loop：`move2(drone, target, flying_ms)` → `apply_light(drone, color, ticks)` → `drone.delay(delay_ms)`
+- **移动优先用 `prev = safe_move(drones, prev, geo, flying_ms, mode="wave")` + route-around 点表**：一次完成安全分配+错峰+执行，验证的时序就是飞的时序，清不开会自己抛错让你铺开点表。真对穿/大交叉只在 motif 明确 mirror-cross 且点表稀疏时试 `mode="relay"`；relay 抛错就改两条 XY 带绕行，不要继续硬凑。**任何错峰/交叉/大动作都不要手搓 `move2`+`drone.delay` 凑错峰（会撞、反复返工的直接根因）**。仅「同步非交叉的就近小动作」或「原地灯光细节」才展开 per-drone loop：`move2(drone, target, flying_ms)` → `apply_light(drone, color, ticks)` → `drone.delay(delay_ms)`
 - 每段函数**首行**必须先 `auto_init(drones)` 再 `prev = [(d.x, d.y, d.z) for d in drones]`，之后才能把 prev 传给 safe_move/best_assign 等（否则 prev 未定义直接报错）
 - S02-S05 每段至少一个 keyframe 必须打破时间同步（同起同停会被节奏门打回）：`safe_move(..., mode="wave", step_ms=120)` 内部错峰即破同步且安全；S01 起飞这种无交叉场景才可 `drone.delay(i * 120)`（move2 前）
 - 在 per-drone `move2(..., flying_ms)` 循环里，灯光必须是短提示 + 尾部等待：`ticks = 2..4; apply_light(drone, color, ticks); drone.delay(max(0, flying_ms - ticks*100 + 100))`。不要在同一循环写 `apply_light(..., fly_ms // 100)`，这会把飞行和灯效串行成超预算；长亮/渐变/呼吸放到 keyframe 之后用 `light_wave`/`breathe_group`/`fade_group`。
 - 个体色彩身份：群舞/交换 keyframe 每架机自己的色相（palette[i]），观众才能跟踪换位；统一色留给宣言时刻
-- 镜像换位/对穿用 `safe_move(drones, prev, geo, flying_ms, mode="relay")`；左右/前后问答优先 `call_response_safe(drones, prev, geo, flying_ms, gap_ms=...)`（顺序接力、零跨组交叉、自带 60fps 验证）——**别再写 `drone.delay(i*150)`+move2 手搓对穿：小错峰救不了真交叉，必撞返工**
-- 移动优先 `safe_move`（对穿/大交叉/密集承接必须用）。`best_assign(prev, geo)` + `ripple_move(drones, targets, flying_ms, delays)` 组合在**不交叉的展开/承接**时仍然安全好用（它们用同步锁步模型，非交叉时一致）；**交叉/对穿才必须 safe_move**（同步模型会把交叉的路径算安全但实跑撞）。环形刚体旋转 `rotate_assign` 天然安全可直接用
+- 左右/前后问答默认 route-around：两组走不同 XY 带并用 `safe_move(..., mode="wave")` 或 `safe_assign + ripple_move`。镜像换位/真对穿只在 motif 明确 mirror-cross 时试 `safe_move(..., mode="relay")` / `call_response_safe(...)`；若它们抛“清不开/仍相撞”，不要继续加 gap，改点表绕行。**别再写 `drone.delay(i*150)`+move2 手搓对穿：小错峰救不了真交叉，必撞返工**
+- 移动优先 `safe_move` / `safe_assign+ripple_move`。`best_assign(prev, geo)` + `ripple_move(drones, targets, flying_ms, delays)` 组合在**不交叉的展开/承接**时仍然安全好用（它们用同步锁步模型，非交叉时一致）；交叉/对穿必须用 safe_move/safe_assign 验真实分时轨迹。环形刚体旋转 `rotate_assign` 天然安全可直接用
 - 定格 pose 合法（静止展示造型可超 1s），但定格期间必须灯亮；黑灯静止会被判低活动
-- `move_group/move_group_staggered` 只作为 smoke/兜底工具；S01-S06 纯 helper 执行会被 composition gate 打回。卡农/错峰用 `safe_move(mode="wave")` 或 `chain_follow_safe`；分组问答用 `call_response_safe`。`group_relay` 只是底层执行器，只有 targets 已按同一接力 delays 走过 safe_assign 才直接调
+- `move_group/move_group_staggered` 只作为 smoke/兜底工具；S01-S06 纯 helper 执行会被 composition gate 打回。卡农/错峰/分组问答优先 `safe_move(mode="wave")` 或 `safe_assign+ripple_move` 的 route-around；`call_response_safe` 只用于明确接力问答且点表已铺开。`group_relay` 只是底层执行器，只有 targets 已按同一接力 delays 走过 safe_assign 才直接调
 - 3s 以上 keyframe 若用 `far_assign`，写 `min_path_cm=active_min_path_cm(flying_ms)`；不要写 90/100cm 导致真实运动过早结束
 - 安全距离按 XY 看，不要把同一 XY 不同 Z 当成安全分离
 - 6-8s 中短窗口只写 2 个强 keyframe；若错峰，stagger_ms=60-90，避免第三个 keyframe 把段尾动作拖成未完成
-- S04 抒情展开段要写 4-5 个短 keyframe，至少 3 种颜色/灯光变化；S06 尾声要写两段式收尾（中继点 + 最终署名），不能单 keyframe 小挪动
-- 编舞词汇（每段至少用一种）：交错启动 (safe_move/ripple_move + delays), 安全分组问答 (call_response_safe), Z 个性 (move2 内 +dz*sin(i)), 分组对比 (safe_move relay/call_response_safe), 焦点机, 中心迁移, 密度呼吸, 灯光渐变 (gradient_to= / range()+TurnOnAll((r,g,b)))；S01-S05 全段匀速单色无差异会被节奏门打回
+- S04 抒情展开段要写 4-5 个短 keyframe，至少 3 种颜色/灯光变化；S06 尾声要写两段式收尾（中继点 + 最终署名），至少一个主体移动 3000-3400ms、路径 90-140cm，不能单 keyframe 小挪动或短 move + fade/flash 冒充有效运动
+- 编舞词汇（每段至少用一种）：交错启动 (safe_move/ripple_move + delays), 安全分组问答 (route-around + safe_move wave / safe_assign+ripple_move；少数 mirror-cross 才 call_response_safe), Z 个性 (move2 内 +dz*sin(i)), 分组对比, 焦点机, 中心迁移, 密度呼吸, 灯光渐变 (gradient_to= / range()+TurnOnAll((r,g,b)))；S01-S05 全段匀速单色无差异会被节奏门打回
 - 渐变灯光必须塞进飞行窗口：keyframe 内 `ticks*100 + delay_ms ≈ fly_ms`；动作完成后原地亮灯 >1s 会被判低活动打回
 - 每个 keyframe 完成后更新 `prev = [(t[0], t[1], t[2]) for t in targets]`
 - `planning_speed/planning_accel` 只用于预算 fly_ms；final 代码不要写 set_speed/set_accel/VelXY/VelZ，也不要写 `drone[d]`

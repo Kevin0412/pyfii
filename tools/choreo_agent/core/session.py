@@ -204,6 +204,18 @@ class Session:
             self._candidate_pool_seg = seg_id
         return self._candidate_pool
 
+    def _clear_candidate_pool(self, seg_id: str) -> None:
+        """Drop preflight-passed backups once validator feedback changes.
+
+        Parallel backups are generated from the previous prompt/feedback.  After a
+        full validator failure we now have segment-specific facts (e.g. "only
+        median path is 3cm short" or "relay geometry cannot clear").  Reusing a
+        stale backup at that point often destroys a near-pass instead of applying
+        the new local repair.
+        """
+        if self._candidate_pool_seg == seg_id and self._candidate_pool:
+            self._candidate_pool = []
+
     def generate_until_safe_with_llm(
         self,
         provider: str = "deepseek",
@@ -473,9 +485,12 @@ class Session:
             if result.passed:
                 break
 
+            self._clear_candidate_pool(seg.id)
+
             raw_output = _limit_text(result.raw_stderr if hasattr(result, 'raw_stderr') else "", 800)
             repair_parts = [
                 f"上一轮自动验证反馈（第 {index} 轮）：\n{_compact_validation_feedback(result)}",
+                _targeted_validation_repair_feedback(result),
                 f"pyfii 原始输出：\n{raw_output}" if raw_output else "",
                 _conservative_safety_feedback(index, result),
             ]
@@ -1234,6 +1249,85 @@ def _compact_validation_feedback(result: ValidationResult) -> str:
         "无长悬停/低活动；优先改目标几何、飞行预算和 per-drone delay，不要输出解释。"
     )
     return _limit_text("\n".join(lines), 2400)
+
+
+def _targeted_validation_repair_feedback(result: ValidationResult) -> str:
+    """Return surgical repair instructions for common near-pass failures."""
+    safe_enough = (
+        result.compile_ok
+        and result.run_ok
+        and result.read_fii_ok
+        and result.distance_warnings == 0
+        and result.action_warnings == 0
+        and not result.collision_intervals
+        and (
+            result.dense_min_distance_cm is None
+            or result.dense_min_distance_cm > 51
+        )
+    )
+    if not safe_enough:
+        if result.error_message and "safe_move(relay) 仍相撞" in result.error_message:
+            return (
+                "局部修复提示：不要继续重试同一组 `safe_move(..., mode=\"relay\")`。"
+                "这个错误表示当前点表/巷道被静止组或同巷对穿堵住了；改成 route-around："
+                "两组走不同 XY 带（例如一组 y 上带、一组 y 下带），点表整体铺开，"
+                "再用 `safe_move(..., mode=\"wave\")` 或 `safe_assign + ripple_move`。"
+                "不要手搓 `move2+drone.delay`。"
+            )
+        return ""
+
+    parts: list[str] = []
+    mq = result.motion_quality or {}
+    if result.motion_quality_errors:
+        median_path = mq.get("median_path_cm")
+        max_exc = mq.get("max_excursion_cm")
+        moving = mq.get("moving_drones")
+        metric_bits = []
+        if isinstance(median_path, (int, float)):
+            metric_bits.append(f"当前中位路径 {median_path:.1f}cm")
+        if isinstance(max_exc, (int, float)):
+            metric_bits.append(f"最大展开 {max_exc:.1f}cm")
+        if isinstance(moving, int):
+            metric_bits.append(f"移动机数 {moving}")
+        prefix = "，".join(metric_bits)
+        if prefix:
+            prefix = f"（{prefix}）。"
+        parts.append(
+            "局部修复提示：安全/动作警告/窗口已经基本通过，但 motion_quality 不足"
+            f"{prefix}"
+            "不要重写整段、不要换成 relay 对穿；保留当前安全执行器和灯光结构，"
+            "只把现有主体 geo 的 5-7 个目标沿当前展开方向外推 15-30cm，"
+            "或把一个过短 keyframe 的路径增大到 90-130cm；同时保持 dense_minD>51、窗口填满。"
+        )
+
+    if getattr(result, "window_fill_errors", None):
+        parts.append(
+            "局部修复提示：窗口没填满时不要重新规划几何。保留已安全的移动，"
+            "在段尾增加灯亮定格/`light_wave`/`breathe_group` 0.6-1.2s，"
+            "或把最后一个非碰撞 keyframe 的 flying_ms 小幅增加；黑灯静止不算。"
+        )
+
+    if result.effective_motion_errors:
+        parts.append(
+            "局部修复提示：effective_motion 不足时，不要用连续灯光/空 delay 填。"
+            "如果 dense_minD/动作警告/窗口已过，保留当前安全点表和灯光结构，"
+            "只把主体移动从短促收尾改成一个 3000-3400ms 的真实 move/ripple_move，"
+            "路径设计到 90-130cm；或追加一个非交叉二次位移 keyframe（≥2600ms）。"
+            "不要重写整段，不要只加 fade/flash，灯光不算有效群体运动。"
+        )
+
+    if result.composition_errors:
+        composition_text = " | ".join(result.composition_errors[:3])
+        if "同起同停" in composition_text or "时间错峰" in composition_text:
+            parts.append(
+                "局部修复提示：节奏门只要求真实错峰。保留当前 geo，"
+                "把同步执行改成 `safe_move(..., mode=\"wave\", step_ms=90-140)` "
+                "或 `delays = ripple_delays(prev, mode='by_index', step_ms=90-140); "
+                "targets = safe_assign(prev, geo, delays=delays, flying_ms=flying_ms); "
+                "prev = ripple_move(...)`。不要改成手搓对穿。"
+            )
+
+    return _limit_text("\n".join(parts), 1800)
 
 
 def _is_mimo_provider(provider: str) -> bool:

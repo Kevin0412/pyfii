@@ -208,6 +208,13 @@ def test_preflight_blocks_common_runtime_mistakes():
     assert not bare_light
     assert any("NameError" in error and "TurnOnAll" in error for error in bare_light.errors)
 
+    bad_turnoff = preflight_check("""
+for d in drones:
+    d.TurnOff()
+""")
+    assert not bad_turnoff
+    assert any("TurnOff()" in error and "TurnOffAll" in error for error in bad_turnoff.errors)
+
     bad_groups = preflight_check("""
 gids = split_groups(prev, mode="left_right")
 for i in gids[1]:
@@ -230,6 +237,21 @@ for i, gid in enumerate(gids):
         apply_light(drones[i], "#ffaa00", 3)
 """)
     assert good_groups, good_groups.errors
+
+    bare_drone = preflight_check("""
+auto_init(drones)
+prev = [(d.x, d.y, d.z) for d in drones]
+drone.delay(50)
+""")
+    assert not bare_drone
+    assert any("裸用 `drone.<method>" in error for error in bare_drone.errors)
+
+    loop_drone = preflight_check("""
+for i, drone in enumerate(drones):
+    drone.delay(i * 80)
+    apply_light(drone, "#44aaff", 3)
+""")
+    assert loop_drone, loop_drone.errors
     print("PASSED: preflight blocks recurring TurnOnAll/split_groups runtime mistakes")
 
 

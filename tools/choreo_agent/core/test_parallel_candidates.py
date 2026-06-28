@@ -114,6 +114,20 @@ def test_candidate_pool_scoped_per_segment():
     _with_temp_session(run)
 
 
+def test_candidate_pool_clears_after_validator_feedback():
+    def run(session):
+        seg_id = session.state.current_segment.id
+        session._pool_for_segment(seg_id).extend(["# stale A", "# stale B"])
+        session._clear_candidate_pool(seg_id)
+        assert session._pool_for_segment(seg_id) == []
+        # Clearing a different segment must not disturb the current scoped pool.
+        session._pool_for_segment(seg_id).append("# fresh")
+        session._clear_candidate_pool("S99")
+        assert session._pool_for_segment(seg_id) == ["# fresh"]
+
+    _with_temp_session(run)
+
+
 def test_chat_works_in_worker_thread_without_sigalrm():
     """SIGALRM 只允许主线程；worker 线程里的 chat() 必须改走软墙，不得 ValueError。"""
     import core.llm_client as lc

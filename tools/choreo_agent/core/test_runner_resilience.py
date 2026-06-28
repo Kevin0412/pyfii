@@ -8,7 +8,11 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from run_pipeline import run_full_flow, _failure_category_from_exception, _failure_category_from_validation
 from core.script_editor import lock_segment
-from core.session import _compact_validation_feedback, _validation_snapshot
+from core.session import (
+    _compact_validation_feedback,
+    _targeted_validation_repair_feedback,
+    _validation_snapshot,
+)
 from core.validator import ValidationResult
 
 
@@ -179,6 +183,49 @@ def test_window_fill_feedback_is_visible_to_llm_and_state():
     assert snapshot["window_fill_errors"] == v.window_fill_errors
 
 
+def test_near_pass_quality_feedback_is_surgical():
+    v = ValidationResult()
+    v.compile_ok = True
+    v.run_ok = True
+    v.read_fii_ok = True
+    v.distance_warnings = 0
+    v.action_warnings = 0
+    v.collision_intervals = []
+    v.dense_min_distance_cm = 93.8
+    v.motion_quality_errors = [
+        "中位路径长度过短：76.4cm；当前 5.2s 段至少需要 80.0cm"
+    ]
+    v.motion_quality = {
+        "median_path_cm": 76.4,
+        "max_excursion_cm": 120.3,
+        "moving_drones": 7,
+    }
+
+    feedback = _targeted_validation_repair_feedback(v)
+    assert "不要重写整段" in feedback
+    assert "外推 15-30cm" in feedback
+    assert "relay" in feedback
+
+
+def test_effective_motion_feedback_prefers_real_move():
+    v = ValidationResult()
+    v.compile_ok = True
+    v.run_ok = True
+    v.read_fii_ok = True
+    v.distance_warnings = 0
+    v.action_warnings = 0
+    v.collision_intervals = []
+    v.dense_min_distance_cm = 54.0
+    v.effective_motion_errors = [
+        "有效群体运动持续时间过短：1.28s；至少需要 2.5s。"
+    ]
+
+    feedback = _targeted_validation_repair_feedback(v)
+    assert "3000-3400ms" in feedback
+    assert "灯光不算有效群体运动" in feedback
+    assert "不要重写整段" in feedback
+
+
 def test_no_bad_patterns():
     """Runner has no force lock/fallback/static segments."""
     code = Path(__file__).resolve().parent.parent / "run_pipeline.py"
@@ -195,5 +242,7 @@ if __name__ == "__main__":
     test_failure_category_from_exception()
     test_failure_category_from_window_fill()
     test_window_fill_feedback_is_visible_to_llm_and_state()
+    test_near_pass_quality_feedback_is_surgical()
+    test_effective_motion_feedback_prefers_real_move()
     test_no_bad_patterns()
     print("\nALL RUNNER RESILIENCE TESTS PASSED")

@@ -125,15 +125,17 @@ def build_segment_prompt(
 - 不要直接写 `inittime()`；跨段对齐由 `auto_init` 处理"""
 
     if segment_upper in {"S04", "S05"}:
-        assign_rule = "- S04/S05 错峰/分组大动作、对穿、密集承接：**一律用 `prev = safe_move(drones, prev, geo, flying_ms, mode=\"wave\")`**（对穿/大交叉用 `mode=\"relay\"`）——它把安全分配+错峰+执行绑成一次调用，验证的时序就是飞的时序，清不开会自己抛错让你铺开点表。**切勿手搓 `move2`+`drone.delay` 凑错峰、也别照抄预算表 delay_ms 做对穿**（那正是“算着安全实跑撞”反复返工的根因）。就近承接（无交叉）用 `targets = best_assign(prev, geo)` 后展开 per-drone loop；不错峰的同步大交换才用 `far_assign(prev, geo, min_path_cm=active_min_path_cm(flying_ms))`。每个 keyframe 最长路径有确定性上限（speed×时长内能飞完），规划报告会给精确 `[下限,上限]` 带——别设计飞不完的大动作。assign 类函数返回 targets 列表，不要拆 `perm/min_d`"
+        assign_rule = "- S04/S05 错峰/分组大动作、密集承接：默认 **route-around + `prev = safe_move(drones, prev, geo, flying_ms, mode=\"wave\")`**——两组走不同 XY 带，安全分配+错峰+执行绑成一次调用，验证时序=飞行时序，清不开会自己抛错让你铺开点表。真对穿/大交叉不是默认选项；只有 motif 明确 mirror-cross 且点表足够稀疏时才试 `mode=\"relay\"`，relay 若抛错就改 route-around，不要继续硬凑。**切勿手搓 `move2`+`drone.delay` 凑错峰、也别照抄预算表 delay_ms 做对穿**。就近承接（无交叉）用 `targets = best_assign(prev, geo)` 后展开 per-drone loop；不错峰的同步大交换才用 `far_assign(prev, geo, min_path_cm=active_min_path_cm(flying_ms))`。每个 keyframe 最长路径有确定性上限（speed×时长内能飞完），规划报告会给精确 `[下限,上限]` 带——别设计飞不完的大动作。assign 类函数返回 targets 列表，不要拆 `perm/min_d`"
     else:
-        assign_rule = "- 就近承接（无交叉）：`targets = best_assign(prev, geo)` 后展开 per-drone loop。**错峰/分组大动作、对穿、密集：一律用 `prev = safe_move(drones, prev, geo, flying_ms, mode=\"wave\")`**（对穿/大交叉用 `mode=\"relay\"`）——安全分配+错峰+执行绑成一次调用，验证时序=飞行时序，清不开会自己抛错。**切勿手搓 `move2`+`drone.delay` 凑错峰、别照抄预算表 delay_ms 做对穿**（mirror 小错峰照撞）。prev/geo 用完整 `(x,y,z)`；assign 类函数返回 targets 列表，不要拆 `perm/min_d`"
+        assign_rule = "- 就近承接（无交叉）：`targets = best_assign(prev, geo)` 后展开 per-drone loop。**错峰/分组大动作、密集：优先 route-around + `prev = safe_move(drones, prev, geo, flying_ms, mode=\"wave\")`**——安全分配+错峰+执行绑成一次调用，验证时序=飞行时序，清不开会自己抛错。真对穿/大交叉只在 motif 明确 mirror-cross 且点表稀疏时试 `mode=\"relay\"`；relay 抛错就改两条 XY 带绕行。**切勿手搓 `move2`+`drone.delay` 凑错峰、别照抄预算表 delay_ms 做对穿**（mirror 小错峰照撞）。prev/geo 用完整 `(x,y,z)`；assign 类函数返回 targets 列表，不要拆 `perm/min_d`"
 
     segment_duration = float(end_time - start_time)
     if segment_upper == "S06":
         keyframe_rule = (
             "S06 尾声必须写 2 个明确 keyframe：先到中继/呼应姿态，再到最终署名位置；"
-            "每个 keyframe 用 2300-2600ms，展开 per-drone loop，不要用单个 move_group 小挪动收尾"
+            "至少一个主体移动 keyframe 用 3000-3400ms 且多数无人机路径 90-140cm，"
+            "第二个 keyframe 用 2600-3200ms 到最终署名；不要用短 move + fade/flash 冒充尾声，"
+            "有效群体运动必须持续 ≥2.5s，段尾再用亮灯定格/渐隐铺满"
         )
         prev_update_rule = "每个 keyframe 后更新 prev；段尾更新 prev = [(t[0],t[1],t[2]) for t in targets]"
     elif segment_upper == "S04":
@@ -191,7 +193,7 @@ def build_segment_prompt(
         f"    `delays = ripple_delays(prev, mode='by_index', step_ms=130)`\n"
         f"    `targets = safe_assign(prev, geo, delays=delays, flying_ms=2800)`  # 按真实错峰时序选无碰撞排列（与逐帧验证器同模型，错峰大动作首选）\n"
         f"    `prev = ripple_move(drones, targets, 2800, delays, colors=palette)`\n"
-        f"  穿过同一中心区的真对穿是**少数刻意情况，仅当 motif 明确是 mirror-cross 时**才做：用 `safe_move(..., mode='relay')` / `call_response_safe` 顺序接力，或错峰 `delay≥单程飞行时长`，小步 `delay(i*150)` 清不开必撞。其余大动作一律 route-around。单 keyframe 路径 ≤360cm，跨场拆多个 keyframe\n"
+        f"  穿过同一中心区的真对穿是**少数刻意情况，仅当 motif 明确是 mirror-cross 时**才做：先把点表铺开，再试 `safe_move(..., mode='relay')` / `call_response_safe`；relay/call_response 若报告清不开，立刻改 route-around（两组不同 XY 带），不要继续加小错峰。其余大动作一律 route-around。单 keyframe 路径 ≤360cm，跨场拆多个 keyframe\n"
         f"  **碰撞门多半来自点表太密**：几何点要铺开占场（圆形 R≥85，两排同行≥70/行距≥120，散点任意两点 x差或y差≥60），far_assign 才有间距可挑出无碰撞排列；硬塞密集点表后指望 far_assign 救是没用的（点本身太近时连最优排列也 <51cm）。密集造型留给短促/慢速小动作，大迁移用铺开的几何\n"
         f"- 避免刚性圆退化（圆/放射/中心/辐射主题尤其注意，否则 degradation 门反复打回）：不要让多数 keyframe 保持同一圆形且同一角序——"
         f"至少一个主体 keyframe 换非圆轮廓（直线/V/弧/星/双排/十字/署名造型），或用 `swap_assign`/`mirror_assign`/分组重组打乱角序；"
@@ -254,8 +256,8 @@ def build_segment_prompt(
 - 如果段长需要覆盖，不要拉长单个 move2；用多个可完成的快 keyframe、分组错峰、高度切层，或**亮灯定格**承接——图形到位后保持灯亮定格 0.8-2s 让观众读图（dntg 节奏=移动→定格→移动，dntg 全片 57% 时间是定格展示）；黑灯静止才算低活动
 - 3s 以上 keyframe 不要写 `min_path_cm=90/100`；用 `flying_ms = 3000` 后 `targets = far_assign(prev, geo, min_path_cm=active_min_path_cm(flying_ms))`
 - 安全距离按 XY 看：不要把同一 XY 的不同 Z 当成安全分离；XY 间距硬下限 51cm（pyfii core 碰撞线，检查器精确验证），密集造型配合短路径慢速；复杂交换交给 `far_assign`
-- 错峰 `delay(i * 150)` 是**波次**工具（各机飞向不重叠目标、先后起步），不是对穿安全工具——对穿/大动作的安全见上方“大动作安全”一条（默认 route-around，刻意对穿才用 safe_move(mode='relay') / call_response_safe / 大错峰）
-- **错峰/分组/对穿等大动作一律用 `prev = safe_move(drones, prev, geo, flying_ms, mode="wave")`（对穿/大交叉 `mode="relay"` 顺序接力零跨组交叉）**：融合安全分配+错峰+执行为一次调用，用来验证无碰撞的时序就是真正飞的时序——清不开会自己抛错让你铺开点表。**切勿手搓 `move2`+`drone.delay` 凑错峰或照抄预算表 delay_ms 做对穿**（“算着安全、实跑相撞”的直接来源）。
+- 错峰 `delay(i * 150)` 是**波次**工具（各机飞向不重叠目标、先后起步），不是对穿安全工具——对穿/大动作的安全见上方“大动作安全”一条（默认 route-around，刻意 mirror-cross 才试 safe_move(mode='relay') / call_response_safe；失败就绕行）
+- **错峰/分组/密集大动作优先用 `prev = safe_move(drones, prev, geo, flying_ms, mode="wave")` + route-around 点表**：融合安全分配+错峰+执行为一次调用，用来验证无碰撞的时序就是真正飞的时序。真对穿/大交叉只在 motif 明确 mirror-cross 且点表稀疏时试 `mode="relay"`；relay/call_response 抛错说明几何装不下，改两条 XY 带绕行，别继续硬凑。**切勿手搓 `move2`+`drone.delay` 凑错峰或照抄预算表 delay_ms 做对穿**（“算着安全、实跑相撞”的直接来源）。
 - 分配函数家族（safe_move 内部已用；只有自己手动组合时序时才直接调）：`best_assign(prev, geo)` 就近收束 / `far_assign(prev, geo, min_path_cm=...)` 大幅交换（同步锁步模型）/ `safe_assign(prev, geo, delays=delays, flying_ms=...)` 按真实分时轨迹挑无碰撞排列（best/far 假设全员同步直线，错峰段会“算着安全、实跑相撞”）；组完时序后用 `ok, min_cm, pair = verify_timed_clearance(prev, targets, delays=delays, flying_ms=...)` 自检（直接解包 3 元组）/ `rotate_assign(prev, geo, steps=1)` 整体漩涡旋转（同构环形刚体旋转天然安全，steps 可负；非环形/对齐两列旋转会贴 51cm 同步路径门）/ `mirror_assign(prev, geo)` 镜像对穿（**无 axis 参数**；同步路径门跳过它，但对穿真的交叉——必须足量顺序错峰让一架先离开交叉点另一架才到，小错峰照撞，分时门与 validator 都逐帧核验，不是免检；拿不准就 safe_assign 验真）/ `swap_assign(prev, geo, axis='x'|'y')` 半场互换（有 axis；同步直线检查，对齐两列会贴硬下限）/ `keep_assign(prev, geo)` 身份保持（drone i 固定走第 i 个目标，palette 叙事用）。左右对答/换位默认 route-around（两组不同带同时飞，见“大动作安全”），只有刻意要中心对穿才 mirror_assign+大错峰
 - 波次计算器（从当前队形推导时间编排，动序即光序）：`delays = ripple_delays(prev, mode='center_out'|'sweep_x'|'sweep_y'|'spiral'|'by_index', step_ms=120-250, reverse=False)` 波次延迟表；`spatial_ranks(prev, mode=...)` 波次序号（可按 rank 配色）；`gids = split_groups(prev, mode='left_right'|'front_back'|'inner_outer'|'alternate')` 0/1 分组。注意：环形/等距队形上 center_out 全员同距=同一波（退化为同步起步），想要可见波次改用 spiral/sweep_x/sweep_y/by_index
 - 动作母题执行器（内部已做 per-drone 灯光+段尾自动对齐，免回正算术，计入时间错峰门）：

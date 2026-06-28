@@ -79,7 +79,7 @@ def preflight_check(
     # 8. Bare API calls (d.move2 / d.VelXY)
     _check_no_bare_api(code, r)
     # 8b. Common runtime NameError/TypeError patterns
-    _check_common_runtime_mistakes(code, r)
+    _check_common_runtime_mistakes(code, r, segment_id=segment_id)
     # 9. inittime calls
     _check_no_inittime(code, r)
     # 10. Single-drone timing after group move
@@ -762,7 +762,7 @@ def _check_no_bare_api(code, r):
         r.add(f"裸调 VelXY/VelZ: {', '.join([f'{m[0]}.Vel{m[1]}' for m in bare_vel[:3]])} — 用 move2 包装器")
 
 
-def _check_common_runtime_mistakes(code, r):
+def _check_common_runtime_mistakes(code, r, segment_id: str | None = None):
     """Catch recurring model mistakes that otherwise survive until full script execution."""
     try:
         tree = ast.parse(code)
@@ -779,6 +779,9 @@ def _check_common_runtime_mistakes(code, r):
         duration_name = _duration_source_from_ticks_expr(node.value)
         if duration_name:
             tick_duration_sources[target.id] = duration_name
+
+    if str(segment_id or "").upper() != "S01":
+        _check_no_unbound_singular_drone(tree, r)
 
     for node in ast.walk(tree):
         if (
@@ -801,6 +804,18 @@ def _check_common_runtime_mistakes(code, r):
             r.add(
                 "Drone 没有 turn_on(...) 方法 — 用 `d.TurnOnAll(color)`，"
                 "或优先用 `apply_light(d, color, ticks)` / `flash_group`"
+            )
+            break
+
+    for node in ast.walk(tree):
+        if (
+            isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Attribute)
+            and node.func.attr == "TurnOff"
+        ):
+            r.add(
+                "Drone 没有 TurnOff() 方法 — 用 `d.TurnOffAll()`，"
+                "或优先用 apply_light/flash_group/fade_group 控制灯光收尾"
             )
             break
 
@@ -969,6 +984,60 @@ def _check_common_runtime_mistakes(code, r):
                 "或直接调用 group_relay(..., group_ids=gids)"
             )
             break
+
+
+def _check_no_unbound_singular_drone(tree, r):
+    """Reject `drone.delay(...)` when `drone` is not a loop/local variable."""
+    assigned_names: set[str] = set()
+    parents: dict[int, ast.AST] = {}
+    for parent in ast.walk(tree):
+        for child in ast.iter_child_nodes(parent):
+            parents[id(child)] = parent
+        if isinstance(parent, (ast.Assign, ast.AnnAssign, ast.AugAssign)):
+            targets = []
+            if isinstance(parent, ast.Assign):
+                targets = list(parent.targets)
+            else:
+                targets = [parent.target]
+            for target in targets:
+                assigned_names.update(_target_names(target))
+
+    for node in ast.walk(tree):
+        if not (
+            isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Attribute)
+            and isinstance(node.func.value, ast.Name)
+            and node.func.value.id == "drone"
+        ):
+            continue
+        if "drone" in assigned_names or _name_bound_by_enclosing_loop(node, parents, "drone"):
+            continue
+        r.add(
+            "裸用 `drone.<method>(...)` 会 NameError：当前函数里没有名为 drone 的全局对象。"
+            "写成 `for i, drone in enumerate(drones): ...` 并把 drone.delay/apply_light/move2 "
+            "放进循环内；循环外请用 `for d in drones:` 或 helpers。"
+        )
+        return
+
+
+def _target_names(target) -> set[str]:
+    if isinstance(target, ast.Name):
+        return {target.id}
+    if isinstance(target, (ast.Tuple, ast.List)):
+        out: set[str] = set()
+        for elt in target.elts:
+            out.update(_target_names(elt))
+        return out
+    return set()
+
+
+def _name_bound_by_enclosing_loop(node, parents, name: str) -> bool:
+    current = node
+    while id(current) in parents:
+        current = parents[id(current)]
+        if isinstance(current, ast.For) and name in _target_names(current.target):
+            return True
+    return False
 
 
 def _check_no_inittime(code, r):

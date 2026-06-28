@@ -93,8 +93,9 @@ def evaluate_composition(
     if needs_stagger and not features["has_time_stagger"]:
         errors.append(
             "当前段章法要求卡农/错峰/分组，但代码只有颜色分组、没有真正的时间错峰；"
-            "把移动改成 `prev = safe_move(drones, prev, geo, flying_ms, mode=\"wave\")`"
-            "（对穿/分组问答 mode=\"relay\"）——内部就是真实波次错峰、且自带避撞。"
+            "把移动改成 route-around 点表 + `prev = safe_move(drones, prev, geo, flying_ms, mode=\"wave\")`，"
+            "或 `safe_assign(..., delays=..., flying_ms=...) + ripple_move(...)`。"
+            "真对穿/relay 只用于明确 mirror-cross；若清不开就改两条 XY 带绕行。"
         )
 
     needs_climax = _needs_climax_gate(segment_id, role_text, role_motifs)
@@ -168,9 +169,9 @@ def evaluate_composition(
     ):
         errors.append(
             f"{segment_id} 全段所有无人机同起同停 — 至少一个 keyframe 要打破时间同步："
-            "把移动改成 `prev = safe_move(drones, prev, geo, flying_ms, mode=\"wave\")`"
-            "（对穿/分组问答 mode=\"relay\"）——内部真实波次错峰、自动段尾对齐+先动先亮、且自带避撞，"
-            "不用手搓 delay。"
+            "把移动改成 route-around 点表 + `prev = safe_move(drones, prev, geo, flying_ms, mode=\"wave\")`，"
+            "或 `safe_assign(..., delays=..., flying_ms=...) + ripple_move(...)`；"
+            "不要手搓对穿 delay。"
         )
 
     if segment_id == "S04" and features["estimated_keyframe_count"] < 4:
