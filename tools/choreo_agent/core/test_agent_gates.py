@@ -335,6 +335,106 @@ def test_degradation_signature_in_state():
     print("PASSED: degradation_signature in state.json")
 
 
+def test_preflight_blocks_sync_assign_stagger_mismatch():
+    # far_assign + ripple_move with delays → blocked
+    bad_far = preflight_check("""
+auto_init(drones)
+prev = [(d.x, d.y, d.z) for d in drones]
+geo = custom_points([(100,100,150),(200,200,150),(300,300,150),(400,400,150),(350,150,150),(150,350,150),(250,450,150)], n=len(drones))
+targets = far_assign(prev, geo, min_path_cm=120)
+delays = ripple_delays(prev, mode="by_index", step_ms=150)
+prev = ripple_move(drones, targets, 2800, delays, colors="#ff0000")
+""", segment_id="S03")
+    assert not bad_far
+    assert any("far_assign" in e and "同步锁步" in e for e in bad_far.errors)
+
+    # best_assign + per-drone loop with delay → blocked
+    bad_loop = preflight_check("""
+auto_init(drones)
+prev = [(d.x, d.y, d.z) for d in drones]
+geo = custom_points([(100,100,150),(200,200,150),(300,300,150),(400,400,150),(350,150,150),(150,350,150),(250,450,150)], n=len(drones))
+targets = best_assign(prev, geo)
+for i, drone in enumerate(drones):
+    drone.delay(i * 120)
+    move2(drone, targets[i], 2800)
+    apply_light(drone, "#ff0000", 3)
+""", segment_id="S02")
+    assert not bad_loop
+    assert any("best_assign" in e and "drone.delay" in e for e in bad_loop.errors)
+
+    # keep_assign + ripple_move with delays → blocked
+    bad_keep = preflight_check("""
+auto_init(drones)
+prev = [(d.x, d.y, d.z) for d in drones]
+geo = custom_points([(100,100,150),(200,200,150),(300,300,150),(400,400,150),(350,150,150),(150,350,150),(250,450,150)], n=len(drones))
+targets = keep_assign(prev, geo)
+delays = ripple_delays(prev, mode="by_index", step_ms=150)
+prev = ripple_move(drones, targets, 2800, delays)
+""", segment_id="S04")
+    assert not bad_keep
+    assert any("keep_assign" in e for e in bad_keep.errors)
+
+    # safe_assign + ripple_move with SAME delays → allowed
+    good_safe = preflight_check("""
+auto_init(drones)
+prev = [(d.x, d.y, d.z) for d in drones]
+geo = custom_points([(100,100,150),(200,200,150),(300,300,150),(400,400,150),(350,150,150),(150,350,150),(250,450,150)], n=len(drones))
+delays = ripple_delays(prev, mode="by_index", step_ms=130)
+targets = safe_assign(prev, geo, delays=delays, flying_ms=2800)
+prev = ripple_move(drones, targets, 2800, delays, colors="#ff0000")
+""", segment_id="S03")
+    assert good_safe, good_safe.errors
+
+    # safe_move → allowed
+    good_sm = preflight_check("""
+auto_init(drones)
+prev = [(d.x, d.y, d.z) for d in drones]
+geo = custom_points([(100,100,150),(200,200,150),(300,300,150),(400,400,150),(350,150,150),(150,350,150),(250,450,150)], n=len(drones))
+prev = safe_move(drones, prev, geo, 2800, mode="wave")
+""", segment_id="S03")
+    assert good_sm, good_sm.errors
+
+    # best_assign + sync loop (delay(0)) → allowed
+    good_sync = preflight_check("""
+auto_init(drones)
+prev = [(d.x, d.y, d.z) for d in drones]
+geo = custom_points([(100,100,150),(200,200,150),(300,300,150),(400,400,150),(350,150,150),(150,350,150),(250,450,150)], n=len(drones))
+targets = best_assign(prev, geo)
+for i, drone in enumerate(drones):
+    move2(drone, targets[i], 2800)
+    apply_light(drone, "#ff0000", 3)
+    drone.delay(0)
+""", segment_id="S03")
+    assert good_sync, good_sync.errors
+
+    # S01 exempt — best_assign + delay loop allowed
+    good_s01 = preflight_check("""
+auto_init(drones)
+prev = [(d.x, d.y, d.z) for d in drones]
+geo = custom_points([(100,100,150),(200,200,150),(300,300,150),(400,400,150),(350,150,150),(150,350,150),(250,450,150)], n=len(drones))
+targets = best_assign(prev, geo)
+for i, drone in enumerate(drones):
+    drone.delay(i * 120)
+    move2(drone, targets[i], 2800)
+""", segment_id="S01")
+    assert good_s01, good_s01.errors
+
+    # safe_assign delays mismatch → blocked
+    bad_mismatch = preflight_check("""
+auto_init(drones)
+prev = [(d.x, d.y, d.z) for d in drones]
+geo = custom_points([(100,100,150),(200,200,150),(300,300,150),(400,400,150),(350,150,150),(150,350,150),(250,450,150)], n=len(drones))
+delays_search = ripple_delays(prev, mode="by_index", step_ms=80)
+targets = safe_assign(prev, geo, delays=delays_search, flying_ms=2600)
+delays_exec = ripple_delays(prev, mode="center_out", step_ms=130)
+prev = ripple_move(drones, targets, 2600, delays_exec, colors="#ff0000")
+""", segment_id="S03")
+    assert not bad_mismatch
+    assert any("不同的 delays" in e for e in bad_mismatch.errors)
+
+    print("PASSED: preflight blocks sync-assign + stagger timing mismatch")
+
+
 if __name__ == "__main__":
     test_mimo_no_prefix()
     test_chat_no_recursion()
@@ -351,10 +451,11 @@ if __name__ == "__main__":
     test_preflight_enforces_land_protocol()
     test_preflight_blocks_bare_api()
     test_preflight_blocks_common_runtime_mistakes()
+    test_preflight_blocks_sync_assign_stagger_mismatch()
     test_preflight_blocks_inittime()
     test_preflight_blocks_single_drone_timing()
     test_preflight_blocks_out_of_range_coordinate_literals()
     test_preflight_accepts_clean()
     test_planning_pass_importable()
     test_degradation_signature_in_state()
-    print("\nALL 18 TESTS PASSED")
+    print("\nALL 19 TESTS PASSED")

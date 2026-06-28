@@ -109,5 +109,22 @@ crosscut_v9 用排列搜索才安全。
 
 **修复**: 几何切换必须做路径分配。final segment 可直接用 `targets = best_assign(prev, geo)`，它返回重排后的 targets 列表；不要自己写搜索函数、不要 import、不要拆 `(perm, min_d)`。
 
+## 11. 同步分配 + 错峰执行（时序不匹配碰撞）
+
+`best_assign`/`far_assign` 用同步锁步模型验安全（假设所有机同时起飞、同速直线），但实际执行用了 `ripple_move(delays=...)` 或 `drone.delay(i*N)` 手搓错峰。分配函数认为安全的排列在错峰时序下路径交叉——"算着安全、实跑相撞"。
+
+**典型代码**:
+```python
+targets = far_assign(prev, geo)           # 同步模型
+delays = ripple_delays(prev, step_ms=150) # 错峰时序
+prev = ripple_move(drones, targets, 2800, delays)  # 时序不匹配 → 撞
+```
+
+**根因**: `best_assign` 只在 5 个同步采样点检查间距，`far_assign` 在 51 个同步采样点检查。它们都不知道错峰 delays，两机在不同时刻到达交叉点的情况被漏掉。
+
+**修复**: 错峰执行必须用 `safe_assign(prev, geo, delays=delays, flying_ms=...)` 或 `safe_move(drones, prev, geo, flying_ms, mode="wave")`——它们用和 validator 相同的 60fps 分时轨迹模型验证，且 safe_assign 的 delays 和 ripple_move 的 delays 是同一份。
+
+---
+
 ## 全平面编舞
 所有几何在同一高度平面，没有Z轴层次。应该每个几何给定不同Z。

@@ -88,6 +88,31 @@ drone.Y = drone.y = y_pos    # 逻辑起点（后续相对移动的参考）
 drone.takeoff(1, 110)        # 飞到高度110cm
 ```
 
+## 分配函数时序模型
+
+分配函数决定"哪架机飞哪个目标"——但它们的安全判断依赖时序假设：
+
+| 函数 | 时序假设 | 采样密度 | 适用场景 |
+|------|---------|---------|---------|
+| `best_assign` | 全员同步(delays=0) | 5 点 | 同步非交叉小动作 |
+| `far_assign` | 全员同步(delays=0) | 51 点 | 同步大交换 |
+| `safe_assign` | **真实错峰(delays=传入值)** | **60fps** | 错峰/分组/任何有 delays 的场景 |
+| `safe_move` | 内部调 safe_assign | 60fps | 推荐默认 |
+
+**规则：如果执行时有 delays（ripple_move / drone.delay），分配必须用 `safe_assign` 或 `safe_move`。** `best_assign`/`far_assign` 假设全员同步，在错峰时序下保证无效——preflight 会拦截这种不匹配。
+
+正确组合：
+```python
+delays = ripple_delays(prev, mode='by_index', step_ms=130)
+targets = safe_assign(prev, geo, delays=delays, flying_ms=2800)  # 同一 delays
+prev = ripple_move(drones, targets, 2800, delays)                # 同一 delays
+```
+
+或一步到位：
+```python
+prev = safe_move(drones, prev, geo, 2800, mode="wave")
+```
+
 ## 常见错误
 
 | 错误 | 后果 | 正确做法 |

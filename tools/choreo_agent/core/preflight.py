@@ -80,6 +80,8 @@ def preflight_check(
     _check_no_bare_api(code, r)
     # 8b. Common runtime NameError/TypeError patterns
     _check_common_runtime_mistakes(code, r, segment_id=segment_id)
+    # 8c. Sync-assign + staggered execution mismatch
+    _check_assign_timing_mismatch(code, r, segment_id=segment_id)
     # 9. inittime calls
     _check_no_inittime(code, r)
     # 10. Single-drone timing after group move
@@ -1036,6 +1038,189 @@ def _name_bound_by_enclosing_loop(node, parents, name: str) -> bool:
     while id(current) in parents:
         current = parents[id(current)]
         if isinstance(current, ast.For) and name in _target_names(current.target):
+            return True
+    return False
+
+
+_SYNC_ASSIGN_FUNCS = {"best_assign", "far_assign", "keep_assign", "mirror_assign"}
+
+
+def _check_assign_timing_mismatch(code, r, segment_id: str | None = None):
+    """Block sync-assign results fed to staggered execution (ripple_move with delays
+    or per-drone loop with drone.delay + move2).  S01 exempt — takeoff is synchronous."""
+    if str(segment_id or "").upper() == "S01":
+        return
+    try:
+        tree = ast.parse(code)
+    except SyntaxError:
+        return
+
+    parents: dict[int, ast.AST] = {}
+    for parent in ast.walk(tree):
+        for child in ast.iter_child_nodes(parent):
+            parents[id(child)] = parent
+
+    sync_vars: dict[str, tuple[str, int]] = {}
+    safe_assign_delays: dict[str, ast.expr | None] = {}
+
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Assign):
+            continue
+        if len(node.targets) != 1 or not isinstance(node.targets[0], ast.Name):
+            continue
+        var = node.targets[0].id
+        call = node.value
+        if not isinstance(call, ast.Call):
+            continue
+        fname = _call_func_name(call)
+        if fname in _SYNC_ASSIGN_FUNCS:
+            sync_vars[var] = (fname, node.lineno)
+        elif fname == "safe_assign":
+            delays_node = _keyword_value(call, "delays")
+            safe_assign_delays[var] = delays_node
+
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Call):
+            continue
+        fname = _call_func_name(node)
+
+        if fname == "ripple_move":
+            targets_name = _positional_name(node, 1)
+            delays_arg = _positional_or_kw(node, 3, "delays")
+            has_delays = delays_arg is not None and not _is_literal_none(delays_arg)
+            if targets_name and targets_name in sync_vars and has_delays:
+                afn, aln = sync_vars[targets_name]
+                r.add(
+                    f"{afn}()(line {aln}) 的结果传给了带 delays 的 ripple_move — "
+                    f"{afn} 用同步锁步模型验安全，但 ripple_move 错峰执行，时序不匹配会撞。"
+                    "改成 `targets = safe_assign(prev, geo, delays=delays, flying_ms=...) "
+                    "+ ripple_move(drones, targets, flying_ms, delays)`（同一 delays），"
+                    "或直接 `prev = safe_move(drones, prev, geo, flying_ms, mode=\"wave\")`。"
+                )
+                return
+
+            if targets_name and targets_name in safe_assign_delays and has_delays:
+                sa_delays = safe_assign_delays[targets_name]
+                if sa_delays is not None and not _ast_same(sa_delays, delays_arg):
+                    r.add(
+                        "safe_assign 和 ripple_move 使用了不同的 delays 变量 — "
+                        "safe_assign 按传入的 delays 验证无碰撞时序，ripple_move 必须用同一份 delays 执行，"
+                        "否则验证结果作废。把两处改成同一个 delays 变量，"
+                        "或用 `prev = safe_move(drones, prev, geo, flying_ms)` 自动绑定。"
+                    )
+                    return
+
+        if fname == "move2":
+            for_node = _enclosing_for(node, parents)
+            if for_node is None:
+                continue
+            targets_name = _loop_uses_sync_assign_target(for_node, sync_vars)
+            if targets_name is None:
+                continue
+            if _loop_has_delay(for_node):
+                afn, aln = sync_vars[targets_name]
+                r.add(
+                    f"{afn}()(line {aln}) 的结果在 per-drone 循环里配合 drone.delay 使用 — "
+                    f"{afn} 假设全员同步起飞，手搓 delay 打破了这个前提，实跑会撞。"
+                    "改成 `delays = ripple_delays(prev, ...); "
+                    "targets = safe_assign(prev, geo, delays=delays, flying_ms=...); "
+                    "prev = ripple_move(drones, targets, flying_ms, delays)`，"
+                    "或 `prev = safe_move(drones, prev, geo, flying_ms, mode=\"wave\")`。"
+                )
+                return
+
+
+def _call_func_name(node: ast.Call) -> str | None:
+    if isinstance(node.func, ast.Name):
+        return node.func.id
+    return None
+
+
+def _keyword_value(call: ast.Call, kw: str) -> ast.expr | None:
+    for k in call.keywords:
+        if k.arg == kw:
+            return k.value
+    return None
+
+
+def _positional_name(call: ast.Call, idx: int) -> str | None:
+    if idx < len(call.args) and isinstance(call.args[idx], ast.Name):
+        return call.args[idx].id
+    for k in call.keywords:
+        if k.arg == "targets" and isinstance(k.value, ast.Name):
+            return k.value.id
+    return None
+
+
+def _positional_or_kw(call: ast.Call, idx: int, kw: str) -> ast.expr | None:
+    if idx < len(call.args):
+        return call.args[idx]
+    return _keyword_value(call, kw)
+
+
+def _is_literal_none(node: ast.expr) -> bool:
+    return isinstance(node, ast.Constant) and node.value is None
+
+
+def _ast_same(a: ast.expr, b: ast.expr) -> bool:
+    """Structural equality of two simple AST expressions (variable names, subscripts)."""
+    if type(a) is not type(b):
+        return False
+    if isinstance(a, ast.Name):
+        return a.id == b.id
+    if isinstance(a, ast.Constant):
+        return a.value == b.value
+    if isinstance(a, ast.Subscript):
+        return _ast_same(a.value, b.value) and _ast_same(a.slice, b.slice)
+    return ast.dump(a) == ast.dump(b)
+
+
+def _enclosing_for(node, parents) -> ast.For | None:
+    current = node
+    while id(current) in parents:
+        current = parents[id(current)]
+        if isinstance(current, ast.For):
+            return current
+    return None
+
+
+def _loop_uses_sync_assign_target(for_node: ast.For, sync_vars: dict) -> str | None:
+    """Check if the for-loop body subscripts or references a sync-assigned variable."""
+    for node in ast.walk(for_node):
+        if isinstance(node, ast.Subscript) and isinstance(node.value, ast.Name):
+            if node.value.id in sync_vars:
+                return node.value.id
+    return None
+
+
+def _loop_has_delay(for_node: ast.For) -> bool:
+    """Check if the for-loop body has a stagger delay (index-dependent, before move2).
+
+    Post-move constant delays (same value for all drones) are safe — they are
+    just wait-for-completion, not a timing stagger.  A delay is a stagger if its
+    argument references the loop variable (e.g. ``i * 120``, ``delays[i]``).
+    """
+    loop_vars = _target_names(for_node.target)
+    for node in ast.walk(for_node):
+        if not (
+            isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Attribute)
+            and node.func.attr == "delay"
+            and node.args
+        ):
+            continue
+        arg = node.args[0]
+        if isinstance(arg, ast.Constant) and arg.value == 0:
+            continue
+        if _expr_references_names(arg, loop_vars):
+            return True
+    return False
+
+
+def _expr_references_names(node: ast.expr, names: set[str]) -> bool:
+    """Return True if any Name node in the expression tree matches ``names``."""
+    for child in ast.walk(node):
+        if isinstance(child, ast.Name) and child.id in names:
             return True
     return False
 

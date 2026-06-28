@@ -43,7 +43,7 @@ def _gold_segments() -> dict[str, str]:
 
 def test_gold_segments_pass_preflight():
     for seg_id, body in _gold_segments().items():
-        result = preflight_check(body)
+        result = preflight_check(body, segment_id=seg_id)
         assert result.passed, f"{seg_id} rejected by preflight: {result.errors}"
 
 
