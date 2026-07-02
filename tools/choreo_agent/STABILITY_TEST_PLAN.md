@@ -33,6 +33,27 @@
 - API timeout、首包慢、stream 卡顿不是清空或弱化 prompt 的理由；应记录为 `api_network` 或基础设施问题。
 - 不得为了单模型临时通过而删除 S01 `wait_until`、S02+ `auto_init`、LAND 协议、动态 S07/S08、高度层、短窗口 `far_assign` 等核心契约。
 
+## 双模型矩阵协议（2026-07-03 起强制）
+
+规则以补丁形式对单一模型的失败史调参，是已经发生过的事故（73005ec 过拟合后由
+0a35b8f 回滚）。为防再犯：
+
+- **任何** system prompt / context packs / prompt_builder / validator / preflight
+  规则变更，落地前必须用 `run_matrix.py` 在 `deepseek`（flash）和 `mimo_vision`
+  两个便宜模型上各跑 ≥2 次 fresh run，与基线对比不劣化。
+- 不劣化判定（`run_matrix.py compare`，exit code 把关）：
+  - 完整 LAND 完成率不得下降；
+  - 完成 run 的平均 LLM 轮数不得上升超过 25%（小样本噪声，超阈先复跑确认）。
+- 基线报告存 `matrix_reports/`，标签带 git head；每次矩阵复测后把新报告设为下一轮基线。
+- 命令：
+
+```bash
+python tools/choreo_agent/run_matrix.py run --label post_<change> \
+  --providers deepseek,mimo_vision --runs 2
+python tools/choreo_agent/run_matrix.py compare \
+  matrix_reports/baseline_<head>.json matrix_reports/post_<change>.json
+```
+
 ## 推荐命令
 
 ```bash
