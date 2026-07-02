@@ -317,8 +317,13 @@ def _parse_drone_count(value: str) -> int:
 
 
 def _print_tier_summary(result, indent: str = "") -> None:
+    for line in tier_summary_lines(result):
+        print(indent + line)
+
+
+def tier_summary_lines(result) -> list[str]:
     """三层门摘要：Tier-0 物理安全（不可 override）/ Tier-1 演出完整性（导演可
-    override）/ Tier-2 审美（interactive 下仅建议）。"""
+    override）/ Tier-2 审美（interactive 下仅建议）。REPL 与 TUI 共用。"""
     tier0_fail = []
     if not (result.compile_ok and result.run_ok and result.read_fii_ok):
         tier0_fail.append("compile/run/read")
@@ -347,16 +352,17 @@ def _print_tier_summary(result, indent: str = "") -> None:
         tier2_advice.append("composition")
     if not result.degradation_ok:
         tier2_advice.append("degradation")
-    print(
-        f"{indent}[tier] passed={result.passed} (profile={result.gate_profile}) "
+    lines = [
+        f"[tier] passed={result.passed} (profile={result.gate_profile}) "
         f"passed_safety={result.passed_safety}"
-    )
+    ]
     if tier0_fail:
-        print(f"{indent}[tier] Tier-0 物理安全未过（不可 override）: {', '.join(tier0_fail)}")
+        lines.append(f"[tier] Tier-0 物理安全未过（不可 override）: {', '.join(tier0_fail)}")
     if tier1_fail:
-        print(f"{indent}[tier] Tier-1 完整性未过（o <理由> 可 override）: {', '.join(tier1_fail)}")
+        lines.append(f"[tier] Tier-1 完整性未过（o <理由> 可 override）: {', '.join(tier1_fail)}")
     if tier2_advice:
-        print(f"{indent}[tier] Tier-2 审美建议（不阻断）: {', '.join(tier2_advice)}")
+        lines.append(f"[tier] Tier-2 审美建议（不阻断）: {', '.join(tier2_advice)}")
+    return lines
 
 
 def _compact_quality(quality: dict) -> dict:
