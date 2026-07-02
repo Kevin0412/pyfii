@@ -35,7 +35,9 @@ def main():
         print(f"No state.json in {proj}. Run init first.")
         return
 
-    session = Session(proj)
+    # 交互导演模式：审美门（motion_quality/composition/geo 模板）降为建议，
+    # 物理安全与演出完整性门保持硬。
+    session = Session(proj, gate_profile="safety")
     provider = session.state.provider
     print(f"Project: {session.state.name}")
     print(f"Music: {session.state.music_path} ({session.state.music_duration}s)")

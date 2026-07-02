@@ -106,13 +106,15 @@ class ValidationResult:
     raw_stderr: str = ""
     hover_error: str = ""
     continuity_error: str = ""
+    # "full"（自动台）| "safety"（交互导演模式）。safety 下 motion_quality/composition
+    # 两个审美门不阻断 passed —— 错误列表照常填充，作为给导演的建议展示。
+    # 其余门（物理安全 + hover/有效运动/窗口填充等演出完整性）两种 profile 都硬。
+    gate_profile: str = "full"
 
-    @property
-    def passed(self) -> bool:
-        """段安全通过。必须 exit_state 非空且坐标数量匹配项目无人机数。"""
+    def _gates_pass(self, include_aesthetic: bool) -> bool:
         if not self.exit_state or len(self.exit_state) != self.expected_drone_count:
             return False
-        base = (
+        return (
             self.compile_ok
             and self.run_ok
             and self.read_fii_ok
@@ -131,14 +133,25 @@ class ValidationResult:
                     and self.effective_motion_ok
                     and self.window_fill_ok
                     and not self.low_activity_segments
-                    and self.motion_quality_ok
-                    and self.composition_ok
+                    and (
+                        not include_aesthetic
+                        or (self.motion_quality_ok and self.composition_ok)
+                    )
                     # degradation_ok is advisory only for single segment
                     # (hard fail only on consecutive same signature — see session.py)
                 )
             )
         )
-        return base
+
+    @property
+    def passed(self) -> bool:
+        """段验证通过（按本结果的 gate_profile 判定）。"""
+        return self._gates_pass(include_aesthetic=self.gate_profile == "full")
+
+    @property
+    def passed_safety(self) -> bool:
+        """不含审美门的安全+完整性判定，与 profile 无关（观测/测试用）。"""
+        return self._gates_pass(include_aesthetic=False)
 
     @property
     def hover_feedback(self) -> str:
@@ -283,8 +296,10 @@ def validate(
     expected_drone_count: int = 7,
     composition_plan: dict | None = None,
     segment_id: str | None = None,
+    gate_profile: str = "full",
 ) -> ValidationResult:
     result = ValidationResult()
+    result.gate_profile = gate_profile if gate_profile in ("full", "safety") else "full"
     result.expected_drone_count = max(1, int(expected_drone_count))
     result.quality_window = quality_window
     if quality_window:

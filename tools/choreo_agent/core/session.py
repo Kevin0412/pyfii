@@ -34,8 +34,11 @@ class ApprovalResult:
 
 
 class Session:
-    def __init__(self, project_root: Path):
+    def __init__(self, project_root: Path, gate_profile: str = "full"):
         self.project_root = Path(project_root).resolve()
+        # "full"=自动台（审美门硬）；"safety"=交互导演模式（审美门降建议）。
+        # 同一 Session 的 preflight/validate 全部走同一 profile。
+        self.gate_profile = gate_profile if gate_profile in ("full", "safety") else "full"
         self.state = ProjectState.load(self.project_root)
         self._pending_code: str | None = None
         self._skip_continuity: bool = True  # 单段生成不检查连续性
@@ -387,7 +390,8 @@ class Session:
                     for cand in candidates:
                         cand_code = _extract_candidate_code(cand.text)
                         if cand_code.strip() and preflight_check(
-                            cand_code, segment_id=seg.id, drone_count=self.state.drone_count
+                            cand_code, segment_id=seg.id, drone_count=self.state.drone_count,
+                            gate_profile=self.gate_profile,
                         ):
                             if response is None:
                                 response = cand
@@ -431,7 +435,8 @@ class Session:
             
             # Preflight BEFORE writing to design.py
             pf = preflight_check(
-                code, segment_id=seg.id, drone_count=self.state.drone_count
+                code, segment_id=seg.id, drone_count=self.state.drone_count,
+                gate_profile=self.gate_profile,
             )
             self._record_preflight_result(pf)
             if not pf:
@@ -456,7 +461,8 @@ class Session:
                         "candidate_empty": not bool(code.strip()),
                     })
                     pf = preflight_check(
-                        code, segment_id=seg.id, drone_count=self.state.drone_count
+                        code, segment_id=seg.id, drone_count=self.state.drone_count,
+                        gate_profile=self.gate_profile,
                     )
                     self._record_preflight_result(pf)
                     if pf:
@@ -517,6 +523,7 @@ class Session:
             expected_drone_count=self.state.drone_count,
             composition_plan=self.state.composition_plan,
             segment_id=seg.id if seg else None,
+            gate_profile=self.gate_profile,
         )
         if seg is not None and quality_window is not None:
             dynamic = self._retry_compressed_quality_window(script_path, output_dir, seg, result)
@@ -564,6 +571,7 @@ class Session:
                 expected_drone_count=self.state.drone_count,
                 composition_plan=self.state.composition_plan,
                 segment_id=seg.id,
+                gate_profile=self.gate_profile,
             )
             if candidate.passed:
                 seg.start_time = candidate_window[0]
@@ -1420,6 +1428,8 @@ def _validation_snapshot(result: ValidationResult) -> dict:
         "run_ok": result.run_ok,
         "read_fii_ok": result.read_fii_ok,
         "passed": result.passed,
+        "passed_safety": result.passed_safety,
+        "gate_profile": result.gate_profile,
         "distance_warnings": result.distance_warnings,
         "action_warnings": result.action_warnings,
         "min_distance_cm": result.min_distance_cm,

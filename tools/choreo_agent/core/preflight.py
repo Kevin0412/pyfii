@@ -22,10 +22,15 @@ class PreflightResult:
     def __init__(self):
         self.passed = True
         self.errors: list[str] = []
+        # interactive(safety) profile 下不阻断的风格建议（不影响 passed/__bool__）
+        self.style_errors: list[str] = []
 
     def add(self, msg: str):
         self.passed = False
         self.errors.append(msg)
+
+    def add_style(self, msg: str):
+        self.style_errors.append(msg)
 
     def __bool__(self):
         return self.passed
@@ -35,6 +40,7 @@ def preflight_check(
     code: str,
     segment_id: str | None = None,
     drone_count: int | None = None,
+    gate_profile: str = "full",
 ) -> PreflightResult:
     """Run all cheap checks on agent-generated code. Returns result with errors."""
     r = PreflightResult()
@@ -62,8 +68,8 @@ def preflight_check(
     _check_no_definitions(code, r)
     # 4. Agent tool leakage
     _check_no_tool_leakage(code, r)
-    # 5. Deprecated geometry templates
-    _check_no_geo_templates(code, r)
+    # 5. Deprecated geometry templates（反模板属审美规则：safety profile 降为建议）
+    _check_no_geo_templates(code, r, gate_profile)
     # 6. Handwritten geometry contract
     _check_custom_points_contract(code, r)
     # 6a. Statically visible custom_points tables: catch exact runtime
@@ -630,15 +636,21 @@ def _check_no_tool_leakage(code, r):
         r.add(f"agent 侧工具泄漏: {name} — 替换为具体数值")
 
 
-def _check_no_geo_templates(code, r):
+def _check_no_geo_templates(code, r, gate_profile="full"):
     tokens = set(re.findall(r'\b([a-zA-Z_]\w*)\s*\(', code))
     leaked = tokens & FORBIDDEN_GEO_TEMPLATES
     for name in sorted(leaked):
-        r.add(
+        msg = (
             f"几何模板已下线: {name}() — 改用 custom_points([...], n=len(drones)) "
             "手写目标点表，再用 best_assign/far_assign 做路径分配"
         )
+        if gate_profile == "safety":
+            # 交互模式：模板与否由导演的眼睛裁决，不用门跟人较劲
+            r.add_style(msg)
+        else:
+            r.add(msg)
     if "jitter_points(" in code:
+        # 会绕过 custom_points 的安全点表校验 — 两种 profile 都硬
         r.add(
             "禁止 jitter_points() 出现在 final segment — 它会在 custom_points 校验后再次扰动坐标，"
             "可能绕过安全点表检查；请直接手写最终 numeric targets，并使用 custom_points([...], n=len(drones))"

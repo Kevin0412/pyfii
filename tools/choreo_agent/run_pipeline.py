@@ -76,6 +76,7 @@ def run_full_flow(
     review_segments: bool = False,
     retry_sleep_s: int = 30,
     max_api_exceptions_per_segment: int = 5,
+    gate_profile: str = "full",
 ) -> dict:
     project_root = Path(project_root).resolve()
     if review_segments and not sys.stdin.isatty():
@@ -94,7 +95,7 @@ def run_full_flow(
 
     records: list[dict] = []
     started_at = time.time()
-    session = Session(project_root)
+    session = Session(project_root, gate_profile=gate_profile)
     run_provider = provider or session.state.provider
     run_meta = _build_run_metadata(
         project_root=project_root,
@@ -135,6 +136,7 @@ def run_full_flow(
             max_cycles_per_segment, max_attempts_per_cycle,
             use_planning_pass, parallel_candidates, review_segments,
             retry_sleep_s, max_api_exceptions_per_segment,
+            gate_profile,
         )
     finally:
         for sig, handler in prev_handlers.items():
@@ -156,9 +158,10 @@ def _run_full_flow_body(
     review_segments: bool,
     retry_sleep_s: int,
     max_api_exceptions_per_segment: int,
+    gate_profile: str = "full",
 ) -> dict:
     while True:
-        session = Session(project_root)
+        session = Session(project_root, gate_profile=gate_profile)
         seg = session.state.current_segment
         if seg is None:
             break
@@ -330,7 +333,7 @@ def _run_full_flow_body(
             _append(log_path, f"\n# STOP {seg.id} not locked\n")
             break
 
-    session = Session(project_root)
+    session = Session(project_root, gate_profile=gate_profile)
     completed = session.state.current_segment is None
     convergence = _convergence_summary(records, completed)
     attempt_counts = _attempt_counts(records)
