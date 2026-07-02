@@ -490,6 +490,10 @@ class Session:
             rounds.append(GenerationRound(index=index, response=response, validation=result))
             if result.passed:
                 break
+            if self.gate_profile == "safety" and result.tier0_ok:
+                # 交互导演模式：物理安全已过，剩余失败全部是可 override 的
+                # 完整性/审美项——停止烧轮次，交还导演决定（反馈重做或 override 锁定）。
+                break
 
             self._clear_candidate_pool(seg.id)
 
@@ -717,6 +721,14 @@ def {function_name}(drones: list):
         result = self.validate()
         if not result.passed and not allow_human_override:
             return ApprovalResult(False, result)
+        if not result.passed and not result.tier0_ok:
+            # 人类 override 只能越过演出完整性/审美（Tier-1/2）；
+            # 碰撞/越界/动作未完成是物理底线，谁也不能锁。
+            return ApprovalResult(
+                False,
+                result,
+                reason="物理安全门未过（碰撞/越界/动作未完成/不可执行）— 导演 override 也不能锁定",
+            )
 
         script_path = self.project_root / "scripts" / "design.py"
         if lock_segment(script_path, seg.id):

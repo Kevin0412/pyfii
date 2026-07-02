@@ -154,6 +154,26 @@ class ValidationResult:
         return self._gates_pass(include_aesthetic=False)
 
     @property
+    def tier0_ok(self) -> bool:
+        """物理安全底线：可执行 + 无碰撞/越界 + 动作完成。
+
+        这是导演 override 也不能越过的一层；hover/窗口填充等演出完整性
+        （Tier-1）不在此列——导演可以显式 override 它们。
+        """
+        return bool(
+            self.compile_ok
+            and self.run_ok
+            and self.read_fii_ok
+            and self.exit_state
+            and len(self.exit_state) == self.expected_drone_count
+            and self.distance_warnings == 0
+            and self.action_warnings == 0
+            and self.dense_min_distance_cm is not None
+            and self.dense_min_distance_cm > 51
+            and not self.collision_intervals
+        )
+
+    @property
     def hover_feedback(self) -> str:
         if not self.continuity_required or not self.hover_segments:
             return ""

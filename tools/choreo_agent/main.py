@@ -8,6 +8,7 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO_ROOT / "tools" / "choreo_agent"))
 
 from core import Session
+from core.design_memory import record as design_memory_record
 
 
 def main():
@@ -99,6 +100,7 @@ def main():
                 print(f"error: {result.error_message[-200:]}")
             if result.continuity_error:
                 print(f"continuity_error: {result.continuity_error[-200:]}")
+            _print_tier_summary(result)
 
         elif cmd == "a":
             approval = session.approve_and_lock(allow_human_override=True)
@@ -107,10 +109,45 @@ def main():
                 if approval.human_override:
                     print("Human override: validation did not pass, but manual approval locked the segment.")
             else:
-                print("Approve failed — segment missing or marker lock failed.")
+                print(f"Approve failed — {approval.reason or 'segment missing or marker lock failed.'}")
+
+        elif cmd == "i" or cmd.startswith("i "):
+            if seg is None:
+                print("No current segment.")
+                continue
+            text = raw_cmd[1:].strip()
+            if not text:
+                print(f"Intent for {seg.id}: {seg.intent or '(empty)'}")
+            else:
+                seg.intent = text
+                session.save()
+                print(f"Intent for {seg.id} updated: {text}")
+
+        elif cmd == "o" or cmd.startswith("o "):
+            reason = raw_cmd[1:].strip()
+            if seg is None:
+                print("No current segment.")
+                continue
+            if not reason:
+                print("Usage: o <理由> — 导演 override 锁定（可越过 hover/窗口等完整性门与审美建议；物理安全不可越）")
+                continue
+            approval = session.approve_and_lock(allow_human_override=True)
+            if approval.locked:
+                design_memory_record(
+                    proj, "segment_feedback", f"[导演 override 锁定] {reason}", context=seg.id
+                )
+                session._human_preferences = None
+                flag = "（override：验证未全过，导演拍板）" if approval.human_override else ""
+                print(f"Locked {session.state.locked_segment_ids[-1]} {flag}— 理由已记录 design_memory。")
+            else:
+                print(f"Override 失败 — {approval.reason or 'marker lock failed'}")
 
         elif cmd.startswith("g"):
             feedback = raw_cmd[1:].strip()
+            if feedback and seg is not None:
+                # 导演反馈立即留痕；清缓存让后续 prompt 重新加载偏好
+                design_memory_record(proj, "segment_feedback", feedback, context=seg.id)
+                session._human_preferences = None
             print(f"Generating with {provider}; max_attempts=5. Streaming thinking/results when the provider sends them.")
             stream = _StreamPrinter()
             try:
@@ -173,6 +210,7 @@ def main():
                         print(f"  error: {validation.error_message[-200:]}")
                     if validation.continuity_error:
                         print(f"  continuity_error: {validation.continuity_error[-200:]}")
+                    _print_tier_summary(validation, indent="  ")
 
             if rounds[-1].validation and rounds[-1].validation.passed:
                 if session.state.mode == "fast":
@@ -188,7 +226,14 @@ def main():
                 else:
                     print("Safe gate passed. Manual mode: human approval is required; use a to lock.")
             else:
-                print("Safe gate failed. Segment remains unlocked; do not advance.")
+                last = rounds[-1].validation
+                if last is not None and last.tier0_ok:
+                    print(
+                        "物理安全已过；剩余失败是可 override 的完整性/审美项（见 [tier] 摘要）。"
+                        "可 g <反馈> 重做，或 o <理由> 导演拍板锁定。"
+                    )
+                else:
+                    print("Safe gate failed. Segment remains unlocked; do not advance.")
 
         elif cmd == "h":
             print(session.handoff())
@@ -213,7 +258,11 @@ def main():
                 print("Usage: mode [manual|fast]")
 
         else:
-            print("Commands: g [feedback]=generate+repair v=validate a=approve h=handoff mode [manual|fast] sync s=save q=quit")
+            print(
+                "Commands: g [反馈]=generate+repair  i [文本]=查看/编辑当前段 intent  "
+                "v=validate  a=approve  o <理由>=导演 override 锁定  "
+                "h=handoff  mode [manual|fast]  sync  s=save  q=quit"
+            )
 
 
 def _resolve_project_path(value: str) -> Path:
@@ -265,6 +314,49 @@ def _parse_drone_count(value: str) -> int:
     if count <= 0:
         raise ValueError("drone_count must be positive")
     return count
+
+
+def _print_tier_summary(result, indent: str = "") -> None:
+    """三层门摘要：Tier-0 物理安全（不可 override）/ Tier-1 演出完整性（导演可
+    override）/ Tier-2 审美（interactive 下仅建议）。"""
+    tier0_fail = []
+    if not (result.compile_ok and result.run_ok and result.read_fii_ok):
+        tier0_fail.append("compile/run/read")
+    if (
+        result.distance_warnings != 0
+        or result.collision_intervals
+        or (result.dense_min_distance_cm is not None and result.dense_min_distance_cm <= 51)
+    ):
+        tier0_fail.append("distance/collision")
+    if result.action_warnings != 0:
+        tier0_fail.append("action")
+    tier1_fail = []
+    if result.continuity_required:
+        if not result.hover_check_ok or result.hover_segments:
+            tier1_fail.append("hover")
+        if not result.motion_envelope_ok:
+            tier1_fail.append("motion_envelope")
+        if not result.effective_motion_ok or result.low_activity_segments:
+            tier1_fail.append("effective_motion")
+        if not result.window_fill_ok:
+            tier1_fail.append("window_fill")
+    tier2_advice = []
+    if not result.motion_quality_ok:
+        tier2_advice.append("motion_quality")
+    if not result.composition_ok:
+        tier2_advice.append("composition")
+    if not result.degradation_ok:
+        tier2_advice.append("degradation")
+    print(
+        f"{indent}[tier] passed={result.passed} (profile={result.gate_profile}) "
+        f"passed_safety={result.passed_safety}"
+    )
+    if tier0_fail:
+        print(f"{indent}[tier] Tier-0 物理安全未过（不可 override）: {', '.join(tier0_fail)}")
+    if tier1_fail:
+        print(f"{indent}[tier] Tier-1 完整性未过（o <理由> 可 override）: {', '.join(tier1_fail)}")
+    if tier2_advice:
+        print(f"{indent}[tier] Tier-2 审美建议（不阻断）: {', '.join(tier2_advice)}")
 
 
 def _compact_quality(quality: dict) -> dict:

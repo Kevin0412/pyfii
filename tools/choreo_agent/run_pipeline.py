@@ -51,6 +51,7 @@ def main(argv: list[str] | None = None) -> int:
             plan_review=args.plan_review,
         )
 
+    director_script = _load_director_script(args.director_script)
     result = run_full_flow(
         project_root=project_root,
         provider=args.provider,
@@ -58,12 +59,31 @@ def main(argv: list[str] | None = None) -> int:
         max_attempts_per_cycle=args.max_attempts_per_cycle,
         use_planning_pass=not args.no_planning_pass,
         parallel_candidates=args.parallel_candidates,
-        review_segments=args.review_segments,
+        # 导演剧本 = 脚本化的段级评审 + 交互 profile（审美门降建议）
+        review_segments=args.review_segments or director_script is not None,
         retry_sleep_s=args.retry_sleep_s,
         max_api_exceptions_per_segment=args.max_api_exceptions_per_segment,
+        gate_profile="safety" if director_script is not None else "full",
+        director_script=director_script,
     )
     print(json.dumps(result["summary"], ensure_ascii=False, indent=2))
     return 0 if result["summary"]["completed"] else 1
+
+
+def _load_director_script(value: str | None) -> dict | None:
+    """导演剧本 JSON：{"segments": {SID: {"intent": str, "feedback": [str,...]}},
+    "session_verdict": str}。feedback 依次在段级评审时下达，耗尽后锁定。"""
+    if not value:
+        return None
+    path = Path(value)
+    if not path.is_absolute():
+        path = (REPO_ROOT / value).resolve()
+    if not path.exists():
+        raise SystemExit(f"director script not found: {path}")
+    script = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(script, dict):
+        raise SystemExit("director script must be a JSON object")
+    return script
 
 
 def run_full_flow(
@@ -77,9 +97,11 @@ def run_full_flow(
     retry_sleep_s: int = 30,
     max_api_exceptions_per_segment: int = 5,
     gate_profile: str = "full",
+    director_script: dict | None = None,
 ) -> dict:
     project_root = Path(project_root).resolve()
-    if review_segments and not sys.stdin.isatty():
+    # 有导演剧本时评审由脚本驱动，不需要 TTY
+    if review_segments and director_script is None and not sys.stdin.isatty():
         raise SystemExit("--review-segments needs an interactive terminal")
     log_path = project_root / "agent_interaction.log"
     _append(log_path, f"\n\n# FULL FLOW START {time.strftime('%Y-%m-%d %H:%M:%S')}\n")
@@ -136,7 +158,7 @@ def run_full_flow(
             max_cycles_per_segment, max_attempts_per_cycle,
             use_planning_pass, parallel_candidates, review_segments,
             retry_sleep_s, max_api_exceptions_per_segment,
-            gate_profile,
+            gate_profile, director_script,
         )
     finally:
         for sig, handler in prev_handlers.items():
@@ -159,12 +181,15 @@ def _run_full_flow_body(
     retry_sleep_s: int,
     max_api_exceptions_per_segment: int,
     gate_profile: str = "full",
+    director_script: dict | None = None,
 ) -> dict:
     while True:
         session = Session(project_root, gate_profile=gate_profile)
         seg = session.state.current_segment
         if seg is None:
             break
+        if director_script:
+            _apply_scripted_intent(director_script, session, seg, log_path)
 
         segment_record = {
             "segment": seg.id,
@@ -277,7 +302,10 @@ def _run_full_flow_body(
 
             if rounds and rounds[-1].validation and rounds[-1].validation.passed:
                 if review_segments:
-                    human = _segment_review_prompt(seg, rounds[-1].validation)
+                    if director_script is not None:
+                        human = _scripted_review(director_script, seg, log_path)
+                    else:
+                        human = _segment_review_prompt(seg, rounds[-1].validation)
                     if human == "__quit__":
                         _append(log_path, f"\n# STOP human aborted at {seg.id}\n")
                         raise SystemExit("segment review aborted by human")
@@ -352,10 +380,13 @@ def _run_full_flow_body(
         "records": records,
     }
     if review_segments:
-        verdict = input(
-            f"\nSession 验收（locked: {summary['locked_segment_ids']}）"
-            "[回车=通过 / 文本=评语（'否'开头=否决）]: "
-        ).strip()
+        if director_script is not None:
+            verdict = str(director_script.get("session_verdict") or "").strip()
+        else:
+            verdict = input(
+                f"\nSession 验收（locked: {summary['locked_segment_ids']}）"
+                "[回车=通过 / 文本=评语（'否'开头=否决）]: "
+            ).strip()
         summary["human_verdict"] = verdict or "approved"
         if verdict:
             from core.design_memory import record as _dm_record
@@ -895,22 +926,46 @@ def _apply_music_plan(project_root: Path, state: dict, music: str, provider: str
     print(f"[music plan] theme: {str(plan.get('theme'))[:60]} | show_end: {show_end}s")
 
 
-def _segment_review_prompt(seg, validation) -> str:
+def _segment_review_prompt(seg, validation, input_fn=input, print_fn=print) -> str:
     """段级评审（PLAN 12.3）：返回 '' = 锁定，文本 = 导演反馈重做，'__quit__' = 中止。"""
-    print(f"\n===== 段级评审 {seg.id} ({seg.start_time}-{seg.end_time}s) =====")
-    print(
+    print_fn(f"\n===== 段级评审 {seg.id} ({seg.start_time}-{seg.end_time}s) =====")
+    print_fn(
         f"dist={validation.distance_warnings} act={validation.action_warnings} "
         f"minD={validation.min_distance_cm} dense_minD={validation.dense_min_distance_cm}"
     )
     card = (validation.composition or {}).get("design_card") or {}
     for key in ("role", "motifs", "beat", "formation", "lighting"):
         if card.get(key):
-            print(f"  #{key}: {card[key]}")
-    answer = input("[回车/a]=锁定  [文本]=导演反馈重做本段  [q]=中止: ").strip()
+            print_fn(f"  #{key}: {card[key]}")
+    answer = str(input_fn("[回车/a]=锁定  [文本]=导演反馈重做本段  [q]=中止: ")).strip()
     if answer.lower() in ("", "a", "y"):
         return ""
     if answer.lower() == "q":
         return "__quit__"
+    return answer
+
+
+def _apply_scripted_intent(script: dict, session: Session, seg, log_path: Path) -> None:
+    """导演剧本：段成为当前段时应用其 intent（等价 REPL 的 i 命令）。"""
+    entry = (script.get("segments") or {}).get(seg.id) or {}
+    intent = str(entry.get("intent") or "").strip()
+    if intent and seg.intent != intent:
+        seg.intent = intent
+        session.state.save(session.project_root)
+        _append(log_path, f"\n# {seg.id} DIRECTOR INTENT\n{intent}\n")
+
+
+def _scripted_review(script: dict, seg, log_path: Path) -> str:
+    """导演剧本评审：按段依次弹出 feedback 队列；耗尽后返回 ''（锁定）。"""
+    entry = (script.get("segments") or {}).get(seg.id)
+    if not isinstance(entry, dict):
+        return ""
+    queue = entry.get("_queue")
+    if queue is None:
+        queue = [str(item) for item in (entry.get("feedback") or [])]
+        entry["_queue"] = queue
+    answer = queue.pop(0).strip() if queue else ""
+    _append(log_path, f"\n# {seg.id} SCRIPTED REVIEW -> {answer or '(approve)'}\n")
     return answer
 
 
@@ -969,6 +1024,7 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
     parser.add_argument("--fresh-name", help="Create a fresh project under agent_projects/.")
     parser.add_argument("--music", help="Music file (abs or repo-root relative); generates composition plan + segment windows from it.")
     parser.add_argument("--review-segments", action="store_true", help="HITL: pause after each gate-passing segment for approve/feedback; session verdict at the end (PLAN 12.3/12.4). Rejections consume cycles.")
+    parser.add_argument("--director-script", help="JSON script of per-segment intent + feedback rounds; drives the review loop non-interactively with gate_profile=safety (real-API director acceptance).")
     parser.add_argument("--plan-review", action="store_true", help="HITL: review the generated plan interactively; reject with director notes to regenerate (PLAN 12.1).")
     parser.add_argument("--music-title", help="Human-provided track title/character hint (e.g. 春节序曲); overrides audio-feature mood inference.")
     parser.add_argument("--provider", help="Provider name from ai_providers.local.json.")
