@@ -7,7 +7,14 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 
 def test_chat_mimo_no_prefix():
-    """chat(provider='mimo') works without prefix/recursion."""
+    """chat(provider='mimo') works without prefix/recursion.
+
+    真实 API 调用——默认跳过，设 PYFII_REAL_API_TESTS=1 启用。
+    """
+    import os
+    if not os.environ.get("PYFII_REAL_API_TESTS"):
+        import pytest
+        pytest.skip("real mimo API call; set PYFII_REAL_API_TESTS=1 to run")
     from core.llm_client import chat
     r = chat("say OK", "respond OK", provider="mimo", temperature=0.1)
     assert r is not None
@@ -181,6 +188,56 @@ def test_stream_parses_reasoning_and_result_deltas():
     print("PASSED: stream parser separates thinking and result")
 
 
+def test_stream_deadline_cuts_endless_reasoning():
+    """Worker 线程里没有 SIGALRM，no-content 看门狗又被 reasoning 增量不断重置；
+    流式循环内的 deadline 检查必须能掐断一个无限输出思考的流。"""
+    import json as _json
+    import time as _time
+    from concurrent.futures import ThreadPoolExecutor
+    from unittest.mock import patch
+    from core import llm_client
+
+    class EndlessReasoningStream:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return False
+
+        def raise_for_status(self):
+            pass
+
+        def iter_lines(self):
+            line = "data: " + _json.dumps(
+                {"choices": [{"delta": {"reasoning_content": "嗯"}}]}
+            )
+            while True:
+                yield line
+
+    cfg = {
+        "model": "mock",
+        "base_url": "https://example.test",
+        "api_key": "test-key",
+        "stream": True,
+        "timeout_s": 0.5,
+        "no_content_timeout_s": 600,
+        "max_retries": 0,
+    }
+    started = _time.monotonic()
+    with patch("core.llm_client.load_config", return_value=cfg), \
+            patch("core.llm_client.httpx.stream", return_value=EndlessReasoningStream()):
+        # 在 worker 线程里跑，绕开主线程 SIGALRM，逼出 deadline 路径
+        with ThreadPoolExecutor(max_workers=1) as pool:
+            future = pool.submit(llm_client.chat, "sys", "user", provider="mock")
+            try:
+                future.result(timeout=30)
+                assert False, "expected LlmTimeoutError from in-stream deadline"
+            except llm_client.LlmTimeoutError:
+                pass
+    assert _time.monotonic() - started < 10, "deadline should cut the stream promptly"
+    print("PASSED: in-stream deadline cuts endless reasoning stream")
+
+
 def test_chat_retries_transient_error_once():
     """chat() retries transient network errors before surfacing failure."""
     from unittest.mock import patch
@@ -232,7 +289,9 @@ def test_extract_candidate_code_dedents_fenced_body():
     print("PASSED: candidate code dedents fenced body")
 
 if __name__ == "__main__":
-    test_chat_mimo_no_prefix()
+    import os as _os
+    if _os.environ.get("PYFII_REAL_API_TESTS"):
+        test_chat_mimo_no_prefix()
     test_chat_prefix_mimo_rejects()
     test_bad_code_does_not_write_design_py()
     test_degradation_signature_cross_segment()
@@ -242,6 +301,7 @@ if __name__ == "__main__":
     test_full_flow_runner_is_strict()
     test_generate_never_calls_chat_prefix()
     test_stream_parses_reasoning_and_result_deltas()
+    test_stream_deadline_cuts_endless_reasoning()
     test_chat_retries_transient_error_once()
     test_extract_candidate_code_dedents_fenced_body()
     print("\nALL 10 INTEGRATION TESTS PASSED")

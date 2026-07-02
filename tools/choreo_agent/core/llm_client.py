@@ -132,8 +132,9 @@ def chat(
             f"provider={provider} model={cfg['model']}"
         )
 
-    # SIGALRM 只能装在主线程；并行候选的 worker 线程改用单调时钟软墙——
-    # 线程内仍有 httpx connect/read 超时 + 流式 no-content 看门狗兜底。
+    # SIGALRM 只能装在主线程；worker 线程靠传入流式循环的单调时钟 deadline——
+    # no-content 看门狗会被持续的 reasoning 增量不断重置，挡不住 40 分钟的长篇
+    # 思考流，deadline 是线程内唯一的硬性时长上限。
     use_alarm = threading.current_thread() is threading.main_thread()
     if use_alarm:
         previous_handler = signal.getsignal(signal.SIGALRM)
@@ -170,6 +171,7 @@ def chat(
                         on_reasoning_delta=on_reasoning_delta,
                         on_heartbeat=on_heartbeat,
                         no_content_timeout_s=no_content_timeout_s,
+                        deadline=started_at + wall_timeout_s,
                     )
                 else:
                     response = once_fn(
@@ -243,6 +245,7 @@ def _chat_stream(
     on_reasoning_delta: Callable[[str], None] | None,
     on_heartbeat: Callable[[], None] | None,
     no_content_timeout_s: float = STREAM_NO_CONTENT_TIMEOUT_S,
+    deadline: float | None = None,
 ) -> LlmResponse:
     chunks: list[str] = []
     reasoning_chunks: list[str] = []
@@ -259,6 +262,7 @@ def _chat_stream(
     ) as resp:
         resp.raise_for_status()
         for line in resp.iter_lines():
+            _raise_if_deadline_exceeded(deadline, model)
             if not line:
                 continue
             if line.startswith("data:"):
@@ -373,6 +377,7 @@ def _chat_stream_anthropic(
     on_reasoning_delta: Callable[[str], None] | None,
     on_heartbeat: Callable[[], None] | None,
     no_content_timeout_s: float = STREAM_NO_CONTENT_TIMEOUT_S,
+    deadline: float | None = None,
 ) -> LlmResponse:
     """Parse the Anthropic Messages SSE stream.
 
@@ -396,6 +401,7 @@ def _chat_stream_anthropic(
     ) as resp:
         resp.raise_for_status()
         for line in resp.iter_lines():
+            _raise_if_deadline_exceeded(deadline, model)
             if not line:
                 continue
             if line.startswith("event:"):
@@ -500,6 +506,13 @@ def _attach_prompt_usage(response: LlmResponse, system: str, user: str) -> LlmRe
 
 def _estimate_tokens_from_chars(chars: int) -> int:
     return int(math.ceil(max(0, chars) / 2.0))
+
+
+def _raise_if_deadline_exceeded(deadline: float | None, model: str) -> None:
+    if deadline is not None and time.monotonic() > deadline:
+        raise LlmTimeoutError(
+            f"LLM stream exceeded wall deadline mid-stream: model={model}"
+        )
 
 
 def _raise_if_no_semantic_delta(last_semantic_at: float, no_content_timeout_s: float) -> None:

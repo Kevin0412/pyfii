@@ -15,8 +15,10 @@ import argparse
 import json
 import os
 import shutil
+import signal
 import subprocess
 import sys
+import threading
 import time
 import traceback
 import uuid
@@ -106,6 +108,55 @@ def run_full_flow(
     )
     _write_partial_result(project_root, records, session, started_at, provider=run_provider, run_meta=run_meta)
 
+    # 被 SIGINT/SIGTERM 杀掉的 run 不能永远停留在 status="running"：
+    # 先落盘 aborted 再退出，事后才能区分"中止"与"进行中/卡死"。
+    def _abort_on_signal(signum, _frame):
+        try:
+            current = Session(project_root)
+        except Exception:
+            current = session
+        _write_partial_result(
+            project_root, records, current, started_at, provider=run_provider,
+            last_failure_category="aborted", last_exception=f"signal {signum}",
+            run_meta=run_meta, status="aborted",
+        )
+        raise SystemExit(128 + signum)
+
+    prev_handlers = {}
+    if threading.current_thread() is threading.main_thread():
+        for sig in (signal.SIGINT, signal.SIGTERM):
+            prev_handlers[sig] = signal.getsignal(sig)
+            signal.signal(sig, _abort_on_signal)
+
+    try:
+        return _run_full_flow_body(
+            project_root, records, session, started_at, log_path,
+            run_provider, run_meta,
+            max_cycles_per_segment, max_attempts_per_cycle,
+            use_planning_pass, parallel_candidates, review_segments,
+            retry_sleep_s, max_api_exceptions_per_segment,
+        )
+    finally:
+        for sig, handler in prev_handlers.items():
+            signal.signal(sig, handler)
+
+
+def _run_full_flow_body(
+    project_root: Path,
+    records: list,
+    session: Session,
+    started_at: float,
+    log_path: Path,
+    run_provider: str,
+    run_meta: dict,
+    max_cycles_per_segment: int,
+    max_attempts_per_cycle: int,
+    use_planning_pass: bool,
+    parallel_candidates: int,
+    review_segments: bool,
+    retry_sleep_s: int,
+    max_api_exceptions_per_segment: int,
+) -> dict:
     while True:
         session = Session(project_root)
         seg = session.state.current_segment
@@ -122,6 +173,22 @@ def run_full_flow(
             "failure_category": None,
         }
         records.append(segment_record)
+
+        # LAND: auto-generate, skip LLM entirely
+        if str(seg.id).upper() == "LAND":
+            _append(log_path, f"\n# {seg.id} AUTO-LAND\n")
+            land_ok = _auto_land(session, segment_record, log_path)
+            _write_partial_result(
+                project_root, records, session, started_at,
+                provider=run_provider, run_meta=run_meta,
+                last_failure_category=None if land_ok else segment_record.get("failure_category"),
+                last_exception=None,
+            )
+            if land_ok:
+                continue
+            else:
+                break
+
         feedback = _segment_feedback(seg.id, session.state.drone_count)
         _append(
             log_path,
@@ -136,7 +203,13 @@ def run_full_flow(
         for cycle in range(1, max_cycles_per_segment + 1):
             _append(log_path, f"\n# {seg.id} CYCLE {cycle} START\n")
             _write_partial_result(project_root, records, session, started_at, provider=run_provider, run_meta=run_meta)
-            stream = _StreamLog(log_path, seg.id, cycle)
+            stream = _StreamLog(
+                log_path, seg.id, cycle,
+                on_activity=lambda s=session: _write_partial_result(
+                    project_root, records, s, started_at,
+                    provider=run_provider, run_meta=run_meta,
+                ),
+            )
             try:
                 rounds = session.generate_until_safe_with_llm(
                     provider=run_provider,
@@ -295,14 +368,82 @@ def run_full_flow(
     return result
 
 
+def _auto_land(session: Session, segment_record: dict, log_path: Path) -> bool:
+    """Write fixed LAND code, validate, and lock. No LLM needed."""
+    from core.script_editor import replace_active_segment, lock_segment
+
+    seg = session.state.current_segment
+    if seg is None:
+        return False
+
+    land_code = (
+        "    auto_init(drones)\n"
+        "    # role: landing\n"
+        "    # motifs: fade-out\n"
+        "    # beat: N/A\n"
+        "    # formation: hold entry positions\n"
+        "    # lighting: brief white flash before landing\n"
+        "    prev = [(d.x, d.y, d.z) for d in drones]\n"
+        "    flash_group(drones, '#ffffff', times=2, on_ms=300, off_ms=200)\n"
+        "    for d in drones:\n"
+        "        d.land()\n"
+    )
+
+    script_path = session.project_root / "scripts" / "design.py"
+    if not replace_active_segment(script_path, seg.id, land_code, session.state.locked_segment_ids):
+        _append(log_path, "# AUTO-LAND: replace_active_segment failed\n")
+        segment_record["failure_category"] = "land_protocol"
+        return False
+
+    result = session.validate()
+    _append(log_path, f"# AUTO-LAND: passed={result.passed} minD={result.min_distance_cm}\n")
+
+    segment_record["cycles"].append({
+        "cycle": 1,
+        "rounds": [{"round": 1, "auto_land": True,
+                     "validation": _validation_summary(result)}],
+    })
+
+    if not result.passed:
+        _append(log_path, f"# AUTO-LAND: validation failed: {result.error_message}\n")
+        segment_record["locked"] = False
+        segment_record["failure_category"] = "land_protocol"
+        return False
+
+    approval = session.approve_and_lock()
+    segment_record["locked"] = approval.locked
+    if approval.locked:
+        _append(log_path, "# AUTO-LAND: locked\n")
+        return True
+    _append(log_path, f"# AUTO-LAND: lock failed: {approval.reason}\n")
+    segment_record["failure_category"] = "lock_failed"
+    return False
+
+
 class _StreamLog:
-    def __init__(self, log_path: Path, segment_id: str, cycle: int):
+    def __init__(self, log_path: Path, segment_id: str, cycle: int,
+                 on_activity=None):
         self.log_path = log_path
         self.segment_id = segment_id
         self.cycle = cycle
         self._reasoning_open = False
         self._content_open = False
         self._last_heartbeat = 0.0
+        self._on_activity = on_activity
+        self._last_activity_write = time.monotonic()
+
+    def _notify_activity(self) -> None:
+        # 长轮期间 stability_result 的 updated_at 也要跳，否则从文件上
+        # 无法区分"卡死"和"正常长流"。60s 节流，写失败不打断流。
+        if self._on_activity is None:
+            return
+        now = time.monotonic()
+        if now - self._last_activity_write >= 60:
+            self._last_activity_write = now
+            try:
+                self._on_activity()
+            except Exception:
+                pass
 
     def round_start(self, index: int) -> None:
         _append(self.log_path, f"\n# {self.segment_id} CYCLE {self.cycle} ROUND {index} START\n")
@@ -312,18 +453,21 @@ class _StreamLog:
             _append(self.log_path, f"\n# {self.segment_id} CYCLE {self.cycle} REASONING\n")
             self._reasoning_open = True
         _append(self.log_path, text)
+        self._notify_activity()
 
     def delta(self, text: str) -> None:
         if not self._content_open:
             _append(self.log_path, f"\n# {self.segment_id} CYCLE {self.cycle} CONTENT\n")
             self._content_open = True
         _append(self.log_path, text)
+        self._notify_activity()
 
     def heartbeat(self) -> None:
         now = time.monotonic()
         if now - self._last_heartbeat >= 15:
             _append(self.log_path, f"\n# {self.segment_id} CYCLE {self.cycle} HEARTBEAT\n")
             self._last_heartbeat = now
+        self._notify_activity()
 
 
 def _round_summary(round_item) -> dict:
@@ -779,12 +923,13 @@ def _write_partial_result(project_root: Path, records: list, session, started_at
                           provider: str | None = None,
                           last_failure_category: str | None = None,
                           last_exception: str | None = None,
-                          run_meta: dict | None = None) -> None:
+                          run_meta: dict | None = None,
+                          status: str = "running") -> None:
     """Write intermediate stability_result.json after each cycle."""
     try:
         attempt_counts = _attempt_counts(records)
         convergence = _convergence_summary(records, completed=False)
-        run_status = _run_status(run_meta, "running", started_at)
+        run_status = _run_status(run_meta, status, started_at)
         summary = {
             "project": str(project_root),
             "provider": provider or session.state.provider,
@@ -810,7 +955,8 @@ def _write_partial_result(project_root: Path, records: list, session, started_at
 
 def _write_json_atomic(path: Path, data: dict) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    tmp = path.with_name(f".{path.name}.{os.getpid()}.tmp")
+    # 并行候选流式期间心跳可能从多个 worker 线程并发写，tmp 名必须含线程 id
+    tmp = path.with_name(f".{path.name}.{os.getpid()}.{threading.get_ident()}.tmp")
     tmp.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
     tmp.replace(path)
 
