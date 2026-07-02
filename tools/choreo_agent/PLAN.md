@@ -11,20 +11,23 @@
 | 1 | core state system | ✅ |
 | 2 | script_editor | ✅ |
 | 3 | validator (四层+hover+dense_collision+motion/degradation+repair_feedback) | ✅ |
-| 4 | TUI | CLI REPL 可用，Textual 待做 |
+| 4 | TUI | ✅ CLI REPL（g/v/i/a/o）+ 最小 Textual 壳 `tui/app.py`；完整 TUI 迭代中 |
 | 5 | LLM 接入 (DeepSeek / custom_gpt) | ✅ |
 | 6 | 自动修复闭环 | ✅ generate_until_safe_with_llm |
 | 7 | 试跑 cannon_in_d | ✅ DeepSeek `S01-S08 + LAND` 全流程锁定，已生成视频验收文件 |
 | 8 | agent-side planning tools | ✅ timeline_cues / assign_targets / budget_layers |
+| 9 | 交互导演主线（2026-07-03） | ✅ gate_profile 三层门（物理安全/演出完整性可 override/审美建议）；requirements 数据化 composition 门；导演反馈进 planning prompt（曾被静默丢弃）；`--director-script` + 轨迹级验收 `run_director_cases.py`；双模型矩阵协议 `run_matrix.py` |
 
 ## 待做
-- Textual TUI
+- 完整 Textual TUI（最小壳已可用：三面板 + G/V/I/A/O）
 - 音乐分析自动化 (BPM/能量/段落检测)
 - Safe/Fast 模式切换 ✅ 已有 manual/fast CLI；仍需更好 UI
 - best_assign / planning_tools 的候选结果更细粒度注入到 prompt feedback
-- 双模型多次生成稳定性测试：DeepSeek / MIMO 各多次 fresh run，按 `STABILITY_TEST_PLAN.md` 统计完整 LAND 成功率和失败原因
+- 双模型多次生成稳定性测试 ✅ 工具与协议就绪（run_matrix.py + STABILITY_TEST_PLAN 矩阵协议）；持续按协议执行
 - Context 文件自动更新 (design_memory.md, handoff.md, segment_cards)
 - 退化检测集成到验证流水线 ✅ 已有基础车道/刚性圆检测；仍需跨段重复检测
+- planning prompt 里 S04/S06 的字面 keyframe 合同（planning_pass `_format_keyframe_contract`、coding prompt 规则行）尚未 requirements 数据化——门已数据化，prompt 文案是残余，自定义 plan 放宽时会出现"prompt 更严于门"的无害不一致
+- function.py 分层削减实验（后续轨道）：同一段落说明 helper vs 裸模式对比安全轮次；geo_* 审美模板已在 auto 模式禁用/interactive 降建议 → 母题执行器 → safe_move/best_assign 安全原语最后
 
 ---
 
