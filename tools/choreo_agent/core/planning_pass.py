@@ -15,6 +15,8 @@ def build_planning_prompt(
     drone_count: int = 7,
     composition_plan: Mapping[str, Any] | None = None,
     music_brief: Mapping[str, Any] | None = None,
+    feedback: str = "",
+    human_preferences: str = "",
 ) -> str:
     """Prompt for first pass: output structured JSON plan."""
     prev_lines = []
@@ -32,6 +34,7 @@ def build_planning_prompt(
         from .music_brief import format_segment_music_hint
 
         music_text = format_segment_music_hint(music_brief, start_time, end_time)
+    direction_text = _format_direction_block(feedback, human_preferences)
 
     return f"""## 规划 {segment_id} ({start_time}-{end_time}s, 时长{end_time-start_time}s)
 意图: {intent}
@@ -84,8 +87,33 @@ def build_planning_prompt(
 章法约束: JSON 里的 feel/targets/light_color 必须服务全局章法；不要随机换题，不要连续重复同一种退化队形。
 assign 字段（可选，默认 best）: "best"收束 / "far"大交换 / "rotate"漩涡(可加 "rotate_steps") / "mirror"对穿(检查器会提醒错峰) / "swap"半场互换 / "keep"身份保持——转场即编舞，按意图声明，检查器按声明的映射验算。
 输出纪律: 直接给 JSON；不要写距离证明、不要手算两两间距、不要自问自答。规划检查器会回报精确间距/路径/时长数字，如有违规你会收到报告再修正。
-
+{direction_text}
 只输出 JSON，不解释。"""
+
+
+def _format_direction_block(feedback: str, human_preferences: str) -> str:
+    """导演反馈/人类偏好注入块（与 build_segment_prompt 同语义）。
+
+    round-1 planning pass 曾经完全丢弃 feedback（只记日志不进 prompt）——
+    这是导演反馈通道的产品级 bug；此块保证两级 planning prompt 都收到。
+    空输入返回空串，prompt 字节级不变。
+    """
+    parts: list[str] = []
+    prefs = (human_preferences or "").strip()
+    if prefs:
+        from .design_memory import format_preferences_block
+
+        block = format_preferences_block(prefs)
+        if block:
+            parts.append(block.rstrip())
+    note = (feedback or "").strip()
+    if note:
+        parts.append(
+            "## 导演/上轮反馈（权威，必须满足）\n" + note + "\n据此修正，勿改动无关部分。"
+        )
+    if not parts:
+        return ""
+    return "\n" + "\n\n".join(parts) + "\n"
 
 
 def _format_keyframe_contract(segment_id: str, start_time: float, end_time: float) -> str:
@@ -675,9 +703,12 @@ def build_coding_prompt(
     end_time: float,
     drone_count: int = 7,
     composition_plan: Mapping[str, Any] | None = None,
+    feedback: str = "",
+    human_preferences: str = "",
 ) -> str:
     """Second pass: budget table → Python code."""
     composition_text = _format_planning_composition_plan(composition_plan, segment_id)
+    direction_text = _format_direction_block(feedback, human_preferences)
     return f"""## 编码 {segment_id} ({start_time}-{end_time}s)
 
 {budget_table}
@@ -709,7 +740,7 @@ def build_coding_prompt(
 - 如需错峰，优先 `safe_move(mode="wave")` 或 `ripple_move`（它们自动对齐段尾），只有同步小挪动才手动 `drone.delay(i * 60)` + `move2`
 - 段尾：prev = [(t[0],t[1],t[2]) for t in targets_last]
 - 禁止 import/def/markdown/inittime/VelXY
-
+{direction_text}
 只输出 fenced Python：
 ```python
 # 你的代码

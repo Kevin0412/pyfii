@@ -99,7 +99,8 @@ def evaluate_composition(
         errors.append(
             "设计卡没有承接当前段母题：需要在 #motifs/#beat/#formation 中明确使用或变奏 "
             + " / ".join(role_motifs[:4])
-            + "。"
+            + "。注意：这是字面子串匹配——至少一个母题词必须原样出现在设计卡文本里，"
+            "意译/同义改写不会被识别。"
         )
 
     if avoid_terms and _mentions_any(_text(card.get("formation")), avoid_terms):

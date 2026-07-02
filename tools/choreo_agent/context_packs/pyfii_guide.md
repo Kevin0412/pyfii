@@ -43,6 +43,11 @@ clamp_xy(v)  # [0, 560]
 clamp_z(v)   # [80, 250]
 ```
 
+## 分配→执行契约速查（三行，别再纠结）
+- `prev = safe_move(drones, prev, geo, flying_ms, mode="wave")`：内部自带安全分配+错峰+执行，**不接收 targets**——把 geo 点表直接给它，不要先 far_assign 再喂。
+- `targets = far_assign(prev, geo, min_path_cm=...)` → 只能配**同步执行**：per-drone loop `move2(drone, targets[i], flying_ms)`，全员同起同停。
+- 要错峰执行就必须 `safe_assign(prev, geo, delays=..., flying_ms=...)` + `ripple_move(...)`；把 best_assign/far_assign 的结果配 delays 用＝"算着安全、实跑相撞"，preflight 会拦。
+
 ## 时序模型（每次移动）
 正式段默认展开 per-drone loop，保留每架机的动作、灯光和等待细节：
 ```python

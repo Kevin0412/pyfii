@@ -269,6 +269,8 @@ class Session:
                         drone_count=self.state.drone_count,
                         composition_plan=self.state.composition_plan,
                         music_brief=self.music_brief,
+                        feedback=repair_feedback,
+                        human_preferences=self.human_preferences,
                     )
                     plan_resp = self._chat_stage(
                         seg=seg,
@@ -325,6 +327,8 @@ class Session:
                             seg.end_time,
                             drone_count=self.state.drone_count,
                             composition_plan=self.state.composition_plan,
+                            feedback=repair_feedback,
+                            human_preferences=self.human_preferences,
                         )
                         code_resp = self._chat_stage(
                             seg=seg,
@@ -1214,7 +1218,9 @@ def _append_attempt_event(seg: SegmentState, event: dict) -> None:
 
 
 def _join_feedback(initial: str, repair: str) -> str:
-    initial = _limit_text(initial.strip(), 1200)
+    # initial 里是导演反馈（权威）：pipeline 路径还带段反馈样板+权威标头，
+    # 1200 会把导演原话截掉——这是不能悄悄丢的输入。
+    initial = _limit_text(initial.strip(), 2000)
     repair = _limit_text(repair.strip(), 3200)
     if initial:
         return initial + "\n\n" + repair

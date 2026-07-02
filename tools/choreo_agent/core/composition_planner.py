@@ -108,6 +108,10 @@ def build_planner_prompt(
 - S01 从 {TAKEOFF_S:.0f}s 开始（前 {TAKEOFF_S:.0f}s 起飞）；每段 {MIN_SEGMENT_S:.0f}-{MAX_SEGMENT_S:.0f}s；窗口连续不重叠。
 - show_end_s（LAND 结束）在 {MIN_SHOW_S:.0f}-{min(duration, MAX_SHOW_S):.0f}s 内。
 
+段落还可选输出 "requirements"：结构化审美要求，验证门按它执行——
+`{{"min_keyframes": int, "min_colors": int, "requires_stagger": bool, "requires_per_drone": bool, "requires_climax": bool}}`。
+按各段音乐特性定（高潮段 requires_climax、卡农段 requires_stagger、抒情展开段 min_keyframes/min_colors）；不确定就省略，系统有缺省。
+
 只输出 JSON（不解释）：
 {{
   "theme": "...",
@@ -117,7 +121,7 @@ def build_planner_prompt(
   "movement_motifs": ["...", "..."],
   "continuity_rules": ["...", "..."],
   "segments": [
-    {{"id": "S01", "start_s": {TAKEOFF_S:.1f}, "end_s": 13.0, "role": "...", "motifs": ["..."], "avoid": ["..."], "lighting_register": "motion|light_clock|identity", "music_cue": "对应哪个音乐事件/能量"}},
+    {{"id": "S01", "start_s": {TAKEOFF_S:.1f}, "end_s": 13.0, "role": "...", "motifs": ["..."], "avoid": ["..."], "lighting_register": "motion|light_clock|identity", "music_cue": "对应哪个音乐事件/能量", "requirements": {{"requires_per_drone": true}}}},
     ... S02-S06 ...,
     {{"id": "LAND", "start_s": 63.0, "end_s": 68.0}}
   ]
