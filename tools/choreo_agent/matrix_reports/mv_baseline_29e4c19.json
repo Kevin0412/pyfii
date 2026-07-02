@@ -1,0 +1,60 @@
+{
+ "label": "mv_baseline_29e4c19",
+ "created_at": "2026-07-03T07:42:08+0800",
+ "providers": {
+  "mimo_vision": {
+   "aggregate": {
+    "runs": 1,
+    "completed": 1,
+    "completed_rate": 1.0,
+    "mean_rounds_completed": 18,
+    "failed_round_categories": {
+     "no_validation": 7,
+     "composition": 3,
+     "collision": 1,
+     "motion": 1
+    },
+    "mean_cost_cny_uncached": 1.687
+   },
+   "runs": [
+    {
+     "project": "matrix_mv_baseline_29e4c19_mimo_vision_a",
+     "provider": "mimo_vision",
+     "git_head": "29e4c19",
+     "status": "completed",
+     "completed": true,
+     "converged": true,
+     "locked_segments": [
+      "S01",
+      "S02",
+      "S03",
+      "S04",
+      "S05",
+      "S06",
+      "LAND"
+     ],
+     "elapsed_s": 5195.7,
+     "llm_rounds": 18,
+     "rounds_by_segment": {
+      "S01": 4,
+      "S02": 2,
+      "S03": 2,
+      "S04": 4,
+      "S05": 5,
+      "S06": 1,
+      "LAND": 1
+     },
+     "failed_round_categories": {
+      "no_validation": 7,
+      "composition": 3,
+      "collision": 1,
+      "motion": 1
+     },
+     "input_tokens": 153923,
+     "output_tokens": 204160,
+     "est_cost_cny_uncached": 1.686729
+    }
+   ]
+  }
+ }
+}

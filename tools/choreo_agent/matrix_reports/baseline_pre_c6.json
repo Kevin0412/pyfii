@@ -1,0 +1,153 @@
+{
+ "label": "baseline_pre_c6",
+ "created_at": "2026-07-03T07:42:53+0800",
+ "providers": {
+  "deepseek": {
+   "aggregate": {
+    "runs": 2,
+    "completed": 2,
+    "completed_rate": 1.0,
+    "mean_rounds_completed": 18.5,
+    "failed_round_categories": {
+     "code_run": 5,
+     "collision": 6,
+     "motion": 4,
+     "no_validation": 2,
+     "window_fill": 6
+    },
+    "mean_cost_cny_uncached": 1.163
+   },
+   "runs": [
+    {
+     "project": "stab_flash_timing_gate_a",
+     "provider": "deepseek",
+     "git_head": "f780fe9",
+     "status": "completed",
+     "completed": true,
+     "converged": false,
+     "locked_segments": [
+      "S01",
+      "S02",
+      "S03",
+      "S04",
+      "S05",
+      "S06",
+      "LAND"
+     ],
+     "elapsed_s": 11129.6,
+     "llm_rounds": 22,
+     "rounds_by_segment": {
+      "S01": 2,
+      "S02": 5,
+      "S03": 2,
+      "S04": 2,
+      "S05": 8,
+      "S06": 2,
+      "LAND": 1
+     },
+     "failed_round_categories": {
+      "code_run": 4,
+      "collision": 3,
+      "motion": 3,
+      "no_validation": 2,
+      "window_fill": 3
+     },
+     "input_tokens": 171640,
+     "output_tokens": 155342,
+     "est_cost_cny_uncached": 1.446972
+    },
+    {
+     "project": "stab_flash_timing_gate_b",
+     "provider": "deepseek",
+     "git_head": "f780fe9",
+     "status": "completed",
+     "completed": true,
+     "converged": false,
+     "locked_segments": [
+      "S01",
+      "S02",
+      "S03",
+      "S04",
+      "S05",
+      "S06",
+      "LAND"
+     ],
+     "elapsed_s": 3353.3,
+     "llm_rounds": 15,
+     "rounds_by_segment": {
+      "S01": 1,
+      "S02": 1,
+      "S03": 2,
+      "S04": 1,
+      "S05": 1,
+      "S06": 8,
+      "LAND": 1
+     },
+     "failed_round_categories": {
+      "code_run": 1,
+      "collision": 3,
+      "window_fill": 3,
+      "motion": 1
+     },
+     "input_tokens": 118374,
+     "output_tokens": 87391,
+     "est_cost_cny_uncached": 0.879468
+    }
+   ]
+  },
+  "mimo_vision": {
+   "aggregate": {
+    "runs": 1,
+    "completed": 1,
+    "completed_rate": 1.0,
+    "mean_rounds_completed": 18,
+    "failed_round_categories": {
+     "no_validation": 7,
+     "composition": 3,
+     "collision": 1,
+     "motion": 1
+    },
+    "mean_cost_cny_uncached": 1.687
+   },
+   "runs": [
+    {
+     "project": "matrix_mv_baseline_29e4c19_mimo_vision_a",
+     "provider": "mimo_vision",
+     "git_head": "29e4c19",
+     "status": "completed",
+     "completed": true,
+     "converged": true,
+     "locked_segments": [
+      "S01",
+      "S02",
+      "S03",
+      "S04",
+      "S05",
+      "S06",
+      "LAND"
+     ],
+     "elapsed_s": 5195.7,
+     "llm_rounds": 18,
+     "rounds_by_segment": {
+      "S01": 4,
+      "S02": 2,
+      "S03": 2,
+      "S04": 4,
+      "S05": 5,
+      "S06": 1,
+      "LAND": 1
+     },
+     "failed_round_categories": {
+      "no_validation": 7,
+      "composition": 3,
+      "collision": 1,
+      "motion": 1
+     },
+     "input_tokens": 153923,
+     "output_tokens": 204160,
+     "est_cost_cny_uncached": 1.686729
+    }
+   ]
+  }
+ }
+}
