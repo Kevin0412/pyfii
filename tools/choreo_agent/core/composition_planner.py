@@ -203,6 +203,9 @@ def to_legacy_plan(plan: Mapping[str, Any]) -> dict:
             "avoid": seg.get("avoid", []),
             "relationship": seg.get("music_cue", ""),
             "lighting_register": seg.get("lighting_register", ""),
+            # 结构化审美要求（min_keyframes/min_colors/requires_*），
+            # 缺省时 composition 门回退 DEFAULT_REQUIREMENTS。
+            "requirements": dict(seg.get("requirements") or {}),
         }
     legacy = {
         "theme": plan.get("theme", ""),

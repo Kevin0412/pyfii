@@ -28,7 +28,25 @@ MOTIF_LIGHT_NAMES = ("light_wave", "fade_rgb", "fade_group", "breathe_group", "f
 HANDWRITTEN_REQUIRED_SEGMENTS = {"S02", "S03", "S04", "S05"}
 PER_DRONE_REQUIRED_SEGMENTS = {"S01", "S02", "S03", "S04", "S05", "S06"}
 MONOTONE_PACING_SEGMENTS = {"S01", "S02", "S03", "S04", "S05"}
-TIME_STAGGER_REQUIRED_SEGMENTS = {"S02", "S03", "S04", "S05"}
+
+# 结构化审美要求的数据接口：music plan 的 segment_roles[SID]["requirements"] 可携带
+#   {min_keyframes, min_colors, requires_stagger, requires_per_drone, requires_climax}
+# 计划未提供时回退到下表——与旧的段号硬编码逐条等价（auto 测试台行为不变）；
+# S07+ 动态追加段映射空表，与旧行为一致（旧 ID 规则从不覆盖它们）。
+# geo 模板禁令与单调节奏门刻意保持 ID 键控：它们是近乎普适的反退化规则，不属于每曲章法。
+DEFAULT_REQUIREMENTS: dict[str, dict] = {
+    "S01": {"requires_per_drone": True},
+    "S02": {"requires_stagger": True, "requires_per_drone": True},
+    "S03": {"requires_stagger": True, "requires_per_drone": True},
+    "S04": {
+        "min_keyframes": 4,
+        "min_colors": 3,
+        "requires_stagger": True,
+        "requires_per_drone": True,
+    },
+    "S05": {"requires_climax": True, "requires_stagger": True, "requires_per_drone": True},
+    "S06": {"min_keyframes": 2, "requires_per_drone": True},
+}
 
 
 def evaluate_composition(
@@ -46,6 +64,7 @@ def evaluate_composition(
     role_text = _role_text(role)
     role_motifs = _role_motifs(role)
     avoid_terms = _role_avoid(role)
+    requirements = _segment_requirements(role, segment_id)
     full_card_text = " ".join(str(value) for value in card.values())
     full_reference_text = " ".join([role_text, " ".join(role_motifs)])
 
@@ -56,6 +75,7 @@ def evaluate_composition(
         "role": role_text,
         "role_motifs": role_motifs,
         "avoid": avoid_terms,
+        "requirements": requirements,
         "recommendations": [],
     }
     errors: list[str] = []
@@ -98,7 +118,7 @@ def evaluate_composition(
             "真对穿/relay 只用于明确 mirror-cross；若清不开就改两条 XY 带绕行。"
         )
 
-    needs_climax = _needs_climax_gate(segment_id, role_text, role_motifs)
+    needs_climax = _needs_climax_gate(segment_id, role_text, role_motifs, requirements)
     if needs_climax:
         max_excursion = _float((motion_quality or {}).get("max_excursion_cm"))
         if max_excursion is not None and max_excursion < 150.0:
@@ -137,7 +157,7 @@ def evaluate_composition(
             "不要用 geo_* 参数变体替代编舞构图。"
         )
 
-    if segment_id in PER_DRONE_REQUIRED_SEGMENTS and features["uses_group_only_execution"]:
+    if requirements.get("requires_per_drone") and features["uses_group_only_execution"]:
         errors.append(
             f"{segment_id} 只使用 move_group/move_group_staggered 执行 keyframe。"
             "正式段应展开 per-drone loop：move2(drone, target, flying_ms) → "
@@ -160,10 +180,10 @@ def evaluate_composition(
             "或在 per-drone loop 内按 i % group_mod 加小错峰。"
         )
 
-    # 同起同停门：正式编舞段(S02-S05)必须有真正的时间错峰，
+    # 同起同停门：章法要求错峰的段必须有真正的时间错峰，
     # 颜色分组(i % 3 选色)不算 — 观感上全队仍然同起同停。
     if (
-        segment_id in TIME_STAGGER_REQUIRED_SEGMENTS
+        requirements.get("requires_stagger")
         and features["estimated_keyframe_count"] >= 1
         and not features["has_time_stagger"]
     ):
@@ -174,18 +194,19 @@ def evaluate_composition(
             "不要手搓对穿 delay。"
         )
 
-    if segment_id == "S04" and features["estimated_keyframe_count"] < 4:
+    min_keyframes = _int_requirement(requirements.get("min_keyframes"))
+    if min_keyframes and features["estimated_keyframe_count"] < min_keyframes:
         errors.append(
-            "S04 是抒情展开段，至少需要 4 个明确 keyframe 或 4 组目标点，"
-            "不要退化成少量同步大块移动。"
+            f"{segment_id} 段结构过简：本段章法要求至少 {min_keyframes} 个明确 keyframe 或目标点组"
+            f"（当前估计 {features['estimated_keyframe_count']}），"
+            "不要退化成少量同步大块移动或过早悬停。"
         )
-    if segment_id == "S04" and color_count < 3 and not has_dynamic_lighting:
-        errors.append("S04 灯光过单一：抒情展开段至少需要 3 种颜色或三段明显色彩变化（渐变呼吸也算）。")
 
-    if segment_id == "S06" and features["estimated_keyframe_count"] < 2:
+    min_colors = _int_requirement(requirements.get("min_colors"))
+    if min_colors and color_count < min_colors and not has_dynamic_lighting:
         errors.append(
-            "S06 尾声应为两段式收尾：先到中继/呼应姿态，再到最终署名位置；"
-            "单 keyframe 容易变成小挪动或过早悬停。"
+            f"{segment_id} 灯光过单一：本段章法要求至少 {min_colors} 种颜色"
+            "或明显色彩变化（渐变呼吸也算）。"
         )
 
     # ---- 品质建议（非阻塞） ----
@@ -633,15 +654,38 @@ def _mentions_any(text: str, needles: Sequence[str]) -> bool:
     return any(needle and needle.lower() in lowered for needle in needles)
 
 
-def _needs_climax_gate(segment_id: str, role_text: str, role_motifs: Sequence[str]) -> bool:
+def _segment_requirements(role: Any, segment_id: str) -> dict:
+    """结构化审美要求：plan 的 requirements 覆盖在 DEFAULT_REQUIREMENTS 之上。"""
+    merged = dict(DEFAULT_REQUIREMENTS.get(segment_id, {}))
+    if isinstance(role, Mapping):
+        supplied = role.get("requirements")
+        if isinstance(supplied, Mapping):
+            merged.update({k: v for k, v in supplied.items() if v is not None})
+    return merged
+
+
+def _int_requirement(value: Any) -> int:
+    try:
+        number = int(value)
+    except (TypeError, ValueError):
+        return 0
+    return number if number > 0 else 0
+
+
+def _needs_climax_gate(
+    segment_id: str,
+    role_text: str,
+    role_motifs: Sequence[str],
+    requirements: Mapping[str, Any] | None = None,
+) -> bool:
     """Return whether climax-specific amplitude/color rules apply.
 
     A tail segment often says "从高潮回收" to describe its source. That should
-    not inherit S05's climax gate; otherwise S06 gets rejected for intentionally
-    calming down.
+    not inherit the climax gate; otherwise a coda gets rejected for
+    intentionally calming down.
     """
     text = " ".join([role_text, " ".join(role_motifs)]).lower()
-    if segment_id == "S05":
+    if requirements and requirements.get("requires_climax"):
         return True
     if _mentions_any(text, ("尾声", "收束", "署名", "降落", "安全落地", "回收", "回到")):
         return False

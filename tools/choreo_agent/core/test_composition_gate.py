@@ -187,8 +187,61 @@ prev = [(t[0], t[1], t[2]) for t in targets]
 
     _features, errors = evaluate_composition(code, PLAN, "S04")
 
-    assert any("至少需要 4 个明确 keyframe" in item for item in errors)
-    assert any("至少需要 3 种颜色" in item for item in errors)
+    assert any("至少 4 个明确 keyframe" in item for item in errors)
+    assert any("至少 3 种颜色" in item for item in errors)
+
+
+def test_requirements_from_plan_override_defaults():
+    """plan 的 requirements 覆盖缺省表：放宽 S04、给 S07 加要求都走数据。"""
+    relaxed = {
+        "segment_roles": {
+            "S04": {
+                "role": "刻意极简的静场",
+                "motifs": ["静场"],
+                "requirements": {
+                    "min_keyframes": 1,
+                    "min_colors": 1,
+                    "requires_stagger": False,
+                },
+            },
+            "S07": {
+                "role": "追加高潮段",
+                "motifs": ["爆发"],
+                "requirements": {"min_keyframes": 3},
+            },
+        }
+    }
+    code = """
+# role: 静场
+# motifs: 静场
+# beat: 单块
+# formation: 保持
+# lighting: 白
+auto_init(drones)
+geo = custom_points([
+    (80,80,100),(80,280,160),(80,480,220),
+    (280,100,120),(280,300,180),(280,500,240),
+    (500,80,140),(500,280,200),(500,480,160),
+], n=len(drones), min_xy_cm=90)
+targets = far_assign(prev, geo, min_path_cm=active_min_path_cm(3200))
+for i, drone in enumerate(drones):
+    move2(drone, targets[i], 3200)
+    apply_light(drone, "#ffffff", 4)
+    drone.delay(2900)
+prev = [(t[0], t[1], t[2]) for t in targets]
+"""
+    # S04 被 plan 放宽：不再要求 4 keyframe/3 色/错峰
+    _f, errors = evaluate_composition(code, relaxed, "S04")
+    assert not any("keyframe" in item for item in errors), errors
+    assert not any("种颜色" in item for item in errors), errors
+    assert not any("同起同停" in item for item in errors), errors
+
+    # S07 缺省无要求，但 plan 可以给它加 min_keyframes
+    code_s07 = code.replace("# role: 静场", "# role: 追加高潮段").replace(
+        "# motifs: 静场", "# motifs: 爆发"
+    )
+    _f, errors = evaluate_composition(code_s07, relaxed, "S07")
+    assert any("至少 3 个明确 keyframe" in item for item in errors), errors
 
 
 def test_composition_gate_blocks_underpowered_climax():
@@ -270,7 +323,7 @@ prev = [(t[0], t[1], t[2]) for t in targets]
 
     _features, errors = evaluate_composition(code, PLAN, "S06")
 
-    assert any("两段式收尾" in item for item in errors)
+    assert any("至少 2 个明确 keyframe" in item for item in errors)
 
 
 def test_validation_result_passed_requires_composition_ok_for_formal_segments():
