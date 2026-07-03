@@ -773,6 +773,7 @@ def _resolve_stage(value: str | None) -> Path | None:
 
 
 def main(argv: list[str] | None = None) -> int:
+    global MAX_LLM_CALLS_PER_PHASE
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--provider", default="deepseek")
     parser.add_argument("--cases", default="1,2,3,4,5,6",
@@ -787,7 +788,6 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--out")
     args = parser.parse_args(argv)
 
-    global MAX_LLM_CALLS_PER_PHASE
     MAX_LLM_CALLS_PER_PHASE = max(1, int(args.max_llm_calls))
 
     if args.make_stage:

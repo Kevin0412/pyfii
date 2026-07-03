@@ -95,6 +95,15 @@ def test_d_planning_pass_prompt_carries_director_feedback():
     print("PASSED: planning pass prompt carries director feedback")
 
 
+def test_director_cases_runner_imports():
+    """runner 语法/导入健全性（测试套件不 import 它，曾漏过 SyntaxError）。"""
+    import importlib
+
+    module = importlib.import_module("run_director_cases")
+    assert sorted(module._case_specs()) == list(range(1, 19))
+    print("PASSED: director cases runner imports")
+
+
 def test_llm_call_budget_stops_grinding():
     """次数预算：弱模型快速失败——调用数到顶后不再烧轮。"""
     project = _temp_project(TEMPLATE)
