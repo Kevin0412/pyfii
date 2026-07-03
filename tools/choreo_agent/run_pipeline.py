@@ -65,6 +65,7 @@ def main(argv: list[str] | None = None) -> int:
         max_api_exceptions_per_segment=args.max_api_exceptions_per_segment,
         gate_profile="safety" if director_script is not None else "full",
         director_script=director_script,
+        max_llm_calls_per_cycle=args.max_llm_calls_per_cycle,
     )
     print(json.dumps(result["summary"], ensure_ascii=False, indent=2))
     return 0 if result["summary"]["completed"] else 1
@@ -98,6 +99,7 @@ def run_full_flow(
     max_api_exceptions_per_segment: int = 5,
     gate_profile: str = "full",
     director_script: dict | None = None,
+    max_llm_calls_per_cycle: int | None = None,
 ) -> dict:
     project_root = Path(project_root).resolve()
     # 有导演剧本时评审由脚本驱动，不需要 TTY
@@ -158,7 +160,7 @@ def run_full_flow(
             max_cycles_per_segment, max_attempts_per_cycle,
             use_planning_pass, parallel_candidates, review_segments,
             retry_sleep_s, max_api_exceptions_per_segment,
-            gate_profile, director_script,
+            gate_profile, director_script, max_llm_calls_per_cycle,
         )
     finally:
         for sig, handler in prev_handlers.items():
@@ -182,6 +184,7 @@ def _run_full_flow_body(
     max_api_exceptions_per_segment: int,
     gate_profile: str = "full",
     director_script: dict | None = None,
+    max_llm_calls_per_cycle: int | None = None,
 ) -> dict:
     while True:
         session = Session(project_root, gate_profile=gate_profile)
@@ -245,6 +248,7 @@ def _run_full_flow_body(
                     max_attempts=max_attempts_per_cycle,
                     use_planning_pass=use_planning_pass,
                     parallel_candidates=parallel_candidates,
+                    max_llm_calls=max_llm_calls_per_cycle,
                     on_delta=stream.delta,
                     on_reasoning_delta=stream.reasoning_delta,
                     on_heartbeat=stream.heartbeat,
@@ -1024,6 +1028,8 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
     parser.add_argument("--fresh-name", help="Create a fresh project under agent_projects/.")
     parser.add_argument("--music", help="Music file (abs or repo-root relative); generates composition plan + segment windows from it.")
     parser.add_argument("--review-segments", action="store_true", help="HITL: pause after each gate-passing segment for approve/feedback; session verdict at the end (PLAN 12.3/12.4). Rejections consume cycles.")
+    parser.add_argument("--max-llm-calls-per-cycle", type=int, default=None,
+                        help="每个 cycle 的 LLM 调用次数硬预算（弱模型保险丝；默认不限，与既有稳定性口径一致）")
     parser.add_argument("--director-script", help="JSON script of per-segment intent + feedback rounds; drives the review loop non-interactively with gate_profile=safety (real-API director acceptance).")
     parser.add_argument("--plan-review", action="store_true", help="HITL: review the generated plan interactively; reject with director notes to regenerate (PLAN 12.1).")
     parser.add_argument("--music-title", help="Human-provided track title/character hint (e.g. 春节序曲); overrides audio-feature mood inference.")
