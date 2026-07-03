@@ -81,6 +81,14 @@ def test_no_new_degradation_tolerances():
     noisy = dict(before, order_stable_fraction=0.31)
     ok, _ = check_no_new_degradation(dict(before, order_stable_fraction=0.14), noisy)
     assert ok
+    # 无圆时角序稳定升高是良性（车道/直线运动天然角序稳定，真实案例 0.14→0.55）
+    linear = dict(before, order_stable_fraction=0.55, circle_like_fraction=0.0)
+    ok, _ = check_no_new_degradation(dict(before, order_stable_fraction=0.14), linear)
+    assert ok
+    # 有圆 + 角序稳定升高 = 刚性圆趋势，必须拦
+    circling = dict(before, order_stable_fraction=0.6, circle_like_fraction=0.6)
+    ok, detail = check_no_new_degradation(dict(before, order_stable_fraction=0.14), circling)
+    assert not ok, detail
     flat = dict(before, window_z_range_cm=40.0)
     ok, detail = check_no_new_degradation(before, flat)
     assert not ok and any("collapsed" in p for p in detail["problems"])

@@ -568,13 +568,19 @@ def check_no_new_degradation(before: dict, after: dict) -> tuple[bool, dict]:
         detail[key] = {"before": b, "after": a}
         if a > b + 1:
             problems.append(f"{key}: {b} -> {a}")
+    circle_after = float(after.get("circle_like_fraction", 0.0) or 0.0)
     for key in _FRACTION_KEYS:
         b, a = float(before.get(key, 0.0) or 0.0), float(after.get(key, 0.0) or 0.0)
         detail[key] = {"before": round(b, 3), "after": round(a, 3)}
         # 占比指标在低位区间是两次生成间的正常噪声（validator 的退化判定在
         # 0.75/0.85 量级）；只有升幅明显且逼近退化区间才算新增塌缩。
-        if a > b + 0.15 and a > 0.5:
-            problems.append(f"{key}: {b:.2f} -> {a:.2f}")
+        if not (a > b + 0.15 and a > 0.5):
+            continue
+        # 角序稳定单独不构成退化：无圆时的直线/车道运动天然角序稳定，
+        # validator 的刚性圆判定要求 circle_like 与 order_stable 同时高。
+        if key == "order_stable_fraction" and circle_after < 0.4:
+            continue
+        problems.append(f"{key}: {b:.2f} -> {a:.2f}")
     z_before = float(before.get("window_z_range_cm", 0.0) or 0.0)
     z_after = float(after.get("window_z_range_cm", 0.0) or 0.0)
     detail["window_z_range_cm"] = {"before": round(z_before, 1), "after": round(z_after, 1)}

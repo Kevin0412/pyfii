@@ -455,6 +455,7 @@ def _directed_loop(
     """指令下达 → 安全生成 → 轨迹断言 → 未达标用实测偏差再修（导演修正回路）。"""
     feedback = directive
     last_validation = None
+    last_assertions: dict = {}
     for round_index in range(1, directive_rounds + 2):
         _rounds, validation = _generate(session, provider, feedback, max_attempts)
         last_validation = validation
@@ -473,7 +474,8 @@ def _directed_loop(
                 {"round": round_index, "safety_passed": False}
             )
             verdict["explanation"] = explain_conflict(validation, directive)
-            return False, {}, last_validation
+            # 保留上一轮的断言细节：安全崩在修正轮时，之前的偏差数据是关键诊断
+            return False, last_assertions, last_validation
         data, fps = load_trajectory(project / "output")
         assertions = {}
         repair_notes = []
@@ -484,6 +486,7 @@ def _directed_loop(
             all_ok = all_ok and ok
             if fb:
                 repair_notes.append(fb)
+        last_assertions = assertions
         verdict.setdefault("directive_trace", []).append(
             {"round": round_index, "safety_passed": True,
              "assertions": {k: v["ok"] for k, v in assertions.items()}}
