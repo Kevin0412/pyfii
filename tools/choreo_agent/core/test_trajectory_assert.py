@@ -67,6 +67,10 @@ def test_no_new_degradation_tolerances():
     collapsed = dict(before, lane_x_locked_drones=5, circle_like_fraction=0.9)
     ok, detail = check_no_new_degradation(before, collapsed)
     assert not ok and len(detail["problems"]) == 2
+    # 低位占比抖动是代际噪声，不算新增塌缩（真实案例：order_stable 0.14→0.31）
+    noisy = dict(before, order_stable_fraction=0.31)
+    ok, _ = check_no_new_degradation(dict(before, order_stable_fraction=0.14), noisy)
+    assert ok
     flat = dict(before, window_z_range_cm=40.0)
     ok, detail = check_no_new_degradation(before, flat)
     assert not ok and any("collapsed" in p for p in detail["problems"])

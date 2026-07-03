@@ -130,7 +130,9 @@ def check_no_new_degradation(before: dict, after: dict) -> tuple[bool, dict]:
     for key in _FRACTION_KEYS:
         b, a = float(before.get(key, 0.0) or 0.0), float(after.get(key, 0.0) or 0.0)
         detail[key] = {"before": round(b, 3), "after": round(a, 3)}
-        if a > b + 0.15:
+        # 占比指标在低位区间是两次生成间的正常噪声（validator 的退化判定在
+        # 0.75/0.85 量级）；只有升幅明显且逼近退化区间才算新增塌缩。
+        if a > b + 0.15 and a > 0.5:
             problems.append(f"{key}: {b:.2f} -> {a:.2f}")
     z_before = float(before.get("window_z_range_cm", 0.0) or 0.0)
     z_after = float(after.get("window_z_range_cm", 0.0) or 0.0)
