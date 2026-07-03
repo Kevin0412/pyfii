@@ -267,8 +267,11 @@ class Session:
 
                 prev_positions = self._previous_exit_state() or None
                 window_s = float(seg.end_time - seg.start_time)
+                # 修正轮反馈里引用的实测坐标不是新目标点——只预检原始指令部分，
+                # 否则"实测 (x,y,z)"会触发误导性的"必撞/平移目标点"建议。
+                directive_part = feedback.split("## 上轮执行偏差", 1)[0]
                 warnings = precheck_directive(
-                    feedback, prev_positions, self.state.drone_count, window_s=window_s
+                    directive_part, prev_positions, self.state.drone_count, window_s=window_s
                 )
                 feedback = ground_directive(feedback, prev_positions)
                 if warnings:

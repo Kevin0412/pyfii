@@ -470,10 +470,26 @@ def _directed_loop(
         if not (validation and validation.passed):
             from core.directive_advisor import explain_conflict
 
+            explanation = explain_conflict(validation, directive)
             verdict.setdefault("directive_trace", []).append(
-                {"round": round_index, "safety_passed": False}
+                {"round": round_index, "safety_passed": False,
+                 "tier0_ok": bool(validation and validation.tier0_ok)}
             )
-            verdict["explanation"] = explain_conflict(validation, directive)
+            verdict["explanation"] = explanation
+            # Tier-1（演出完整性）失败 = 导演可处置项：真实导演会说"补满窗口/
+            # 别悬停再来"——把解释作为下一轮指令继续，而不是弃疗整个 case。
+            # Tier-0（物理安全）崩塌才中止。
+            if (
+                validation is not None
+                and validation.tier0_ok
+                and round_index <= directive_rounds
+            ):
+                feedback = (
+                    directive
+                    + "\n\n## 上轮执行偏差（逐条修正，保持已满足的部分不变）\n"
+                    + explanation
+                )
+                continue
             # 保留上一轮的断言细节：安全崩在修正轮时，之前的偏差数据是关键诊断
             return False, last_assertions, last_validation
         data, fps = load_trajectory(project / "output")
