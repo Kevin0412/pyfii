@@ -111,6 +111,187 @@ def check_color_window(
     }
 
 
+def check_drone_in_box(
+    data,
+    fps: int,
+    drone_index: int,
+    t_s: float,
+    box: tuple[tuple[float, float], tuple[float, float], tuple[float, float]],
+) -> tuple[bool, dict]:
+    """模糊方位指令确认：drone k 在 t_s 时刻落在 (x0,x1)/(y0,y1)/(z0,z1) 区域内。"""
+    actual = drone_position_at(data, fps, drone_index, t_s)
+    ok = all(lo - 1e-9 <= v <= hi + 1e-9 for v, (lo, hi) in zip(actual, box))
+    return ok, {
+        "drone": drone_index,
+        "t_s": round(t_s, 2),
+        "box": [[round(float(lo), 1), round(float(hi), 1)] for lo, hi in box],
+        "actual": [round(v, 1) for v in actual],
+    }
+
+
+def check_relative_shift(
+    before_xyz: tuple[float, float, float],
+    after_xyz: tuple[float, float, float],
+    axis: int,
+    sign: int,
+    min_cm: float = 20.0,
+    max_other_drift_cm: float = 120.0,
+) -> tuple[bool, dict]:
+    """相对方位指令确认（"再往左一点"）：目标轴按指定方向位移 ≥min_cm，
+    其余轴漂移 ≤max_other_drift_cm（挪了但没乱跑）。"""
+    delta = [float(a) - float(b) for a, b in zip(after_xyz, before_xyz)]
+    moved = delta[axis] * sign
+    others = [abs(d) for i, d in enumerate(delta) if i != axis]
+    ok = moved >= min_cm and all(d <= max_other_drift_cm for d in others)
+    return ok, {
+        "axis": "xyz"[axis],
+        "direction": "+" if sign > 0 else "-",
+        "before": [round(float(v), 1) for v in before_xyz],
+        "after": [round(float(v), 1) for v in after_xyz],
+        "moved_cm": round(moved, 1),
+        "min_cm": min_cm,
+        "other_drift_cm": [round(d, 1) for d in others],
+    }
+
+
+# ---- 灯光时序原语（"从左到右依次彩虹并明暗渐变"这类复杂灯效的客观确认）----
+
+
+def hue_deg(rgb: tuple[int, int, int]) -> float | None:
+    """RGB → HSV 色相角（0-360）；灰/黑（饱和度过低）返回 None。"""
+    r, g, b = (v / 255.0 for v in rgb)
+    mx, mn = max(r, g, b), min(r, g, b)
+    if mx <= 0.05 or (mx - mn) / mx < 0.25:
+        return None
+    d = mx - mn
+    if mx == r:
+        h = ((g - b) / d) % 6
+    elif mx == g:
+        h = (b - r) / d + 2
+    else:
+        h = (r - g) / d + 4
+    return h * 60.0
+
+
+def brightness(rgb: tuple[int, int, int]) -> int:
+    return max(int(v) for v in rgb)
+
+
+def color_onset_times(data, fps: int, t0: float, t1: float, predicate) -> dict[int, float | None]:
+    """各机在窗口内首次满足颜色谓词的时刻（未出现 = None）。"""
+    onsets: dict[int, float | None] = {}
+    step = 1.0 / min(fps, 20)
+    for k in range(len(data)):
+        onset = None
+        t = t0
+        while t <= t1 + 1e-9:
+            rgb = drone_color_at(data, fps, k, t)
+            if rgb is not None and predicate(rgb):
+                onset = round(t, 2)
+                break
+            t += step
+        onsets[k] = onset
+    return onsets
+
+
+def check_spatial_temporal_order(
+    data,
+    fps: int,
+    t0: float,
+    t1: float,
+    predicate,
+    axis: int = 0,
+    ascending: bool = True,
+    min_span_s: float = 0.6,
+    max_inversions: int = 1,
+) -> tuple[bool, dict]:
+    """"从左到右依次…"确认：颜色 onset 顺序跟随空间轴排序。
+
+    以窗口起点的各机 axis 坐标排序为基准，onset 时刻应随之递增；
+    允许 max_inversions 个逆序对，且首尾 onset 时差 ≥min_span_s（否则是同步不是依次）。
+    """
+    onsets = color_onset_times(data, fps, t0, t1, predicate)
+    missing = [k for k, v in onsets.items() if v is None]
+    if missing:
+        return False, {"onsets": onsets, "missing": missing}
+    order = sorted(
+        range(len(data)),
+        key=lambda k: drone_position_at(data, fps, k, t0)[axis],
+        reverse=not ascending,
+    )
+    sequence = [onsets[k] for k in order]
+    inversions = sum(
+        1
+        for i in range(len(sequence))
+        for j in range(i + 1, len(sequence))
+        if sequence[i] > sequence[j] + 1e-9
+    )
+    span = max(sequence) - min(sequence)
+    ok = inversions <= max_inversions and span >= min_span_s
+    return ok, {
+        "spatial_order": order,
+        "onsets_in_spatial_order": sequence,
+        "inversions": inversions,
+        "max_inversions": max_inversions,
+        "span_s": round(span, 2),
+        "min_span_s": min_span_s,
+    }
+
+
+def check_hue_diversity(
+    data, fps: int, t_s: float, min_hue_buckets: int = 5, bucket_deg: float = 60.0
+) -> tuple[bool, dict]:
+    """彩虹/多彩确认：同一时刻全队色相覆盖 ≥min_hue_buckets 个色相桶。"""
+    hues = {}
+    buckets = set()
+    for k in range(len(data)):
+        rgb = drone_color_at(data, fps, k, t_s)
+        h = hue_deg(rgb) if rgb is not None else None
+        hues[k] = None if h is None else round(h, 0)
+        if h is not None:
+            buckets.add(int(h // bucket_deg))
+    return len(buckets) >= min_hue_buckets, {
+        "t_s": round(t_s, 2),
+        "hues_deg": hues,
+        "hue_buckets": sorted(buckets),
+        "min_hue_buckets": min_hue_buckets,
+    }
+
+
+def check_brightness_modulation(
+    data,
+    fps: int,
+    t0: float,
+    t1: float,
+    min_amplitude: int = 60,
+    min_fraction: float = 0.7,
+) -> tuple[bool, dict]:
+    """明暗渐变/呼吸确认：窗口内各机亮度摆幅 ≥min_amplitude 的机占比达标。"""
+    step = 1.0 / min(fps, 20)
+    amplitudes: dict[int, int] = {}
+    qualified = 0
+    for k in range(len(data)):
+        values = []
+        t = t0
+        while t <= t1 + 1e-9:
+            rgb = drone_color_at(data, fps, k, t)
+            if rgb is not None:
+                values.append(brightness(rgb))
+            t += step
+        amp = (max(values) - min(values)) if values else 0
+        amplitudes[k] = amp
+        if amp >= min_amplitude:
+            qualified += 1
+    fraction = qualified / max(1, len(data))
+    return fraction >= min_fraction, {
+        "window": [round(t0, 2), round(t1, 2)],
+        "amplitudes": amplitudes,
+        "qualified_fraction": round(fraction, 3),
+        "min_amplitude": min_amplitude,
+        "min_fraction": min_fraction,
+    }
+
+
 # 退化对比容差：整数指标（车道/固定高度机数）允许 +1，占比指标允许 +0.15。
 _INT_KEYS = ("lane_x_locked_drones", "lane_y_locked_drones", "fixed_height_drones")
 _FRACTION_KEYS = ("circle_like_fraction", "flat_height_fraction", "order_stable_fraction")

@@ -7,10 +7,16 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from core.trajectory_assert import (
     blue_dominant,
+    check_brightness_modulation,
     check_color_window,
     check_drone_at,
+    check_drone_in_box,
+    check_hue_diversity,
     check_no_new_degradation,
+    check_relative_shift,
+    check_spatial_temporal_order,
     drone_color_at,
+    hue_deg,
 )
 
 FPS = 60
@@ -79,8 +85,77 @@ def test_no_new_degradation_tolerances():
     print("PASSED: no_new_degradation tolerances")
 
 
+def test_box_and_relative_shift():
+    data = _data()
+    ok, _ = check_drone_in_box(data, FPS, 0, 1.0, ((100, 200), (100, 200), (150, 220)))
+    assert ok
+    ok, detail = check_drone_in_box(data, FPS, 0, 1.0, ((200, 300), (100, 200), (150, 220)))
+    assert not ok and detail["actual"][0] == 140.0
+
+    # "再往左一点"：x 减 60，其他轴基本不动
+    ok, detail = check_relative_shift((280, 280, 165), (220, 290, 160), axis=0, sign=-1)
+    assert ok and detail["moved_cm"] == 60.0
+    # 反方向 / 位移不足 / 其他轴乱跑 都要拒绝
+    assert not check_relative_shift((280, 280, 165), (320, 280, 165), axis=0, sign=-1)[0]
+    assert not check_relative_shift((280, 280, 165), (270, 280, 165), axis=0, sign=-1)[0]
+    assert not check_relative_shift((280, 280, 165), (200, 480, 165), axis=0, sign=-1)[0]
+    print("PASSED: box and relative shift predicates")
+
+
+def _rainbow_data():
+    """5 机：按 x 从左到右，颜色 onset 依次延后 0.3s；色相红→蓝紫；带亮度呼吸。"""
+    hues_bgr = [(0, 0, 230), (0, 200, 230), (0, 210, 0), (230, 190, 0), (230, 0, 80)]
+    data = []
+    for i in range(5):
+        frames = []
+        onset_s = 0.5 + i * 0.3
+        for f in range(int(4.0 * FPS)):
+            t = f / FPS
+            if t < onset_s:
+                led = (-1, -1, -1)
+            else:
+                b, g, r = hues_bgr[i]
+                # 呼吸：亮度在 40%-100% 摆动
+                phase = 0.7 + 0.3 * ((f // 12) % 2)  # 简单方波摆动
+                scale = 0.4 + 0.6 * (phase - 0.7) / 0.3 if phase > 0.7 else 0.4
+                led = (int(b * scale), int(g * scale), int(r * scale))
+            x = 80 + i * 100
+            frames.append((t, x, 200, 150, 0.0, led, 0))
+        data.append(frames)
+    return data
+
+
+def test_rainbow_wave_primitives():
+    data = _rainbow_data()
+    assert hue_deg((255, 0, 0)) == 0.0
+    assert hue_deg((30, 30, 30)) is None  # 灰黑无色相
+
+    ok, detail = check_spatial_temporal_order(
+        data, FPS, 0.0, 3.5, lambda rgb: hue_deg(rgb) is not None,
+        axis=0, ascending=True, min_span_s=0.6, max_inversions=1,
+    )
+    assert ok, detail
+
+    ok, detail = check_hue_diversity(data, FPS, 3.0, min_hue_buckets=4)
+    assert ok, detail
+
+    ok, detail = check_brightness_modulation(data, FPS, 2.0, 3.8, min_amplitude=60, min_fraction=0.7)
+    assert ok, detail
+
+    # 同步点亮（onset 无先后）应被"依次"检查拒绝
+    sync = [[(t / FPS, 80 + i * 100, 200, 150, 0.0, (0, 0, 230), 0) for t in range(int(2 * FPS))] for i in range(5)]
+    ok, detail = check_spatial_temporal_order(
+        sync, FPS, 0.0, 1.8, lambda rgb: rgb is not None and rgb[0] > 100,
+        axis=0, min_span_s=0.6,
+    )
+    assert not ok, detail
+    print("PASSED: rainbow wave primitives")
+
+
 if __name__ == "__main__":
     test_check_drone_at_tolerance()
     test_color_conversion_and_window()
     test_no_new_degradation_tolerances()
+    test_box_and_relative_shift()
+    test_rainbow_wave_primitives()
     print("\nALL TRAJECTORY ASSERT TESTS PASSED")

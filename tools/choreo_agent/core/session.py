@@ -242,6 +242,15 @@ class Session:
         if seg is None or seg.locked:
             return []
         rounds: list[GenerationRound] = []
+        # 导演方位/灯光描述 grounding："往左一点""从左到右依次彩虹渐变"这类
+        # 自然语言追加换算图例+各机当前坐标（普通反馈原样返回，prompt 不变）。
+        if feedback:
+            try:
+                from .director_language import ground_directive
+
+                feedback = ground_directive(feedback, self._previous_exit_state() or None)
+            except Exception:
+                pass
         repair_feedback = feedback
 
         for index in range(1, max_attempts + 1):
