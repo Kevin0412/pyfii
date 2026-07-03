@@ -33,3 +33,7 @@ apps/pyfii-gui/frontend/dist/
 apps/pyfii-gui/frontend/node_modules/
 tools/tmp*/
 tools/choreo_agent/tmp*/
+
+# 运行产物：本地数据，不进开源仓库
+tools/choreo_agent/director_case_reports/
+tools/choreo_agent/matrix_reports/
