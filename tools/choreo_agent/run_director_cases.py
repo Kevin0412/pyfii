@@ -422,8 +422,10 @@ def _case_specs() -> dict[int, dict]:
         15: {"name": "regret_undo", "special": "regret"},
         16: {"name": "sequential_combo", "special": "sequential"},
         17: {"name": "slow_elegant", "directives": [SLOW_DIRECTIVE], "evals": [_eval_slow]},
+        # 约束型指令刻意收窄运动包络（压高度→Z 方差必然缩），退化对比会惩罚
+        # 导演明确要的效果；反退化核心（禁圆形）已由 case 自身断言保护。
         18: {"name": "negative_constraints", "directives": [NEGATIVE_DIRECTIVE],
-             "evals": [_eval_negative]},
+             "evals": [_eval_negative], "skip_degradation": True},
     }
 
 

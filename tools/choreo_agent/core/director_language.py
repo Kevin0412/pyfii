@@ -65,8 +65,34 @@ LIGHT_LEGEND = (
 )
 
 
+# 速度/节奏词 → 触发速度换算图例（flash 靠散文做不好 flying_ms 的除法）
+_SPEED_PATTERNS = (
+    "放慢", "慢一点", "慢下来", "别太快", "不要快", "优雅一点",
+    "加快", "快一点", "更快", "提速", "速度不超过", "cm/s",
+)
+
+SPEED_LEGEND = (
+    "## 速度换算（用数学保证，不要凭感觉）\n"
+    "- move2 的实际速度 = 3D 路径长度 ÷ (flying_ms/1000)。要满足速度上限 V，"
+    "必须 flying_ms ≥ ceil(路径cm ÷ V × 1000)\n"
+    "- 例：路径 200cm、上限 120cm/s → flying_ms ≥ 1667；路径 300cm → ≥ 2500\n"
+    "- 对每个 keyframe 的最长路径按上式算 flying_ms（宁可取整到更大值）；"
+    "路径长的机决定全组 flying_ms\n"
+    "- 加速段同理反算；'放慢'没给数字时按 ≤120cm/s 处理"
+)
+
+
+def needs_speed_grounding(text: str) -> bool:
+    text = text or ""
+    return any(pattern in text for pattern in _SPEED_PATTERNS)
+
+
 def needs_grounding(text: str) -> bool:
-    return needs_spatial_grounding(text) or needs_light_grounding(text)
+    return (
+        needs_spatial_grounding(text)
+        or needs_light_grounding(text)
+        or needs_speed_grounding(text)
+    )
 
 
 def needs_spatial_grounding(text: str) -> bool:
@@ -91,13 +117,16 @@ def ground_directive(
         return feedback
     spatial = needs_spatial_grounding(feedback)
     light = needs_light_grounding(feedback)
-    if not spatial and not light:
+    speed = needs_speed_grounding(feedback)
+    if not spatial and not light and not speed:
         return feedback
     parts = [feedback.rstrip(), ""]
     if spatial:
         parts.append(STAGE_LEGEND)
     if light:
         parts.append(LIGHT_LEGEND)
+    if speed:
+        parts.append(SPEED_LEGEND)
     if drone_positions and (spatial or light):
         # 灯光的空间顺序（从左到右依次…）同样需要当前坐标做排序基准
         pos = ", ".join(

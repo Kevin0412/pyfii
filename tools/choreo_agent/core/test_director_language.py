@@ -49,7 +49,7 @@ def test_ground_directive_appends_legends_and_positions():
     text = ground_directive("把 3 号机往左一点，然后做彩虹渐变", POSITIONS)
     assert "方位词换算" in text and "灯光描述换算" in text
 
-    plain = "第二个 keyframe 放慢，收在暖白"
+    plain = "设计卡母题要呼应前段，收在暖白"
     assert ground_directive(plain, POSITIONS) == plain
     print("PASSED: ground_directive legends and passthrough")
 
@@ -85,6 +85,18 @@ def test_session_entry_grounds_spatial_feedback():
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
     print("PASSED: session entry grounds spatial feedback")
+
+
+def test_speed_grounding():
+    from core.director_language import needs_speed_grounding
+
+    assert needs_speed_grounding("整段放慢，优雅一点")
+    assert needs_speed_grounding("速度不超过 120cm/s")
+    assert not needs_speed_grounding("灯光改成蓝色")
+    text = ground_directive("整段放慢，别太快", POSITIONS)
+    assert "速度换算" in text and "flying_ms ≥" in text
+    assert "方位词换算" not in text  # 纯速度指令不带方位图例
+    print("PASSED: speed grounding")
 
 
 def test_directive_checklist_formatting():
