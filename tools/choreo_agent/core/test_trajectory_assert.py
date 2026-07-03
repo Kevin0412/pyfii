@@ -168,6 +168,33 @@ def test_rainbow_wave_primitives():
     print("PASSED: rainbow wave primitives")
 
 
+def test_speed_and_altitude_limits():
+    from core.trajectory_assert import check_max_altitude, check_max_speed
+
+    slow = [
+        [(f / FPS, 100 + i * 60 + f * 1.5, 200, 150, 0.0, (0, 120, 120), 0)
+         for f in range(int(3 * FPS))]
+        for i in range(3)
+    ]  # 90cm/s
+    ok, detail = check_max_speed(slow, FPS, 0.2, 2.6, max_cm_s=140.0)
+    assert ok, detail
+    fast = [
+        [(f / FPS, 100 + i * 60 + f * 4, 200, 150, 0.0, (0, 120, 120), 0)
+         for f in range(int(3 * FPS))]
+        for i in range(3)
+    ]  # 240cm/s
+    ok, detail = check_max_speed(fast, FPS, 0.2, 2.6, max_cm_s=140.0)
+    assert not ok and detail["peak_speed_cm_s"] > 200, detail
+
+    low = [_drone_frames((100 + i * 80, 200, 180), (0, 120, 120)) for i in range(3)]
+    ok, _ = check_max_altitude(low, FPS, 0.2, 1.8, max_z_cm=210.0)
+    assert ok
+    high = low + [_drone_frames((450, 200, 240), (0, 120, 120))]
+    ok, detail = check_max_altitude(high, FPS, 0.2, 1.8, max_z_cm=210.0)
+    assert not ok and detail["offender"] == 3 and detail["peak_z_cm"] == 240.0
+    print("PASSED: speed and altitude limits")
+
+
 def test_collinear_formation():
     # 斜线：y = x，7 机均匀铺开
     line = [

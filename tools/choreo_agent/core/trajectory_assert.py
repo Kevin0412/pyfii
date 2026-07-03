@@ -323,6 +323,69 @@ def check_brightness_modulation(
     }
 
 
+def check_max_speed(
+    data,
+    fps: int,
+    t0: float,
+    t1: float,
+    max_cm_s: float = 140.0,
+    min_fraction: float = 0.98,
+) -> tuple[bool, dict]:
+    """"整段放慢"确认：窗口内瞬时速度超限的采样占比 ≤ (1-min_fraction)。"""
+    step = 1.0 / min(fps, 20)
+    peak = 0.0
+    total = 0
+    over = 0
+    for k in range(len(data)):
+        prev = None
+        t = t0
+        while t <= t1 + 1e-9:
+            pos = drone_position_at(data, fps, k, t)
+            if prev is not None:
+                speed = math.dist(pos, prev) / step
+                peak = max(peak, speed)
+                total += 1
+                if speed > max_cm_s:
+                    over += 1
+            prev = pos
+            t += step
+    ok = total > 0 and (total - over) / total >= min_fraction
+    return ok, {
+        "window": [round(t0, 2), round(t1, 2)],
+        "peak_speed_cm_s": round(peak, 1),
+        "over_limit_fraction": round(over / max(1, total), 4),
+        "max_cm_s": max_cm_s,
+    }
+
+
+def check_max_altitude(
+    data,
+    fps: int,
+    t0: float,
+    t1: float,
+    max_z_cm: float = 210.0,
+) -> tuple[bool, dict]:
+    """否定约束确认（"别飞太高"）：窗口内所有机 Z 不超过上限。"""
+    step = 1.0 / min(fps, 20)
+    peak = 0.0
+    offender = None
+    for k in range(len(data)):
+        t = t0
+        while t <= t1 + 1e-9:
+            z = drone_position_at(data, fps, k, t)[2]
+            if z > peak:
+                peak = z
+                offender = k
+            t += step
+    ok = peak <= max_z_cm
+    return ok, {
+        "window": [round(t0, 2), round(t1, 2)],
+        "peak_z_cm": round(peak, 1),
+        "offender": offender,
+        "max_z_cm": max_z_cm,
+    }
+
+
 def check_collinear(
     data,
     fps: int,

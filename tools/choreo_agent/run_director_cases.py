@@ -43,6 +43,8 @@ from core.trajectory_assert import (  # noqa: E402
     blue_dominant,
     check_brightness_modulation,
     check_collinear,
+    check_max_altitude,
+    check_max_speed,
     check_color_window,
     check_dark_multicolor,
     check_drone_at,
@@ -217,6 +219,15 @@ SWAP_DIRECTIVE = (
     "drones[4] 的本段入口位置，drones[4] 停在 drones[3] 的入口位置（各 ±45cm，"
     "身份保持写法）。注意对穿路径要错峰或绕行，其余机让出通道。"
 )
+SLOW_DIRECTIVE = (
+    "细节修改：整段动作明显放慢、优雅一点——不要快速冲刺，"
+    "任何机任何时刻的移动速度都不要超过 120cm/s（用更长的 flying_ms、"
+    "更短的单次位移），动作仍要铺满整段窗口。"
+)
+NEGATIVE_DIRECTIVE = (
+    "细节修改（两条禁令）：本段不要用圆形/环形队形（不要绕圈），"
+    "并且所有机全程别飞到 200cm 以上（高度都压在 200 以下），其余照常编舞。"
+)
 REGRET_STAGE_A = "细节修改：2 号机段尾往左移一大步（至少 80cm），其余照常。"
 REGRET_STAGE_B = (
     "刚才说错了，撤销上一条往左的要求：2 号机回到本段入口原来的位置附近停住，"
@@ -329,6 +340,42 @@ def _eval_hold(data, fps, window, _ctx):
     return "hold", ok, detail, fb
 
 
+def _eval_slow(data, fps, window, _ctx):
+    ok, detail = check_max_speed(data, fps, window[0] + 0.5, window[1] - 0.3, max_cm_s=140.0)
+    fb = None
+    if not ok:
+        fb = (
+            f"指令仍未满足：瞬时速度峰值 {detail['peak_speed_cm_s']}cm/s、"
+            f"超限采样占比 {detail['over_limit_fraction']}（限 120cm/s，验收容差 140）。"
+            "加长每个 move2 的 flying_ms 或缩短单次位移；保持动作铺满窗口。"
+        )
+    return "slow_motion", ok, detail, fb
+
+
+def _eval_negative(data, fps, window, ctx):
+    alt_ok, alt_detail = check_max_altitude(data, fps, window[0] + 0.3, window[1] - 0.3, max_z_cm=210.0)
+    degradation = ctx.get("_directed_degradation") or {}
+    circle_fraction = float(degradation.get("circle_like_fraction", 0.0) or 0.0)
+    circle_ok = circle_fraction < 0.5
+    ok = alt_ok and circle_ok
+    detail = {"altitude": alt_detail, "circle_like_fraction": circle_fraction}
+    fb = None
+    if not ok:
+        parts = []
+        if not alt_ok:
+            parts.append(
+                f"d{alt_detail['offender']} 飞到 {alt_detail['peak_z_cm']}cm"
+                "（禁令：全程 ≤200，验收容差 210）——把 Z 压回 200 以下"
+            )
+        if not circle_ok:
+            parts.append(
+                f"仍在绕圈（circle_like={circle_fraction:.2f}）——禁令：不要圆形/环形队形，"
+                "改成直线/斜线/散点等非圆几何"
+            )
+        fb = "禁令仍被违反：" + "；".join(parts) + "。"
+    return "negative_constraints", ok, detail, fb
+
+
 def _eval_swap(data, fps, window, _ctx):
     entry3 = drone_position_at(data, fps, 3, window[0] + 0.2)
     entry4 = drone_position_at(data, fps, 4, window[0] + 0.2)
@@ -374,6 +421,9 @@ def _case_specs() -> dict[int, dict]:
              "evals": [_eval_swap]},
         15: {"name": "regret_undo", "special": "regret"},
         16: {"name": "sequential_combo", "special": "sequential"},
+        17: {"name": "slow_elegant", "directives": [SLOW_DIRECTIVE], "evals": [_eval_slow]},
+        18: {"name": "negative_constraints", "directives": [NEGATIVE_DIRECTIVE],
+             "evals": [_eval_negative]},
     }
 
 
@@ -406,6 +456,9 @@ def _directed_loop(
         last_validation = validation
         if session.last_precheck_warnings:
             verdict["precheck_warnings"] = list(session.last_precheck_warnings)
+        if validation is not None:
+            # 供否定约束类断言读取验证器的退化指标（circle_like 等）
+            verdict["_directed_degradation"] = dict(validation.degradation or {})
         if not (validation and validation.passed):
             from core.directive_advisor import explain_conflict
 
