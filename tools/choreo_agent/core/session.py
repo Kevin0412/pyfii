@@ -47,7 +47,19 @@ class Session:
         self._candidate_pool: list[str] = []
         self._candidate_pool_seg: str | None = None
         self.last_precheck_warnings: list[str] = []
+        # LLM 调用次数预算（弱模型快速失败，不无限磨轮）：
+        # generate_until_safe_with_llm(max_llm_calls=N) 设定，planning/编码/
+        # preflight 修复/并行候选全部计数；review 阶段不计。
+        self._llm_call_budget: int | None = None
+        self._llm_calls_used: int = 0
+        self.last_budget_exhausted: bool = False
         self.sync_state_with_markers(save=False)
+
+    def _llm_budget_ok(self, need: int = 1) -> bool:
+        return self._llm_call_budget is None or self._llm_calls_used + need <= self._llm_call_budget
+
+    def _consume_llm_calls(self, n: int = 1) -> None:
+        self._llm_calls_used += n
 
     @property
     def human_preferences(self) -> str:
@@ -170,6 +182,7 @@ class Session:
 
         responses: list[LlmResponse] = []
         errors: list[Exception] = []
+        self._consume_llm_calls(k)
         with ThreadPoolExecutor(max_workers=k) as pool:
             futures = {pool.submit(_call, i): i for i in range(k)}
             for future in as_completed(futures):
@@ -232,6 +245,7 @@ class Session:
         on_reasoning_delta: Callable[[str], None] | None = None,
         on_heartbeat: Callable[[], None] | None = None,
         on_round_start: Callable[[int], None] | None = None,
+        max_llm_calls: int | None = None,
     ) -> list[GenerationRound]:
         """生成当前段并自动验证；失败则把危险反馈回灌给 LLM。
 
@@ -266,8 +280,19 @@ class Session:
             except Exception:
                 self.last_precheck_warnings = []
         repair_feedback = feedback
+        self._llm_call_budget = max_llm_calls
+        self._llm_calls_used = 0
+        self.last_budget_exhausted = False
 
         for index in range(1, max_attempts + 1):
+            if not self._llm_budget_ok():
+                # 次数预算耗尽：弱模型快速失败，不再烧轮（弱模型+慢思考的保险丝）
+                self.last_budget_exhausted = True
+                self._record_attempt_update({
+                    "budget_exhausted": True,
+                    "llm_calls_used": self._llm_calls_used,
+                })
+                break
             if on_round_start:
                 on_round_start(index)
             round_temp = temperature if index == 1 else max(0.05, temperature * 0.4)
@@ -470,6 +495,9 @@ class Session:
                 # Internal repair loop (max 5 rounds)
                 repair_ok = False
                 for repair_i in range(5):
+                    if not self._llm_budget_ok():
+                        self.last_budget_exhausted = True
+                        break
                     repair_fb = _preflight_repair_feedback(pf, code)
                     response = self.generate_current_segment_with_llm(
                         provider=provider,
@@ -1109,6 +1137,7 @@ def {function_name}(drones: list):
     ) -> LlmResponse:
         if _is_mimo_provider(provider):
             user = _mimo_output_contract(stage) + "\n\n" + user
+        self._consume_llm_calls()
         try:
             response = chat(
                 system=system,

@@ -427,12 +427,16 @@ def _case_specs() -> dict[int, dict]:
     }
 
 
+MAX_LLM_CALLS_PER_PHASE = 10  # 弱模型保险丝：每个生成阶段的调用次数硬预算
+
+
 def _generate(session: Session, provider: str, feedback: str, max_attempts: int):
     rounds = session.generate_until_safe_with_llm(
         provider=provider,
         feedback=feedback,
         max_attempts=max_attempts,
         use_planning_pass=True,
+        max_llm_calls=MAX_LLM_CALLS_PER_PHASE,
     )
     return rounds, (rounds[-1].validation if rounds else None)
 
@@ -454,6 +458,9 @@ def _directed_loop(
     for round_index in range(1, directive_rounds + 2):
         _rounds, validation = _generate(session, provider, feedback, max_attempts)
         last_validation = validation
+        verdict.setdefault("llm_calls_per_phase", []).append(session._llm_calls_used)
+        if session.last_budget_exhausted:
+            verdict["budget_exhausted"] = True
         if session.last_precheck_warnings:
             verdict["precheck_warnings"] = list(session.last_precheck_warnings)
         if validation is not None:
@@ -773,10 +780,15 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--max-attempts", type=int, default=4)
     parser.add_argument("--directive-rounds", type=int, default=2,
                         help="断言失败后的导演修正轮数（实测偏差回灌）")
+    parser.add_argument("--max-llm-calls", type=int, default=MAX_LLM_CALLS_PER_PHASE,
+                        help="每个生成阶段的 LLM 调用次数硬预算（弱模型快速失败）")
     parser.add_argument("--stage", help="S01 已锁定的舞台快照项目（名字或路径），跳过重复的 S01 生成")
     parser.add_argument("--make-stage", help="只生成并锁定 S01，产出可复用舞台快照后退出")
     parser.add_argument("--out")
     args = parser.parse_args(argv)
+
+    global MAX_LLM_CALLS_PER_PHASE
+    MAX_LLM_CALLS_PER_PHASE = max(1, int(args.max_llm_calls))
 
     if args.make_stage:
         return _make_stage(args.provider, args.max_attempts, args.make_stage)

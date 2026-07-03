@@ -95,6 +95,31 @@ def test_d_planning_pass_prompt_carries_director_feedback():
     print("PASSED: planning pass prompt carries director feedback")
 
 
+def test_llm_call_budget_stops_grinding():
+    """次数预算：弱模型快速失败——调用数到顶后不再烧轮。"""
+    project = _temp_project(TEMPLATE)
+    calls = []
+
+    def fake_chat(system, user, **_kwargs):
+        calls.append(1)
+        return LlmResponse(text="不是代码", model="mock")
+
+    try:
+        with patch("core.session.chat", side_effect=fake_chat):
+            session = Session(project, gate_profile="safety")
+            rounds = session.generate_until_safe_with_llm(
+                provider="mock", feedback="", max_attempts=10,
+                use_planning_pass=False, max_llm_calls=3,
+            )
+        assert len(calls) == 3, f"budget 3 应恰好 3 次调用，实际 {len(calls)}"
+        assert session.last_budget_exhausted
+        assert session._llm_calls_used == 3
+        assert len(rounds) <= 4
+    finally:
+        shutil.rmtree(project.parent, ignore_errors=True)
+    print("PASSED: llm call budget stops grinding")
+
+
 def _crafted_result(**overrides) -> ValidationResult:
     result = ValidationResult(
         compile_ok=True, run_ok=True, read_fii_ok=True,
@@ -152,6 +177,7 @@ def test_e_director_override_locks_tier1_and_records():
 
 
 if __name__ == "__main__":
+    test_llm_call_budget_stops_grinding()
     test_b_direct_generation_prompt_carries_director_feedback()
     test_d_planning_pass_prompt_carries_director_feedback()
     test_c_director_override_cannot_pass_tier0()
