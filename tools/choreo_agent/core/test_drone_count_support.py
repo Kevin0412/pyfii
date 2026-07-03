@@ -41,7 +41,10 @@ def test_prompt_uses_project_drone_count():
 def test_planning_pass_uses_project_drone_count():
     prev = [[100 + i * 20, 120 + (i % 3) * 70, 150 + i] for i in range(9)]
 
-    prompt = build_planning_prompt("S02", 13, 23, "test", prev, drone_count=9)
+    from core.planning_pass import build_planning_system_prompt
+    prompt = build_planning_system_prompt(9) + "\n" + build_planning_prompt(
+        "S02", 13, 23, "test", prev, drone_count=9
+    )  # C14: 约束行在 system
     assert "targets总数=9" in prompt
     assert "[x8,y8,z8]" in prompt
 
@@ -60,7 +63,10 @@ def test_planning_pass_uses_project_drone_count():
     assert "d8" in budget
     assert "skip:" not in budget
 
-    coding = build_coding_prompt(budget, "S02", 13, 23, drone_count=9)
+    from core.planning_pass import build_coding_system_prompt
+    coding = build_coding_system_prompt(9) + "\n" + build_coding_prompt(
+        budget, "S02", 13, 23, drone_count=9
+    )  # C14: "9 架无人机" 规则行在 system
     assert "9 架无人机" in coding
 
 

@@ -73,6 +73,8 @@ def run_metrics(summary: dict) -> dict:
         "failed_round_categories": dict(round_cats),
         "input_tokens": tu.get("input_tokens"),
         "output_tokens": tu.get("output_tokens"),
+        "cache_hit_tokens": tu.get("prompt_cache_hit_tokens"),
+        "cache_miss_tokens": tu.get("prompt_cache_miss_tokens"),
         "est_cost_cny_uncached": pricing.get("total_if_input_uncached"),
     }
 
@@ -91,6 +93,8 @@ def aggregate_provider(runs: list[dict]) -> dict:
     completed = sum(1 for r in runs if r["completed"])
     rounds_completed = _nums("llm_rounds", only_completed=True)
     costs = _nums("est_cost_cny_uncached")
+    hits = sum(v for v in _nums("cache_hit_tokens"))
+    misses = sum(v for v in _nums("cache_miss_tokens"))
     return {
         "runs": len(runs),
         "completed": completed,
@@ -100,6 +104,7 @@ def aggregate_provider(runs: list[dict]) -> dict:
         ),
         "failed_round_categories": dict(cats),
         "mean_cost_cny_uncached": round(statistics.mean(costs), 3) if costs else None,
+        "cache_hit_rate": round(hits / (hits + misses), 3) if (hits + misses) else None,
     }
 
 
@@ -125,6 +130,7 @@ def print_report(report: dict) -> None:
             f"  {name}: completed {agg['completed']}/{agg['runs']}"
             f"  mean_rounds(completed)={agg['mean_rounds_completed']}"
             f"  mean_cost_cny={agg['mean_cost_cny_uncached']}"
+            f"  cache_hit_rate={agg.get('cache_hit_rate')}"
         )
         cats = " ".join(f"{k}={v}" for k, v in sorted(agg["failed_round_categories"].items()))
         if cats:

@@ -84,6 +84,8 @@ def test_planning_prompt_includes_current_segment_role():
         composition_plan=_sample_plan(),
     )
 
+    from core.planning_pass import build_planning_system_prompt
+    prompt = build_planning_system_prompt(7) + "\n" + prompt  # C14: 静态规则在 system
     assert "全局章法:" in prompt
     assert "current role: 卡农变奏" in prompt
     assert "current motifs: 分组卡农; 交叉换位" in prompt

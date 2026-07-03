@@ -6,6 +6,24 @@ from collections.abc import Mapping, Sequence
 from typing import Any
 
 
+def build_planning_system_prompt(drone_count: int = 7) -> str:
+    """planning 阶段的静态规则块（按项目字节稳定 → 前缀缓存跨段/跨轮命中）。
+
+    只含与段无关的规则；一切带段窗时间/意图/坐标的内容留在 user prompt。
+    """
+    drone_count = int(drone_count)
+    target_example = ", ".join(f"[x{i},y{i},z{i}]" for i in range(drone_count))
+    coordinate_seeds = _format_safe_coordinate_seeds(drone_count)
+    return f"""你是无人机编队的段落规划器：把段落意图转成结构化 JSON keyframe 计划。
+
+可完成性: 单个 keyframe 的 3D 路径通常控制在约 120-380cm；不要规划 500cm 级跨场短飞。
+约束: targets总数={drone_count}, shape=[{target_example}], XY 0-560cm, Z 80-250cm, target 点表 XY 间距硬下限 51cm（pyfii core 碰撞线，检查器精确验证）；密度是构图自由，不要为了凑大间距放弃造型。速度20-200, 加速度50-400, 推荐速度150-200、加速度260-400；light_ticks 用 2-5 的运动短提示，长灯光/呼吸/渐变应在编码阶段用 light_wave/breathe_group/fade_group 单独铺时，不要规划成每机 move2 循环里的长 ticks。
+章法约束: JSON 里的 feel/targets/light_color 必须服务全局章法；不要随机换题，不要连续重复同一种退化队形。
+assign 字段（可选，默认 best）: "best"收束 / "far"大交换 / "rotate"漩涡(可加 "rotate_steps") / "mirror"对穿(检查器会提醒错峰) / "swap"半场互换 / "keep"身份保持——转场即编舞，按意图声明，检查器按声明的映射验算。
+{coordinate_seeds}
+输出纪律: 直接给 JSON；不要写距离证明、不要手算两两间距、不要自问自答。规划检查器会回报精确间距/路径/时长数字，如有违规你会收到报告再修正。"""
+
+
 def build_planning_prompt(
     segment_id: str,
     start_time: float,
@@ -28,7 +46,6 @@ def build_planning_prompt(
     target_example = ", ".join(f"[x{i},y{i},z{i}]" for i in range(drone_count))
     composition_text = _format_planning_composition_plan(composition_plan, segment_id)
     keyframe_text = _format_keyframe_contract(segment_id, start_time, end_time)
-    coordinate_seeds = _format_safe_coordinate_seeds(drone_count)
     music_text = ""
     if music_brief:
         from .music_brief import format_segment_music_hint
@@ -47,8 +64,6 @@ def build_planning_prompt(
 {prev_text}
 
 {keyframe_text}
-
-{coordinate_seeds}
 
 输出 JSON 计划：
 ```json
@@ -82,11 +97,6 @@ def build_planning_prompt(
 ```
 
 节奏目标: 动作更利落，不要用单个慢 move 拖满段落——但**必须铺满本段窗口**：各 keyframe 顺次排布，最后一个的 start_s+duration_s 要落在 {end_time-1.0:.1f}s 之后（窗口尾 {end_time}s 的 1.0s 以内）。这是 validator 硬门：欠填>1.0s 会把本段判“有效运动过短”，并把后续所有段与音乐 cue 整体推错（错误归因到无辜的下一段）。时长不够就多加一个 keyframe 或适当延长动作；段尾余量交给灯光定格（light_wave/breathe_group/fade_group 亮灯铺到窗口尾——亮灯定格是预算一等公民），别留黑灯空档。按此一次配齐，不要反复纠结覆盖问题。
-可完成性: 单个 keyframe 的 3D 路径通常控制在约 120-380cm；不要规划 500cm 级跨场短飞。
-约束: targets总数={drone_count}, shape=[{target_example}], XY 0-560cm, Z 80-250cm, target 点表 XY 间距硬下限 51cm（pyfii core 碰撞线，检查器精确验证）；密度是构图自由，不要为了凑大间距放弃造型。速度20-200, 加速度50-400, 推荐速度150-200、加速度260-400；light_ticks 用 2-5 的运动短提示，长灯光/呼吸/渐变应在编码阶段用 light_wave/breathe_group/fade_group 单独铺时，不要规划成每机 move2 循环里的长 ticks。
-章法约束: JSON 里的 feel/targets/light_color 必须服务全局章法；不要随机换题，不要连续重复同一种退化队形。
-assign 字段（可选，默认 best）: "best"收束 / "far"大交换 / "rotate"漩涡(可加 "rotate_steps") / "mirror"对穿(检查器会提醒错峰) / "swap"半场互换 / "keep"身份保持——转场即编舞，按意图声明，检查器按声明的映射验算。
-输出纪律: 直接给 JSON；不要写距离证明、不要手算两两间距、不要自问自答。规划检查器会回报精确间距/路径/时长数字，如有违规你会收到报告再修正。
 {direction_text}
 只输出 JSON，不解释。"""
 
@@ -697,24 +707,9 @@ def plan_to_budget_table(plan: dict, prev_state: list, drone_count: int = 7) -> 
     return "\n".join(lines)
 
 
-def build_coding_prompt(
-    budget_table: str,
-    segment_id: str,
-    start_time: float,
-    end_time: float,
-    drone_count: int = 7,
-    composition_plan: Mapping[str, Any] | None = None,
-    feedback: str = "",
-    human_preferences: str = "",
-) -> str:
-    """Second pass: budget table → Python code."""
-    composition_text = _format_planning_composition_plan(composition_plan, segment_id)
-    direction_text = _format_direction_block(feedback, human_preferences)
-    return f"""## 编码 {segment_id} ({start_time}-{end_time}s)
-
-{budget_table}
-
-{composition_text}
+def build_coding_system_prompt(drone_count: int = 7) -> str:
+    """编码阶段的静态规则块（按项目字节稳定 → 前缀缓存跨段/跨轮命中）。"""
+    return f"""你是无人机编队的段落编码器：把预算表转成可运行的 pyfii 段代码。
 
 ## 规则
 - `drones` 是 {int(drone_count)} 架无人机对象列表；循环写 `for i, drone in enumerate(drones):`
@@ -740,7 +735,27 @@ def build_coding_prompt(
 - `planning_speed/planning_accel` 只用于预算 fly_ms；final 代码不要写 set_speed/set_accel/VelXY/VelZ，也不要写 `drone[d]`
 - 如需错峰，优先 `safe_move(mode="wave")` 或 `ripple_move`（它们自动对齐段尾），只有同步小挪动才手动 `drone.delay(i * 60)` + `move2`
 - 段尾：prev = [(t[0],t[1],t[2]) for t in targets_last]
-- 禁止 import/def/markdown/inittime/VelXY
+- 禁止 import/def/markdown/inittime/VelXY"""
+
+
+def build_coding_prompt(
+    budget_table: str,
+    segment_id: str,
+    start_time: float,
+    end_time: float,
+    drone_count: int = 7,
+    composition_plan: Mapping[str, Any] | None = None,
+    feedback: str = "",
+    human_preferences: str = "",
+) -> str:
+    """Second pass: budget table → Python code（动态部分；规则在 system prompt）。"""
+    composition_text = _format_planning_composition_plan(composition_plan, segment_id)
+    direction_text = _format_direction_block(feedback, human_preferences)
+    return f"""## 编码 {segment_id} ({start_time}-{end_time}s)
+
+{budget_table}
+
+{composition_text}
 {direction_text}
 只输出 fenced Python：
 ```python

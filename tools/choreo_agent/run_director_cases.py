@@ -462,6 +462,9 @@ def _directed_loop(
         _rounds, validation = _generate(session, provider, feedback, max_attempts)
         last_validation = validation
         verdict.setdefault("llm_calls_per_phase", []).append(session._llm_calls_used)
+        verdict.setdefault("cache_per_phase", []).append(
+            {"hit": session._cache_hit_tokens, "miss": session._cache_miss_tokens}
+        )
         if session.last_budget_exhausted:
             verdict["budget_exhausted"] = True
         if session.last_precheck_warnings:

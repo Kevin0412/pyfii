@@ -193,7 +193,11 @@ def test_budget_table_no_longer_says_to_blindly_copy_violations():
 def test_coding_prompt_does_not_recommend_fly_ms_light_clock_in_move_loop():
     from core.planning_pass import build_coding_prompt
 
-    prompt = build_coding_prompt("budget", "S03", 19.8, 30.5, drone_count=9)
+    from core.planning_pass import build_coding_system_prompt
+
+    prompt = build_coding_system_prompt(9) + "\n" + build_coding_prompt(
+        "budget", "S03", 19.8, 30.5, drone_count=9
+    )  # C14: 规则区在 system
 
     assert "不要在同一循环写 `apply_light(..., fly_ms // 100)`" in prompt
     assert "apply_light(drone, color, fly_ms // 100)` 占满飞行窗口" not in prompt
@@ -203,7 +207,11 @@ def test_prompts_do_not_recommend_long_light_ticks_inside_move_loop():
     from core.planning_pass import build_planning_prompt
     from core.prompt_builder import build_segment_prompt
 
-    planning = build_planning_prompt("S03", 19.8, 30.5, "transition", [[100, 100, 150]] * 9, drone_count=9)
+    from core.planning_pass import build_planning_system_prompt
+
+    planning = build_planning_system_prompt(9) + "\n" + build_planning_prompt(
+        "S03", 19.8, 30.5, "transition", [[100, 100, 150]] * 9, drone_count=9
+    )
     assert "duration_s*10" not in planning
     assert "不要规划成每机 move2 循环里的长 ticks" in planning
 
@@ -250,7 +258,9 @@ def test_revision_prompt_contains_plan_and_report():
 
 
 def test_planning_prompt_has_no_seeds():
-    prompt = build_planning_prompt(
+    from core.planning_pass import build_planning_system_prompt
+
+    prompt = build_planning_system_prompt(9) + "\n" + build_planning_prompt(
         "S02", 13.0, 23.0, "展开", _PREV_9, drone_count=9
     )
     assert "seed_box" not in prompt

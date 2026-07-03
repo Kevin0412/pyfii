@@ -12,7 +12,14 @@ from .script_editor import replace_active_segment, lock_segment, parse_markers, 
 from .checkpoint import save as checkpoint_save
 from .validator import validate, ValidationResult
 from .preflight import preflight_check, preflight_feedback
-from .planning_pass import build_planning_prompt, parse_plan_json, plan_to_budget_table, build_coding_prompt
+from .planning_pass import (
+    build_coding_prompt,
+    build_coding_system_prompt,
+    build_planning_prompt,
+    build_planning_system_prompt,
+    parse_plan_json,
+    plan_to_budget_table,
+)
 from .prompt_builder import build_segment_prompt
 from .llm_client import chat, chat_prefix, LlmResponse, load_config as _load_provider_config
 
@@ -53,6 +60,9 @@ class Session:
         self._llm_call_budget: int | None = None
         self._llm_calls_used: int = 0
         self.last_budget_exhausted: bool = False
+        # 缓存命中观测（provider 返回 usage 才有数；线程并发下计数近似即可）
+        self._cache_hit_tokens: int = 0
+        self._cache_miss_tokens: int = 0
         self.sync_state_with_markers(save=False)
 
     def _llm_budget_ok(self, need: int = 1) -> bool:
@@ -60,6 +70,14 @@ class Session:
 
     def _consume_llm_calls(self, n: int = 1) -> None:
         self._llm_calls_used += n
+
+    def _record_cache_usage(self, response) -> None:
+        hit = getattr(response, "prompt_cache_hit_tokens", None)
+        miss = getattr(response, "prompt_cache_miss_tokens", None)
+        if isinstance(hit, int):
+            self._cache_hit_tokens += hit
+        if isinstance(miss, int):
+            self._cache_miss_tokens += miss
 
     @property
     def human_preferences(self) -> str:
@@ -286,6 +304,8 @@ class Session:
         self._llm_call_budget = max_llm_calls
         self._llm_calls_used = 0
         self.last_budget_exhausted = False
+        self._cache_hit_tokens = 0
+        self._cache_miss_tokens = 0
 
         for index in range(1, max_attempts + 1):
             if not self._llm_budget_ok():
@@ -327,7 +347,8 @@ class Session:
                         seg=seg,
                         provider=provider,
                         stage="planning_json",
-                        system="",
+                        # 静态规则块进 system：字节稳定 → 前缀缓存跨段/跨轮命中
+                        system=build_planning_system_prompt(self.state.drone_count),
                         user=plan_prompt,
                         temperature=0.2,
                         feedback=repair_feedback,
@@ -385,7 +406,7 @@ class Session:
                             seg=seg,
                             provider=provider,
                             stage="planning_code",
-                            system="",
+                            system=build_coding_system_prompt(self.state.drone_count),
                             user=code_prompt,
                             temperature=0.3,
                             feedback=repair_feedback,
@@ -1183,6 +1204,7 @@ def {function_name}(drones: list):
         system_chars: int,
         user_chars: int,
     ) -> None:
+        self._record_cache_usage(response)
         seg.attempts.append({
             "provider": provider,
             "stage": stage,
