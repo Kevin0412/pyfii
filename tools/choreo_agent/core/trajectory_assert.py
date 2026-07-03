@@ -194,12 +194,34 @@ def color_onset_times(data, fps: int, t0: float, t1: float, predicate) -> dict[i
     return onsets
 
 
+def final_hue_onset_predicate(data, fps: int, drone_index: int, t1: float, tol_deg: float = 30.0):
+    """"依次点亮各自颜色"的正确谓词：到达该机段尾最终色相才算 onset。
+
+    直接用"任意有色"当谓词会被前半段既有彩灯误触发（onset 全等于窗口起点）。
+    """
+    target = None
+    rgb = drone_color_at(data, fps, drone_index, t1)
+    if rgb is not None:
+        target = hue_deg(rgb)
+
+    def predicate(rgb_value):
+        if target is None:
+            return False
+        h = hue_deg(rgb_value)
+        if h is None:
+            return False
+        diff = abs(h - target) % 360.0
+        return min(diff, 360.0 - diff) <= tol_deg
+
+    return predicate
+
+
 def check_spatial_temporal_order(
     data,
     fps: int,
     t0: float,
     t1: float,
-    predicate,
+    predicate=None,
     axis: int = 0,
     ascending: bool = True,
     min_span_s: float = 0.6,
@@ -209,8 +231,17 @@ def check_spatial_temporal_order(
 
     以窗口起点的各机 axis 坐标排序为基准，onset 时刻应随之递增；
     允许 max_inversions 个逆序对，且首尾 onset 时差 ≥min_span_s（否则是同步不是依次）。
+    predicate=None 时按各机"到达段尾最终色相"检测（final_hue_onset_predicate）。
     """
-    onsets = color_onset_times(data, fps, t0, t1, predicate)
+    if predicate is None:
+        onsets = {}
+        for k in range(len(data)):
+            per_drone = final_hue_onset_predicate(data, fps, k, t1)
+            onsets.update(
+                {k: color_onset_times([data[k]], fps, t0, t1, per_drone)[0]}
+            )
+    else:
+        onsets = color_onset_times(data, fps, t0, t1, predicate)
     missing = [k for k, v in onsets.items() if v is None]
     if missing:
         return False, {"onsets": onsets, "missing": missing}

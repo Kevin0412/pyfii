@@ -139,15 +139,12 @@ def _eval_fuzzy_box(data, fps, window, _ctx):
     return "fuzzy_box", ok, detail, fb
 
 
-def _rainbow_predicate(rgb):
-    return hue_deg(rgb) is not None
-
-
 def _eval_rainbow(data, fps, window, _ctx):
     mid = (window[0] + window[1]) / 2.0
     t_end = window[1] - 0.4
+    # predicate=None → 按"到达各自段尾最终色相"检测 onset（防前半段既有彩灯误判）
     order_ok, order_detail = check_spatial_temporal_order(
-        data, fps, mid, t_end, _rainbow_predicate, axis=0, ascending=True,
+        data, fps, mid, t_end, None, axis=0, ascending=True,
         min_span_s=0.6, max_inversions=1,
     )
     hue_ok, hue_detail = check_hue_diversity(data, fps, t_end, min_hue_buckets=5)

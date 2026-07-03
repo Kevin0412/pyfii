@@ -149,6 +149,18 @@ def test_rainbow_wave_primitives():
         axis=0, min_span_s=0.6,
     )
     assert not ok, detail
+
+    # 默认谓词（到达段尾最终色相）：前半段已有别的彩灯也不该误判 onset
+    data2 = _rainbow_data()
+    for frames in data2:  # 前半段统一预置黄绿干扰灯（色相 ~86°，与全部最终色相差 >30°）
+        for f in range(len(frames)):
+            t, x, y, z, a, led, acc = frames[f]
+            if led == (-1, -1, -1):
+                frames[f] = (t, x, y, z, a, (0, 255, 145), acc)
+    ok, detail = check_spatial_temporal_order(
+        data2, FPS, 0.0, 3.5, None, axis=0, min_span_s=0.6,
+    )
+    assert ok, detail  # 各机到达"自己段尾色相"的时刻仍是依次的
     print("PASSED: rainbow wave primitives")
 
 
