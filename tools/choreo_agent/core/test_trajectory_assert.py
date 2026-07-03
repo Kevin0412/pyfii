@@ -8,13 +8,17 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from core.trajectory_assert import (
     blue_dominant,
     check_brightness_modulation,
+    check_collinear,
     check_color_window,
+    check_dark_multicolor,
     check_drone_at,
     check_drone_in_box,
+    check_group_hold,
     check_hue_diversity,
     check_no_new_degradation,
     check_relative_shift,
     check_spatial_temporal_order,
+    check_sync_pulses,
     drone_color_at,
     hue_deg,
 )
@@ -164,10 +168,92 @@ def test_rainbow_wave_primitives():
     print("PASSED: rainbow wave primitives")
 
 
+def test_collinear_formation():
+    # 斜线：y = x，7 机均匀铺开
+    line = [
+        _drone_frames((80 + i * 65, 80 + i * 65, 150), (0, 0, 200))
+        for i in range(7)
+    ]
+    ok, detail = check_collinear(line, FPS, 1.0)
+    assert ok, detail
+    # 打散一机出线 80cm → 拒绝
+    broken = [list(f) for f in line]
+    broken[3] = _drone_frames((275, 195, 150), (0, 0, 200))
+    ok, detail = check_collinear(broken, FPS, 1.0)
+    assert not ok and detail["max_residual_cm"] > 35
+    # 挤成一团（跨度不足）→ 拒绝
+    cluster = [_drone_frames((280 + i * 10, 280, 150), (0, 0, 200)) for i in range(7)]
+    ok, detail = check_collinear(cluster, FPS, 1.0)
+    assert not ok and detail["span_cm"] < 250
+    print("PASSED: collinear formation check")
+
+
+def test_group_hold_detection():
+    def moving_then_hold(i):
+        frames = []
+        for f in range(int(4.0 * FPS)):
+            t = f / FPS
+            x = 100 + i * 60 + (t * 50 if t < 1.0 else 50)  # 1s 后静止
+            frames.append((t, x, 200, 150, 0.0, (0, 120, 120), 0))
+        return frames
+
+    data = [moving_then_hold(i) for i in range(5)]
+    ok, detail = check_group_hold(data, FPS, 0.0, 3.8, min_hold_s=1.6)
+    assert ok and detail["longest_hold_s"] >= 2.0, detail
+    # 全程运动 → 无定格
+    always_moving = [
+        [(f / FPS, 100 + i * 60 + f, 200, 150, 0.0, (0, 120, 120), 0) for f in range(int(3 * FPS))]
+        for i in range(5)
+    ]
+    ok, detail = check_group_hold(always_moving, FPS, 0.0, 2.8, min_hold_s=1.6)
+    assert not ok, detail
+    print("PASSED: group hold detection")
+
+
+def test_sync_pulses():
+    def flasher(offset_s):
+        frames = []
+        for f in range(int(6.0 * FPS)):
+            t = f / FPS
+            on = any(start + offset_s <= t < start + offset_s + 0.4 for start in (1.0, 2.0, 3.0))
+            led = (200, 200, 200) if on else (10, 10, 10)
+            frames.append((t, 100, 200, 150, 0.0, led, 0))
+        return frames
+
+    synced = [flasher(0.0) for _ in range(5)]
+    ok, detail = check_sync_pulses(synced, FPS, 0.0, 5.5, expected_pulses=3)
+    assert ok, detail
+    # 一机错开 0.6s → 不同步
+    ragged = [flasher(0.0) for _ in range(4)] + [flasher(0.6)]
+    ok, detail = check_sync_pulses(ragged, FPS, 0.0, 5.5, expected_pulses=3, sync_tol_s=0.3)
+    assert not ok, detail
+    print("PASSED: sync pulses check")
+
+
+def test_dark_multicolor():
+    dark_hues_bgr = [(90, 20, 20), (20, 90, 20), (20, 20, 90), (80, 80, 10), (10, 80, 80)]
+    data = [_drone_frames((100 + i * 80, 200, 150), dark_hues_bgr[i]) for i in range(5)]
+    ok, detail = check_dark_multicolor(data, FPS, 0.2, 1.8)
+    assert ok, detail
+    # 亮场版本 → 拒绝（不是"黑"）
+    bright = [_drone_frames((100 + i * 80, 200, 150), tuple(v * 2 + 40 for v in dark_hues_bgr[i])) for i in range(5)]
+    ok, detail = check_dark_multicolor(bright, FPS, 0.2, 1.8)
+    assert not ok, detail
+    # 单色暗光 → 拒绝（不是"五彩斑斓"）
+    mono = [_drone_frames((100 + i * 80, 200, 150), (90, 20, 20)) for i in range(5)]
+    ok, detail = check_dark_multicolor(mono, FPS, 0.2, 1.8)
+    assert not ok, detail
+    print("PASSED: dark multicolor check")
+
+
 if __name__ == "__main__":
     test_check_drone_at_tolerance()
     test_color_conversion_and_window()
     test_no_new_degradation_tolerances()
     test_box_and_relative_shift()
     test_rainbow_wave_primitives()
+    test_collinear_formation()
+    test_group_hold_detection()
+    test_sync_pulses()
+    test_dark_multicolor()
     print("\nALL TRAJECTORY ASSERT TESTS PASSED")

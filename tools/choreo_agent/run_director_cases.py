@@ -42,13 +42,17 @@ from core.director_language import format_directive_checklist  # noqa: E402
 from core.trajectory_assert import (  # noqa: E402
     blue_dominant,
     check_brightness_modulation,
+    check_collinear,
     check_color_window,
+    check_dark_multicolor,
     check_drone_at,
     check_drone_in_box,
+    check_group_hold,
     check_hue_diversity,
     check_no_new_degradation,
     check_relative_shift,
     check_spatial_temporal_order,
+    check_sync_pulses,
     drone_position_at,
     hue_deg,
     load_trajectory,
@@ -177,6 +181,170 @@ def _eval_rainbow(data, fps, window, _ctx):
     return "rainbow", ok, detail, fb
 
 
+# ---- 广覆盖样例（C12）：多机/队形/不可行/部分灯光/同步爆闪/暗多彩/定格/
+# ---- 对穿身份/后悔撤销/逐条组合 ----
+
+MULTI_POSITION_DIRECTIVE = (
+    "细节修改：0 号机和 6 号机段尾并排停在前排——drones[0] 停 (200, 120, 150)，"
+    "drones[6] 停 (360, 120, 150)，各 ±25cm，身份保持写法（段末分别单独 move2）；"
+    "其余照常并保持安全间距。"
+)
+FORMATION_LINE_DIRECTIVE = (
+    "细节修改：本段结束时全体排成一条清晰的斜线——从左前方到右后方，"
+    "均匀铺开（跨度至少大半个场地），高度可以有层次；段尾停在线上。"
+)
+INFEASIBLE_DIRECTIVE = (
+    "细节修改：让 3 号机段尾停到 (600, 100, 180)。"
+)
+PARTIAL_LIGHT_DIRECTIVE = (
+    "细节修改：只把 2 号机（drones[2]）后半段的灯光改成红色并保持到段尾；"
+    "其余所有机保持原来的配色，不要跟着变红。"
+)
+SYNC_FLASH_DIRECTIVE = (
+    "细节修改：本段中段全体无人机同步爆闪 3 下——同时亮、同时灭，"
+    "三下节奏一致；爆闪前后灯光照常。"
+)
+DARK_MULTI_DIRECTIVE = (
+    "细节修改：后半段做'五彩斑斓的黑'——暗底多彩微光：每一架机不同色相，"
+    "但亮度都压得很低（每个通道不超过 120），微微闪动保持到段尾，不要灭灯也不要亮场。"
+)
+HOLD_DIRECTIVE = (
+    "细节修改：本段中段全体到位后**定住 2 秒**（位置保持不动、灯保持亮），"
+    "定格结束后再继续后续动作铺满段尾。"
+)
+SWAP_DIRECTIVE = (
+    "细节修改：3 号机和 4 号机在本段内交换彼此的位置——段尾 drones[3] 停在 "
+    "drones[4] 的本段入口位置，drones[4] 停在 drones[3] 的入口位置（各 ±45cm，"
+    "身份保持写法）。注意对穿路径要错峰或绕行，其余机让出通道。"
+)
+REGRET_STAGE_A = "细节修改：2 号机段尾往左移一大步（至少 80cm），其余照常。"
+REGRET_STAGE_B = (
+    "刚才说错了，撤销上一条往左的要求：2 号机回到本段入口原来的位置附近停住，"
+    "其余尽量保持不变。"
+)
+SEQ_STAGE_B = (
+    "在保持 3 号机停位 (140, 140, 180) 不变的前提下：本段时间过半之后"
+    "全体（每一架）灯光改成蓝色系并保持到段尾。"
+)
+
+
+def red_dominant(rgb):
+    r, g, b = rgb
+    return r >= 90 and r > b and r >= g
+
+
+def _eval_multi_position(data, fps, window, _ctx):
+    ok0, d0 = check_drone_at(data, fps, 0, window[1] - 0.3, (200, 120, 150), tol_cm=25.0)
+    ok6, d6 = check_drone_at(data, fps, 6, window[1] - 0.3, (360, 120, 150), tol_cm=25.0)
+    ok = ok0 and ok6
+    fb = None
+    if not ok:
+        parts = []
+        if not ok0:
+            parts.append(f"drones[0] 实测 {tuple(d0['actual'])}，要求 (200,120,150)±25")
+        if not ok6:
+            parts.append(f"drones[6] 实测 {tuple(d6['actual'])}，要求 (360,120,150)±25")
+        fb = "指令仍未满足：" + "；".join(parts) + "。分别在段末单独 move2 修正，其余机让开前排。"
+    return "multi_position", ok, {"d0": d0, "d6": d6}, fb
+
+
+def _eval_formation_line(data, fps, window, _ctx):
+    ok, detail = check_collinear(data, fps, window[1] - 0.3, max_residual_cm=35.0, min_span_cm=250.0)
+    fb = None
+    if not ok:
+        fb = (
+            f"指令仍未满足：段尾队形离直线偏差 {detail['max_residual_cm']}cm"
+            f"（限 35）、跨度 {detail['span_cm']}cm（需 ≥250）。"
+            "把段尾点表改成一条显式斜线：如 (80+i*65, 80+i*65, z_i)，i=0..6。"
+        )
+    return "formation_line", ok, detail, fb
+
+
+def _eval_precheck_fired(_data, _fps, _window, ctx):
+    warnings = ctx.get("precheck_warnings") or []
+    ok = any("越界" in w for w in warnings)
+    fb = None  # 预检是确定性行为，不需要模型修正
+    return "precheck_fired", ok, {"warnings": warnings}, fb
+
+
+def _eval_partial_light(data, fps, window, _ctx):
+    mid = (window[0] + window[1]) / 2.0
+    ok2, d2 = check_color_window(data, fps, mid + 0.5, window[1] - 0.3, red_dominant,
+                                 drones=[2], min_fraction=0.6)
+    others = [k for k in range(len(data)) if k != 2]
+    _ok_o, d_o = check_color_window(data, fps, mid + 0.5, window[1] - 0.3, red_dominant,
+                                    drones=others, min_fraction=0.0)
+    leak = [k for k, v in d_o["per_drone_fraction"].items() if v > 0.35]
+    ok = ok2 and not leak
+    fb = None
+    if not ok:
+        parts = []
+        if not ok2:
+            parts.append(f"drones[2] 红色占比 {d2['per_drone_fraction'].get(2, 0)}（需 ≥0.6）")
+        if leak:
+            parts.append(f"机 {leak} 不该跟着变红（指令只改 2 号机）")
+        fb = "指令仍未满足：" + "；".join(parts) + "。只对 drones[2] 设红色，其余保持原配色。"
+    return "partial_light", ok, {"d2": d2, "others": d_o}, fb
+
+
+def _eval_sync_flash(data, fps, window, _ctx):
+    ok, detail = check_sync_pulses(
+        data, fps, window[0] + 1.5, window[1] - 1.0, expected_pulses=3, sync_tol_s=0.35
+    )
+    fb = None
+    if not ok:
+        fb = (
+            f"指令仍未满足：各机脉冲数 {detail['pulse_counts']}（需每机 ≥3），"
+            f"脉冲对齐偏差 {detail['pulse_spreads_s']}s（需 ≤0.35s）。"
+            "全体一起做 3 次 亮(≥150)→灭(≤60) 的循环：flash_group(drones, color, times=3, ...)"
+            " 或统一 for 循环 TurnOnAll/TurnOffAll，不要逐机错开。"
+        )
+    return "sync_flash", ok, detail, fb
+
+
+def _eval_dark_multicolor(data, fps, window, _ctx):
+    mid = (window[0] + window[1]) / 2.0
+    ok, detail = check_dark_multicolor(data, fps, mid + 0.5, window[1] - 0.3)
+    fb = None
+    if not ok:
+        fb = (
+            f"指令仍未满足：色相桶 {detail['hues'].get('hue_buckets')}（需 ≥4 桶）、"
+            f"低亮度达标机占比 {detail['dark_qualified_fraction']}（需 ≥0.7，"
+            f"亮度峰值 {detail['brightness_peaks']}，每通道 ≤130 且不灭灯）。"
+            "每机不同色相但数值压低，如 (90, 20, 70) 这类暗彩。"
+        )
+    return "dark_multicolor", ok, detail, fb
+
+
+def _eval_hold(data, fps, window, _ctx):
+    ok, detail = check_group_hold(
+        data, fps, window[0] + 1.0, window[1] - 0.5, min_hold_s=1.6, max_drift_cm=12.0
+    )
+    fb = None
+    if not ok:
+        fb = (
+            f"指令仍未满足：最长全体静止亮灯区间 {detail['longest_hold_s']}s（需 ≥1.6s）。"
+            "中段安排一个明确定格：全体到位后同时 apply_light + delay(2000)，期间不 move。"
+        )
+    return "hold", ok, detail, fb
+
+
+def _eval_swap(data, fps, window, _ctx):
+    entry3 = drone_position_at(data, fps, 3, window[0] + 0.2)
+    entry4 = drone_position_at(data, fps, 4, window[0] + 0.2)
+    ok3, d3 = check_drone_at(data, fps, 3, window[1] - 0.3, entry4, tol_cm=45.0)
+    ok4, d4 = check_drone_at(data, fps, 4, window[1] - 0.3, entry3, tol_cm=45.0)
+    ok = ok3 and ok4
+    fb = None
+    if not ok:
+        fb = (
+            f"指令仍未满足：交换后 drones[3] 应停在 {tuple(round(v,0) for v in entry4)}±45"
+            f"（实测 {tuple(d3['actual'])}），drones[4] 应停在 {tuple(round(v,0) for v in entry3)}±45"
+            f"（实测 {tuple(d4['actual'])}）。保持身份保持写法，对穿用错峰/绕行清冲突。"
+        )
+    return "swap", ok, {"d3": d3, "d4": d4}, fb
+
+
 def _case_specs() -> dict[int, dict]:
     return {
         1: {"name": "position_hold", "directives": [POSITION_DIRECTIVE], "evals": [_eval_position]},
@@ -189,6 +357,23 @@ def _case_specs() -> dict[int, dict]:
         4: {"name": "fuzzy_center_left", "directives": [FUZZY_DIRECTIVE], "evals": [_eval_fuzzy_box]},
         5: {"name": "relative_refinement", "special": "relative"},
         6: {"name": "rainbow_wave_fade", "directives": [RAINBOW_DIRECTIVE], "evals": [_eval_rainbow]},
+        7: {"name": "multi_drone_position", "directives": [MULTI_POSITION_DIRECTIVE],
+            "evals": [_eval_multi_position]},
+        8: {"name": "formation_line", "directives": [FORMATION_LINE_DIRECTIVE],
+            "evals": [_eval_formation_line]},
+        9: {"name": "infeasible_precheck", "directives": [INFEASIBLE_DIRECTIVE],
+            "evals": [_eval_precheck_fired], "skip_degradation": True},
+        10: {"name": "partial_lighting", "directives": [PARTIAL_LIGHT_DIRECTIVE],
+             "evals": [_eval_partial_light]},
+        11: {"name": "sync_flash_x3", "directives": [SYNC_FLASH_DIRECTIVE],
+             "evals": [_eval_sync_flash]},
+        12: {"name": "dark_multicolor", "directives": [DARK_MULTI_DIRECTIVE],
+             "evals": [_eval_dark_multicolor]},
+        13: {"name": "hold_still_2s", "directives": [HOLD_DIRECTIVE], "evals": [_eval_hold]},
+        14: {"name": "swap_identity_through_safety", "directives": [SWAP_DIRECTIVE],
+             "evals": [_eval_swap]},
+        15: {"name": "regret_undo", "special": "regret"},
+        16: {"name": "sequential_combo", "special": "sequential"},
     }
 
 
@@ -219,6 +404,8 @@ def _directed_loop(
     for round_index in range(1, directive_rounds + 2):
         _rounds, validation = _generate(session, provider, feedback, max_attempts)
         last_validation = validation
+        if session.last_precheck_warnings:
+            verdict["precheck_warnings"] = list(session.last_precheck_warnings)
         if not (validation and validation.passed):
             from core.directive_advisor import explain_conflict
 
@@ -226,8 +413,6 @@ def _directed_loop(
                 {"round": round_index, "safety_passed": False}
             )
             verdict["explanation"] = explain_conflict(validation, directive)
-            if session.last_precheck_warnings:
-                verdict["precheck_warnings"] = list(session.last_precheck_warnings)
             return False, {}, last_validation
         data, fps = load_trajectory(project / "output")
         assertions = {}
@@ -306,6 +491,10 @@ def _run_case(
 
     if spec.get("special") == "relative":
         return _run_relative_case(session, project, provider, window, max_attempts, directive_rounds, verdict)
+    if spec.get("special") == "regret":
+        return _run_regret_case(session, project, provider, window, max_attempts, directive_rounds, verdict)
+    if spec.get("special") == "sequential":
+        return _run_sequential_case(session, project, provider, window, max_attempts, directive_rounds, verdict)
 
     directive = format_directive_checklist(spec["directives"])
     verdict["directive"] = directive
@@ -325,11 +514,117 @@ def _run_case(
         return verdict
     verdict["generation_ok"] = True
 
+    if spec.get("skip_degradation"):
+        verdict["degradation"] = {"ok": True, "note": "case asserts advisor behavior; degradation n/a"}
+        verdict["passed"] = bool(ok)
+        return verdict
     degr_ok, degr_detail = check_no_new_degradation(
         baseline_degradation, dict(directed_validation.degradation or {})
     )
     verdict["degradation"] = {"ok": degr_ok, **degr_detail}
     verdict["passed"] = bool(ok and degr_ok)
+    return verdict
+
+
+def _run_regret_case(session, project, provider, window, max_attempts, directive_rounds, verdict):
+    """case 15（Q2）：先"往左一大步"，再"说错了撤销"——最新指令优先。"""
+    verdict["directive"] = REGRET_STAGE_A + " → " + REGRET_STAGE_B
+    entry2 = None
+
+    def eval_stage_a(data, fps, win, _ctx):
+        nonlocal entry2
+        if entry2 is None:
+            entry2 = drone_position_at(data, fps, 2, win[0] + 0.2)
+        p = drone_position_at(data, fps, 2, win[1] - 0.3)
+        ok, detail = check_relative_shift(entry2, p, axis=0, sign=-1, min_cm=60.0,
+                                          max_other_drift_cm=200.0)
+        fb = None
+        if not ok:
+            fb = (
+                f"指令仍未满足：2 号机段尾 x 应比入口 {entry2[0]:.0f} 至少小 60cm，"
+                f"实测 {tuple(detail['after'])}。段末单独 move2 修正。"
+            )
+        return "stage_a_left", ok, detail, fb
+
+    ok_a, assertions_a, validation_a = _directed_loop(
+        session, provider, REGRET_STAGE_A, [eval_stage_a], window, project,
+        max_attempts, directive_rounds, verdict,
+    )
+    verdict["assertions"]["stage_a"] = assertions_a
+    if not ok_a or validation_a is None:
+        verdict["error"] = "stage A (move left) not satisfied"
+        return verdict
+    data, fps = load_trajectory(project / "output")
+    stage_a_pos = drone_position_at(data, fps, 2, window[1] - 0.3)
+    verdict["stage_a_position"] = [round(v, 1) for v in stage_a_pos]
+
+    def eval_stage_b(data, fps, win, _ctx):
+        p = drone_position_at(data, fps, 2, win[1] - 0.3)
+        back_near_entry = abs(p[0] - entry2[0]) <= 60.0
+        moved_back_right = p[0] > stage_a_pos[0] + 40.0
+        ok = back_near_entry and moved_back_right
+        detail = {
+            "entry": [round(v, 1) for v in entry2],
+            "stage_a": [round(v, 1) for v in stage_a_pos],
+            "final": [round(v, 1) for v in p],
+        }
+        fb = None
+        if not ok:
+            fb = (
+                f"撤销指令仍未满足：2 号机应回到入口 x≈{entry2[0]:.0f}±60"
+                f"（上一版在 {stage_a_pos[0]:.0f}），实测 {p[0]:.0f}。"
+                "以最新指令为准：回到入口位置附近。"
+            )
+        return "stage_b_undo", ok, detail, fb
+
+    ok_b, assertions_b, validation_b = _directed_loop(
+        session, provider, REGRET_STAGE_B, [eval_stage_b], window, project,
+        max_attempts, directive_rounds, verdict,
+    )
+    verdict["assertions"]["stage_b"] = assertions_b
+    if validation_b is None or not validation_b.passed:
+        verdict["error"] = "stage B regeneration did not pass safety gates"
+        return verdict
+    verdict["generation_ok"] = True
+    verdict["degradation"] = {"ok": True, "note": "regret case compares positions"}
+    verdict["passed"] = bool(ok_a and ok_b)
+    return verdict
+
+
+def _run_sequential_case(session, project, provider, window, max_attempts, directive_rounds, verdict):
+    """case 16：组合指令的产品路径——逐条下达，后条要求保持前条成果。"""
+    verdict["directive"] = POSITION_DIRECTIVE + " → " + SEQ_STAGE_B
+
+    ok_a, assertions_a, validation_a = _directed_loop(
+        session, provider, POSITION_DIRECTIVE, [_eval_position], window, project,
+        max_attempts, directive_rounds, verdict,
+    )
+    verdict["assertions"]["stage_a"] = assertions_a
+    if not ok_a or validation_a is None:
+        verdict["error"] = "stage A (position) not satisfied"
+        return verdict
+
+    def eval_stage_b_both(data, fps, win, ctx):
+        name_p, ok_p, detail_p, fb_p = _eval_position(data, fps, win, ctx)
+        name_l, ok_l, detail_l, fb_l = _eval_lighting(data, fps, win, ctx)
+        ok = ok_p and ok_l
+        fb = None
+        if not ok:
+            notes = [f for f in (fb_p, fb_l) if f]
+            fb = "\n".join(notes) + "\n（两条都必须满足：位置保持 + 后半蓝色）"
+        return "position_and_lighting", ok, {"position": detail_p, "lighting": detail_l}, fb
+
+    ok_b, assertions_b, validation_b = _directed_loop(
+        session, provider, SEQ_STAGE_B, [eval_stage_b_both], window, project,
+        max_attempts, directive_rounds, verdict,
+    )
+    verdict["assertions"]["stage_b"] = assertions_b
+    if validation_b is None or not validation_b.passed:
+        verdict["error"] = "stage B regeneration did not pass safety gates"
+        return verdict
+    verdict["generation_ok"] = True
+    verdict["degradation"] = {"ok": True, "note": "sequential case asserts both directives"}
+    verdict["passed"] = bool(ok_a and ok_b)
     return verdict
 
 
@@ -420,7 +715,8 @@ def _resolve_stage(value: str | None) -> Path | None:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--provider", default="deepseek")
-    parser.add_argument("--cases", default="1,2,3,4,5,6")
+    parser.add_argument("--cases", default="1,2,3,4,5,6",
+                        help="逗号分隔的 case 号，或 'all'（1-16 全量覆盖套件）")
     parser.add_argument("--max-attempts", type=int, default=4)
     parser.add_argument("--directive-rounds", type=int, default=2,
                         help="断言失败后的导演修正轮数（实测偏差回灌）")
@@ -434,7 +730,10 @@ def main(argv: list[str] | None = None) -> int:
     stage = _resolve_stage(args.stage)
 
     specs = _case_specs()
-    case_ids = [int(c) for c in args.cases.split(",") if c.strip()]
+    if args.cases.strip().lower() == "all":
+        case_ids = sorted(specs)
+    else:
+        case_ids = [int(c) for c in args.cases.split(",") if c.strip()]
     results: list[dict] = []
     for case_id in case_ids:
         spec = specs[case_id]

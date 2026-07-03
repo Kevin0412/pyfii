@@ -323,6 +323,172 @@ def check_brightness_modulation(
     }
 
 
+def check_collinear(
+    data,
+    fps: int,
+    t_s: float,
+    max_residual_cm: float = 35.0,
+    min_span_cm: float = 250.0,
+) -> tuple[bool, dict]:
+    """队形级指令确认（"排成一条斜线"）：t 时刻全队 XY 共线且铺开。
+
+    对 XY 做主方向拟合（质心+主轴），残差=各机到主轴距离。
+    """
+    pts = [drone_position_at(data, fps, k, t_s)[:2] for k in range(len(data))]
+    n = len(pts)
+    cx = sum(p[0] for p in pts) / n
+    cy = sum(p[1] for p in pts) / n
+    sxx = sum((p[0] - cx) ** 2 for p in pts)
+    syy = sum((p[1] - cy) ** 2 for p in pts)
+    sxy = sum((p[0] - cx) * (p[1] - cy) for p in pts)
+    # 主轴方向（2x2 协方差最大特征向量）
+    angle = 0.5 * math.atan2(2 * sxy, sxx - syy)
+    ux, uy = math.cos(angle), math.sin(angle)
+    residuals = [abs(-(p[0] - cx) * uy + (p[1] - cy) * ux) for p in pts]
+    projections = [(p[0] - cx) * ux + (p[1] - cy) * uy for p in pts]
+    span = max(projections) - min(projections)
+    ok = max(residuals) <= max_residual_cm and span >= min_span_cm
+    return ok, {
+        "t_s": round(t_s, 2),
+        "max_residual_cm": round(max(residuals), 1),
+        "span_cm": round(span, 1),
+        "limits": {"max_residual_cm": max_residual_cm, "min_span_cm": min_span_cm},
+    }
+
+
+def check_group_hold(
+    data,
+    fps: int,
+    t0: float,
+    t1: float,
+    min_hold_s: float = 1.6,
+    max_drift_cm: float = 12.0,
+    require_lit: bool = True,
+) -> tuple[bool, dict]:
+    """"到位后全体定住 N 秒"确认：窗口内存在 ≥min_hold_s 的区间，
+    所有机位移 <max_drift_cm 且（可选）灯亮。"""
+    step = 1.0 / min(fps, 20)
+    times = []
+    t = t0
+    while t <= t1 + 1e-9:
+        times.append(t)
+        t += step
+    best = 0.0
+    best_start = None
+    anchor = None
+    anchor_t = None
+    for t in times:
+        pos = [drone_position_at(data, fps, k, t) for k in range(len(data))]
+        lit = all(drone_color_at(data, fps, k, t) is not None for k in range(len(data)))
+        # 相对定格起点（锚点）的累计位移——逐点比较会放过慢速持续漂移
+        still = (
+            anchor is not None
+            and all(math.dist(a, b) <= max_drift_cm for a, b in zip(pos, anchor))
+            and (lit or not require_lit)
+        )
+        if still:
+            duration = t - anchor_t
+            if duration > best:
+                best = duration
+                best_start = anchor_t
+        else:
+            anchor = pos
+            anchor_t = t
+    ok = best >= min_hold_s
+    return ok, {
+        "window": [round(t0, 2), round(t1, 2)],
+        "longest_hold_s": round(best, 2),
+        "hold_start_s": round(best_start, 2) if best_start is not None else None,
+        "min_hold_s": min_hold_s,
+    }
+
+
+def check_sync_pulses(
+    data,
+    fps: int,
+    t0: float,
+    t1: float,
+    expected_pulses: int = 3,
+    sync_tol_s: float = 0.3,
+    on_threshold: int = 150,
+    off_threshold: int = 60,
+) -> tuple[bool, dict]:
+    """"全体同步爆闪 N 下"确认：各机亮度脉冲数 ≥N，且各次脉冲起点跨机对齐。"""
+    step = 1.0 / min(fps, 30)
+    pulse_starts: dict[int, list[float]] = {}
+    for k in range(len(data)):
+        starts = []
+        on = False
+        t = t0
+        while t <= t1 + 1e-9:
+            rgb = drone_color_at(data, fps, k, t)
+            level = brightness(rgb) if rgb is not None else 0
+            if not on and level >= on_threshold:
+                on = True
+                starts.append(round(t, 2))
+            elif on and level <= off_threshold:
+                on = False
+            t += step
+        pulse_starts[k] = starts
+    counts = {k: len(v) for k, v in pulse_starts.items()}
+    enough = all(c >= expected_pulses for c in counts.values())
+    synced = True
+    spreads = []
+    if enough:
+        for i in range(expected_pulses):
+            onsets = [pulse_starts[k][i] for k in pulse_starts]
+            spread = max(onsets) - min(onsets)
+            spreads.append(round(spread, 2))
+            if spread > sync_tol_s:
+                synced = False
+    ok = enough and synced
+    return ok, {
+        "pulse_counts": counts,
+        "expected_pulses": expected_pulses,
+        "pulse_spreads_s": spreads,
+        "sync_tol_s": sync_tol_s,
+    }
+
+
+def check_dark_multicolor(
+    data,
+    fps: int,
+    t0: float,
+    t1: float,
+    min_hue_buckets: int = 4,
+    max_brightness: int = 130,
+    min_brightness: int = 15,
+    min_fraction: float = 0.7,
+) -> tuple[bool, dict]:
+    """"五彩斑斓的黑"确认：多色相 + 低亮度微光（不灭灯、不亮场）。"""
+    mid = (t0 + t1) / 2.0
+    hue_ok, hue_detail = check_hue_diversity(data, fps, mid, min_hue_buckets=min_hue_buckets)
+    step = 1.0 / min(fps, 20)
+    qualified = 0
+    peaks: dict[int, int] = {}
+    for k in range(len(data)):
+        levels = []
+        t = t0
+        while t <= t1 + 1e-9:
+            rgb = drone_color_at(data, fps, k, t)
+            if rgb is not None:
+                levels.append(brightness(rgb))
+            t += step
+        peak = max(levels) if levels else 0
+        floor = min(levels) if levels else 0
+        peaks[k] = peak
+        if levels and peak <= max_brightness and peak >= min_brightness and floor >= 0:
+            qualified += 1
+    frac = qualified / max(1, len(data))
+    ok = hue_ok and frac >= min_fraction
+    return ok, {
+        "hues": hue_detail,
+        "brightness_peaks": peaks,
+        "dark_qualified_fraction": round(frac, 3),
+        "limits": {"max_brightness": max_brightness, "min_hue_buckets": min_hue_buckets},
+    }
+
+
 # 退化对比容差：整数指标（车道/固定高度机数）允许 +1，占比指标允许 +0.15。
 _INT_KEYS = ("lane_x_locked_drones", "lane_y_locked_drones", "fixed_height_drones")
 _FRACTION_KEYS = ("circle_like_fraction", "flat_height_fraction", "order_stable_fraction")
