@@ -291,7 +291,7 @@ def build_segment_prompt(
 - 只输出代码片段（4空格缩进）"""
 
     if feedback:
-        user += f"\n\n## 上一轮反馈\n{feedback}\n根据反馈修正。"
+        user += f"\n\n## 上一轮反馈（若与更早历史反馈矛盾，以本条最新为准）\n{feedback}\n根据反馈修正。"
 
     return system, user
 

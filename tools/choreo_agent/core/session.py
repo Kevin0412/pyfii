@@ -46,6 +46,7 @@ class Session:
         # 并行候选池：preflight 已通过但未走完整验证的备胎代码（按段清空）。
         self._candidate_pool: list[str] = []
         self._candidate_pool_seg: str | None = None
+        self.last_precheck_warnings: list[str] = []
         self.sync_state_with_markers(save=False)
 
     @property
@@ -243,14 +244,27 @@ class Session:
             return []
         rounds: list[GenerationRound] = []
         # 导演方位/灯光描述 grounding："往左一点""从左到右依次彩虹渐变"这类
-        # 自然语言追加换算图例+各机当前坐标（普通反馈原样返回，prompt 不变）。
+        # 自然语言追加换算图例+各机当前坐标（普通反馈原样返回，prompt 不变）；
+        # 显式坐标再做确定性可行性预检（越界/与他机间距/时间可达），预警一并入 prompt。
         if feedback:
             try:
+                from .directive_advisor import precheck_directive
                 from .director_language import ground_directive
 
-                feedback = ground_directive(feedback, self._previous_exit_state() or None)
+                prev_positions = self._previous_exit_state() or None
+                window_s = float(seg.end_time - seg.start_time)
+                warnings = precheck_directive(
+                    feedback, prev_positions, self.state.drone_count, window_s=window_s
+                )
+                feedback = ground_directive(feedback, prev_positions)
+                if warnings:
+                    feedback += (
+                        "\n\n## 指令可行性预检（确定性计算，必须处理）\n- "
+                        + "\n- ".join(warnings)
+                    )
+                self.last_precheck_warnings = warnings
             except Exception:
-                pass
+                self.last_precheck_warnings = []
         repair_feedback = feedback
 
         for index in range(1, max_attempts + 1):
@@ -488,7 +502,16 @@ class Session:
             
             # Write to design.py (only after preflight passes)
             script_path = self.project_root / "scripts" / "design.py"
-            if not replace_active_segment(script_path, seg.id, code, self.state.locked_segment_ids):
+            if replace_active_segment(script_path, seg.id, code, self.state.locked_segment_ids):
+                # 记录 agent 写入指纹：人工改动当前段后 g 覆盖前可检测
+                try:
+                    from .script_editor import segment_body_hashes
+
+                    seg.last_agent_hash = segment_body_hashes(script_path, [seg.id]).get(seg.id, "")
+                    self.state.save(self.project_root)
+                except Exception:
+                    pass
+            else:
                 self._record_attempt_update({
                     "write_ok": False,
                     "write_error": "replace_active_segment returned False",
@@ -753,6 +776,13 @@ def {function_name}(drones: list):
                     reason=f"exit_state 必须是 {self.state.drone_count} 个坐标，不允许锁定",
                 )
             seg.exit_state = result.exit_state
+            # 锁定时留段体指纹：后续加载时检测人工改动锁定段
+            try:
+                from .script_editor import segment_body_hashes
+
+                seg.locked_hash = segment_body_hashes(script_path, [seg.id]).get(seg.id, "")
+            except Exception:
+                seg.locked_hash = ""
             seg.attempts.append({
                 "human_approval": True,
                 "human_override": human_override,
@@ -889,6 +919,90 @@ def {function_name}(drones: list):
 
         if save:
             self.state.save(self.project_root)
+
+    # ---- 人工改码鲁棒性 ----
+
+    def integrity_report(self) -> dict:
+        """检测 design.py 的人工改动：锁定段被改、当前段被改、marker 丢失。
+
+        人类有权手工改代码；系统的责任是不装作没发生——锁定段被改后
+        缓存的 exit_state 可能失真，直接续写下一段会按错误起点规划（撞机根源）。
+        """
+        script_path = self.project_root / "scripts" / "design.py"
+        report = {"tampered_locked": [], "active_edited": False, "missing_markers": []}
+        if not script_path.exists():
+            report["missing_markers"] = [s.id for s in self.state.segments]
+            return report
+        try:
+            from .script_editor import parse_markers, segment_body_hashes
+
+            marker_ids = {m["id"] for m in parse_markers(script_path)}
+            hashes = segment_body_hashes(script_path)
+        except Exception:
+            return report
+        for seg in self.state.segments:
+            if seg.id not in marker_ids:
+                report["missing_markers"].append(seg.id)
+                continue
+            if seg.locked and seg.locked_hash and hashes.get(seg.id) != seg.locked_hash:
+                report["tampered_locked"].append(seg.id)
+        current = self.state.current_segment
+        if (
+            current is not None
+            and current.last_agent_hash
+            and hashes.get(current.id)
+            and hashes.get(current.id) != current.last_agent_hash
+        ):
+            report["active_edited"] = True
+        return report
+
+    def adopt_manual_edits(self) -> dict:
+        """采纳人工修改：重跑验证，刷新被改锁定段的 exit_state 与指纹。
+
+        验证不过（编译/运行失败或安全崩坏）则拒绝采纳，让人先修好。
+        当前段的人工修改则更新 last_agent_hash（后续 g 不再告警，但会覆盖）。
+        """
+        script_path = self.project_root / "scripts" / "design.py"
+        report = self.integrity_report()
+        outcome = {"adopted": [], "rejected": [], "reason": ""}
+        if not report["tampered_locked"] and not report["active_edited"]:
+            outcome["reason"] = "没有检测到人工修改"
+            return outcome
+
+        result = self.validate()
+        if not (result.compile_ok and result.run_ok and result.read_fii_ok):
+            outcome["rejected"] = list(report["tampered_locked"])
+            outcome["reason"] = f"整体脚本执行失败，先修复再采纳：{(result.error_message or '')[-160:]}"
+            return outcome
+
+        from .script_editor import segment_body_hashes
+        from .validator import _sample_exit_state
+
+        hashes = segment_body_hashes(script_path)
+        for seg in self.state.segments:
+            if seg.id not in report["tampered_locked"]:
+                continue
+            sampled = None
+            try:
+                sampled = _sample_exit_state(self.project_root / "output", time_s=seg.end_time)
+            except Exception:
+                sampled = None
+            if sampled and len(sampled) == self.state.drone_count:
+                seg.exit_state = sampled
+                seg.locked_hash = hashes.get(seg.id, "")
+                outcome["adopted"].append(seg.id)
+            else:
+                outcome["rejected"].append(seg.id)
+        current = self.state.current_segment
+        if report["active_edited"] and current is not None:
+            current.last_agent_hash = hashes.get(current.id, "")
+            outcome["adopted"].append(f"{current.id}(active)")
+        if not (result.distance_warnings == 0 and not result.collision_intervals):
+            outcome["reason"] = (
+                "已采纳但注意：当前整体轨迹存在距离告警/碰撞区间，锁定段的修改可能是根源。"
+            )
+        self.state.save(self.project_root)
+        return outcome
 
     # ---- 恢复 ----
 

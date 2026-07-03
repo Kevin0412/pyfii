@@ -17,6 +17,8 @@ class SegmentState:
     final_permutation: Optional[tuple] = None
     exit_state: Optional[list] = None
     degradation_signature: Optional[str] = None  # 退化指纹，跨段去重用
+    locked_hash: str = ""  # 锁定时段体哈希：检测人工改动锁定段
+    last_agent_hash: str = ""  # agent 最后写入的段体哈希：g 覆盖前检测人工修改
 
 
 @dataclass
@@ -62,6 +64,8 @@ class ProjectState:
                     "attempts": s.attempts,
                     "exit_state": s.exit_state,
                     "degradation_signature": s.degradation_signature,
+                    "locked_hash": s.locked_hash,
+                    "last_agent_hash": s.last_agent_hash,
                 }
                 for s in self.segments
             ],
@@ -90,6 +94,8 @@ class ProjectState:
                 attempts=s.get("attempts", []),
                 exit_state=s.get("exit_state"),
                 degradation_signature=s.get("degradation_signature"),
+                locked_hash=s.get("locked_hash", ""),
+                last_agent_hash=s.get("last_agent_hash", ""),
             )
             for s in data.get("segments", [])
         ]

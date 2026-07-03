@@ -109,7 +109,8 @@ def _format_direction_block(feedback: str, human_preferences: str) -> str:
     note = (feedback or "").strip()
     if note:
         parts.append(
-            "## 导演/上轮反馈（权威，必须满足）\n" + note + "\n据此修正，勿改动无关部分。"
+            "## 导演/上轮反馈（权威，必须满足；若与更早的历史反馈矛盾，以本条最新指令为准）\n"
+            + note + "\n据此修正，勿改动无关部分。"
         )
     if not parts:
         return ""

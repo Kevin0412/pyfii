@@ -63,7 +63,8 @@ def format_preferences_block(preferences: str) -> str:
     if not preferences.strip():
         return ""
     return (
-        "## 人类偏好记忆（历史评审沉淀——遵循；与默认原则冲突时以此为准）\n"
+        "## 人类偏好记忆（历史评审沉淀——遵循；与默认原则冲突时以此为准；"
+        "条目按时间排列，若互相矛盾以最新条目为准）\n"
         + preferences.strip()
         + "\n"
     )

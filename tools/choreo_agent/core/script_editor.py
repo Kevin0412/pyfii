@@ -137,6 +137,29 @@ def update_segment_docstring(
     return False
 
 
+def segment_body_hashes(script_path: Path, ids: list[str] | None = None) -> dict[str, str]:
+    """各段段体（marker 之间的代码）的 sha256，不看 locked 标志。
+
+    人工改码检测用：与 state 里记录的 locked_hash/last_agent_hash 比对。
+    """
+    lines = script_path.read_text(encoding="utf-8").splitlines()
+    wanted = set(ids) if ids is not None else None
+    hashes: dict[str, str] = {}
+    current = None
+    buf: list[str] = []
+    for line in lines:
+        if line.strip().startswith(MARKER_START):
+            current = _extract(line, "id")
+            buf = []
+        elif line.strip().startswith(MARKER_END) and current:
+            if wanted is None or current in wanted:
+                hashes[current] = hashlib.sha256("\n".join(buf).encode()).hexdigest()
+            current = None
+        elif current:
+            buf.append(line)
+    return hashes
+
+
 def _hash_locked(lines: list[str], locked_ids: list[str]) -> dict[str, str]:
     hashes = {}
     in_segment = None

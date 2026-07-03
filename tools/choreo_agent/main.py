@@ -9,6 +9,7 @@ sys.path.insert(0, str(REPO_ROOT / "tools" / "choreo_agent"))
 
 from core import Session
 from core.design_memory import record as design_memory_record
+from core.directive_advisor import explain_conflict
 
 
 def main():
@@ -46,6 +47,8 @@ def main():
     print(f"Provider: {provider}")
     print(f"Drones: {session.state.drone_count}")
     print(f"Locked: {session.state.locked_segment_ids}")
+    _warn_integrity(session)
+    edit_ack = {"done": False}
 
     while True:
         seg = session.state.current_segment
@@ -142,8 +145,32 @@ def main():
             else:
                 print(f"Override 失败 — {approval.reason or 'marker lock failed'}")
 
+        elif cmd == "adopt":
+            outcome = session.adopt_manual_edits()
+            print(f"adopted={outcome['adopted']} rejected={outcome['rejected']}")
+            if outcome.get("reason"):
+                print(outcome["reason"])
+            edit_ack["done"] = False
+
         elif cmd.startswith("g"):
             feedback = raw_cmd[1:].strip()
+            integrity = session.integrity_report()
+            if integrity["tampered_locked"] and not edit_ack["done"]:
+                print(
+                    f"⚠ 锁定段 {integrity['tampered_locked']} 被手工修改过——缓存的出口坐标可能失真，"
+                    "续写会按错误起点规划（撞机根源）。先 `adopt` 采纳（重验证+刷新出口），"
+                    "或还原文件；再次 g 则带风险继续。"
+                )
+                edit_ack["done"] = True
+                continue
+            if integrity["active_edited"] and not edit_ack["done"]:
+                print(
+                    f"⚠ 当前段 {seg.id if seg else ''} 有手工修改，g 会覆盖它——"
+                    "先 `v` 验证手工版本、`adopt` 采纳，或再次 g 确认覆盖。"
+                )
+                edit_ack["done"] = True
+                continue
+            edit_ack["done"] = False
             if feedback and seg is not None:
                 # 导演反馈立即留痕；清缓存让后续 prompt 重新加载偏好
                 design_memory_record(proj, "segment_feedback", feedback, context=seg.id)
@@ -227,6 +254,13 @@ def main():
                     print("Safe gate passed. Manual mode: human approval is required; use a to lock.")
             else:
                 last = rounds[-1].validation
+                if session.last_precheck_warnings:
+                    print("指令预检警告（生成前已知）：")
+                    for w in session.last_precheck_warnings:
+                        print(f"  - {w}")
+                explanation = explain_conflict(last, feedback)
+                if explanation:
+                    print(f"解释：{explanation}")
                 if last is not None and last.tier0_ok:
                     print(
                         "物理安全已过；剩余失败是可 override 的完整性/审美项（见 [tier] 摘要）。"
@@ -260,7 +294,7 @@ def main():
         else:
             print(
                 "Commands: g [反馈]=generate+repair  i [文本]=查看/编辑当前段 intent  "
-                "v=validate  a=approve  o <理由>=导演 override 锁定  "
+                "v=validate  a=approve  o <理由>=导演 override 锁定  adopt=采纳手工修改  "
                 "h=handoff  mode [manual|fast]  sync  s=save  q=quit"
             )
 
@@ -314,6 +348,19 @@ def _parse_drone_count(value: str) -> int:
     if count <= 0:
         raise ValueError("drone_count must be positive")
     return count
+
+
+def _warn_integrity(session: Session) -> None:
+    report = session.integrity_report()
+    if report["tampered_locked"]:
+        print(
+            f"⚠ 检测到锁定段被手工修改: {report['tampered_locked']}"
+            "（出口坐标可能失真，建议 `adopt` 采纳或还原）"
+        )
+    if report["active_edited"]:
+        print("⚠ 当前段有手工修改（g 会覆盖；`adopt` 可采纳为基准）")
+    if report["missing_markers"]:
+        print(f"⚠ design.py 缺少段 marker: {report['missing_markers']}（段结构已损坏，检查文件）")
 
 
 def _print_tier_summary(result, indent: str = "") -> None:

@@ -220,9 +220,14 @@ def _directed_loop(
         _rounds, validation = _generate(session, provider, feedback, max_attempts)
         last_validation = validation
         if not (validation and validation.passed):
+            from core.directive_advisor import explain_conflict
+
             verdict.setdefault("directive_trace", []).append(
                 {"round": round_index, "safety_passed": False}
             )
+            verdict["explanation"] = explain_conflict(validation, directive)
+            if session.last_precheck_warnings:
+                verdict["precheck_warnings"] = list(session.last_precheck_warnings)
             return False, {}, last_validation
         data, fps = load_trajectory(project / "output")
         assertions = {}
