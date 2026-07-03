@@ -14,6 +14,14 @@ session 入口自动 grounding。用便宜模型（默认 deepseek flash）。
 Usage:
   conda run -n pyfii python tools/choreo_agent/run_director_cases.py \
       --provider deepseek --cases 1,2,3,4,5,6
+
+提速两招：
+  # 1) 舞台复用：S01 生成+锁定只做一次（各 case 从快照拷贝，省 ~40% 调用）
+  ... --make-stage s01_stage_flash
+  ... --cases 1,2,3 --stage s01_stage_flash
+  # 2) case 级并行：各 case 项目独立，分进程同时跑即可
+  ... --cases 4 --stage s01_stage_flash --out reports/c4.json &
+  ... --cases 6 --stage s01_stage_flash --out reports/c6.json &
 """
 
 from __future__ import annotations
@@ -239,23 +247,39 @@ def _directed_loop(
     return False, {}, last_validation
 
 
-def _setup_project(case_id: int, spec: dict, provider: str, max_attempts: int, verdict: dict):
+def _setup_project(
+    case_id: int, spec: dict, provider: str, max_attempts: int, verdict: dict,
+    stage: Path | None = None,
+):
     stamp = time.strftime("%Y%m%d_%H%M%S")
     name = f"director_case{case_id}_{spec['name']}_{stamp}"
     project = TOOL_ROOT / "agent_projects" / name
-    shutil.copytree(TOOL_ROOT / "project_template", project)
     verdict["project"] = name
 
-    session = Session(project, gate_profile="safety")
-    _rounds, validation = _generate(session, provider, "", max_attempts)
-    if not (validation and validation.passed):
-        verdict["error"] = "S01 generation did not pass"
-        return None, None
-    approval = session.approve_and_lock()
-    verdict["s01_locked"] = bool(approval.locked)
-    if not approval.locked:
-        verdict["error"] = f"S01 lock failed: {approval.reason}"
-        return None, None
+    if stage is not None:
+        # 舞台复用：从 S01 已锁定的快照起步，跳过重复的 S01 生成
+        shutil.copytree(stage, project)
+        session = Session(project, gate_profile="safety")
+        if session.state.locked_segment_ids != ["S01"]:
+            verdict["error"] = (
+                f"stage must have exactly S01 locked, got {session.state.locked_segment_ids}"
+            )
+            return None, None
+        verdict["s01_locked"] = True
+        verdict["stage"] = stage.name
+    else:
+        shutil.copytree(TOOL_ROOT / "project_template", project)
+        session = Session(project, gate_profile="safety")
+        _rounds, validation = _generate(session, provider, "", max_attempts)
+        if not (validation and validation.passed):
+            verdict["error"] = "S01 generation did not pass"
+            return None, None
+        approval = session.approve_and_lock()
+        verdict["s01_locked"] = bool(approval.locked)
+        if not approval.locked:
+            verdict["error"] = f"S01 lock failed: {approval.reason}"
+            return None, None
+
     seg = session.state.current_segment
     if seg is None or seg.id != "S02":
         verdict["error"] = f"unexpected current segment: {seg and seg.id}"
@@ -264,13 +288,16 @@ def _setup_project(case_id: int, spec: dict, provider: str, max_attempts: int, v
     return project, session
 
 
-def _run_case(case_id: int, spec: dict, provider: str, max_attempts: int, directive_rounds: int) -> dict:
+def _run_case(
+    case_id: int, spec: dict, provider: str, max_attempts: int,
+    directive_rounds: int, stage: Path | None = None,
+) -> dict:
     verdict: dict = {
         "case": case_id, "name": spec["name"], "provider": provider,
         "s01_locked": False, "baseline_ok": None, "generation_ok": False,
         "assertions": {}, "degradation": None, "passed": False,
     }
-    project, session = _setup_project(case_id, spec, provider, max_attempts, verdict)
+    project, session = _setup_project(case_id, spec, provider, max_attempts, verdict, stage=stage)
     if project is None:
         return verdict
     window = tuple(verdict["window"])
@@ -357,6 +384,37 @@ def _run_relative_case(session, project, provider, window, max_attempts, directi
     return verdict
 
 
+def _make_stage(provider: str, max_attempts: int, name: str) -> int:
+    """生成一个 S01 已锁定的舞台快照，供 --stage 复用。"""
+    project = TOOL_ROOT / "agent_projects" / name
+    if project.exists():
+        raise SystemExit(f"stage already exists: {project}")
+    shutil.copytree(TOOL_ROOT / "project_template", project)
+    session = Session(project, gate_profile="safety")
+    _rounds, validation = _generate(session, provider, "", max_attempts)
+    if not (validation and validation.passed):
+        print("stage S01 generation did not pass")
+        return 1
+    approval = session.approve_and_lock()
+    if not approval.locked:
+        print(f"stage S01 lock failed: {approval.reason}")
+        return 1
+    print(f"stage ready: {project}  locked={session.state.locked_segment_ids}")
+    return 0
+
+
+def _resolve_stage(value: str | None) -> Path | None:
+    if not value:
+        return None
+    path = Path(value)
+    if not path.is_absolute():
+        candidate = TOOL_ROOT / "agent_projects" / value
+        path = candidate if candidate.exists() else (Path.cwd() / value).resolve()
+    if not (path / "state.json").exists():
+        raise SystemExit(f"stage project not found: {path}")
+    return path
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--provider", default="deepseek")
@@ -364,8 +422,14 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--max-attempts", type=int, default=4)
     parser.add_argument("--directive-rounds", type=int, default=2,
                         help="断言失败后的导演修正轮数（实测偏差回灌）")
+    parser.add_argument("--stage", help="S01 已锁定的舞台快照项目（名字或路径），跳过重复的 S01 生成")
+    parser.add_argument("--make-stage", help="只生成并锁定 S01，产出可复用舞台快照后退出")
     parser.add_argument("--out")
     args = parser.parse_args(argv)
+
+    if args.make_stage:
+        return _make_stage(args.provider, args.max_attempts, args.make_stage)
+    stage = _resolve_stage(args.stage)
 
     specs = _case_specs()
     case_ids = [int(c) for c in args.cases.split(",") if c.strip()]
@@ -374,7 +438,8 @@ def main(argv: list[str] | None = None) -> int:
         spec = specs[case_id]
         print(f"\n### director case {case_id}: {spec['name']} ({args.provider})")
         try:
-            verdict = _run_case(case_id, spec, args.provider, args.max_attempts, args.directive_rounds)
+            verdict = _run_case(case_id, spec, args.provider, args.max_attempts,
+                                args.directive_rounds, stage=stage)
         except (KeyboardInterrupt, SystemExit):
             raise
         except Exception as exc:
