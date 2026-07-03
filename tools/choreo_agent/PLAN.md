@@ -31,6 +31,69 @@
 
 ---
 
+# 0. 交互导演主线（2026-07-03 落地）
+
+产品核心 = 人类逐段导演：说明这段怎么做 → AI 生成 → 人类反馈 → 修改或下一段。
+run_pipeline 只是自动测试台。
+
+## 0.1 REPL（main.py，产品交互面）
+
+```
+g [反馈]   生成+自动修复（反馈自动 grounding + 可行性预检 + 留痕 design_memory）
+i [文本]   查看/编辑当前段 intent
+v          验证（三层门摘要：Tier-0 物理安全 / Tier-1 完整性可 override / Tier-2 审美建议）
+a          锁定（验证未全过则为人工 override）
+o <理由>   导演强制锁定（可越过 Tier-1；物理安全谁也不能越；理由留痕）
+adopt      采纳手工修改的 design.py（重验证+刷新出口坐标+指纹）
+```
+
+最小 Textual 壳：`python tools/choreo_agent/tui/app.py agent_projects/<name>`。
+
+## 0.2 导演指令语言（core/director_language.py 自动 grounding）
+
+- **相对方位**："往左一点/移到中间/再高一点"——相对该机当前位置；轴向与三视图渲染一致
+  （左/右=x减/增，前/后=y减/增，上/下=z增/减）；附各机当前坐标供换算
+- **复杂灯效**：渐变/呼吸/依次点亮/彩虹/同步异步/"五彩斑斓的黑"→ 映射到执行器写法
+- **速度**："放慢/别太快/≤120cm/s" → flying_ms ≥ ceil(路径÷限速×1000) 换算式
+- **多条指令** → 编号清单+逐条自查；**前后矛盾以最新为准**（所有反馈头显式声明）
+- **可行性预检**（directive_advisor）：显式坐标先做确定性检查（越界/与他机间距/时间可达），
+  预警同给模型与导演；安全失败后 explain_conflict 翻译成"谁和谁差多少 cm + 取舍选项"
+
+实测的措辞铁律（弱模型服从三杠杆）：指定某机到点必须**身份保持写法**（分配器会重排机-点
+对应）；灯光全体类要说"**每一架都要**"；速度类给**数学换算**而不是形容词。
+
+## 0.3 三层门与 override
+
+- Tier-0 物理安全（编译/运行/读回、碰撞/越界、动作完成）：任何模式任何人不可越过
+- Tier-1 演出完整性（hover/有效运动/窗口填充/包络）：auto 硬门；interactive 导演可 `o` 拍板
+- Tier-2 章法审美（composition/motion_quality）：auto 数据驱动硬门；interactive 仅建议
+- gate_profile 在 Session 构造时定（main.py=safety，pipeline=full）；交互下剩余失败全部
+  可 override 时生成循环提前停轮交还导演
+
+## 0.4 验收与测试工具
+
+- `run_director_cases.py --cases all`：18 类导演指令的真实 API 验收（位置/灯光/节奏/队形/
+  多轮语义/鲁棒性），轨迹级断言（读回 .fii 验坐标/逐帧灯色/退化对比）+ 修正回路
+  （实测偏差回灌，Tier-1 失败视为导演可处置继续）。提速：`--make-stage`/`--stage` 复用
+  S01 快照（省 ~40% 调用）；case 独立可分进程并行
+- `run_matrix.py`：双模型稳定性矩阵（协议见 STABILITY_TEST_PLAN.md）——改 prompt/门必须
+  flash+mimo 不劣化；报告含 cache_hit_rate
+- 保险丝：`max_llm_calls`（Session 级，全模型生效）——弱/慢模型快速失败不磨轮；
+  run_director_cases 默认 10/阶段，run_pipeline `--max-llm-calls-per-cycle` 可选
+- 手工改码鲁棒性：锁定段指纹 + integrity_report + adopt 流程（人工改过的锁定段出口坐标
+  失真是下段撞机根源，必须显式采纳或还原）
+
+## 0.5 模型分工（2026-07-03 实测定位）
+
+| 模型 | 角色 |
+|---|---|
+| deepseek flash | 开发主力 + 服从率基准（约 ¥1.2/整跑，缓存命中 ~66%→C14 后更高） |
+| mimo_vision | 防过拟合对照（矩阵协议裁决权；风格"能到但磨"） |
+| qwen_local_nothink（本地） | harness 开发测试机：免费、0.1s/调用级，管子通不通用它 |
+| qwen_local thinking | 零通过样例第三陪审员（think 买安全产能不买位置精度；必须带保险丝） |
+
+qwen 本地**不能并发**、**不作为调参对象**（能力剖面差异大，跟着调=第三方向过拟合）。
+
 # 1. 项目定位
 
 Pyfii TUI 编舞工作台 = 常驻进程 + 当前段上下文内存 + 人类多轮反馈 + AI 修改当前段 + Pyfii 验证闭环 + 视频验收 + 段落锁定 + 退出恢复
