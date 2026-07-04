@@ -320,6 +320,7 @@ def _run_full_flow_body(
                         from core.design_memory import record as _dm_record
 
                         _dm_record(project_root, "segment_feedback", human, context=seg.id)
+                        session._human_preferences = None
                         _append(log_path, f"\n# {seg.id} HUMAN FEEDBACK\n{human}\n")
                         feedback = (
                             _segment_feedback(seg.id, session.state.drone_count)
