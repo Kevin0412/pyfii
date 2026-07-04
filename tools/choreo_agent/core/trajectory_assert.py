@@ -386,6 +386,69 @@ def check_max_altitude(
     }
 
 
+def window_mean_speed(data, fps: int, t0: float, t1: float) -> float:
+    """窗口内全队平均瞬时速度（cm/s）——跨段能量对比的代理量。"""
+    step = 1.0 / min(fps, 20)
+    total = 0.0
+    count = 0
+    for k in range(len(data)):
+        prev = None
+        t = t0
+        while t <= t1 + 1e-9:
+            pos = drone_position_at(data, fps, k, t)
+            if prev is not None:
+                total += math.dist(pos, prev) / step
+                count += 1
+            prev = pos
+            t += step
+    return total / count if count else 0.0
+
+
+def window_xy_span(data, fps: int, t0: float, t1: float) -> float:
+    """窗口内全队 XY 占地对角线（cm）——密度收拢/铺开的代理量。"""
+    xs: list[float] = []
+    ys: list[float] = []
+    step = 1.0 / min(fps, 10)
+    t = t0
+    while t <= t1 + 1e-9:
+        for k in range(len(data)):
+            x, y, _z = drone_position_at(data, fps, k, t)
+            xs.append(x)
+            ys.append(y)
+        t += step
+    if not xs:
+        return 0.0
+    return math.hypot(max(xs) - min(xs), max(ys) - min(ys))
+
+
+def check_entry_matches_recorded_exit(
+    data,
+    fps: int,
+    t_s: float,
+    recorded_exit: list,
+    tol_cm: float = 25.0,
+) -> tuple[bool, dict]:
+    """跨段衔接确认：本段入口实测位置 == 上一段锁定时记录的 exit_state。
+
+    失真意味着续段是按错误起点规划的（撞机根源，也是手工改锁定段的典型后果）。
+    """
+    worst = 0.0
+    detail = {}
+    for k, expected in enumerate(recorded_exit or []):
+        actual = drone_position_at(data, fps, k, t_s)
+        dist = math.dist(actual, tuple(float(v) for v in expected))
+        worst = max(worst, dist)
+        if dist > tol_cm:
+            detail[f"d{k}"] = {
+                "recorded": [round(float(v), 1) for v in expected],
+                "actual": [round(v, 1) for v in actual],
+                "dist_cm": round(dist, 1),
+            }
+    ok = bool(recorded_exit) and worst <= tol_cm
+    return ok, {"t_s": round(t_s, 2), "worst_dist_cm": round(worst, 1),
+                "tol_cm": tol_cm, "mismatches": detail}
+
+
 def check_collinear(
     data,
     fps: int,

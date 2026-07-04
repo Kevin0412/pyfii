@@ -203,6 +203,41 @@ def test_speed_and_altitude_limits():
     print("PASSED: speed and altitude limits")
 
 
+def test_cross_segment_primitives():
+    from core.trajectory_assert import (
+        check_entry_matches_recorded_exit,
+        window_mean_speed,
+        window_xy_span,
+    )
+
+    fast = [
+        [(f / FPS, 100 + i * 60 + f * 3, 200, 150, 0.0, (0, 120, 120), 0)
+         for f in range(int(3 * FPS))]
+        for i in range(3)
+    ]  # 180cm/s
+    slow = [
+        [(f / FPS, 100 + i * 60 + f * 0.5, 200, 150, 0.0, (0, 120, 120), 0)
+         for f in range(int(3 * FPS))]
+        for i in range(3)
+    ]  # 30cm/s
+    v_fast = window_mean_speed(fast, FPS, 0.2, 2.6)
+    v_slow = window_mean_speed(slow, FPS, 0.2, 2.6)
+    assert v_slow < 0.3 * v_fast, (v_fast, v_slow)
+
+    wide = [_drone_frames((80 + i * 200, 80 + i * 150, 150), (0, 120, 120)) for i in range(3)]
+    tight = [_drone_frames((260 + i * 30, 260 + i * 20, 150), (0, 120, 120)) for i in range(3)]
+    assert window_xy_span(tight, FPS, 0.2, 1.6) < 0.3 * window_xy_span(wide, FPS, 0.2, 1.6)
+
+    data = _data()
+    exits = [[140, 140, 180], [300, 300, 150], [420, 200, 200]]
+    ok, detail = check_entry_matches_recorded_exit(data, FPS, 0.5, exits, tol_cm=25)
+    assert ok, detail
+    drifted = [[140, 140, 180], [300, 380, 150], [420, 200, 200]]
+    ok, detail = check_entry_matches_recorded_exit(data, FPS, 0.5, drifted, tol_cm=25)
+    assert not ok and "d1" in detail["mismatches"], detail
+    print("PASSED: cross segment primitives")
+
+
 def test_collinear_formation():
     # 斜线：y = x，7 机均匀铺开
     line = [

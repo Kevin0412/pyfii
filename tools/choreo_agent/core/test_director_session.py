@@ -100,7 +100,7 @@ def test_director_cases_runner_imports():
     import importlib
 
     module = importlib.import_module("run_director_cases")
-    assert sorted(module._case_specs()) == list(range(1, 19))
+    assert sorted(module._case_specs()) == list(range(1, 21))
     print("PASSED: director cases runner imports")
 
 

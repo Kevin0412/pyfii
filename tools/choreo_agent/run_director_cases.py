@@ -232,6 +232,15 @@ NEGATIVE_DIRECTIVE = (
     "细节修改（两条禁令）：本段不要用圆形/环形队形（不要绕圈），"
     "并且所有机全程别飞到 200cm 以上（高度都压在 200 以下），其余照常编舞。"
 )
+ECHO_STAGE_A = FORMATION_LINE_DIRECTIVE  # S02：先立斜线母题
+ECHO_STAGE_B = (
+    "跨段指令：本段（S03）要**呼应上一段的斜线母题**——段尾回到同一走向的斜线队形"
+    "（可以变奏：间距、高度层可不同，但整体仍是清晰的斜线、跨度铺开），中段可以自由展开。"
+)
+BUILDUP_STAGE_B = (
+    "跨段指令：本段（S03）为下一段的爆发**压低蓄力**——明显比上一段更慢、更收拢："
+    "全段平均速度显著低于上一段，队形占地也收小；灯光转暗色蓄势，动作仍要铺满窗口。"
+)
 REGRET_STAGE_A = "细节修改：2 号机段尾往左移一大步（至少 80cm），其余照常。"
 REGRET_STAGE_B = (
     "刚才说错了，撤销上一条往左的要求：2 号机回到本段入口原来的位置附近停住，"
@@ -430,6 +439,8 @@ def _case_specs() -> dict[int, dict]:
         # 导演明确要的效果；反退化核心（禁圆形）已由 case 自身断言保护。
         18: {"name": "negative_constraints", "directives": [NEGATIVE_DIRECTIVE],
              "evals": [_eval_negative], "skip_degradation": True},
+        19: {"name": "cross_segment_echo", "special": "cross:echo"},
+        20: {"name": "cross_segment_buildup", "special": "cross:buildup"},
     }
 
 
@@ -583,6 +594,10 @@ def _run_case(
         return _run_regret_case(session, project, provider, window, max_attempts, directive_rounds, verdict)
     if spec.get("special") == "sequential":
         return _run_sequential_case(session, project, provider, window, max_attempts, directive_rounds, verdict)
+    if str(spec.get("special", "")).startswith("cross:"):
+        mode = spec["special"].split(":", 1)[1]
+        return _run_cross_segment_case(session, project, provider, window,
+                                       max_attempts, directive_rounds, verdict, mode)
 
     directive = format_directive_checklist(spec["directives"])
     verdict["directive"] = directive
@@ -676,6 +691,112 @@ def _run_regret_case(session, project, provider, window, max_attempts, directive
     verdict["generation_ok"] = True
     verdict["degradation"] = {"ok": True, "note": "regret case compares positions"}
     verdict["passed"] = bool(ok_a and ok_b)
+    return verdict
+
+
+def _run_cross_segment_case(session, project, provider, window, max_attempts,
+                            directive_rounds, verdict, mode):
+    """case 19/20（P2）：S02 定向并**锁定** → S03 下跨段指令 → 跨段断言。
+
+    mode="echo"：S02 立斜线母题，S03 呼应（同走向斜线 + 衔接）；
+    mode="buildup"：S02 照常，S03 压低蓄力（均速/占地显著低于 S02 + 衔接）。
+    """
+    from core.trajectory_assert import (
+        check_entry_matches_recorded_exit,
+        window_mean_speed,
+        window_xy_span,
+    )
+
+    # ---- 阶段 A：S02 ----
+    if mode == "echo":
+        ok_a, assertions_a, validation_a = _directed_loop(
+            session, provider, ECHO_STAGE_A, [_eval_formation_line], window, project,
+            max_attempts, directive_rounds, verdict,
+        )
+        verdict["assertions"]["s02"] = assertions_a
+        if not ok_a or validation_a is None or not validation_a.passed:
+            verdict["error"] = "S02 stage (formation line) not satisfied"
+            return verdict
+    else:
+        _rounds, validation_a = _generate(session, provider, "", max_attempts)
+        if not (validation_a and validation_a.passed):
+            verdict["error"] = "S02 baseline generation did not pass"
+            return verdict
+
+    approval = session.approve_and_lock()
+    if not approval.locked:
+        verdict["error"] = f"S02 lock failed: {approval.reason}"
+        return verdict
+    verdict["s02_locked"] = True
+    s02_exit = list(session.state.segments[1].exit_state or [])
+    data, fps = load_trajectory(project / "output")
+    s02_speed = window_mean_speed(data, fps, window[0] + 0.3, window[1] - 0.3)
+    s02_span = window_xy_span(data, fps, window[0] + 0.3, window[1] - 0.3)
+    verdict["s02_metrics"] = {"mean_speed": round(s02_speed, 1), "xy_span": round(s02_span, 1)}
+
+    # ---- 阶段 B：S03（跨段指令） ----
+    session = Session(project, gate_profile="safety")
+    seg3 = session.state.current_segment
+    if seg3 is None or seg3.id != "S03":
+        verdict["error"] = f"unexpected segment after S02 lock: {seg3 and seg3.id}"
+        return verdict
+    win3 = (float(seg3.start_time), float(seg3.end_time))
+    verdict["s03_window"] = list(win3)
+
+    def eval_cross(data, fps, win, _ctx):
+        junction_ok, junction = check_entry_matches_recorded_exit(
+            data, fps, win[0] + 0.2, s02_exit, tol_cm=30.0
+        )
+        details = {"junction": junction}
+        notes = []
+        if not junction_ok:
+            notes.append(
+                f"跨段衔接失真：S03 入口与 S02 锁定出口最大偏差 {junction['worst_dist_cm']}cm（限 30）。"
+            )
+        if mode == "echo":
+            line_ok, line = check_collinear(data, fps, win[1] - 0.3,
+                                            max_residual_cm=40.0, min_span_cm=220.0)
+            details["echo_line"] = line
+            ok = junction_ok and line_ok
+            if not line_ok:
+                notes.append(
+                    f"母题呼应未满足：S03 段尾应回到清晰斜线（残差 {line['max_residual_cm']}cm/"
+                    f"限40，跨度 {line['span_cm']}cm/需≥220）。段尾点表写成斜线。"
+                )
+        else:
+            s03_speed = window_mean_speed(data, fps, win[0] + 0.3, win[1] - 0.3)
+            s03_span = window_xy_span(data, fps, win[0] + 0.3, win[1] - 0.3)
+            speed_ratio = s03_speed / max(s02_speed, 1e-6)
+            span_ratio = s03_span / max(s02_span, 1e-6)
+            details["buildup"] = {
+                "s03_mean_speed": round(s03_speed, 1), "speed_ratio": round(speed_ratio, 2),
+                "s03_xy_span": round(s03_span, 1), "span_ratio": round(span_ratio, 2),
+            }
+            ok = junction_ok and speed_ratio <= 0.7 and span_ratio <= 0.85
+            if speed_ratio > 0.7:
+                notes.append(
+                    f"蓄力未满足：S03 均速应 ≤0.7×S02（实测比值 {speed_ratio:.2f}，"
+                    f"S02={s02_speed:.0f}cm/s）。加长 flying_ms、缩短位移。"
+                )
+            if span_ratio > 0.85:
+                notes.append(
+                    f"收拢未满足：S03 占地应 ≤0.85×S02（实测比值 {span_ratio:.2f}）。点表整体收小。"
+                )
+        fb = ("跨段指令仍未满足：\n- " + "\n- ".join(notes)) if notes else None
+        return "cross_segment", ok, details, fb
+
+    directive = ECHO_STAGE_B if mode == "echo" else BUILDUP_STAGE_B
+    ok_b, assertions_b, validation_b = _directed_loop(
+        session, provider, directive, [eval_cross], win3, project,
+        max_attempts, directive_rounds, verdict,
+    )
+    verdict["assertions"]["s03"] = assertions_b
+    if validation_b is None or not validation_b.passed:
+        verdict["error"] = "S03 regeneration did not pass safety gates"
+        return verdict
+    verdict["generation_ok"] = True
+    verdict["degradation"] = {"ok": True, "note": "cross-segment case asserts junction/motif/energy"}
+    verdict["passed"] = bool(ok_b)
     return verdict
 
 
