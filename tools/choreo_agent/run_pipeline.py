@@ -29,6 +29,7 @@ TOOL_ROOT = REPO_ROOT / "tools" / "choreo_agent"
 sys.path.insert(0, str(TOOL_ROOT))
 
 from core import Session
+from core import conversation
 from core.conversation import limit_text as _limit_text
 from core.token_usage import summarize_usage
 
@@ -369,8 +370,12 @@ def _run_full_flow_body(
                     # 黑洞熔断（mimo 三连单段黑洞的结构对策）：连续两个 cycle 同类失败
                     # = 当前方案家族走不通，继续灌同类修复反馈只会烧轮。清候选池 +
                     # 宣告方案作废，强制换几何家族/降 keyframe 数/换 assign 策略。
+                    # 会话历史也要清空：这是唯一携带"上一版代码"的渠道了（下面的正常续
+                    # 分支不再重新拼接 last_code），留着旧尝试的完整对话会跟"方案作废、
+                    # 换思路重来"的文字指令自相矛盾——模型看得到自己刚被否决的代码。
                     segment_record["scheme_resets"] += 1
                     session._clear_candidate_pool(seg.id)
+                    conversation.reset(seg.conversation)
                     _append(log_path, f"\n# {seg.id} SCHEME RESET #{segment_record['scheme_resets']} (repeat {category})\n")
                     feedback = (
                         _segment_feedback(seg.id, session.state.drone_count)
@@ -382,20 +387,24 @@ def _run_full_flow_body(
                     prev_cycle_category = None
                     continue
                 prev_cycle_category = category
-                # 重建而非累加：跨 cycle 一直 += 会让旧诊断/旧代码在 prompt 里越堆越多，
-                # 且新旧代码块并存时模型分不清哪份是"当前"。每个 cycle 只保留最新一份。
+                # 跨 cycle 不再重建：seg.conversation 是段级持久历史，不随 cycle 边界清空，
+                # 上一轮实际代码已经是里面真实的 assistant turn，不用再手动拼接 last_code。
+                # feedback 字符串只带这一轮的诊断摘要（cycle 边界现在只是计数/报表概念，
+                # 不再是 prompt 内容边界）。conversation_history_enabled=False 时
+                # seg.conversation 从不写入，此时仍需要字符串拼接方案兜底。
                 feedback = (
                     _segment_feedback(seg.id, session.state.drone_count)
                     + "\n\n继续修复 validator 反馈，目标是本段 passed=True。"
                 )
                 if last_validation is not None:
                     feedback += "\n" + _compact_runner_validation_feedback(last_validation)
-                last_code = getattr(rounds[-1], "code", "") if rounds else ""
-                if last_code and last_code.strip():
-                    feedback += (
-                        "\n\n上一轮实际生成并写入的代码如下，请在它基础上做最小改动，"
-                        "不要整段重写：\n```python\n" + last_code[:6000] + "\n```"
-                    )
+                if not session.conversation_history_enabled:
+                    last_code = getattr(rounds[-1], "code", "") if rounds else ""
+                    if last_code and last_code.strip():
+                        feedback += (
+                            "\n\n上一轮实际生成并写入的代码如下，请在它基础上做最小改动，"
+                            "不要整段重写：\n```python\n" + last_code[:6000] + "\n```"
+                        )
 
         if not locked:
             _append(log_path, f"\n# STOP {seg.id} not locked\n")
