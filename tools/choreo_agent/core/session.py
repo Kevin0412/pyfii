@@ -30,6 +30,7 @@ class GenerationRound:
     index: int
     response: LlmResponse | None
     validation: ValidationResult | None
+    code: str = ""
 
 
 @dataclass
@@ -48,7 +49,6 @@ class Session:
         # 同一 Session 的 preflight/validate 全部走同一 profile。
         self.gate_profile = gate_profile if gate_profile in ("full", "safety") else "full"
         self.state = ProjectState.load(self.project_root)
-        self._pending_code: str | None = None
         self._skip_continuity: bool = True  # 单段生成不检查连续性
         self._music_brief: dict | None = None
         # 并行候选池：preflight 已通过但未走完整验证的备胎代码（按段清空）。
@@ -492,7 +492,7 @@ class Session:
                     )
             if response is None and pooled_code is None:
                 rounds.append(GenerationRound(index=index, response=None, validation=None))
-                repair_feedback = "上一轮生成的代码无法插入（语法错误或违反段标记协议）。请检查代码格式。"
+                repair_feedback = "上一轮生成的代码无法插入(语法错误或违反段标记协议)。请检查代码格式。"
                 continue
 
             # Extract candidate code from LLM response (or take the pooled one)
@@ -505,8 +505,13 @@ class Session:
                     "candidate_code_chars": 0,
                     "candidate_empty": True,
                 })
-                rounds.append(GenerationRound(index=index, response=response, validation=None))
-                repair_feedback = "空代码 — 请生成有效 Python"
+                rounds.append(GenerationRound(index=index, response=response, validation=None, code=code))
+                raw_text = _limit_text(getattr(response, "text", "") or "", 2000) if response else ""
+                repair_feedback = (
+                    "上一轮没有提取到可用代码" +
+                    (f"，你实际输出的内容如下：\n```\n{raw_text}\n```\n" if raw_text.strip() else "(响应为空)。") +
+                    "请直接输出可插入函数体的完整 Python 代码片段，不要只写解释、不要空响应。"
+                )
                 continue
             self._record_attempt_update({
                 "candidate_code_chars": len(code),
@@ -552,7 +557,7 @@ class Session:
                         repair_ok = True
                         break
                 if not repair_ok:
-                    rounds.append(GenerationRound(index=index, response=response, validation=None))
+                    rounds.append(GenerationRound(index=index, response=response, validation=None, code=code))
                     repair_feedback = _preflight_repair_feedback(pf, code)
                     continue
             
@@ -572,14 +577,20 @@ class Session:
                     "write_ok": False,
                     "write_error": "replace_active_segment returned False",
                 })
-                rounds.append(GenerationRound(index=index, response=response, validation=None))
-                repair_feedback = "代码写入失败 — 检查段 marker 是否匹配"
+                rounds.append(GenerationRound(index=index, response=response, validation=None, code=code))
+                repair_feedback = (
+                    "代码写入失败——多半是段 marker 注释被误输出或破坏，导致找不到插入位置。"
+                    "你上一轮生成的代码如下，检查是否意外包含、复述或删改了 "
+                    "`PYFII_AGENT_SEGMENT_START`/`PYFII_AGENT_SEGMENT_END` 标记行；"
+                    "只输出函数体内容，不要包含 marker 本身：\n"
+                    "```python\n" + code[:6000] + "\n```"
+                )
                 continue
             self._record_attempt_update({"write_ok": True})
-            
+
             result = self.validate()
             self._record_validation_result(result)
-            rounds.append(GenerationRound(index=index, response=response, validation=result))
+            rounds.append(GenerationRound(index=index, response=response, validation=result, code=code))
             if result.passed:
                 break
             if self.gate_profile == "safety" and result.tier0_ok:
@@ -592,6 +603,7 @@ class Session:
             raw_output = _limit_text(result.raw_stderr if hasattr(result, 'raw_stderr') else "", 800)
             repair_parts = [
                 f"上一轮自动验证反馈（第 {index} 轮）：\n{_compact_validation_feedback(result)}",
+                _previous_code_block(code),
                 _targeted_validation_repair_feedback(result),
                 f"pyfii 原始输出：\n{raw_output}" if raw_output else "",
                 _conservative_safety_feedback(index, result),
@@ -858,7 +870,6 @@ def {function_name}(drones: list):
             self.state.current_segment_index += 1
             self._ensure_pre_land_formal_segment()
             self.state.save(self.project_root)
-            self._pending_code = None
             return ApprovalResult(True, result, human_override=human_override)
         return ApprovalResult(False, result)
 
@@ -941,7 +952,6 @@ def {function_name}(drones: list):
             self.state.current_segment_index += 1
             self._ensure_pre_land_formal_segment()
             self.state.save(self.project_root)
-            self._pending_code = None
             return ApprovalResult(True, validation, ai_approval=True, reason=reason)
         self.state.save(self.project_root)
         return ApprovalResult(False, validation, reason="marker lock failed")
@@ -1233,6 +1243,7 @@ def {function_name}(drones: list):
             "estimated_input_tokens": response.estimated_input_tokens,
             "estimated_output_tokens": response.estimated_output_tokens,
             "response_chars": len(response.text or ""),
+            "response_text": _limit_text(response.text or "", 8000),
             "reasoning_chars": len(response.reasoning_text or ""),
             "raw_usage": response.raw_usage,
         })
@@ -1417,10 +1428,27 @@ def _join_feedback(initial: str, repair: str) -> str:
     # initial 里是导演反馈（权威）：pipeline 路径还带段反馈样板+权威标头，
     # 1200 会把导演原话截掉——这是不能悄悄丢的输入。
     initial = _limit_text(initial.strip(), 2000)
-    repair = _limit_text(repair.strip(), 3200)
+    # repair 现在带上一轮实际代码(至多 6000 字符)，3200 会把代码和诊断一起腰斩——
+    # 抬到能装下 诊断(2400)+代码(6000)+定向提示(1800)+stderr(800)+安全提示 的量。
+    repair = _limit_text(repair.strip(), 12000)
     if initial:
         return initial + "\n\n" + repair
     return repair
+
+
+def _previous_code_block(code: str) -> str:
+    """把上一轮实际生成/写入的代码带回 prompt。
+
+    chat() 是无状态单轮调用(system+user 各一条，不带历史)，模型看不到自己上一轮
+    写了什么；_targeted_validation_repair_feedback 里"保留现有结构只外推/只加一个
+    keyframe"这类局部修复提示，离开这段代码就是空中楼阁——没有代码，"保留现有"无从谈起。
+    """
+    if not code or not code.strip():
+        return ""
+    return (
+        "上一轮实际生成并写入的代码如下(局部修复提示是针对这份代码给出的，"
+        "请在它基础上做最小改动，不要整段重写)：\n```python\n" + code[:6000] + "\n```"
+    )
 
 
 def _limit_text(text: str, max_chars: int) -> str:

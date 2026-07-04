@@ -66,6 +66,7 @@ def _fake_round(passed=True, min_d=200):
     r.response.input_tokens = 10
     r.response.output_tokens = 20
     r.validation = v
+    r.code = "mock code"
     return r
 
 

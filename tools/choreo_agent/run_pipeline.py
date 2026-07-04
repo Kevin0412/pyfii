@@ -29,6 +29,7 @@ TOOL_ROOT = REPO_ROOT / "tools" / "choreo_agent"
 sys.path.insert(0, str(TOOL_ROOT))
 
 from core import Session
+from core.session import _limit_text
 from core.token_usage import summarize_usage
 
 
@@ -376,9 +377,20 @@ def _run_full_flow_body(
                     prev_cycle_category = None
                     continue
                 prev_cycle_category = category
-                feedback = feedback + "\n\n继续修复 validator 反馈，目标是本段 passed=True。"
+                # 重建而非累加：跨 cycle 一直 += 会让旧诊断/旧代码在 prompt 里越堆越多，
+                # 且新旧代码块并存时模型分不清哪份是"当前"。每个 cycle 只保留最新一份。
+                feedback = (
+                    _segment_feedback(seg.id, session.state.drone_count)
+                    + "\n\n继续修复 validator 反馈，目标是本段 passed=True。"
+                )
                 if last_validation is not None:
                     feedback += "\n" + _compact_runner_validation_feedback(last_validation)
+                last_code = getattr(rounds[-1], "code", "") if rounds else ""
+                if last_code and last_code.strip():
+                    feedback += (
+                        "\n\n上一轮实际生成并写入的代码如下，请在它基础上做最小改动，"
+                        "不要整段重写：\n```python\n" + last_code[:6000] + "\n```"
+                    )
 
         if not locked:
             _append(log_path, f"\n# STOP {seg.id} not locked\n")
@@ -546,6 +558,7 @@ def _round_summary(round_item) -> dict:
         "response_chars": len(response.text or "") if response else 0,
         "reasoning_chars": len(response.reasoning_text or "") if response else 0,
         "raw_usage": _optional_dict(getattr(response, "raw_usage", None)) if response else None,
+        "code": _limit_text(getattr(round_item, "code", "") or "", 6000),
         "validation": _validation_summary(validation),
     }
 

@@ -26,6 +26,7 @@ def _colliding_round():
     round_item.index = 1
     round_item.response = MagicMock(model="mock")
     round_item.validation = validation
+    round_item.code = "mock code"
     return [round_item]
 
 
