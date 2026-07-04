@@ -23,6 +23,7 @@ from .planning_pass import (
 from .prompt_builder import build_segment_prompt
 from .limits import MIN_SHOW_END_S
 from .llm_client import chat, chat_prefix, LlmResponse, load_config as _load_provider_config
+from . import conversation
 from .conversation import limit_text as _limit_text
 
 
@@ -44,11 +45,14 @@ class ApprovalResult:
 
 
 class Session:
-    def __init__(self, project_root: Path, gate_profile: str = "full"):
+    def __init__(self, project_root: Path, gate_profile: str = "full", conversation_history_enabled: bool = True):
         self.project_root = Path(project_root).resolve()
         # "full"=自动台（审美门硬）；"safety"=交互导演模式（审美门降建议）。
         # 同一 Session 的 preflight/validate 全部走同一 profile。
         self.gate_profile = gate_profile if gate_profile in ("full", "safety") else "full"
+        # 全局开关：False 时 _chat_stage 完全不读写会话历史，行为等同重构前
+        # （矩阵 A/B 对照用；--no-conversation-history）。
+        self.conversation_history_enabled = conversation_history_enabled
         self.state = ProjectState.load(self.project_root)
         self._skip_continuity: bool = True  # 单段生成不检查连续性
         self._music_brief: dict | None = None
@@ -357,6 +361,7 @@ class Session:
                         user=plan_prompt,
                         temperature=0.2,
                         feedback=repair_feedback,
+                        use_history=False,  # 三段式规划的会话历史接入是 Phase 3，本阶段先不动
                         on_delta=on_delta,
                         on_reasoning_delta=on_reasoning_delta,
                         on_heartbeat=on_heartbeat,
@@ -415,6 +420,7 @@ class Session:
                             user=code_prompt,
                             temperature=0.3,
                             feedback=repair_feedback,
+                            use_history=False,  # Phase 3
                             on_delta=on_delta,
                             on_reasoning_delta=on_reasoning_delta,
                             on_heartbeat=on_heartbeat,
@@ -507,12 +513,20 @@ class Session:
                     "candidate_empty": True,
                 })
                 rounds.append(GenerationRound(index=index, response=response, validation=None, code=code))
-                raw_text = _limit_text(getattr(response, "text", "") or "", 2000) if response else ""
-                repair_feedback = (
-                    "上一轮没有提取到可用代码" +
-                    (f"，你实际输出的内容如下：\n```\n{raw_text}\n```\n" if raw_text.strip() else "(响应为空)。") +
-                    "请直接输出可插入函数体的完整 Python 代码片段，不要只写解释、不要空响应。"
-                )
+                # 会话历史生效时，这次的实际响应（哪怕是空/答非所问）已经是真实 assistant
+                # turn；只有关闭历史时才需要手动把原文再贴一遍。
+                if self.conversation_history_enabled:
+                    repair_feedback = (
+                        "上一轮没有提取到可用代码。请直接输出可插入函数体的完整 Python 代码片段，"
+                        "不要只写解释、不要空响应。"
+                    )
+                else:
+                    raw_text = _limit_text(getattr(response, "text", "") or "", 2000) if response else ""
+                    repair_feedback = (
+                        "上一轮没有提取到可用代码" +
+                        (f"，你实际输出的内容如下：\n```\n{raw_text}\n```\n" if raw_text.strip() else "(响应为空)。") +
+                        "请直接输出可插入函数体的完整 Python 代码片段，不要只写解释、不要空响应。"
+                    )
                 continue
             self._record_attempt_update({
                 "candidate_code_chars": len(code),
@@ -579,13 +593,22 @@ class Session:
                     "write_error": "replace_active_segment returned False",
                 })
                 rounds.append(GenerationRound(index=index, response=response, validation=None, code=code))
-                repair_feedback = (
-                    "代码写入失败——多半是段 marker 注释被误输出或破坏，导致找不到插入位置。"
-                    "你上一轮生成的代码如下，检查是否意外包含、复述或删改了 "
-                    "`PYFII_AGENT_SEGMENT_START`/`PYFII_AGENT_SEGMENT_END` 标记行；"
-                    "只输出函数体内容，不要包含 marker 本身：\n"
-                    "```python\n" + code[:6000] + "\n```"
-                )
+                if self.conversation_history_enabled:
+                    # 上一轮生成的代码已经是真实 assistant turn，不用再贴一遍
+                    repair_feedback = (
+                        "代码写入失败——多半是段 marker 注释被误输出或破坏，导致找不到插入位置。"
+                        "检查你上一轮输出是否意外包含、复述或删改了 "
+                        "`PYFII_AGENT_SEGMENT_START`/`PYFII_AGENT_SEGMENT_END` 标记行；"
+                        "只输出函数体内容，不要包含 marker 本身。"
+                    )
+                else:
+                    repair_feedback = (
+                        "代码写入失败——多半是段 marker 注释被误输出或破坏，导致找不到插入位置。"
+                        "你上一轮生成的代码如下，检查是否意外包含、复述或删改了 "
+                        "`PYFII_AGENT_SEGMENT_START`/`PYFII_AGENT_SEGMENT_END` 标记行；"
+                        "只输出函数体内容，不要包含 marker 本身：\n"
+                        "```python\n" + code[:6000] + "\n```"
+                    )
                 continue
             self._record_attempt_update({"write_ok": True})
 
@@ -604,7 +627,10 @@ class Session:
             raw_output = _limit_text(result.raw_stderr if hasattr(result, 'raw_stderr') else "", 800)
             repair_parts = [
                 f"上一轮自动验证反馈（第 {index} 轮）：\n{_compact_validation_feedback(result)}",
-                _previous_code_block(code),
+                # 会话历史生效时，真实的上一轮 assistant turn 已经带着代码，这里不用再手动
+                # 粘贴一遍——只有 conversation_history_enabled=False（A/B 对照/紧急回退）
+                # 时才需要这个字符串拼接式的替代方案。
+                _previous_code_block(code) if not self.conversation_history_enabled else "",
                 _targeted_validation_repair_feedback(result),
                 f"pyfii 原始输出：\n{raw_output}" if raw_output else "",
                 _conservative_safety_feedback(index, result),
@@ -1167,6 +1193,7 @@ def {function_name}(drones: list):
                 user=prompt,
                 temperature=0.2,
                 feedback=feedback,
+                use_history=False,  # Phase 3; system="" here is also a known bug fixed in Phase 3
                 on_delta=on_delta,
                 on_reasoning_delta=on_reasoning_delta,
                 on_heartbeat=on_heartbeat,
@@ -1193,12 +1220,15 @@ def {function_name}(drones: list):
         user: str,
         temperature: float,
         feedback: str,
+        use_history: bool = True,
         on_delta: Callable[[str], None] | None = None,
         on_reasoning_delta: Callable[[str], None] | None = None,
         on_heartbeat: Callable[[], None] | None = None,
     ) -> LlmResponse:
         if _is_mimo_provider(provider):
             user = _mimo_output_contract(stage) + "\n\n" + user
+        effective_history = use_history and self.conversation_history_enabled
+        history = conversation.to_messages(seg.conversation) if effective_history else None
         self._consume_llm_calls()
         try:
             response = chat(
@@ -1206,6 +1236,7 @@ def {function_name}(drones: list):
                 user=user,
                 provider=provider,
                 temperature=temperature,
+                history=history,
                 on_delta=on_delta,
                 on_reasoning_delta=on_reasoning_delta,
                 on_heartbeat=on_heartbeat,
@@ -1221,6 +1252,16 @@ def {function_name}(drones: list):
                 user_chars=len(user),
             )
             raise
+        if effective_history:
+            conversation.append_user(seg.conversation, user, stage=stage)
+            conversation.append_assistant(
+                seg.conversation, response.text or "", stage=stage,
+                meta={
+                    "model": response.model,
+                    "input_tokens": response.input_tokens,
+                    "output_tokens": response.output_tokens,
+                },
+            )
         self._record_generation_response(
             seg=seg,
             provider=provider,

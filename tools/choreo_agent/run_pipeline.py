@@ -67,6 +67,7 @@ def main(argv: list[str] | None = None) -> int:
         gate_profile="safety" if director_script is not None else "full",
         director_script=director_script,
         max_llm_calls_per_cycle=args.max_llm_calls_per_cycle,
+        conversation_history_enabled=not args.no_conversation_history,
     )
     print(json.dumps(result["summary"], ensure_ascii=False, indent=2))
     return 0 if result["summary"]["completed"] else 1
@@ -101,6 +102,7 @@ def run_full_flow(
     gate_profile: str = "full",
     director_script: dict | None = None,
     max_llm_calls_per_cycle: int | None = None,
+    conversation_history_enabled: bool = True,
 ) -> dict:
     project_root = Path(project_root).resolve()
     # 有导演剧本时评审由脚本驱动，不需要 TTY
@@ -120,7 +122,7 @@ def run_full_flow(
 
     records: list[dict] = []
     started_at = time.time()
-    session = Session(project_root, gate_profile=gate_profile)
+    session = Session(project_root, gate_profile=gate_profile, conversation_history_enabled=conversation_history_enabled)
     run_provider = provider or session.state.provider
     run_meta = _build_run_metadata(
         project_root=project_root,
@@ -162,6 +164,7 @@ def run_full_flow(
             use_planning_pass, parallel_candidates, review_segments,
             retry_sleep_s, max_api_exceptions_per_segment,
             gate_profile, director_script, max_llm_calls_per_cycle,
+            conversation_history_enabled,
         )
     finally:
         for sig, handler in prev_handlers.items():
@@ -186,9 +189,10 @@ def _run_full_flow_body(
     gate_profile: str = "full",
     director_script: dict | None = None,
     max_llm_calls_per_cycle: int | None = None,
+    conversation_history_enabled: bool = True,
 ) -> dict:
     while True:
-        session = Session(project_root, gate_profile=gate_profile)
+        session = Session(project_root, gate_profile=gate_profile, conversation_history_enabled=conversation_history_enabled)
         seg = session.state.current_segment
         if seg is None:
             break
@@ -1075,6 +1079,9 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
     parser.add_argument("--parallel-candidates", type=int, default=2, help="K parallel candidate generations per repair round (1=serial); hedges slow/dead streams and halves repair wall-time.")
     parser.add_argument("--retry-sleep-s", type=int, default=30)
     parser.add_argument("--max-api-exceptions-per-segment", type=int, default=5)
+    parser.add_argument("--no-conversation-history", action="store_true",
+                         help="Disable persistent multi-turn conversation history (matrix A/B against the "
+                              "string-reconstruction baseline; also an emergency rollback switch).")
     return parser.parse_args(argv)
 
 

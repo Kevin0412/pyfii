@@ -1,11 +1,10 @@
 """修复反馈必须带上一轮实际代码。
 
-chat() 是无状态单轮调用（system+user 各一条，不带历史，core/llm_client.py:96-104），
-模型看不到自己上一轮写了什么。validate() 失败后的 repair feedback 曾经只有诊断文字
-（distance/motion/... 数值 + 定向修复提示），完全不含上一轮生成/写入的代码——模型
-每次都在盲写整段，_targeted_validation_repair_feedback 里"保留现有结构只外推
-15-30cm"这类提示离开代码就是空中楼阁。这里同时守住 within-cycle（session.py 内部
-轮次）和 cross-cycle（run_pipeline.py 跨 cycle 续跑）两条路径。
+Phase 2a 之后，within-cycle 的"带代码"是靠真实会话历史（seg.conversation，通过
+chat(history=...) 送回模型）实现的，不再是手动把代码字符串粘回 repair_feedback——
+只有 conversation_history_enabled=False（矩阵 A/B 对照 / 应急回退）时才退回旧的
+字符串拼接方案。这里同时守住 within-cycle（session.py 内部轮次，两种模式都测）和
+cross-cycle（run_pipeline.py 跨 cycle 续跑，Phase 2b 之前仍是字符串方案）两条路径。
 """
 
 import shutil
@@ -47,14 +46,15 @@ def _failing_result() -> ValidationResult:
 
 
 def test_within_cycle_repair_feedback_carries_previous_code():
-    """session.py: 第 2 轮发出的 prompt 必须含第 1 轮实际生成的代码。"""
+    """session.py: 第 2 轮发给模型的 history 必须含第 1 轮实际生成的代码
+    （Phase 2a 起靠真实会话历史，不再靠字符串拼接进 repair_feedback）。"""
     project = _temp_project(TEMPLATE)
-    prompts: list[str] = []
+    histories: list = []
     call_count = {"n": 0}
 
-    def fake_chat(system, user, **_kwargs):
+    def fake_chat(system, user, history=None, **_kwargs):
         call_count["n"] += 1
-        prompts.append(user)
+        histories.append(history)
         if call_count["n"] == 1:
             return LlmResponse(text=f"```python\n{ROUND1_CODE}```", model="mock")
         return LlmResponse(text="```python\n# round2\nprev = [(d.x, d.y, d.z) for d in drones]\n```", model="mock")
@@ -68,10 +68,15 @@ def test_within_cycle_repair_feedback_carries_previous_code():
                 provider="mock", feedback="", max_attempts=2,
                 use_planning_pass=False,
             )
-        assert len(prompts) == 2, f"expected 2 chat calls, got {len(prompts)}"
-        assert ROUND1_MARKER in prompts[1], (
-            "round-2 prompt is missing round-1's actual generated code — "
-            "the model would be regenerating blind"
+        assert len(histories) == 2, f"expected 2 chat calls, got {len(histories)}"
+        assert histories[0] in (None, []), "round 1 has no prior turns yet"
+        assert histories[1], "round 2 must receive non-empty history"
+        assert any(
+            ROUND1_MARKER in str(turn.get("content", "")) and turn.get("role") == "assistant"
+            for turn in histories[1]
+        ), (
+            "round-2's history is missing round-1's actual generated code as an "
+            "assistant turn — the model would be regenerating blind"
         )
         # 顺带守住新增的 GenerationRound.code 字段（跨 cycle 续跑靠它拿代码）
         assert rounds[0].code.strip(), "GenerationRound.code was not populated"
@@ -81,45 +86,96 @@ def test_within_cycle_repair_feedback_carries_previous_code():
     print("PASSED: within-cycle repair feedback carries previous round's code")
 
 
-def test_empty_code_feedback_shows_raw_response_when_available():
-    """提取不到代码时：响应为空只说"为空"；响应非空(如纯 marker 行)要把原文带回去，
-    否则模型不知道自己刚才实际输出了什么、为什么没被当成代码。"""
+def test_conversation_history_disabled_falls_back_to_string_reconstruction():
+    """conversation_history_enabled=False（矩阵 A/B / 应急回退）时，行为等同 Phase 2a 之前：
+    没有 history，但 repair_feedback 字符串里手动带回代码。"""
+    project = _temp_project(TEMPLATE)
+    histories: list = []
+    prompts: list[str] = []
+    call_count = {"n": 0}
+
+    def fake_chat(system, user, history=None, **_kwargs):
+        call_count["n"] += 1
+        histories.append(history)
+        prompts.append(user)
+        if call_count["n"] == 1:
+            return LlmResponse(text=f"```python\n{ROUND1_CODE}```", model="mock")
+        return LlmResponse(text="```python\n# round2\nprev = [(d.x, d.y, d.z) for d in drones]\n```", model="mock")
+
+    try:
+        with patch("core.session.chat", side_effect=fake_chat), \
+             patch("core.session.preflight_check", return_value=PreflightResult()), \
+             patch.object(Session, "validate", return_value=_failing_result()):
+            session = Session(project, gate_profile="full", conversation_history_enabled=False)
+            session.generate_until_safe_with_llm(
+                provider="mock", feedback="", max_attempts=2,
+                use_planning_pass=False,
+            )
+        assert all(h in (None, []) for h in histories), "history disabled must never pass history to chat()"
+        assert ROUND1_MARKER in prompts[1], (
+            "with history disabled, the old string-reconstruction fallback must still "
+            "carry the code -- this is the emergency-rollback / matrix-A/B path"
+        )
+    finally:
+        shutil.rmtree(project.parent, ignore_errors=True)
+    print("PASSED: conversation_history_enabled=False falls back to string reconstruction")
+
+
+def test_empty_code_round1_response_reaches_round2_via_history_or_fallback_text():
+    """提取不到代码时，round 1 的实际响应必须以某种方式让 round 2 看到——历史开启时
+    靠真实 assistant turn，关闭时靠 repair_feedback 字符串里手动带回原文。"""
     MARKER_ONLY_TEXT = "```python\n# PYFII_AGENT_SEGMENT_START id=S01\n# PYFII_AGENT_SEGMENT_END\n```"
 
-    def _round2_prompt_for(round1_text: str) -> str:
+    def _round2_signal_for(round1_text: str, conversation_history_enabled: bool):
         project = _temp_project(TEMPLATE)
         prompts: list[str] = []
+        histories: list = []
         call_count = {"n": 0}
 
-        def fake_chat(system, user, **_kwargs):
+        def fake_chat(system, user, history=None, **_kwargs):
             call_count["n"] += 1
             prompts.append(user)
+            histories.append(history)
             if call_count["n"] == 1:
                 return LlmResponse(text=round1_text, model="mock")
             return LlmResponse(text="```python\nprev = [(d.x, d.y, d.z) for d in drones]\n```", model="mock")
 
         try:
             with patch("core.session.chat", side_effect=fake_chat):
-                session = Session(project, gate_profile="full")
+                session = Session(
+                    project, gate_profile="full",
+                    conversation_history_enabled=conversation_history_enabled,
+                )
                 rounds = session.generate_until_safe_with_llm(
                     provider="mock", feedback="", max_attempts=2,
                     use_planning_pass=False,
                 )
             assert rounds[0].validation is None and not rounds[0].code.strip()
             assert len(prompts) == 2
-            return prompts[1]
+            return prompts[1], histories[1]
         finally:
             shutil.rmtree(project.parent, ignore_errors=True)
 
-    empty_round2_prompt = _round2_prompt_for("")
+    # 历史关闭（矩阵 A/B / 回退）：字符串拼接方案原样保留
+    empty_round2_prompt, empty_round2_history = _round2_signal_for("", conversation_history_enabled=False)
     assert "为空" in empty_round2_prompt or "空响应" in empty_round2_prompt
+    assert empty_round2_history in (None, [])
 
-    marker_only_round2_prompt = _round2_prompt_for(MARKER_ONLY_TEXT)
+    marker_only_round2_prompt, _ = _round2_signal_for(MARKER_ONLY_TEXT, conversation_history_enabled=False)
     assert "PYFII_AGENT_SEGMENT_START" in marker_only_round2_prompt, (
-        "round-1's raw (unparsed) response text should be echoed back when it's "
-        "non-empty but yielded no extractable code"
+        "with history disabled, round-1's raw (unparsed) response text should be "
+        "echoed back in the reconstructed feedback string"
     )
-    print("PASSED: empty-code feedback differentiates truly-empty vs unparsed-content")
+
+    # 历史开启（默认）：round 1 的原始响应作为真实 assistant turn 出现在 round 2 的 history 里，
+    # 不需要（也不应该）在 repair_feedback 字符串里再贴一遍
+    _, marker_only_history = _round2_signal_for(MARKER_ONLY_TEXT, conversation_history_enabled=True)
+    assert marker_only_history, "round 2 must receive non-empty history when enabled"
+    assert any(
+        "PYFII_AGENT_SEGMENT_START" in str(turn.get("content", "")) and turn.get("role") == "assistant"
+        for turn in marker_only_history
+    ), "round-1's raw response must appear as a real assistant turn when history is enabled"
+    print("PASSED: empty-code round-1 response reaches round-2 via history or fallback text")
 
 
 def test_write_failure_feedback_carries_previous_code():
@@ -193,7 +249,8 @@ def test_cross_cycle_feedback_carries_previous_cycle_code():
 
 if __name__ == "__main__":
     test_within_cycle_repair_feedback_carries_previous_code()
-    test_empty_code_feedback_shows_raw_response_when_available()
+    test_conversation_history_disabled_falls_back_to_string_reconstruction()
+    test_empty_code_round1_response_reaches_round2_via_history_or_fallback_text()
     test_write_failure_feedback_carries_previous_code()
     test_cross_cycle_feedback_carries_previous_cycle_code()
     print("\nALL REPAIR-CODE-CARRYOVER TESTS PASSED")
