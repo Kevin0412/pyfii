@@ -939,6 +939,21 @@ def {function_name}(drones: list):
                     reason=f"exit_state 必须是 {self.state.drone_count} 个坐标，不允许锁定",
                 )
             seg.exit_state = validation.exit_state
+            # 锁定时留段体指纹：后续加载时检测人工改动锁定段（镜像 approve_and_lock）
+            try:
+                from .script_editor import segment_body_hashes
+
+                seg.locked_hash = segment_body_hashes(script_path, [seg.id]).get(seg.id, "")
+            except Exception:
+                seg.locked_hash = ""
+            # 锁定时留设计卡：下一段生成时前传，"呼应上一段"才有物理依据（镜像 approve_and_lock）
+            try:
+                from .composition import extract_design_card
+                from .script_editor import segment_body
+
+                seg.design_card = extract_design_card(segment_body(script_path, seg.id)) or {}
+            except Exception:
+                seg.design_card = {}
             seg.attempts.append({
                 "ai_approval": True,
                 "human_override": False,

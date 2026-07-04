@@ -71,6 +71,33 @@ def test_lock_stores_design_card():
     print("PASSED: lock stores design card")
 
 
+def test_fast_mode_lock_also_stores_design_card_and_locked_hash():
+    """review_and_lock_with_llm（main.py fast 模式的锁定路径）此前不写 design_card/locked_hash——
+    每次 fast 模式锁定都会悄悄丢掉跨段语义前传和手工改码指纹检测。"""
+    project = _project()
+    try:
+        script = project / "scripts" / "design.py"
+        session = Session(project, gate_profile="safety")
+        assert replace_active_segment(script, "S01", S01_WITH_CARD, [])
+
+        def fake_chat(system, user, **_kwargs):
+            return LlmResponse(text='{"decision":"lock","reason":"ok"}', model="mock")
+
+        with patch("core.session.chat", side_effect=fake_chat):
+            approval = session.review_and_lock_with_llm(provider="mock", validation=_passing_result())
+        assert approval.locked, approval.reason
+        seg = session.state.segments[0]
+        assert seg.design_card.get("motifs") == "斜线推进; 宽V", seg.design_card
+        assert seg.locked_hash, "locked_hash must be populated on the fast-mode lock path too"
+        # 持久化往返
+        reloaded = Session(project, gate_profile="safety")
+        assert reloaded.state.segments[0].design_card.get("motifs") == "斜线推进; 宽V"
+        assert reloaded.state.segments[0].locked_hash == seg.locked_hash
+    finally:
+        shutil.rmtree(project.parent, ignore_errors=True)
+    print("PASSED: fast-mode lock stores design card and locked_hash too")
+
+
 def test_next_segment_prompts_carry_prev_card():
     project = _project()
     captured: list[str] = []
@@ -109,5 +136,6 @@ def test_next_segment_prompts_carry_prev_card():
 if __name__ == "__main__":
     test_format_prev_design_card()
     test_lock_stores_design_card()
+    test_fast_mode_lock_also_stores_design_card_and_locked_hash()
     test_next_segment_prompts_carry_prev_card()
     print("\nALL CROSS SEGMENT TESTS PASSED")
