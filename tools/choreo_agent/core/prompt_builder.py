@@ -33,29 +33,6 @@ def _load_context_pack(name: str) -> str:
     return ""
 
 
-def _motion_math_summary() -> str:
-    """motion_math 模块的 agent-facing 摘要"""
-    return """## 运动数学（motion_math）
-```python
-flight_time_ms(distance_cm, speed_cm_s, accel_cm_s2) -> int  # 飞行时间(ms)
-dist3(p1, p2) -> float  # 3D距离(cm)
-motion_budget(prev, targets, v, a) -> list  # 每架机的预算
-```"""
-
-
-def _planning_tools_summary() -> str:
-    """planning_tools 模块的 agent-facing 摘要"""
-    return """## 规划工具（planning_tools）
-```python
-generate_safe_geo(prev, mode, n=7, min_spacing_cm=120) -> list
-# mode: expand/rotate/breathe/contract
-
-check_min_spacing(points) -> (min_d_cm, (i,j))
-predict_crossings(prev, targets) -> [(i, j, closest_cm), ...]
-budget_layer(prev, targets, cue, feel='balanced') -> MovePlan
-```"""
-
-
 def build_system_prompt(drone_count: int = 7) -> str:
     """组装完整 system prompt：全部 context packs + 动态工具摘要。"""
     parts = []
@@ -68,8 +45,6 @@ def build_system_prompt(drone_count: int = 7) -> str:
 本项目 `len(drones) == {int(drone_count)}`。所有几何表、start_positions、targets、prev/exit_state 都必须使用 {int(drone_count)} 个 `(x,y,z)`。
 如果示例或旧文档里写“7机/7个/7架”，按本项目数量 {int(drone_count)} 覆盖。
 """)
-    pass  # motion_math summary removed
-    pass  # planning_tools summary removed
     parts.append("""
 ## 输出格式
 只输出当前段的 Python 代码片段（4空格缩进），不输出 marker、import、或 function 定义。
