@@ -47,6 +47,7 @@ def build_planning_prompt(
     music_brief: Mapping[str, Any] | None = None,
     feedback: str = "",
     human_preferences: str = "",
+    prev_design_card: Mapping[str, Any] | None = None,
 ) -> str:
     """Prompt for first pass: output structured JSON plan."""
     prev_lines = []
@@ -55,6 +56,10 @@ def build_planning_prompt(
         for i, p in enumerate(prev_state):
             prev_lines.append(f"  d{i}: [{float(p[0]):.0f}, {float(p[1]):.0f}, {float(p[2]):.0f}]")
     prev_text = "\n".join(prev_lines) if prev_lines else "无"
+    from .prompt_builder import format_prev_design_card
+    _prev_card_text = format_prev_design_card(prev_design_card)
+    if _prev_card_text:
+        prev_text = prev_text + "\n" + _prev_card_text
     target_example = ", ".join(f"[x{i},y{i},z{i}]" for i in range(drone_count))
     composition_text = _format_planning_composition_plan(composition_plan, segment_id)
     keyframe_text = _format_keyframe_contract(segment_id, start_time, end_time)

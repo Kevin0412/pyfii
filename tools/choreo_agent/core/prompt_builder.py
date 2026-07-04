@@ -79,6 +79,25 @@ S02+ 从 `auto_init(drones)` 和 `prev = [(d.x, d.y, d.z) for d in drones]` 开�
     return "\n\n".join(parts)
 
 
+def format_prev_design_card(card: Mapping[str, Any] | None) -> str:
+    """上一段设计卡 → 承接提示块；空卡返回空串（prompt 字节不变）。
+
+    没有它，"呼应上一段/为下段铺垫"类指令物理上无从呼应——
+    此前只有出口坐标前传，母题/队形/灯光语义全部丢失。
+    """
+    if not card:
+        return ""
+    fields = [(k, str(card.get(k, "")).strip()) for k in ("role", "motifs", "formation", "lighting")]
+    fields = [(k, v) for k, v in fields if v]
+    if not fields:
+        return ""
+    inner = "；".join(f"#{k}: {v}" for k, v in fields)
+    return (
+        f"上一段设计卡（{inner}）——本段编舞要与之构成有意识的关系："
+        "承接/变奏其母题，或做明确对比；不要无视它随机换题。"
+    )
+
+
 def build_segment_prompt(
     segment_id: str,
     start_time: float,
@@ -89,6 +108,7 @@ def build_segment_prompt(
     drone_count: int = 7,
     composition_plan: Mapping[str, Any] | None = None,
     human_preferences: str = "",
+    prev_design_card: Mapping[str, Any] | None = None,
 ) -> tuple[str, str]:
     """Build system + user prompt for the current segment."""
 
@@ -116,6 +136,9 @@ def build_segment_prompt(
         prev_text = "\n".join(prev_lines)
     else:
         prev_text = "无上一段坐标（首段）"
+    prev_card_text = format_prev_design_card(prev_design_card)
+    if prev_card_text:
+        prev_text = prev_text + "\n" + prev_card_text
 
     segment_upper = segment_id.upper()
     composition_text = _format_composition_plan(composition_plan, segment_upper)

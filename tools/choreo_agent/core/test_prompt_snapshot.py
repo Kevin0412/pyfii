@@ -75,6 +75,19 @@ def build_all_prompts() -> dict[str, str]:
         "预算表占位（固定文本）", "S02", 13.0, 23.0, drone_count=7,
         composition_plan=plan, feedback="", human_preferences="",
     )
+
+    # P2：上一段设计卡前传（带卡面；空卡路径已由上面各面证明字节不变）
+    prev_card = {"role": "主题引入", "motifs": "斜线推进; 宽V", "lighting": "浅蓝白开场"}
+    _sys, user_s02_card = build_segment_prompt(
+        "S02", 13.0, 23.0, "第一次展开", PREV7, "", drone_count=7,
+        composition_plan=plan, human_preferences="", prev_design_card=prev_card,
+    )
+    prompts["segment_S02_user_with_prev_card"] = user_s02_card
+    prompts["planning_S02_user_with_prev_card"] = build_planning_prompt(
+        "S02", 13.0, 23.0, "第一次展开", PREV7, drone_count=7,
+        composition_plan=plan, music_brief=None,
+        feedback="", human_preferences="", prev_design_card=prev_card,
+    )
     return prompts
 
 

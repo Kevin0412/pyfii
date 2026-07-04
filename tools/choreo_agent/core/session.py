@@ -138,6 +138,7 @@ class Session:
             drone_count=self.state.drone_count,
             composition_plan=self.state.composition_plan,
             human_preferences=self.human_preferences,
+            prev_design_card=self._previous_design_card(),
         )
         return self._chat_stage(
             seg=seg,
@@ -183,6 +184,7 @@ class Session:
             drone_count=self.state.drone_count,
             composition_plan=self.state.composition_plan,
             human_preferences=self.human_preferences,
+            prev_design_card=self._previous_design_card(),
         )
         temps = [
             max(0.05, min(1.0, base_temperature + 0.2 * i)) for i in range(k)
@@ -343,6 +345,7 @@ class Session:
                         music_brief=self.music_brief,
                         feedback=repair_feedback,
                         human_preferences=self.human_preferences,
+                        prev_design_card=self._previous_design_card(),
                     )
                     plan_resp = self._chat_stage(
                         seg=seg,
@@ -836,6 +839,14 @@ def {function_name}(drones: list):
                 seg.locked_hash = segment_body_hashes(script_path, [seg.id]).get(seg.id, "")
             except Exception:
                 seg.locked_hash = ""
+            # 锁定时留设计卡：下一段生成时前传，"呼应上一段"才有物理依据
+            try:
+                from .composition import extract_design_card
+                from .script_editor import segment_body
+
+                seg.design_card = extract_design_card(segment_body(script_path, seg.id)) or {}
+            except Exception:
+                seg.design_card = {}
             seg.attempts.append({
                 "human_approval": True,
                 "human_override": human_override,
@@ -1263,6 +1274,13 @@ def {function_name}(drones: list):
             "preflight_ok": bool(result),
             "preflight_errors": list(getattr(result, "errors", []))[:20],
         })
+
+    def _previous_design_card(self) -> dict:
+        """上一锁定段的设计卡（母题/队形/灯光），供当前段承接。"""
+        index = self.state.current_segment_index - 1
+        if 0 <= index < len(self.state.segments):
+            return dict(self.state.segments[index].design_card or {})
+        return {}
 
     def _previous_exit_state(self) -> list:
         index = self.state.current_segment_index - 1

@@ -160,6 +160,24 @@ def segment_body_hashes(script_path: Path, ids: list[str] | None = None) -> dict
     return hashes
 
 
+def segment_body(script_path: Path, segment_id: str) -> str:
+    """返回指定段 marker 之间的代码文本（找不到返回空串）。"""
+    lines = script_path.read_text(encoding="utf-8").splitlines()
+    current = None
+    buf: list[str] = []
+    for line in lines:
+        if line.strip().startswith(MARKER_START):
+            current = _extract(line, "id")
+            buf = []
+        elif line.strip().startswith(MARKER_END) and current:
+            if current == segment_id:
+                return "\n".join(buf)
+            current = None
+        elif current:
+            buf.append(line)
+    return ""
+
+
 def _hash_locked(lines: list[str], locked_ids: list[str]) -> dict[str, str]:
     hashes = {}
     in_segment = None
