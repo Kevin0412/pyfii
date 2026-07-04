@@ -16,12 +16,15 @@ Usage:
       --provider deepseek --cases 1,2,3,4,5,6
 
 提速两招：
-  # 1) 舞台复用：S01 生成+锁定只做一次（各 case 从快照拷贝，省 ~40% 调用）
-  ... --make-stage s01_stage_flash
-  ... --cases 1,2,3 --stage s01_stage_flash
+  # 1) 舞台复用：S01 生成+锁定只做一次（各 case 从快照拷贝，省 ~40% 调用）。
+  #    默认用 canonical 共享舞台 s01_stage_shared_v1（全 provider 统一入口几何，
+  #    跨模型对比无入口噪声）；--stage none 禁用，--stage <名字> 换专用舞台。
   # 2) case 级并行：各 case 项目独立，分进程同时跑即可
-  ... --cases 4 --stage s01_stage_flash --out reports/c4.json &
-  ... --cases 6 --stage s01_stage_flash --out reports/c6.json &
+  ... --cases 4 --out reports/c4.json &
+  ... --cases 6 --out reports/c6.json &
+
+舞台命名约定：按角色命名（s01_stage_shared_v1 / 专用实验名）；创建者、生成时间、
+出口坐标与选择依据写进舞台目录内的 stage_meta.json，不编码进目录名。
 """
 
 from __future__ import annotations
@@ -61,6 +64,7 @@ from core.trajectory_assert import (  # noqa: E402
 )
 
 REPORT_DIR = TOOL_ROOT / "director_case_reports"
+DEFAULT_STAGE = "s01_stage_shared_v1"
 
 POSITION_TARGET = (140.0, 140.0, 180.0)
 POSITION_DIRECTIVE = (
@@ -785,7 +789,7 @@ def _make_stage(provider: str, max_attempts: int, name: str) -> int:
 
 
 def _resolve_stage(value: str | None) -> Path | None:
-    if not value:
+    if not value or str(value).lower() == "none":
         return None
     path = Path(value)
     if not path.is_absolute():
@@ -807,7 +811,8 @@ def main(argv: list[str] | None = None) -> int:
                         help="断言失败后的导演修正轮数（实测偏差回灌）")
     parser.add_argument("--max-llm-calls", type=int, default=MAX_LLM_CALLS_PER_PHASE,
                         help="每个生成阶段的 LLM 调用次数硬预算（弱模型快速失败）")
-    parser.add_argument("--stage", help="S01 已锁定的舞台快照项目（名字或路径），跳过重复的 S01 生成")
+    parser.add_argument("--stage", default=DEFAULT_STAGE,
+                        help="S01 已锁定的舞台快照（名字/路径；默认 canonical 共享舞台；'none' 禁用）")
     parser.add_argument("--make-stage", help="只生成并锁定 S01，产出可复用舞台快照后退出")
     parser.add_argument("--out")
     args = parser.parse_args(argv)
@@ -816,7 +821,14 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.make_stage:
         return _make_stage(args.provider, args.max_attempts, args.make_stage)
-    stage = _resolve_stage(args.stage)
+    try:
+        stage = _resolve_stage(args.stage)
+    except SystemExit:
+        if args.stage != DEFAULT_STAGE:
+            raise
+        # 新环境没有共享舞台：回退为每 case 自生成 S01，而不是拒绝启动
+        print(f"[stage] 默认共享舞台 {DEFAULT_STAGE} 不存在，回退为每 case 自生成 S01")
+        stage = None
 
     specs = _case_specs()
     if args.cases.strip().lower() == "all":
