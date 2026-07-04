@@ -27,7 +27,7 @@
 - Context 文件自动更新 (design_memory.md, handoff.md, segment_cards)
 - 退化检测集成到验证流水线 ✅ 已有基础车道/刚性圆检测；仍需跨段重复检测
 - planning prompt 里 S04/S06 的字面 keyframe 合同（planning_pass `_format_keyframe_contract`、coding prompt 规则行）尚未 requirements 数据化——门已数据化，prompt 文案是残余，自定义 plan 放宽时会出现"prompt 更严于门"的无害不一致
-- function.py 分层削减实验（后续轨道）：同一段落说明 helper vs 裸模式对比安全轮次；geo_* 审美模板已在 auto 模式禁用/interactive 降建议 → 母题执行器 → safe_move/best_assign 安全原语最后
+- `_retry_compressed_quality_window`（session.py:630-678）覆写当前段窗口时不级联更新下一段的名义窗口，导致 `state.json` 在"已锁定段被动态平移+下一段尚未生成"的间隙里出现表面重叠（详见 0.9）——behavior 变更需过双模型矩阵，非顺手可改，留作专项
 
 ---
 
@@ -181,6 +181,62 @@ qwen 本地**不能并发**、**不作为调参对象**（能力剖面差异大�
 | 灯光执行器 | light_wave、fade/breathe/flash_group | TurnOnAll+delay 循环可裸写 | 第一批（case 21/22 已在测这块的裸能力） |
 
 首轮数据待 P2 确认对腾出 API 带宽后跑（qwen 免费位也可用于 bare 模式的高样本量）。
+
+**状态（2026-07-04 收尾，产品决定不做）**：投入产出比不支持在当前阶段继续——系统已经
+"能用"，削减 function.py 依赖对产品当前目标（人类逐段导演、效率、避免过拟合）的边际收益
+不足以再开一轮矩阵开销。协议与预判表保留作为现成起点，不排期执行首轮数据采集。
+
+## 0.9 P4 泛化矩阵结论（2026-07-04，机数×主题）
+
+0.7/0.7b/0.7c 的所有裁决都在同一首 `cannon_in_D`（7 机）上跑。P4 补三个新格子——机数
+7→9（同主题）、换新主题（春节序曲"cjxq"，7/9 机各一次）——跟 0.7b 的 cannon×7 基线
+（flash 2/2 完成 @ 14+14 轮）对照：
+
+| 格子 | completed | converged | cycles | rounds | 最难段 | 失败类别 |
+|---|---|---|---|---|---|---|
+| cannon×7（基线，0.7b） | ✅ 2/2 | — | — | 14+14 | — | — |
+| cannon×9 | ✅ | ✅ | 8 | 15 | S03: 5 轮/2 cycle | empty_or_unwritten×1 |
+| cjxq×7 | ❌ | ❌ | 7 | 18（卡死） | S04: 14 轮，触发 1 次 scheme reset | window_fill×1 |
+| cjxq×9 | ✅ | ❌ | 8 | 19 | S01: 9 轮/2 cycle（超 round_limit=5） | runtime_or_read×1 |
+
+结论：
+- **机数 7→9 在熟悉主题上不掉分**：cannon×9 的 15 轮与基线 14+14 轮同带，完成干净、零
+  reset——纯机数缩放不是本系统的脆弱维度。
+- **换主题才是真正的泛化考验**：同一个 flash、同一套门/prompt，cjxq 两次跑一次没完成、
+  一次完成但有段严重超轮——这是 P4 才第一次量出来的"新主题税"。这也是本阶段最初"怀疑
+  对 deepseek-v4-flash 过拟合"疑虑的反面证据：如果之前的高服从率只是记住了 cannon 的
+  数据形状，换主题后就该掉分——而它确实掉了，说明此前的表现不是纯过拟合假象，但也确认
+  了换主题的真实代价不为零。
+- **两次"新主题税"是两种不同机制**：
+  - cjxq×7 的 S04（"旋转舞蹈"：orbit-rotate-phrase + density-expand-contract +
+    beat-aligned-light-wave 三母题 + min_keyframes:3 + avoid 直线移动）在 6 个不同轮次
+    反复产出几乎相同的 `dense_min=57.9cm dist=0 act=0` 但仍不通过的候选——安全数值早已
+    干净，指向持续性 window_fill 门失败（根因见下）。这是 case 6/14 那类"组合上限"在真实
+    全流程音乐跑里的首次复现，交叉印证同一根因、不同场景。
+  - cjxq×9 的 S01（需求本不复杂的开场段）反而是纯装配难度：9 轮里出现过 58-警告碰撞
+    （15.5cm）、一次 10951-警告的灾难性碰撞（0.0cm）、两次 `run_ok=False` 崩溃，才在第
+    18/19 轮收到 103.1cm 通过——9 机在新几何配置下的排列空间比 cannon 既有几何更挤，是
+    纯粹的装配难度，不是风格叠加问题。
+- **黑洞熔断在真实泛化压力下确认有效**：cjxq×7 S04 的第 2 个 cycle 命中 scheme reset
+  （window_fill 类连续同类失败判定），行为符合设计；即便如此 S04 仍未在
+  `max_cycles_per_segment=4` 内收敛——说明该段难度超出一次 reset 能覆盖的范围（真实高难度，
+  非熔断逻辑失灵）。
+
+**技术发现（诊断明确，未修，记入待做）**：调查 cjxq×7 的 S03/S04 窗口在 `state.json` 里
+表面重叠（S03 落定 21.0–30.0，S04 仍显示原始 28.0–37.0）时，最初怀疑是
+`composition_planner.validate_music_plan` 的连续性校验被绕过——**假设已排除**：
+`music_plan.json` 原始规划本是干净衔接的（S03 19.0–28.0 → S04 28.0–37.0），连续性校验
+从未被绕过。真正机制是 `session.py:630-678` 的 `_retry_compressed_quality_window`：当
+`auto_init` 启动序列压缩实际运动时间线、导致段落在"名义窗口"里检测不到运动或启动过晚时，
+该函数从"上一锁定段实测运动结束时间 +1s"起搜索一个等长新窗口，找到能通过验证的就**原地
+覆写该段的 `seg.start_time/end_time` 并持久化**——但只覆写当前段，不级联更新下一段（此时
+通常还未生成）的名义窗口。所以 `state.json` 里未锁定段的 `start_time/end_time` 只是名义
+占位，真正契约是"接上一锁定段的实测结束时间"，由 `_previous_locked_motion_end_s()` 动态
+计算。cjxq×7 的 S04 磨 14 轮，很可能相当一部分轮次就是在隐式重新发现这个偏移，直到该机制
+帮它找到匹配窗口，或者一直没找到就只能靠 scheme reset 换几何家族硬啃。给
+`_retry_compressed_quality_window` 加级联（覆写当前段窗口时，若下一段尚未生成/未锁定，
+同步平移其名义窗口）能让 `state.json` 内部零重叠，但这改变了下一段实际被验证的时间窗，
+属于门相关行为变更——按护栏必须过双模型矩阵，不是收尾阶段可以顺手改的"纯重构"，留作专项。
 
 # 1. 项目定位
 

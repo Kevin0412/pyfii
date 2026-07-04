@@ -120,10 +120,12 @@ python tools/choreo_agent/run_pipeline.py \
 - 是否动态追加 `S07/S08`
 - 是否生成视频
 - 失败类别
+- `scheme_resets`（P6 黑洞熔断：同段连续 cycle 同类失败触发的方案重置次数）
 
 ## 失败分类
 
 - `api_network`
+- `exception`（非网络类异常兜底）
 - `empty_or_unwritten`
 - `compile`
 - `code_quality`
@@ -131,11 +133,17 @@ python tools/choreo_agent/run_pipeline.py \
 - `action_incomplete`
 - `collision`
 - `hover_or_low_activity`
+- `window_fill`（Tier-1 窗口填充门；P6 黑洞熔断按此类连续判定重置）
 - `motion_quality`
+- `composition`（Tier-2 章法门）
 - `degradation`
+- `unknown_validation`（validator 判负但未归入以上任何一类的兜底）
 - `lock_failed`
 - `docstring_state_mismatch`
 - `land_protocol`
+
+分类口径见 `run_pipeline.py` 的 `_failure_category_from_validation` / `_failure_category_from_exception`——
+新增 Tier-1/Tier-2 门时同步补这里，避免报告里出现文档未收录的类别。
 
 ## 稳定性判断
 
