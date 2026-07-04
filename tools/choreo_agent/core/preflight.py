@@ -4,6 +4,8 @@ import ast
 import math
 import re
 
+from .limits import COLLISION_FLOOR_CM
+
 
 # Agent-side tools that must NOT appear in design.py
 FORBIDDEN_TOOLS = {
@@ -305,7 +307,7 @@ def _check_computed_geometry(code, r, drone_count):
         wrapped_nodes.add(id(arg))
         if isinstance(arg, ast.Name):
             wrapped_names.add(arg.id)
-        min_xy_cm = 51.0
+        min_xy_cm = COLLISION_FLOOR_CM
         for keyword in node.keywords:
             if keyword.arg == "min_xy_cm":
                 value = _literal_number(keyword.value)
@@ -352,7 +354,7 @@ def _check_computed_geometry(code, r, drone_count):
         if isinstance(arg, ast.Name):
             wrapped_names.add(arg.id)
         lag = 1.0
-        min_xy_cm = 51.0
+        min_xy_cm = COLLISION_FLOOR_CM
         if len(node.args) >= 4:
             value = _literal_number(node.args[3])
             if value is not None:
@@ -457,7 +459,7 @@ def _check_follow_chain_waypoints(code, r, drone_count):
 
         arg = node.args[1]
         lag = 1.0
-        min_xy_cm = 51.0
+        min_xy_cm = COLLISION_FLOOR_CM
         if len(node.args) >= 4:
             value = _literal_number(node.args[3])
             if value is not None:
@@ -515,7 +517,7 @@ def _check_follow_chain_waypoints(code, r, drone_count):
 
 
 # 起飞间距硬下限与全场一致：51cm 以下 pyfii core 报碰撞。构图密度是设计自由。
-START_POSITION_MIN_XY_CM = 51.0
+START_POSITION_MIN_XY_CM = COLLISION_FLOOR_CM
 
 
 def _check_start_positions(code, r, segment_id, drone_count):
@@ -671,7 +673,7 @@ def _check_custom_points_contract(code, r):
             if keyword.arg != "min_xy_cm":
                 continue
             value = _literal_number(keyword.value)
-            if value is not None and value < 51.0:
+            if value is not None and value < COLLISION_FLOOR_CM:
                 r.add(
                     f"custom_points min_xy_cm={value:g} — 不能低于 51（pyfii core 碰撞硬下限）"
                 )
@@ -692,9 +694,9 @@ def _check_static_custom_points(code, r, drone_count):
     env = _build_geometry_env(tree, drone_count)
 
     checked_calls = {
-        "custom_points": {"arg": 0, "min_xy_cm": 51.0, "n_arg": 1},
-        "safe_move": {"arg": 2, "min_xy_cm": 51.0, "n_arg": None},
-        "call_response_safe": {"arg": 2, "min_xy_cm": 51.0, "n_arg": None},
+        "custom_points": {"arg": 0, "min_xy_cm": COLLISION_FLOOR_CM, "n_arg": 1},
+        "safe_move": {"arg": 2, "min_xy_cm": COLLISION_FLOOR_CM, "n_arg": None},
+        "call_response_safe": {"arg": 2, "min_xy_cm": COLLISION_FLOOR_CM, "n_arg": None},
     }
 
     for node in ast.walk(tree):

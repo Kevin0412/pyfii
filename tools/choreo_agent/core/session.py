@@ -21,6 +21,7 @@ from .planning_pass import (
     plan_to_budget_table,
 )
 from .prompt_builder import build_segment_prompt
+from .limits import MIN_SHOW_END_S
 from .llm_client import chat, chat_prefix, LlmResponse, load_config as _load_provider_config
 
 
@@ -718,7 +719,7 @@ class Session:
             return False
 
         last_motion_end = self._previous_locked_motion_end_s()
-        if last_motion_end is not None and last_motion_end > 60.0:
+        if last_motion_end is not None and last_motion_end > MIN_SHOW_END_S:
             return False
 
         segment_id = _next_extra_segment_id(self.state.segments)

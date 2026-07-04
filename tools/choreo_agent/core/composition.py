@@ -12,6 +12,8 @@ import re
 from collections.abc import Mapping, Sequence
 from typing import Any
 
+from .limits import FIELD_XY_MAX, FIELD_XY_MIN, Z_MAX_CM, Z_MIN_CM
+
 
 CARD_FIELDS = ("role", "motifs", "beat", "formation", "lighting")
 STAGGER_WORDS = ("卡农", "错峰", "分组", "波次", "涟漪", "接力", "跟随", "canon", "stagger", "wave", "ripple", "relay")
@@ -465,7 +467,7 @@ def _count_coordinate_literals(code: str) -> int:
         if any(value is None for value in values):
             continue
         x, y, z = values
-        if 0 <= x <= 560 and 0 <= y <= 560 and 80 <= z <= 250:
+        if (FIELD_XY_MIN <= x <= FIELD_XY_MAX and FIELD_XY_MIN <= y <= FIELD_XY_MAX and Z_MIN_CM <= z <= Z_MAX_CM):
             count += 1
     return count
 

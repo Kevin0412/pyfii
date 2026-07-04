@@ -3,6 +3,18 @@
 import json
 import re
 from collections.abc import Mapping, Sequence
+
+from .limits import (
+    COLLISION_FLOOR_CM,
+    FIELD_XY_MAX,
+    FIELD_XY_MIN,
+    MAX_ACCEL_CM_S2,
+    MAX_SPEED_CM_S,
+    MIN_ACCEL_CM_S2,
+    MIN_SPEED_CM_S,
+    Z_MAX_CM,
+    Z_MIN_CM,
+)
 from typing import Any
 
 
@@ -17,7 +29,7 @@ def build_planning_system_prompt(drone_count: int = 7) -> str:
     return f"""你是无人机编队的段落规划器：把段落意图转成结构化 JSON keyframe 计划。
 
 可完成性: 单个 keyframe 的 3D 路径通常控制在约 120-380cm；不要规划 500cm 级跨场短飞。
-约束: targets总数={drone_count}, shape=[{target_example}], XY 0-560cm, Z 80-250cm, target 点表 XY 间距硬下限 51cm（pyfii core 碰撞线，检查器精确验证）；密度是构图自由，不要为了凑大间距放弃造型。速度20-200, 加速度50-400, 推荐速度150-200、加速度260-400；light_ticks 用 2-5 的运动短提示，长灯光/呼吸/渐变应在编码阶段用 light_wave/breathe_group/fade_group 单独铺时，不要规划成每机 move2 循环里的长 ticks。
+约束: targets总数={drone_count}, shape=[{target_example}], XY {int(FIELD_XY_MIN)}-{int(FIELD_XY_MAX)}cm, Z {int(Z_MIN_CM)}-{int(Z_MAX_CM)}cm, target 点表 XY 间距硬下限 {int(COLLISION_FLOOR_CM)}cm（pyfii core 碰撞线，检查器精确验证）；密度是构图自由，不要为了凑大间距放弃造型。速度{int(MIN_SPEED_CM_S)}-{int(MAX_SPEED_CM_S)}, 加速度{int(MIN_ACCEL_CM_S2)}-{int(MAX_ACCEL_CM_S2)}, 推荐速度150-200、加速度260-400；light_ticks 用 2-5 的运动短提示，长灯光/呼吸/渐变应在编码阶段用 light_wave/breathe_group/fade_group 单独铺时，不要规划成每机 move2 循环里的长 ticks。
 章法约束: JSON 里的 feel/targets/light_color 必须服务全局章法；不要随机换题，不要连续重复同一种退化队形。
 assign 字段（可选，默认 best）: "best"收束 / "far"大交换 / "rotate"漩涡(可加 "rotate_steps") / "mirror"对穿(检查器会提醒错峰) / "swap"半场互换 / "keep"身份保持——转场即编舞，按意图声明，检查器按声明的映射验算。
 {coordinate_seeds}
@@ -247,9 +259,9 @@ def parse_plan_json(text: str) -> dict | None:
         return None
 
 
-# 安全阈值：51cm 是 pyfii core 碰撞警告硬下限，点表与转场路径同一条线。
-PLAN_MIN_XY_FLOOR_CM = 51.0
-PLAN_PATH_SPACING_FLOOR_CM = 51.0
+# 安全阈值：pyfii core 碰撞警告硬下限（单一来源 core/limits.py），点表与转场路径同一条线。
+PLAN_MIN_XY_FLOOR_CM = COLLISION_FLOOR_CM
+PLAN_PATH_SPACING_FLOOR_CM = COLLISION_FLOOR_CM
 
 
 def evaluate_plan_safety(

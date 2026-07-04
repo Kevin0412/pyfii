@@ -13,8 +13,10 @@ from dataclasses import dataclass, field
 
 try:
     from .composition import evaluate_composition
+    from .limits import COLLISION_FLOOR_CM
 except ImportError:
     from composition import evaluate_composition
+    from limits import COLLISION_FLOOR_CM
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 SRC_ROOT = REPO_ROOT / "src"
@@ -121,7 +123,7 @@ class ValidationResult:
             and self.distance_warnings == 0
             and self.action_warnings == 0
             and self.dense_min_distance_cm is not None
-            and self.dense_min_distance_cm > 51
+            and self.dense_min_distance_cm > COLLISION_FLOOR_CM
             and not self.collision_intervals
             and self.code_quality_ok
             and (
@@ -169,7 +171,7 @@ class ValidationResult:
             and self.distance_warnings == 0
             and self.action_warnings == 0
             and self.dense_min_distance_cm is not None
-            and self.dense_min_distance_cm > 51
+            and self.dense_min_distance_cm > COLLISION_FLOOR_CM
             and not self.collision_intervals
         )
 
@@ -190,7 +192,7 @@ class ValidationResult:
         """把验证失败转成可直接喂给 LLM 的修复反馈。"""
         hard_gate = (
             "硬门要求：compile=True, run=True, read_fii=True, distance warnings=0, "
-            "action warnings=0, minD > 51cm"
+            f"action warnings=0, minD > {int(COLLISION_FLOOR_CM)}cm"
         )
         if self.continuity_required:
             hard_gate += (
@@ -219,9 +221,9 @@ class ValidationResult:
         lines.append(f"minD: {self.min_distance_cm}cm")
         lines.append(f"dense minD: {self.dense_min_distance_cm}cm")
         lines.append(f"XY span: {self.xy_span}")
-        if self.dense_min_distance_cm is not None and self.dense_min_distance_cm <= 51:
+        if self.dense_min_distance_cm is not None and self.dense_min_distance_cm <= COLLISION_FLOOR_CM:
             lines.append(
-                f"密采样距离硬门失败：dense minD 必须 >51cm，当前 {self.dense_min_distance_cm:.1f}cm。"
+                f"密采样距离硬门失败：dense minD 必须 >{int(COLLISION_FLOOR_CM)}cm，当前 {self.dense_min_distance_cm:.1f}cm。"
                 "这通常是擦边路径或目标点过近；请拉开对应轨迹/点表，避免贴线。"
             )
         if self.collision_intervals:
@@ -1286,7 +1288,7 @@ def _add_dense_distance_report(result: ValidationResult, output_dir: Path) -> No
 
         if frame_min < dense_min:
             dense_min = frame_min
-        if frame_min < 51:
+        if frame_min < COLLISION_FLOOR_CM:
             rows.append((frame / fps, frame_min, frame_pair))
 
     if dense_min != float("inf"):

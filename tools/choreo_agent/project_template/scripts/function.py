@@ -656,7 +656,7 @@ def verify_timed_clearance(starts, targets, delays=None, flying_ms=2800):
     ripple_move/分组时序后调用，拿到 go/no-go，省一轮验证器。targets 是最终每机目标
     （drone i → targets[i]）。
 
-    返回 **3 元组** `(ok, min_cm, pair)`：ok=min_cm>=51(bool)，min_cm=全程最小 XY 间距(cm)，
+    返回 **3 元组** `(ok, min_cm, pair)`：ok=min_cm>51(bool，与验证门同为严格大于)，min_cm=全程最小 XY 间距(cm)，
     pair=最近的一对 (i,j)（无则 None）。直接解包用：
         `ok, min_cm, pair = verify_timed_clearance(prev, targets, delays=delays, flying_ms=2800)`"""
     n = len(starts)
@@ -665,7 +665,7 @@ def verify_timed_clearance(starts, targets, delays=None, flying_ms=2800):
     targets_xyz = [_xyz(_target3(t)) for t in targets]
     delays_ms, flying_list = _norm_schedule(n, delays, flying_ms)
     md, _t, pair = _timed_min_xy(starts_xyz, targets_xyz, delays_ms, flying_list, fps=60)
-    return (md >= 51.0, round(md, 1), pair)
+    return (md > 51.0, round(md, 1), pair)
 
 
 # ---------- 意图分配家族：转场即编舞，按叙事意图选映射 ----------

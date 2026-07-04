@@ -16,6 +16,10 @@ or state coupling. Importing this module must not import pyfii or function.py.
 
 from __future__ import annotations
 
+from .limits import COLLISION_FLOOR_CM
+
+_FLOOR = int(COLLISION_FLOOR_CM)
+
 VALID_CATEGORIES = {"motion", "lighting", "timing", "grouping", "composition"}
 # Section role-classes (NOT segment IDs — the mapping stays soft, see
 # role_class_for_segment). A skill's role_fit says where it belongs musically.
@@ -60,7 +64,7 @@ PRIMITIVE_SKILLS = [
         "when_not": "无交叉的就近承接（直接 best_assign + per-drone loop 更轻）；纯灯光不移动。",
         "key_params": "prev=当前队形, geo=custom_points 目标点表, flying_ms 飞行时长；mode='wave'|'relay'；step_ms 错峰步长；gap_ms relay 两组间隔；gradient_to= 飞行变色。返回飞完的新 prev。",
         "safety": "内部 safe_assign 在真实错峰下 60fps 硬校验并用同一份 delays 执行，保证不被参数错配破坏；wave 装不下自动降级 relay；彻底清不开（同 XY 巷对穿等）会抛 ValueError 让你铺开点表/改 route-around——绝不静默返回相撞排列。",
-        "validation_risks": "几何本身太密（相邻<51cm）或同 XY 巷大量对穿时会抛错（这是正确行为，需改几何）；Z 不参与避撞（间距门是 XY）。",
+        "validation_risks": f"几何本身太密（相邻<{_FLOOR}cm）或同 XY 巷大量对穿时会抛错（这是正确行为，需改几何）；Z 不参与避撞（间距门是 XY）。",
         "example": "geo = custom_points([...展开/对称目标阵...], n=9)\nprev = safe_move(drones, prev, geo, 2800, mode='wave', step_ms=160, colors=palette, gradient_to=cool)\n# 对穿/大交叉：prev = safe_move(drones, prev, geo, 2600, mode='relay', gap_ms=300, colors=palette)",
         "combines_with": ["handwritten-geometry", "wave-delays", "safe-assign", "group-call-response"],
         "music_fit": "高潮大开大合、展开/回卷、戏剧性交叉对穿。",
@@ -87,9 +91,9 @@ PRIMITIVE_SKILLS = [
         "role_fit": ["development", "transition", "expand"],
         "purpose": "底层链式跟随/蛇形：头机沿 waypoints 逐点推进，后机依次延迟 lag_hops 跳走同一路径。",
         "when_to_use": "蛇形游走、领舞带队、长线条流动；想要单一清晰路径而非整体平移。",
-        "when_not": "LLM 临时手写 9-12 个密集 waypoints 时（容易把链上间距写到 51cm 以下）；这种情况优先用 chain_follow_safe。",
+        "when_not": f"LLM 临时手写 9-12 个密集 waypoints 时（容易把链上间距写到 {_FLOOR}cm 以下）；这种情况优先用 chain_follow_safe。",
         "key_params": "waypoints 路径点（≥(机数-1)*lag_hops+1 个）；hop_ms 每跳时长；lag_hops 跟随间隔；进链顺序自动按离 waypoints[0] 远近。",
-        "safety": "函数自校验：相距 lag 的波点对 XY 必须 ≥min_xy_cm(默认51)，否则抛错；preflight 会对静态 waypoints 提前报数。每机总耗时=len(waypoints)*hop_ms，天然对齐。",
+        "safety": f"函数自校验：相距 lag 的波点对 XY 必须 ≥min_xy_cm(默认{_FLOOR})，否则抛错；preflight 会对静态 waypoints 提前报数。每机总耗时=len(waypoints)*hop_ms，天然对齐。",
         "validation_risks": "波点不足或链上间距不足直接运行期抛错；waypoints 过密触发碰撞门。除非路径点很明确，否则使用 chain_follow_safe。",
         "example": "wps = [(80,280,150), (150,280,160), (220,280,170), (290,280,160), (360,280,150), (430,280,150), (500,280,150), (560,280,150), (560,350,150), (560,420,150)]\nprev = follow_chain(drones, wps, 700, lag_hops=1, colors=palette)",
         "combines_with": ["chain-follow-safe", "handwritten-geometry"],
@@ -104,7 +108,7 @@ PRIMITIVE_SKILLS = [
         "when_to_use": "蛇形/领舞/卡农式流动，但不想手写长 waypoint 表；尤其适合 cannon 这类连续旋律段。",
         "when_not": "需要精确卡到每个中间点的手工轨迹；或者 control path 太短，容不下机队链条。",
         "key_params": "control_points 起点→中继→终点；hop_ms 每跳时长；lag_hops 跟随间隔；spacing_cm 推荐60-80；extra_hops 默认1。",
-        "safety": "先用 chain_lane 等距重采样，再用 follow_chain 同一套同时占位规则检查；相距 lag 的波点 XY 必须 ≥min_xy_cm(默认51)。",
+        "safety": f"先用 chain_lane 等距重采样，再用 follow_chain 同一套同时占位规则检查；相距 lag 的波点 XY 必须 ≥min_xy_cm(默认{_FLOOR})。",
         "validation_risks": "控制路径太短或回折太近会抛错；修法是拉长/拉开 control_points 或增大 spacing_cm，而不是降低 min_xy_cm。",
         "example": "ctrl = [(60,520,180), (280,300,160), (540,40,190)]\nprev = chain_follow_safe(drones, ctrl, hop_ms=700, lag_hops=1, spacing_cm=65, colors=palette)",
         "combines_with": ["chain-follow", "handwritten-geometry"],
@@ -299,8 +303,8 @@ PRIMITIVE_SKILLS = [
         "when_to_use": "凡是配错峰/分组/波次(ripple_move/group_relay/delay 波)的大动作——错峰段的首选分配。best/far_assign 假设全员同步锁步直线，错峰段会“算着安全、实跑相撞”，这正是密集段反复碰撞返工的根因。",
         "when_not": "完全同步、不错峰的瞬时大交换可用 far_assign；纯就近承接用 best_assign。",
         "key_params": "safe_assign(prev, geo, delays=delays, flying_ms=2800)。顺序：先 `delays=ripple_delays(prev,...)`，再 safe_assign，再用**同一 delays** 做 ripple_move。返回 targets 列表。",
-        "safety": "按验证器的分时 XY 模型(忽略 Z、floor 51cm)评分，选出的排列实跑也安全；仍受单 keyframe 可完成路径长度约束。组完时序后用 `ok, min_cm, pair = verify_timed_clearance(prev, targets, delays=delays, flying_ms=...)` 自检（直接解包 3 元组），省一轮验证器。",
-        "validation_risks": "delays 必须是实际传给 ripple_move 的同一份；几何本身太密(最优排列也<51)时它只返回最优、仍会贴门——这时要把几何铺开。",
+        "safety": f"按验证器的分时 XY 模型(忽略 Z、floor {_FLOOR}cm)评分，选出的排列实跑也安全；仍受单 keyframe 可完成路径长度约束。组完时序后用 `ok, min_cm, pair = verify_timed_clearance(prev, targets, delays=delays, flying_ms=...)` 自检（直接解包 3 元组），省一轮验证器。",
+        "validation_risks": f"delays 必须是实际传给 ripple_move 的同一份；几何本身太密(最优排列也<{_FLOOR})时它只返回最优、仍会贴门——这时要把几何铺开。",
         "example": "delays = ripple_delays(prev, mode='by_index', step_ms=130)\ntargets = safe_assign(prev, geo, delays=delays, flying_ms=2800)\nprev = ripple_move(drones, targets, 2800, delays, colors=palette)",
         "combines_with": ["wave-ripple-move", "center-out-climax", "call-and-response"],
         "music_fit": "错峰大动作、分组问答、波次展开、高潮。",
@@ -313,7 +317,7 @@ PRIMITIVE_SKILLS = [
         "purpose": "标准化手写坐标表并校验帧内 XY 间距——正式编舞构图的主入口。",
         "when_to_use": "每个 keyframe 的目标构图都先写成 custom_points([...], n=len(drones))。",
         "when_not": "灯光/分组等非坐标数据。",
-        "key_params": "points 坐标表（整数表或 math 表达式）；n 机数；min_xy_cm 默认 51（pyfii 碰撞硬下限）。",
+        "key_params": f"points 坐标表（整数表或 math 表达式）；n 机数；min_xy_cm 默认 {_FLOOR}（pyfii 碰撞硬下限）。",
         "safety": "运行期裁剪坐标(XY0-560/Z80-250)并校验最小间距。",
         "validation_risks": "min_xy 不足直接抛错。",
         "example": "geo = custom_points([(280+170*cos(2*pi*i/9), 280+170*sin(2*pi*i/9), 160+25*sin(i)) for i in range(9)], n=9)",
