@@ -484,9 +484,10 @@ def _case_specs() -> dict[int, dict]:
         19: {"name": "cross_segment_echo", "special": "cross:echo"},
         20: {"name": "cross_segment_buildup", "special": "cross:buildup"},
         # case 6 的单要求拆分（P6）：定位"彩虹依次+明暗渐变"复合失败的根源。
-        # 21 保留退化对比（换色不该重写运动）；22 豁免（呼吸定格类灯光指令
-        # 天然减少后半运动，与 case 18 同理，validator 的亮灯定格规则本就允许）。
-        21: {"name": "rainbow_seq_only", "directives": [RAINBOW_SEQ_ONLY], "evals": [_eval_seq_only]},
+        # 灯光类指令统一豁免退化对比（时序换色/呼吸都靠定点站位完成，
+        # validator 亮灯定格规则本就允许；运动类指令保留对比——circle 0.75 那类真改写仍会被拦）。
+        21: {"name": "rainbow_seq_only", "directives": [RAINBOW_SEQ_ONLY], "evals": [_eval_seq_only],
+             "skip_degradation": True},
         22: {"name": "fade_only", "directives": [FADE_ONLY], "evals": [_eval_fade_only],
              "skip_degradation": True},
     }
