@@ -238,7 +238,42 @@ qwen 本地**不能并发**、**不作为调参对象**（能力剖面差异大�
 同步平移其名义窗口）能让 `state.json` 内部零重叠，但这改变了下一段实际被验证的时间窗，
 属于门相关行为变更——按护栏必须过双模型矩阵，不是收尾阶段可以顺手改的"纯重构"，留作专项。
 
-# 1. 项目定位
+## 0.10 第三阶段：LLM 交互机制重构（无状态单轮 → 持久多轮会话，2026-07-05 起）
+
+背景与完整计划见 `~/.claude/plans/playful-greeting-yeti.md`（该文件当前正是这个任务）。
+核心问题：`chat()` 全程无状态单轮调用，validation-repair 反馈曾经只有诊断文字、从不含
+上一轮实际代码，模型每次修复都在盲写整段。已系统排查同类问题（知识库 7/8 包休眠未审计、
+REPL 跨次调用零连续性、fast 模式锁定路径丢 design_card/locked_hash、human_preferences
+缓存跨 cycle 不失效等），架构方案：段级持久会话历史（`SegmentState.conversation`）+
+`chat(history=...)`，段边界天然重置、scheme-reset 显式清空、`--no-conversation-history`
+做矩阵 A/B 与应急回退。
+
+**Phase 0a/0b/0c/1（2026-07-05，无需矩阵，纯重构/状态修复）**：human_preferences 缓存
+失效、fast 模式 design_card/locked_hash 补齐、删除两个死函数、`core/conversation.py` +
+`chat(history=None)` 字节恒等验证——全部落地，`test_prompt_snapshot.py` 全程未改。
+
+**Phase 2a 矩阵裁决**：`_chat_stage` 接入段内修复轮次真实历史，`_previous_code_block`
+等字符串拼接方案降级为 `conversation_history_enabled=False` 专属回退路径。
+
+| provider | 对照基线 | 本次候选 | 判定 |
+|---|---|---|---|
+| deepseek (flash) | 2/2 完成，14 轮，¥0.851，缓存 0.604（`post_p2_flash_confirm`） | 2/2 完成，**11 轮**，¥0.824，缓存 0.63 | **NO REGRESSION**（轮数 -21%，明确提升） |
+| mimo_vision | 2/2 完成，25/25 轮，零黑洞（`post_p2_mimo`） | 1/2 完成——a 跑 S06 黑洞 45 轮死（hover_or_low_activity，4 cycle 零 reset）、b 跑 25 轮零黑洞 | 表面 REGRESSED，**归因方差主导** |
+
+mimo 的失败形状与 §0.7 记录的 C14 裁决几乎逐字重合：同样"1/2 完成"、同样卡在 **S06**、
+同样是另一跑落在"典型带内"（这次 25 轮，C14 那次 24 轮）。S06 这个具体黑洞点此前已经
+在 pre-C14、C14 两轮矩阵里出现过（§0.7："S03/S04/S06 各一次，先于 C14 存在"）——三次
+命中里两次都是 S06，且都发生在完全不同的代码改动窗口，说明这是 mimo 本身在 S06 附近的
+持续性弱点，不是 Phase 2a 引入的新问题。顺带发现一个值得记录但不在本阶段范围内的细节：
+这次 S06 黑洞的 4 个 cycle 在 cycle 级记录里 `failure_category` 全是 `None`（只有段级
+rollup 显示 `hover_or_low_activity`），意味着黑洞熔断的连续同类判定这次没有触发
+（`scheme_resets=0`）——这是 §0.7 待办"mimo 黑洞结构性对策"里已经记在案的缺口，不是
+Phase 2a 造成的，留在那条待办下不单独立项。
+
+**结论：Phase 2a 保留**，flash 明确提升，mimo 表面回归经溯源确认为方差非本改动所致，
+证据强度与 §0.7 的既有裁决先例相当。继续 Phase 2b。
+
+
 
 Pyfii TUI 编舞工作台 = 常驻进程 + 当前段上下文内存 + 人类多轮反馈 + AI 修改当前段 + Pyfii 验证闭环 + 视频验收 + 段落锁定 + 退出恢复
 
