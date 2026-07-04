@@ -58,11 +58,17 @@ def chat(
     user: str,
     provider: str = "deepseek",
     temperature: float = 0.2,
+    history: list[dict] | None = None,
     on_delta: Callable[[str], None] | None = None,
     on_reasoning_delta: Callable[[str], None] | None = None,
     on_heartbeat: Callable[[], None] | None = None,
 ) -> LlmResponse:
-    """发送 chat completion 请求"""
+    """发送 chat completion 请求
+
+    history: 之前轮次的 {role, content} 列表（role 只能是 user/assistant，严格交替），
+    插在 system 之后、这一轮 user 之前。默认 None——不传时 payload 与历史行为字节相同
+    （这是持久会话历史重构可以按纯重构验收的支点，见 core/conversation.py）。
+    """
     cfg = load_config(provider)
 
     # 协议风格：openai（/chat/completions，默认）或 anthropic（/v1/messages）。
@@ -79,7 +85,7 @@ def chat(
             "model": cfg["model"],
             "max_tokens": cfg.get("max_output_tokens", 16384),
             "system": system,
-            "messages": [{"role": "user", "content": user}],
+            "messages": (history or []) + [{"role": "user", "content": user}],
         }
         # 新版 Claude（Opus 4.x 等）弃用 temperature——provider 配 omit_temperature:true 时不发送；
         # 其它 anthropic 端点（如 DeepSeek anthropic）默认仍带 temperature，行为不变。
@@ -96,10 +102,11 @@ def chat(
     else:
         payload = {
             "model": cfg["model"],
-            "messages": [
-                {"role": "system", "content": system},
-                {"role": "user", "content": user},
-            ],
+            "messages": (
+                [{"role": "system", "content": system}]
+                + (history or [])
+                + [{"role": "user", "content": user}]
+            ),
             "temperature": temperature,
             "max_tokens": cfg.get("max_output_tokens", 16384),
         }
@@ -180,7 +187,7 @@ def chat(
                         headers=headers,
                         timeout=timeout,
                     )
-                return _attach_prompt_usage(response, system, user)
+                return _attach_prompt_usage(response, system, user, history)
             except Exception as exc:
                 last_exc = exc
                 if attempt >= attempts or not _is_retryable_exception(exc):
@@ -485,10 +492,13 @@ def _should_request_stream_usage(cfg: dict) -> bool:
     return "deepseek" in base_url
 
 
-def _attach_prompt_usage(response: LlmResponse, system: str, user: str) -> LlmResponse:
+def _attach_prompt_usage(
+    response: LlmResponse, system: str, user: str, history: list[dict] | None = None,
+) -> LlmResponse:
     system_chars = len(system or "")
     user_chars = len(user or "")
-    prompt_chars = system_chars + user_chars
+    history_chars = sum(len(str(msg.get("content", ""))) for msg in (history or []))
+    prompt_chars = system_chars + user_chars + history_chars
     response.system_prompt_chars = system_chars
     response.user_prompt_chars = user_chars
     response.prompt_chars = prompt_chars

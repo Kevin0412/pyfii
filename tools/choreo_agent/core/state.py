@@ -20,6 +20,7 @@ class SegmentState:
     locked_hash: str = ""  # 锁定时段体哈希：检测人工改动锁定段
     last_agent_hash: str = ""  # agent 最后写入的段体哈希：g 覆盖前检测人工修改
     design_card: dict = field(default_factory=dict)  # 锁定时的设计卡：供下一段承接母题
+    conversation: list = field(default_factory=list)  # 本段持久会话历史：{role,content,stage,meta}
 
 
 @dataclass
@@ -68,6 +69,7 @@ class ProjectState:
                     "locked_hash": s.locked_hash,
                     "last_agent_hash": s.last_agent_hash,
                     "design_card": s.design_card,
+                    "conversation": s.conversation,
                 }
                 for s in self.segments
             ],
@@ -99,6 +101,7 @@ class ProjectState:
                 locked_hash=s.get("locked_hash", ""),
                 last_agent_hash=s.get("last_agent_hash", ""),
                 design_card=s.get("design_card") or {},
+                conversation=s.get("conversation") or [],
             )
             for s in data.get("segments", [])
         ]

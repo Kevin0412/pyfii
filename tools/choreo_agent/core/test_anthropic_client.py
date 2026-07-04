@@ -142,6 +142,112 @@ def test_openai_request_shape_unchanged():
     assert captured["payload"]["messages"][0] == {"role": "system", "content": "SYS"}
 
 
+# ---------- history param (Phase 1 of the conversation-history refactor) ----------
+#
+# history=None (the default, and what every call site still passes through Phase 1)
+# must produce a byte-identical payload to today -- this is the load-bearing property
+# that makes introducing the parameter a provable pure refactor.
+
+def test_history_none_is_byte_identical_openai():
+    captured = []
+
+    def fake_post(url, json=None, headers=None, timeout=None):
+        captured.append(json)
+        return _FakeOnceResp({"model": "m", "choices": [{"message": {"content": "x"}}],
+                              "usage": {"prompt_tokens": 1, "completion_tokens": 1}})
+
+    real_cfg = _with_config(_OPENAI_CFG)
+    real_post = lc.httpx.post
+    lc.httpx.post = fake_post
+    try:
+        lc.chat("SYS", "USER", provider="deepseek", temperature=0.3)  # no history kwarg at all
+        lc.chat("SYS", "USER", provider="deepseek", temperature=0.3, history=None)
+    finally:
+        lc.load_config = real_cfg
+        lc.httpx.post = real_post
+
+    assert captured[0]["messages"] == captured[1]["messages"], "omitted vs explicit history=None must match"
+    assert captured[0]["messages"] == [
+        {"role": "system", "content": "SYS"},
+        {"role": "user", "content": "USER"},
+    ], "history=None must not change the openai payload shape at all"
+
+
+def test_history_none_is_byte_identical_anthropic():
+    captured = []
+
+    def fake_post(url, json=None, headers=None, timeout=None):
+        captured.append(json)
+        return _FakeOnceResp({"model": "m", "content": [{"type": "text", "text": "x"}],
+                              "usage": {"input_tokens": 1, "output_tokens": 1}})
+
+    real_cfg = _with_config(_ANTHROPIC_CFG)
+    real_post = lc.httpx.post
+    lc.httpx.post = fake_post
+    try:
+        lc.chat("SYS", "USER", provider="deepseek_anthropic", temperature=0.3)
+        lc.chat("SYS", "USER", provider="deepseek_anthropic", temperature=0.3, history=None)
+    finally:
+        lc.load_config = real_cfg
+        lc.httpx.post = real_post
+
+    assert captured[0]["messages"] == captured[1]["messages"]
+    assert captured[0]["messages"] == [{"role": "user", "content": "USER"}]
+    assert captured[0]["system"] == "SYS"
+
+
+def test_history_spliced_between_system_and_user_openai():
+    captured = {}
+
+    def fake_post(url, json=None, headers=None, timeout=None):
+        captured.update(payload=json)
+        return _FakeOnceResp({"model": "m", "choices": [{"message": {"content": "x"}}],
+                              "usage": {"prompt_tokens": 1, "completion_tokens": 1}})
+
+    history = [{"role": "user", "content": "H1"}, {"role": "assistant", "content": "H2"}]
+    real_cfg = _with_config(_OPENAI_CFG)
+    real_post = lc.httpx.post
+    lc.httpx.post = fake_post
+    try:
+        lc.chat("SYS", "USER", provider="deepseek", history=history)
+    finally:
+        lc.load_config = real_cfg
+        lc.httpx.post = real_post
+
+    assert captured["payload"]["messages"] == [
+        {"role": "system", "content": "SYS"},
+        {"role": "user", "content": "H1"},
+        {"role": "assistant", "content": "H2"},
+        {"role": "user", "content": "USER"},
+    ]
+
+
+def test_history_spliced_before_user_anthropic_system_stays_top_level():
+    captured = {}
+
+    def fake_post(url, json=None, headers=None, timeout=None):
+        captured.update(payload=json)
+        return _FakeOnceResp({"model": "m", "content": [{"type": "text", "text": "x"}],
+                              "usage": {"input_tokens": 1, "output_tokens": 1}})
+
+    history = [{"role": "user", "content": "H1"}, {"role": "assistant", "content": "H2"}]
+    real_cfg = _with_config(_ANTHROPIC_CFG)
+    real_post = lc.httpx.post
+    lc.httpx.post = fake_post
+    try:
+        lc.chat("SYS", "USER", provider="deepseek_anthropic", history=history)
+    finally:
+        lc.load_config = real_cfg
+        lc.httpx.post = real_post
+
+    assert captured["payload"]["system"] == "SYS", "system must stay the top-level field, not join messages"
+    assert captured["payload"]["messages"] == [
+        {"role": "user", "content": "H1"},
+        {"role": "assistant", "content": "H2"},
+        {"role": "user", "content": "USER"},
+    ]
+
+
 # ---------- response parsing ----------
 
 def test_anthropic_once_parsing():

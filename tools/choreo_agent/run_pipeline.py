@@ -29,7 +29,7 @@ TOOL_ROOT = REPO_ROOT / "tools" / "choreo_agent"
 sys.path.insert(0, str(TOOL_ROOT))
 
 from core import Session
-from core.session import _limit_text
+from core.conversation import limit_text as _limit_text
 from core.token_usage import summarize_usage
 
 

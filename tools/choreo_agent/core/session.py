@@ -23,6 +23,7 @@ from .planning_pass import (
 from .prompt_builder import build_segment_prompt
 from .limits import MIN_SHOW_END_S
 from .llm_client import chat, chat_prefix, LlmResponse, load_config as _load_provider_config
+from .conversation import limit_text as _limit_text
 
 
 @dataclass
@@ -1464,13 +1465,6 @@ def _previous_code_block(code: str) -> str:
         "上一轮实际生成并写入的代码如下(局部修复提示是针对这份代码给出的，"
         "请在它基础上做最小改动，不要整段重写)：\n```python\n" + code[:6000] + "\n```"
     )
-
-
-def _limit_text(text: str, max_chars: int) -> str:
-    text = text or ""
-    if len(text) <= max_chars:
-        return text
-    return text[:max_chars] + f"\n... <truncated {len(text) - max_chars} chars>"
 
 
 def _compact_validation_feedback(result: ValidationResult) -> str:
