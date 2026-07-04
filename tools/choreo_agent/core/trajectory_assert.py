@@ -195,23 +195,28 @@ def color_onset_times(data, fps: int, t0: float, t1: float, predicate) -> dict[i
 
 
 def final_hue_onset_predicate(data, fps: int, drone_index: int, t1: float, tol_deg: float = 30.0):
-    """"依次点亮各自颜色"的正确谓词：到达该机段尾最终色相才算 onset。
+    """"依次点亮各自颜色"的谓词：到达该机段尾最终颜色才算 onset。
 
-    直接用"任意有色"当谓词会被前半段既有彩灯误触发（onset 全等于窗口起点）。
+    直接用"任意有色"会被前半段既有彩灯误触发；按 RGB 距离匹配段尾颜色，
+    对无色相目标（白/灰——模型确实会选白收尾）同样有效；有色相目标再叠加
+    色相容差，避免同亮度异色误配。
     """
-    target = None
-    rgb = drone_color_at(data, fps, drone_index, t1)
-    if rgb is not None:
-        target = hue_deg(rgb)
+    target_rgb = drone_color_at(data, fps, drone_index, t1)
+    target_hue = hue_deg(target_rgb) if target_rgb is not None else None
 
     def predicate(rgb_value):
-        if target is None:
+        if target_rgb is None:
             return False
-        h = hue_deg(rgb_value)
-        if h is None:
+        dist = math.dist(rgb_value, target_rgb)
+        if dist > 60.0:
             return False
-        diff = abs(h - target) % 360.0
-        return min(diff, 360.0 - diff) <= tol_deg
+        if target_hue is not None:
+            h = hue_deg(rgb_value)
+            if h is None:
+                return False
+            diff = abs(h - target_hue) % 360.0
+            return min(diff, 360.0 - diff) <= tol_deg
+        return True
 
     return predicate
 
