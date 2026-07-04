@@ -427,26 +427,48 @@ def check_entry_matches_recorded_exit(
     t_s: float,
     recorded_exit: list,
     tol_cm: float = 25.0,
+    search_back_s: float = 2.0,
+    search_fwd_s: float = 0.5,
 ) -> tuple[bool, dict]:
-    """跨段衔接确认：本段入口实测位置 == 上一段锁定时记录的 exit_state。
+    """跨段衔接确认：上一段记录的 exit_state 必须出现在段边界附近的实测轨迹上。
 
-    失真意味着续段是按错误起点规划的（撞机根源，也是手工改锁定段的典型后果）。
+    auto_init 会做时间线压缩（上一段实际动作提前结束时，下一段的首个动作被锚到
+    更早的整数秒），所以边界不能按固定墙钟采样——在 [t-2.0, t+0.5] 里找与记录
+    出口的最佳匹配时刻。找不到 ≤tol 的匹配 = 出口坐标失真（续段按错误起点规划，
+    撞机根源，手工改锁定段的典型后果）。
     """
-    worst = 0.0
-    detail = {}
-    for k, expected in enumerate(recorded_exit or []):
-        actual = drone_position_at(data, fps, k, t_s)
-        dist = math.dist(actual, tuple(float(v) for v in expected))
-        worst = max(worst, dist)
-        if dist > tol_cm:
-            detail[f"d{k}"] = {
-                "recorded": [round(float(v), 1) for v in expected],
-                "actual": [round(v, 1) for v in actual],
-                "dist_cm": round(dist, 1),
-            }
-    ok = bool(recorded_exit) and worst <= tol_cm
-    return ok, {"t_s": round(t_s, 2), "worst_dist_cm": round(worst, 1),
-                "tol_cm": tol_cm, "mismatches": detail}
+    if not recorded_exit:
+        return False, {"t_s": round(t_s, 2), "worst_dist_cm": None,
+                       "tol_cm": tol_cm, "mismatches": {}, "note": "no recorded exit"}
+    step = 1.0 / min(fps, 20)
+    best_worst = float("inf")
+    best_t = t_s
+    t = t_s - search_back_s
+    while t <= t_s + search_fwd_s + 1e-9:
+        worst = 0.0
+        for k, expected in enumerate(recorded_exit):
+            actual = drone_position_at(data, fps, k, max(0.0, t))
+            worst = max(worst, math.dist(actual, tuple(float(v) for v in expected)))
+        if worst < best_worst:
+            best_worst = worst
+            best_t = t
+        t += step
+    mismatches = {}
+    if best_worst > tol_cm:
+        for k, expected in enumerate(recorded_exit):
+            actual = drone_position_at(data, fps, k, max(0.0, best_t))
+            dist = math.dist(actual, tuple(float(v) for v in expected))
+            if dist > tol_cm:
+                mismatches[f"d{k}"] = {
+                    "recorded": [round(float(v), 1) for v in expected],
+                    "actual": [round(v, 1) for v in actual],
+                    "dist_cm": round(dist, 1),
+                }
+    return best_worst <= tol_cm, {
+        "t_s": round(t_s, 2), "matched_t_s": round(best_t, 2),
+        "worst_dist_cm": round(best_worst, 1), "tol_cm": tol_cm,
+        "mismatches": mismatches,
+    }
 
 
 def check_collinear(
