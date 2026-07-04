@@ -202,7 +202,9 @@ def _run_full_flow_body(
             "cycles": [],
             "locked": False,
             "failure_category": None,
+            "scheme_resets": 0,
         }
+        prev_cycle_category = None
         records.append(segment_record)
 
         # LAND: auto-generate, skip LLM entirely
@@ -357,6 +359,23 @@ def _run_full_flow_body(
                 last_validation = rounds[-1].validation if rounds else None
                 category = _failure_category_from_validation(last_validation)
                 segment_record["failure_category"] = category
+                if prev_cycle_category is not None and category == prev_cycle_category:
+                    # 黑洞熔断（mimo 三连单段黑洞的结构对策）：连续两个 cycle 同类失败
+                    # = 当前方案家族走不通，继续灌同类修复反馈只会烧轮。清候选池 +
+                    # 宣告方案作废，强制换几何家族/降 keyframe 数/换 assign 策略。
+                    segment_record["scheme_resets"] += 1
+                    session._clear_candidate_pool(seg.id)
+                    _append(log_path, f"\n# {seg.id} SCHEME RESET #{segment_record['scheme_resets']} (repeat {category})\n")
+                    feedback = (
+                        _segment_feedback(seg.id, session.state.drone_count)
+                        + f"\n\n## 方案重置（连续 {category} 类失败，上一版方案作废）\n"
+                        "换思路重来，不要在旧方案上小修：更换几何家族（斜线↔散点↔环弧↔双排互换）、"
+                        "减少 keyframe 数、或改用不同 assign 策略/执行器组合；"
+                        "新方案的点表与时序要与上一版有明显结构差异。"
+                    )
+                    prev_cycle_category = None
+                    continue
+                prev_cycle_category = category
                 feedback = feedback + "\n\n继续修复 validator 反馈，目标是本段 passed=True。"
                 if last_validation is not None:
                     feedback += "\n" + _compact_runner_validation_feedback(last_validation)

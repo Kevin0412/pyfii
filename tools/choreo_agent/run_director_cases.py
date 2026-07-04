@@ -149,6 +149,48 @@ def _eval_fuzzy_box(data, fps, window, _ctx):
     return "fuzzy_box", ok, detail, fb
 
 
+RAINBOW_SEQ_ONLY = (
+    "细节修改：本段后半，全体无人机按当前位置**从左到右依次**切换到各自的新颜色"
+    "（每机颜色自定但要彼此不同）——左边的机先换色、右边的机后换色，"
+    "相邻错开明显（首尾至少差 0.6 秒），换色后保持到段尾。每一架都要参与。"
+)
+FADE_ONLY = (
+    "细节修改：本段后半全体做**明暗渐变（呼吸）**——亮度明显起伏（峰谷差大），"
+    "一直持续到段尾；颜色不限，可保持各机原色。每一架都要参与。"
+)
+
+
+def _eval_seq_only(data, fps, window, _ctx):
+    mid = (window[0] + window[1]) / 2.0
+    ok, detail = check_spatial_temporal_order(
+        data, fps, mid, window[1] - 0.4, None, axis=0, ascending=True,
+        min_span_s=0.6, max_inversions=1,
+    )
+    fb = None
+    if not ok:
+        fb = (
+            "'从左到右依次换色'未满足：按 x 从小到大各机到达自己段尾颜色的时刻应递增且"
+            f"首尾差 ≥0.6s；实测 onset（左→右序）= {detail.get('onsets_in_spatial_order')}"
+            f"，缺席 {detail.get('missing', [])}。按当前 x 排序逐机延迟换色"
+            "（light_wave 或逐机 delay 后 apply_light）。"
+        )
+    return "seq_only", ok, detail, fb
+
+
+def _eval_fade_only(data, fps, window, _ctx):
+    mid = (window[0] + window[1]) / 2.0
+    ok, detail = check_brightness_modulation(
+        data, fps, mid + 0.5, window[1] - 0.3, min_amplitude=60, min_fraction=0.7
+    )
+    fb = None
+    if not ok:
+        fb = (
+            f"明暗渐变未满足：亮度摆幅 ≥60 的机占比 {detail['qualified_fraction']}"
+            "（需 ≥0.7）。用 breathe_group 或渐变 ticks 做持续的亮度起伏到段尾。"
+        )
+    return "fade_only", ok, detail, fb
+
+
 def _eval_rainbow(data, fps, window, _ctx):
     mid = (window[0] + window[1]) / 2.0
     t_end = window[1] - 0.4
@@ -441,6 +483,9 @@ def _case_specs() -> dict[int, dict]:
              "evals": [_eval_negative], "skip_degradation": True},
         19: {"name": "cross_segment_echo", "special": "cross:echo"},
         20: {"name": "cross_segment_buildup", "special": "cross:buildup"},
+        # case 6 的单要求拆分（P6）：定位"彩虹依次+明暗渐变"复合失败的根源
+        21: {"name": "rainbow_seq_only", "directives": [RAINBOW_SEQ_ONLY], "evals": [_eval_seq_only]},
+        22: {"name": "fade_only", "directives": [FADE_ONLY], "evals": [_eval_fade_only]},
     }
 
 
