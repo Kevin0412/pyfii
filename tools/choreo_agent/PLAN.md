@@ -147,6 +147,24 @@ qwen 本地**不能并发**、**不作为调参对象**（能力剖面差异大�
   mimo 对 planning 阶段新增 system prompt 的兼容性保持观察（下轮矩阵若再劣化则做
   `_is_mimo_provider` 定向回退实验）
 
+## 0.8 function.py 削减轨道（P5 实验设计，2026-07-04 立项）
+
+目标：回答"哪些组合动作可以撤掉让 LLM 裸写，代价是多少安全轮次"。
+方法：**实验专用 bare 模式**（独立 flag 构造替代 system prompt，主线路径零改动 →
+不触发矩阵义务）；同一组指令（case 1/2/8/13 + 一次全流程）在 helper/bare 两模式下
+各 N=3，对比：安全通过轮次、调用数、最终 minD 分布。
+
+执行器裸写可行性预判（skills 注册表口径）：
+
+| 层 | 执行器 | 裸写等价 | 预判 |
+|---|---|---|---|
+| 安全/数学原语 | best/far/safe_assign、verify_timed_clearance、custom_points | 排列搜索+分时校验，LLM 不可靠替代 | **保留（最后动）** |
+| 安全执行器 | safe_move、ripple_move、rotate_assign | 需正确组合 assign+delays+move2 | 高风险，第二批实验 |
+| 母题执行器 | call_response_safe、follow_chain、group_relay、chain_lane | move2+delay 循环可裸写 | **第一批实验对象** |
+| 灯光执行器 | light_wave、fade/breathe/flash_group | TurnOnAll+delay 循环可裸写 | 第一批（case 21/22 已在测这块的裸能力） |
+
+首轮数据待 P2 确认对腾出 API 带宽后跑（qwen 免费位也可用于 bare 模式的高样本量）。
+
 # 1. 项目定位
 
 Pyfii TUI 编舞工作台 = 常驻进程 + 当前段上下文内存 + 人类多轮反馈 + AI 修改当前段 + Pyfii 验证闭环 + 视频验收 + 段落锁定 + 退出恢复
