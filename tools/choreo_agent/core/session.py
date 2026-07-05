@@ -168,16 +168,20 @@ class Session:
         on_delta: Callable[[str], None] | None = None,
         on_reasoning_delta: Callable[[str], None] | None = None,
         on_heartbeat: Callable[[], None] | None = None,
-    ) -> list[LlmResponse]:
+    ) -> tuple[str, list[LlmResponse]]:
         """并行生成 K 个候选（温度梯度），按完成顺序返回成功响应。
 
         - LLM 调用是修复轮的墙钟大头（3-6 min），并行直接折半；
         - 同时对冲单流网络错误（RemoteProtocolError）：K 流死一条不毁整轮；
         - 只有第一个候选挂流式回调，避免日志交错；记录串行完成（线程安全）。
+
+        返回 (user_prompt, responses)：K 个分支问的是同一个问题（本轮 user prompt 各分支
+        字节相同，只是温度不同），调用方决定哪个候选胜出后，只把赢家这一次真实交换追加为
+        一条会话历史——分支不是真实发生过的多轮对话，都记下来就是伪造历史。
         """
         seg = self.state.current_segment
         if seg is None or seg.locked:
-            return []
+            return "", []
         k = max(1, int(k))
         system, user = build_segment_prompt(
             segment_id=seg.id,
@@ -191,6 +195,7 @@ class Session:
             human_preferences=self.human_preferences,
             prev_design_card=self._previous_design_card(),
         )
+        history = conversation.to_messages(seg.conversation) if self.conversation_history_enabled else None
         temps = [
             max(0.05, min(1.0, base_temperature + 0.2 * i)) for i in range(k)
         ]
@@ -201,6 +206,7 @@ class Session:
                 user=user,
                 provider=provider,
                 temperature=temps[i],
+                history=history,
                 on_delta=on_delta if i == 0 else None,
                 on_reasoning_delta=on_reasoning_delta if i == 0 else None,
                 on_heartbeat=on_heartbeat if i == 0 else None,
@@ -239,7 +245,7 @@ class Session:
                 responses.append(response)
         if not responses and errors:
             raise errors[0]
-        return responses
+        return user, responses
 
     def _pool_for_segment(self, seg_id: str) -> list[str]:
         if self._candidate_pool_seg != seg_id:
@@ -361,7 +367,6 @@ class Session:
                         user=plan_prompt,
                         temperature=0.2,
                         feedback=repair_feedback,
-                        use_history=False,  # 三段式规划的会话历史接入是 Phase 3，本阶段先不动
                         on_delta=on_delta,
                         on_reasoning_delta=on_reasoning_delta,
                         on_heartbeat=on_heartbeat,
@@ -420,7 +425,6 @@ class Session:
                             user=code_prompt,
                             temperature=0.3,
                             feedback=repair_feedback,
-                            use_history=False,  # Phase 3
                             on_delta=on_delta,
                             on_reasoning_delta=on_reasoning_delta,
                             on_heartbeat=on_heartbeat,
@@ -463,7 +467,7 @@ class Session:
                     })
                     response = None
                 elif parallel_candidates > 1:
-                    candidates = self.generate_candidates_parallel(
+                    parallel_user, candidates = self.generate_candidates_parallel(
                         provider=provider,
                         feedback=repair_feedback,
                         base_temperature=round_temp,
@@ -487,6 +491,16 @@ class Session:
                     if response is None and candidates:
                         # 没人过 preflight：拿第一个候选走常规 preflight 修复
                         response = candidates[0]
+                    if response is not None and self.conversation_history_enabled:
+                        # 只有赢家的这次真实交换进入会话：K 个分支问的是同一个问题
+                        # （parallel_user 各分支字节相同），只写一次；assistant turn 是
+                        # 赢家的真实响应文本。输家不算 turn——进 candidate_pool（代码
+                        # 字符串），池子弹出复用时也不产生新 turn（下面 pooled_code 分支）。
+                        conversation.append_user(seg.conversation, parallel_user, stage="direct_generation")
+                        conversation.append_assistant(
+                            seg.conversation, response.text or "", stage="direct_generation",
+                            meta={"model": response.model, "parallel_k": parallel_candidates},
+                        )
                 else:
                     response = self.generate_current_segment_with_llm(
                         provider=provider,
@@ -593,7 +607,10 @@ class Session:
                     "write_error": "replace_active_segment returned False",
                 })
                 rounds.append(GenerationRound(index=index, response=response, validation=None, code=code))
-                if self.conversation_history_enabled:
+                # 会话历史生效时通常不用再贴代码——除非这一轮的代码来自候选池（零 API
+                # 调用，从没作为真实 assistant turn 进过会话，模型看不到它）。
+                code_visible_in_history = self.conversation_history_enabled and pooled_code is None
+                if code_visible_in_history:
                     # 上一轮生成的代码已经是真实 assistant turn，不用再贴一遍
                     repair_feedback = (
                         "代码写入失败——多半是段 marker 注释被误输出或破坏，导致找不到插入位置。"
@@ -625,12 +642,13 @@ class Session:
             self._clear_candidate_pool(seg.id)
 
             raw_output = _limit_text(result.raw_stderr if hasattr(result, 'raw_stderr') else "", 800)
+            # 会话历史生效时，真实的上一轮 assistant turn 已经带着代码，这里不用再手动
+            # 粘贴一遍——除了两种例外：conversation_history_enabled=False（A/B 对照/紧急
+            # 回退），或者这一轮代码来自候选池（零 API 调用，从没作为真实 turn 进过会话）。
+            code_visible_in_history = self.conversation_history_enabled and pooled_code is None
             repair_parts = [
                 f"上一轮自动验证反馈（第 {index} 轮）：\n{_compact_validation_feedback(result)}",
-                # 会话历史生效时，真实的上一轮 assistant turn 已经带着代码，这里不用再手动
-                # 粘贴一遍——只有 conversation_history_enabled=False（A/B 对照/紧急回退）
-                # 时才需要这个字符串拼接式的替代方案。
-                _previous_code_block(code) if not self.conversation_history_enabled else "",
+                "" if code_visible_in_history else _previous_code_block(code),
                 _targeted_validation_repair_feedback(result),
                 f"pyfii 原始输出：\n{raw_output}" if raw_output else "",
                 _conservative_safety_feedback(index, result),
@@ -1112,6 +1130,10 @@ def {function_name}(drones: list):
         current = self.state.current_segment
         if report["active_edited"] and current is not None:
             current.last_agent_hash = hashes.get(current.id, "")
+            # 人工改过当前段后，AI 自己那份"我写了什么"的会话记忆已经不描述 design.py
+            # 里实际内容了——留着只会让下一次 g 把过时的旧尝试当成现状看待。清空后，
+            # 下一轮 g 的 round 1 本来就不依赖历史（跟新段开局一样），干净重新开始。
+            conversation.reset(current.conversation)
             outcome["adopted"].append(f"{current.id}(active)")
         if not (result.distance_warnings == 0 and not result.collision_intervals):
             outcome["reason"] = (
@@ -1189,11 +1211,14 @@ def {function_name}(drones: list):
                 seg=seg,
                 provider=provider,
                 stage=f"planning_check_revision_{revision}",
-                system="",
+                # 曾经是 system=""：修正任务本来就需要 planning 阶段的规则（坐标界、
+                # 间距下限等），空 system 让模型只能靠 revision prompt 自己的只言片语
+                # 猜规则。现在传真正的 planning system——顺带这也是一处真实的
+                # prompt 字节变更，需要矩阵验证。
+                system=build_planning_system_prompt(self.state.drone_count),
                 user=prompt,
                 temperature=0.2,
                 feedback=feedback,
-                use_history=False,  # Phase 3; system="" here is also a known bug fixed in Phase 3
                 on_delta=on_delta,
                 on_reasoning_delta=on_reasoning_delta,
                 on_heartbeat=on_heartbeat,

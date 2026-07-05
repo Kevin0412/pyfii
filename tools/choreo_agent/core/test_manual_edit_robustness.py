@@ -9,6 +9,7 @@ from unittest.mock import patch
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from core import Session
+from core import conversation
 from core.script_editor import (
     lock_segment,
     replace_active_segment,
@@ -136,9 +137,43 @@ def test_active_segment_external_edit_detected():
     print("PASSED: active segment external edit detected")
 
 
+def test_adopting_active_edit_clears_stale_conversation():
+    """人工改了当前(未锁定)段后 adopt：AI 自己那份"我写了什么"的会话记忆已经不描述
+    design.py 实际内容了，必须清空——否则下一次 g 会把过时的旧尝试当成现状看待。"""
+    project = _project()
+    try:
+        script = project / "scripts" / "design.py"
+        session = Session(project, gate_profile="safety")
+        seg = session.state.segments[0]
+        assert replace_active_segment(script, "S01", S01_CODE, [])
+        seg.last_agent_hash = segment_body_hashes(script, ["S01"])["S01"]
+        conversation.append_user(seg.conversation, "AI 的上一轮 prompt", stage="direct_generation")
+        conversation.append_assistant(seg.conversation, S01_CODE, stage="direct_generation")
+        session.state.save(project)
+
+        session = Session(project, gate_profile="safety")
+        assert session.state.segments[0].conversation, "fixture 应该带着非空历史"
+        _tamper_s01(project)
+        assert session.integrity_report()["active_edited"]
+
+        with patch.object(
+            Session, "validate",
+            return_value=ValidationResult(compile_ok=True, run_ok=True, read_fii_ok=True, expected_drone_count=7),
+        ):
+            outcome = session.adopt_manual_edits()
+        assert any("active" in item for item in outcome["adopted"]), outcome
+        assert session.state.segments[0].conversation == [], (
+            "adopting a hand-edit to the active segment must clear its stale conversation history"
+        )
+    finally:
+        shutil.rmtree(project.parent, ignore_errors=True)
+    print("PASSED: adopting an active-segment edit clears stale conversation")
+
+
 if __name__ == "__main__":
     test_clean_project_reports_clean()
     test_tampered_locked_segment_detected_and_adopted()
     test_adopt_rejects_broken_script()
     test_active_segment_external_edit_detected()
+    test_adopting_active_edit_clears_stale_conversation()
     print("\nALL MANUAL EDIT ROBUSTNESS TESTS PASSED")

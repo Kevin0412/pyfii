@@ -51,7 +51,7 @@ def test_parallel_returns_all_successes_and_records():
         orig = session_mod.chat
         session_mod.chat = fake_chat
         try:
-            out = session.generate_candidates_parallel(k=3, base_temperature=0.3)
+            _, out = session.generate_candidates_parallel(k=3, base_temperature=0.3)
         finally:
             session_mod.chat = orig
         assert len(out) == 3
@@ -73,7 +73,7 @@ def test_parallel_survives_partial_stream_failure():
         orig = session_mod.chat
         session_mod.chat = fake_chat
         try:
-            out = session.generate_candidates_parallel(k=3, base_temperature=0.3)
+            _, out = session.generate_candidates_parallel(k=3, base_temperature=0.3)
         finally:
             session_mod.chat = orig
         assert len(out) == 1  # 一条流活着就不毁整轮
@@ -97,6 +97,102 @@ def test_parallel_raises_only_when_all_fail():
         finally:
             session_mod.chat = orig
         assert raised
+
+    _with_temp_session(run)
+
+
+def test_only_winner_candidate_becomes_a_conversation_turn():
+    """Phase 4: K 个并行分支问的是同一个问题，但只有胜出者的这次真实交换该进入
+    seg.conversation——分支不是真实发生过的多轮对话，输家不能也留一条 turn。"""
+    from unittest.mock import patch
+    from core.preflight import PreflightResult
+
+    def run(session):
+        WINNER_MARKER = "WINNER_MARKER_a1b2"
+        LOSER_MARKER = "LOSER_MARKER_c3d4"
+
+        def fake_chat(system, user, temperature, **kw):
+            # 低温度候选先返回，赢得 preflight 竞争
+            if temperature <= 0.31:
+                time.sleep(0.02)
+                return _FakeResponse(f"prev = [(d.x, d.y, d.z) for d in drones]  # {WINNER_MARKER}")
+            time.sleep(0.08)
+            return _FakeResponse(f"prev = [(d.x, d.y, d.z) for d in drones]  # {LOSER_MARKER}")
+
+        orig = session_mod.chat
+        session_mod.chat = fake_chat
+        try:
+            with patch("core.session.preflight_check", return_value=PreflightResult()), \
+                 patch.object(Session, "validate", side_effect=RuntimeError("stop after round 1")):
+                try:
+                    session.generate_until_safe_with_llm(
+                        provider="mock", feedback="", max_attempts=1,
+                        use_planning_pass=False, parallel_candidates=2,
+                    )
+                except RuntimeError:
+                    pass  # 只需要跑到 validate() 之前，用异常短路避免继续跑真实校验
+        finally:
+            session_mod.chat = orig
+
+        seg = session.state.current_segment
+        turns = seg.conversation
+        assert any(
+            WINNER_MARKER in str(t.get("content", "")) and t.get("role") == "assistant"
+            for t in turns
+        ), "the winning candidate must become a real assistant turn"
+        assert not any(LOSER_MARKER in str(t.get("content", "")) for t in turns), (
+            "the losing candidate must never appear in conversation history — "
+            "it went into the candidate pool instead, not a fabricated turn"
+        )
+        # 赢家只记一次（一个 user + 一个 assistant），不是每个分支各记一次
+        assert sum(1 for t in turns if t.get("role") == "user") == 1
+
+    _with_temp_session(run)
+
+
+def test_pool_hit_round_gets_factual_code_recap_even_with_history_enabled():
+    """候选池弹出的代码从没有过真实 assistant turn（零 API 调用）——即便
+    conversation_history_enabled=True，这一轮如果后续验证失败，repair feedback 也必须
+    把代码贴回去，不能假设"历史里已经有了"。"""
+    from unittest.mock import patch
+    from core.validator import ValidationResult
+
+    def run(session):
+        POOL_MARKER = "POOL_CODE_MARKER_9z8y"
+        seg = session.state.current_segment
+        session._pool_for_segment(seg.id).append(
+            f"prev = [(d.x, d.y, d.z) for d in drones]  # {POOL_MARKER}"
+        )
+
+        failing = ValidationResult(
+            compile_ok=True, run_ok=True, read_fii_ok=True,
+            distance_warnings=0, action_warnings=0,
+            dense_min_distance_cm=42.0, expected_drone_count=7,
+        )
+        failing.exit_state = [[100 + 60 * i, 100, 150] for i in range(7)]
+
+        captured_feedback: list[str] = []
+        orig = session_mod.chat
+
+        def fake_chat(system, user, **kw):
+            captured_feedback.append(user)
+            return _FakeResponse("prev = [(d.x, d.y, d.z) for d in drones]  # round2")
+
+        session_mod.chat = fake_chat
+        try:
+            with patch.object(Session, "validate", return_value=failing):
+                session.generate_until_safe_with_llm(
+                    provider="mock", feedback="", max_attempts=2,
+                    use_planning_pass=False, parallel_candidates=2,
+                )
+        finally:
+            session_mod.chat = orig
+
+        assert captured_feedback, "round 2 should have been reached"
+        assert POOL_MARKER in captured_feedback[0], (
+            "the pool-hit segment's code never became a conversation turn, so it must "
+            "still be recapped in the repair feedback text for the next round"
+        )
 
     _with_temp_session(run)
 
