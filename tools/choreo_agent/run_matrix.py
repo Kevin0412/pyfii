@@ -184,6 +184,7 @@ def cmd_run(args) -> int:
                     provider=provider,
                     max_cycles_per_segment=args.max_cycles,
                     max_attempts_per_cycle=args.max_attempts,
+                    parallel_candidates=args.parallel_candidates,
                 )
                 runs.append(run_metrics(result["summary"]))
             except (KeyboardInterrupt, SystemExit):
@@ -261,6 +262,9 @@ def main(argv: list[str] | None = None) -> int:
     p_run.add_argument("--drone-count", type=int, default=7)
     p_run.add_argument("--max-cycles", type=int, default=4)
     p_run.add_argument("--max-attempts", type=int, default=5)
+    p_run.add_argument("--parallel-candidates", type=int, default=2,
+                        help="Must be 1 for qwen_local/qwen_local_nothink -- the local SGLang "
+                             "deployment cannot serve concurrent candidate generations.")
     p_run.add_argument("--out")
     p_run.set_defaults(func=cmd_run)
 
