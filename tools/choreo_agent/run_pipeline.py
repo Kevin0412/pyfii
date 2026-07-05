@@ -69,6 +69,7 @@ def main(argv: list[str] | None = None) -> int:
         director_script=director_script,
         max_llm_calls_per_cycle=args.max_llm_calls_per_cycle,
         conversation_history_enabled=not args.no_conversation_history,
+        max_conversation_chars=args.max_conversation_chars,
     )
     print(json.dumps(result["summary"], ensure_ascii=False, indent=2))
     return 0 if result["summary"]["completed"] else 1
@@ -104,6 +105,7 @@ def run_full_flow(
     director_script: dict | None = None,
     max_llm_calls_per_cycle: int | None = None,
     conversation_history_enabled: bool = True,
+    max_conversation_chars: int | None = None,
 ) -> dict:
     project_root = Path(project_root).resolve()
     # 有导演剧本时评审由脚本驱动，不需要 TTY
@@ -165,7 +167,7 @@ def run_full_flow(
             use_planning_pass, parallel_candidates, review_segments,
             retry_sleep_s, max_api_exceptions_per_segment,
             gate_profile, director_script, max_llm_calls_per_cycle,
-            conversation_history_enabled,
+            conversation_history_enabled, max_conversation_chars,
         )
     finally:
         for sig, handler in prev_handlers.items():
@@ -191,6 +193,7 @@ def _run_full_flow_body(
     director_script: dict | None = None,
     max_llm_calls_per_cycle: int | None = None,
     conversation_history_enabled: bool = True,
+    max_conversation_chars: int | None = None,
 ) -> dict:
     while True:
         session = Session(project_root, gate_profile=gate_profile, conversation_history_enabled=conversation_history_enabled)
@@ -209,6 +212,7 @@ def _run_full_flow_body(
             "locked": False,
             "failure_category": None,
             "scheme_resets": 0,
+            "scheme_reset_reasons": {"category_repeat": 0, "size_cap": 0},
         }
         prev_cycle_category = None
         records.append(segment_record)
@@ -366,20 +370,31 @@ def _run_full_flow_body(
                 last_validation = rounds[-1].validation if rounds else None
                 category = _failure_category_from_validation(last_validation)
                 segment_record["failure_category"] = category
-                if prev_cycle_category is not None and category == prev_cycle_category:
-                    # 黑洞熔断（mimo 三连单段黑洞的结构对策）：连续两个 cycle 同类失败
-                    # = 当前方案家族走不通，继续灌同类修复反馈只会烧轮。清候选池 +
+                conv_chars = conversation.total_chars(seg.conversation)
+                segment_record["conversation_chars"] = conv_chars
+                segment_record["conversation_turns"] = len(seg.conversation)
+                category_repeat = prev_cycle_category is not None and category == prev_cycle_category
+                size_exceeded = max_conversation_chars is not None and conv_chars > max_conversation_chars
+                if category_repeat or size_exceeded:
+                    # 黑洞熔断（mimo 三连单段黑洞的结构对策）：连续两个 cycle 同类失败，
+                    # 或者会话已经长到设定的上限（auto-compact 策略：超限本身是触发
+                    # 重置的另一个理由，不是段内渐进式裁剪——这样才不违反"同一段内不
+                    # 压缩"）= 当前方案家族走不通，继续灌同类修复反馈只会烧轮。清候选池 +
                     # 宣告方案作废，强制换几何家族/降 keyframe 数/换 assign 策略。
                     # 会话历史也要清空：这是唯一携带"上一版代码"的渠道了（下面的正常续
                     # 分支不再重新拼接 last_code），留着旧尝试的完整对话会跟"方案作废、
                     # 换思路重来"的文字指令自相矛盾——模型看得到自己刚被否决的代码。
+                    reset_reason = "category_repeat" if category_repeat else "size_cap"
                     segment_record["scheme_resets"] += 1
+                    segment_record["scheme_reset_reasons"][reset_reason] += 1
                     session._clear_candidate_pool(seg.id)
                     conversation.reset(seg.conversation)
-                    _append(log_path, f"\n# {seg.id} SCHEME RESET #{segment_record['scheme_resets']} (repeat {category})\n")
+                    reason_detail = f"repeat {category}" if category_repeat else f"{conv_chars} chars > {max_conversation_chars}"
+                    _append(log_path, f"\n# {seg.id} SCHEME RESET #{segment_record['scheme_resets']} ({reset_reason}: {reason_detail})\n")
+                    reset_headline = f"连续 {category} 类失败" if category_repeat else "会话过长"
                     feedback = (
                         _segment_feedback(seg.id, session.state.drone_count)
-                        + f"\n\n## 方案重置（连续 {category} 类失败，上一版方案作废）\n"
+                        + f"\n\n## 方案重置（{reset_headline}，上一版方案作废）\n"
                         "换思路重来，不要在旧方案上小修：更换几何家族（斜线↔散点↔环弧↔双排互换）、"
                         "减少 keyframe 数、或改用不同 assign 策略/执行器组合；"
                         "新方案的点表与时序要与上一版有明显结构差异。"
@@ -1091,6 +1106,11 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
     parser.add_argument("--no-conversation-history", action="store_true",
                          help="Disable persistent multi-turn conversation history (matrix A/B against the "
                               "string-reconstruction baseline; also an emergency rollback switch).")
+    parser.add_argument("--max-conversation-chars", type=int, default=None,
+                         help="Auto-compact: if set, a segment's conversation exceeding this many chars "
+                              "becomes an additional scheme-reset trigger (alongside repeated same-category "
+                              "cycle failures). Default off -- no threshold has been calibrated from real "
+                              "matrix data yet.")
     return parser.parse_args(argv)
 
 
