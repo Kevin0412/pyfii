@@ -273,6 +273,30 @@ Phase 2a 造成的，留在那条待办下不单独立项。
 **结论：Phase 2a 保留**，flash 明确提升，mimo 表面回归经溯源确认为方差非本改动所致，
 证据强度与 §0.7 的既有裁决先例相当。继续 Phase 2b。
 
+**Phase 2b 矩阵裁决**：跨 cycle 续跑改为不重建（`seg.conversation` 段级持久、不随 cycle
+边界清空），scheme reset 同时清空会话（否则"方案作废换思路"跟历史里完整的旧尝试自相矛盬）。
+
+flash：2/2 完成，**11→9.5 轮**（在 2a 已经 14→11 的基础上继续下降），成本 ¥0.824→¥0.624，
+`NO REGRESSION`。
+
+mimo 第一次跑（对照 phase2a_mimo）：0/2 完成——比 2a 的 1/2 还差。没有直接归因于 2b 的代码，
+先深挖了两条失败：run a 卡 S03（`empty_or_unwritten`），run b 又是 **S06**（`window_fill`）。
+两条里都反复出现 `response_chars=0` 同时 `output_tokens` 卡在 provider 上限、`reasoning_chars`
+巨大——推理吃满了整个输出预算，一个字都没吐给答案。回查配置根因：`ai_providers.local.json`
+里 `mimo_vision` **压根没设 `max_output_tokens`**（同门的 `mimo`/`mimo_ultra` 都是显式
+65536），静默落到代码里的 16384 兜底——这不是会话历史或本次架构改动引入的新问题，是配置
+一直有的缺口，只是这次因为跑的量大恰好高频撞上。补上 `max_output_tokens: 65536`（用一次
+最小 `chat()` 调用先确认 provider 接受这个值，再重新跑矩阵，没有再猜测就动真格）。
+
+修复后重跑（`phase2b_mimo_v2`）：**2/2 完成，两跑都恰好 15 轮**，¥1.588，对照
+`phase2a_mimo`（25 轮）和最初那份干净基线 `post_p2_mimo`（25/25 轮，本次改造前的真正
+起点）都是 `NO REGRESSION`——对 `post_p2_mimo` 是 **25→15 轮，降 40%**。
+
+**结论：Phase 2b 保留**。顺手把 `qwen_local` 的 `max_output_tokens` 也从 32768 提到
+65536（同样先用最小调用确认 provider 接受）——qwen thinking 模式在同一类"推理吃满预算"
+上也栽过（S06，20 轮里响应为空），机制相同，一并修。这两处 provider 配置修复本身不是
+本次架构改动的一部分，但直接影响了本次矩阵结果的可信度，记在这里而不是散在别处。
+
 
 
 Pyfii TUI 编舞工作台 = 常驻进程 + 当前段上下文内存 + 人类多轮反馈 + AI 修改当前段 + Pyfii 验证闭环 + 视频验收 + 段落锁定 + 退出恢复
