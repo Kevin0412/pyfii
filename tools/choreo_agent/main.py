@@ -5,9 +5,11 @@ import sys
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(REPO_ROOT / "tools" / "choreo_agent"))
+TOOL_ROOT = REPO_ROOT / "tools" / "choreo_agent"
+sys.path.insert(0, str(TOOL_ROOT))
 
 from core import Session
+from core import conversation
 from core.design_memory import record as design_memory_record
 from core.directive_advisor import explain_conflict
 
@@ -150,6 +152,8 @@ def main():
             print(f"adopted={outcome['adopted']} rejected={outcome['rejected']}")
             if outcome.get("reason"):
                 print(outcome["reason"])
+            if any("active" in item for item in outcome["adopted"]):
+                print("会话历史已重置：AI 之前的对话记忆已不描述当前段实际内容。")
             edit_ack["done"] = False
 
         elif cmd.startswith("g"):
@@ -239,6 +243,10 @@ def main():
                         print(f"  continuity_error: {validation.continuity_error[-200:]}")
                     _print_tier_summary(validation, indent="  ")
 
+            if seg is not None:
+                turns = seg.conversation
+                print(f"  conversation: {len(turns)} turns, {conversation.total_chars(turns)} chars")
+
             if rounds[-1].validation and rounds[-1].validation.passed:
                 if session.state.mode == "fast":
                     print("Safe gate passed. Fast mode: asking AI reviewer whether to lock.")
@@ -280,6 +288,14 @@ def main():
             session.sync_state_with_markers(save=True)
             print("Synced state from design.py markers.")
 
+        elif cmd == "c" or cmd == "context":
+            if seg is None:
+                print("No current segment.")
+            else:
+                turns = seg.conversation
+                print(f"conversation for {seg.id}: {len(turns)} turns, {conversation.total_chars(turns)} chars")
+                print(conversation.format_debug_transcript(turns))
+
         elif cmd.startswith("mode"):
             parts = cmd.split()
             if len(parts) == 1:
@@ -295,6 +311,7 @@ def main():
             print(
                 "Commands: g [反馈]=generate+repair  i [文本]=查看/编辑当前段 intent  "
                 "v=validate  a=approve  o <理由>=导演 override 锁定  adopt=采纳手工修改  "
+                "c/context=查看当前段会话历史(只读)  "
                 "h=handoff  mode [manual|fast]  sync  s=save  q=quit"
             )
 
@@ -302,7 +319,12 @@ def main():
 def _resolve_project_path(value: str) -> Path:
     proj = Path(value)
     if not proj.is_absolute():
-        proj = REPO_ROOT / proj
+        # 相对路径("agent_projects/<name>"，匹配 usage 字符串)必须落在
+        # tools/choreo_agent/ 下——落到外层仓库根目录会跑到 .gitignore 覆盖不到的
+        # 地方(只有 tools/choreo_agent/agent_projects/ 被忽略)，运行产物就会被
+        # git 跟踪到。这是真实机测试才抓到的 bug：mock 测试都直接传绝对路径给
+        # Session()，从没走过这条路径解析逻辑。
+        proj = TOOL_ROOT / proj
     return proj.resolve()
 
 
@@ -312,7 +334,7 @@ def _init_project_from_template(
     mode: str | None = None,
     drone_count: int | None = None,
 ) -> None:
-    template_root = REPO_ROOT / "tools" / "choreo_agent" / "project_template"
+    template_root = TOOL_ROOT / "project_template"
     if not template_root.exists():
         raise FileNotFoundError(f"missing project template: {template_root}")
     project_root.mkdir(parents=True, exist_ok=True)

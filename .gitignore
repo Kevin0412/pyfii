@@ -37,3 +37,7 @@ tools/choreo_agent/tmp*/
 # 运行产物：本地数据，不进开源仓库
 tools/choreo_agent/director_case_reports/
 tools/choreo_agent/matrix_reports/
+# 防御性兜底：main.py 曾经有路径解析 bug，把 agent_projects/<name> 解析到仓库根目录
+# 而不是 tools/choreo_agent/ 下（已修复），只忽略 tools/choreo_agent/agent_projects/
+# 接不住这种情况。任何位置的 agent_projects/ 都当运行产物处理。
+agent_projects/
