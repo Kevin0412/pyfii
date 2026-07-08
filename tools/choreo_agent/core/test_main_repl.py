@@ -110,5 +110,89 @@ def test_context_command_with_no_current_segment(capsys):
         shutil.rmtree(project.parent, ignore_errors=True)
 
 
+def test_gate_command_round_trips(capsys):
+    project = _project()
+    try:
+        out = _run_repl(project, ["gate", "gate full", "gate", "gate bogus", "q"], capsys)
+        assert "Gate profile: safety" in out  # startup banner + bare `gate`
+        assert "Gate profile set to full." in out
+        assert "Gate profile: full" in out
+        assert "Usage: gate [full|safety]" in out
+    finally:
+        shutil.rmtree(project.parent, ignore_errors=True)
+
+
+def test_g_command_prefix_does_not_swallow_gate(capsys):
+    """真实撞过的 bug：g 命令曾用 cmd.startswith("g") 匹配，会把 "gate ..." 当成
+    generate 命令（反馈文本变成 "ate ..."），触发一次不该发生的真实 LLM 调用。
+    这里只需确认 gate 命令没有触发 generate 报错/流式输出，不需要真的联网。"""
+    project = _project()
+    try:
+        out = _run_repl(project, ["gate full", "q"], capsys)
+        assert "Gate profile set to full." in out
+        assert "Generating with" not in out
+    finally:
+        shutil.rmtree(project.parent, ignore_errors=True)
+
+
+def test_provider_command_validates_against_known_providers(capsys, monkeypatch):
+    import core.session as session_module
+
+    def fake_load_config(name):
+        if name != "deepseek_pro":
+            raise KeyError(name)
+        return {}
+
+    monkeypatch.setattr(session_module, "_load_provider_config", fake_load_config)
+    monkeypatch.setattr(session_module, "_list_provider_names", lambda: ["deepseek_pro"])
+
+    project = _project()
+    try:
+        out = _run_repl(
+            project,
+            ["provider bogus_name", "provider deepseek_pro", "provider", "q"],
+            capsys,
+        )
+        assert "unknown or unavailable provider 'bogus_name'" in out
+        assert "Known: deepseek_pro" in out
+        assert "Provider set to deepseek_pro." in out
+        assert "Provider: deepseek_pro" in out
+    finally:
+        shutil.rmtree(project.parent, ignore_errors=True)
+
+
+def test_ckpt_command_save_list_restore(capsys):
+    project = _project()
+    try:
+        out = _run_repl(
+            project,
+            ["ckpt save", "ckpt list", "ckpt restore doesnotexist", "q"],
+            capsys,
+        )
+        assert "Checkpoint saved:" in out
+        assert "[1] design_" in out
+        assert "Checkpoint 'doesnotexist' not found." in out
+    finally:
+        shutil.rmtree(project.parent, ignore_errors=True)
+
+
+def test_export_command_writes_zip_excluding_checkpoints(capsys, tmp_path):
+    project = _project()
+    try:
+        out_zip = tmp_path / "out.zip"
+        out = _run_repl(project, [f"export {out_zip}", "q"], capsys)
+        assert f"Exported to {out_zip}" in out
+        assert out_zip.exists()
+
+        import zipfile
+
+        with zipfile.ZipFile(out_zip) as zf:
+            names = zf.namelist()
+        assert "state.json" in names
+        assert not any(n.startswith("checkpoints/") for n in names)
+    finally:
+        shutil.rmtree(project.parent, ignore_errors=True)
+
+
 if __name__ == "__main__":
     print("This test file requires the capsys pytest fixture; run via pytest.")

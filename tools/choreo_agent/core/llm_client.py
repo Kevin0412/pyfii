@@ -53,6 +53,15 @@ def load_config(provider_name: str = "deepseek") -> dict:
     return providers[provider_name]
 
 
+def list_provider_names() -> list[str]:
+    """已配置的 provider 名称列表；配置文件缺失（本机未配置）时返回空列表，
+    供 UI 层拼错误提示用，不用于校验（校验仍走 load_config 的 KeyError）。"""
+    if not CONFIG_PATH.exists():
+        return []
+    cfg = json.loads(CONFIG_PATH.read_text(encoding="utf-8"))
+    return sorted(cfg.get("providers", {}).keys())
+
+
 def chat(
     system: str,
     user: str,

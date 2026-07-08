@@ -9,7 +9,11 @@ from pathlib import Path
 from typing import Callable
 from .state import ProjectState, SegmentState
 from .script_editor import replace_active_segment, lock_segment, parse_markers, update_segment_docstring
-from .checkpoint import save as checkpoint_save
+from .checkpoint import (
+    save as _checkpoint_save_file,
+    restore as _checkpoint_restore_file,
+    list_checkpoints as _checkpoint_list_files,
+)
 from .validator import validate, ValidationResult
 from .preflight import preflight_check, preflight_feedback
 from .planning_pass import (
@@ -22,7 +26,13 @@ from .planning_pass import (
 )
 from .prompt_builder import build_segment_prompt
 from .limits import MIN_SHOW_END_S
-from .llm_client import chat, chat_prefix, LlmResponse, load_config as _load_provider_config
+from .llm_client import (
+    chat,
+    chat_prefix,
+    LlmResponse,
+    load_config as _load_provider_config,
+    list_provider_names as _list_provider_names,
+)
 from . import conversation
 from .conversation import limit_text as _limit_text
 
@@ -1174,6 +1184,56 @@ def {function_name}(drones: list):
 
     def save(self) -> None:
         self.state.save(self.project_root)
+
+    # ---- 模式/存档 ----
+
+    def set_provider(self, name: str) -> None:
+        """校验并切换 provider（立即持久化）。未知/未配置的 provider 抛
+        ValueError，带上已知 provider 列表（若本机有配置）方便排查。"""
+        name = (name or "").strip()
+        try:
+            _load_provider_config(name)
+        except (KeyError, FileNotFoundError) as exc:
+            known = _list_provider_names()
+            hint = f" Known: {', '.join(known)}" if known else ""
+            raise ValueError(f"unknown or unavailable provider '{name}'.{hint}") from exc
+        self.state.provider = name
+        self.save()
+
+    def set_gate_profile(self, name: str) -> bool:
+        """切换本次 Session 生命周期内的 gate_profile；不持久化（构造期概念，
+        非项目数据，见 __init__ 注释）。成功返回 True，非法值返回 False。"""
+        if name not in ("full", "safety"):
+            return False
+        self.gate_profile = name
+        return True
+
+    def checkpoint_save(self) -> Path | None:
+        """备份当前 design.py 到 checkpoints/。design.py 尚不存在时返回 None。"""
+        return _checkpoint_save_file(self.project_root)
+
+    def checkpoint_list(self) -> list[str]:
+        """按时间顺序列出全部 checkpoint 文件名（可能很多，调用方自行截断展示）。"""
+        return _checkpoint_list_files(self.project_root)
+
+    def checkpoint_restore(self, name: str) -> bool:
+        """还原指定 checkpoint 到 design.py，并重新按 marker 同步 state（锁定/
+        当前段索引等）——还原到旧文件后 state.json 里的锁定信息可能对不上文件
+        实际内容，必须重新 sync，否则续写会按错误的段结构规划。对于因还原而
+        从"已锁定"变回"未锁定"的段，同时清空其会话历史：AI 记得的"自己写了
+        什么"已经不再对应磁盘上的内容，留着只会在下一轮生成里带偏模型
+        （与 adopt_manual_edits 的处理是同一个道理）。"""
+        before_locked = set(self.state.locked_segment_ids)
+        if not _checkpoint_restore_file(self.project_root, name):
+            return False
+        self.sync_state_with_markers(save=False)
+        newly_unlocked = before_locked - set(self.state.locked_segment_ids)
+        if newly_unlocked:
+            for seg in self.state.segments:
+                if seg.id in newly_unlocked:
+                    conversation.reset(seg.conversation)
+        self.state.save(self.project_root)
+        return True
 
     def _refine_plan_with_checker(
         self,
