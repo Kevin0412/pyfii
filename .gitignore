@@ -34,6 +34,9 @@ apps/pyfii-gui/frontend/node_modules/
 tools/tmp*/
 tools/choreo_agent/tmp*/
 
+# 真实飞行采集日志：本地数据，不进开源仓库（见 doc/flight_log_trajectory_analysis.md）
+flight_logs/
+
 # 运行产物：本地数据，不进开源仓库
 tools/choreo_agent/director_case_reports/
 tools/choreo_agent/matrix_reports/

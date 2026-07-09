@@ -8,6 +8,7 @@
 | [pyfii_script_patterns_human.md](pyfii_script_patterns_human.md) | dntg 编码模式 | ✅ 核心 |
 | [choreo_agent_lessons.md](choreo_agent_lessons.md) | agent 踩坑 10 条 | ✅ 2026-05-29 |
 | [choreo_agent_roadmap.md](choreo_agent_roadmap.md) | 后续计划 | ✅ 2026-05-29 |
+| [flight_log_trajectory_analysis.md](flight_log_trajectory_analysis.md) | 真实飞行 vs pyfii 模型 差异与优化 | ✅ 2026-07-09 |
 | [doc_zh_CN.md](doc_zh_CN.md) | 中文使用文档 | ✅ |
 | [pyfii_gui.md](pyfii_gui.md) | GUI 原型 | ✅ |
 | [tutorial/](tutorial/) | 教程 | ✅ |

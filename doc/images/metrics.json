@@ -1,0 +1,39 @@
+{
+  "grid": {
+    "model_dur": 26.767529138713368,
+    "real_dur": 20.448,
+    "corner_miss_cm": [
+      39.1,
+      20.1,
+      43.7,
+      39.2
+    ],
+    "mean_miss": 35.5,
+    "n_glitch": 6,
+    "start_offset_cm": 32.6
+  },
+  "complex": {
+    "model_dur": 128.51489325786946,
+    "real_dur": 73.38,
+    "n_glitch_162913": 6,
+    "glitch_pct": 1.6,
+    "vz_max_real": 155.0
+  },
+  "noise": {
+    "frac_speed_gt_250": 1.8,
+    "max_speed_spike": 1371.0
+  },
+  "vertical": {
+    "real_climb_cm_s": [
+      20.0,
+      30.0,
+      40.0
+    ],
+    "pyfii_vertical_vel": 50.0,
+    "config_MaxVelZ": [
+      30,
+      60
+    ],
+    "note": "pyfii ignores VelZ/AccZ -> vertical moves use last VelXY; here 50 vs real ~25-44"
+  }
+}
