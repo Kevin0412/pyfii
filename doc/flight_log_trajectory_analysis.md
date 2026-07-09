@@ -55,18 +55,19 @@
 
 `drone.py` 亦注明 VelZ 在仿真中被忽略（[drone.py:432](../src/pyfii/drone.py#L432)）。pyfii 已有一处"打断"逻辑（`slow`），但它是**强制减速归零再重启**，并报"动作未完成"告警（[read.py:387](../src/pyfii/read.py#L387)），并非真正的航点融合。
 
-### 2.1 速度/加速度只有一个入口
+### 2.1 pyfii 模拟器缺的是垂直速度通道，不是加速度
 
-pyfii 全部速度/加速度仅经 `VelXY(v,a)`（`HorizontalSpeed` 块，含 VH+AH）进入。实测 `read_xml` **不解析** `AccXY`/`VelZ`/`AccZ` 三块。真实脚本分设四个独立量，映射后果：
+先分清两套模块：真实脚本用 **fwfii**（真实飞控 SDK，`from fwfii.fc import *`），设 `MaxVelXY/MaxAccXY/MaxVelZ/MaxAccZ` 四个独立参数，**真机全部生效**——数据里垂直爬升受 VelZ≈30 约束即是证明。**pyfii 是模拟器**（[read.py](../src/pyfii/read.py)），本文是"用 pyfii 复现该 show"，讨论的是模拟器能表达哪些参数。
 
-| 真实量 | 进 pyfii 通道 | 结果 |
-|:--|:--|:--|
-| MaxVelXY | VelXY 的 v | ✅ 准 |
-| MaxAccXY | VelXY 的 a | ✅ 准（若走独立 `AccXY` 块则丢） |
-| MaxVelZ / MaxAccZ | 无 | ❌ 丢弃 |
-| 漏设 VelXY | — | ⚠️ 静默回退默认 60/100 |
+pyfii 的水平速度/加速度经 `VelXY(v,a)`（`HorizontalSpeed` 块，含速度+加速度）传入，**两者都生效、都不丢**（实测 `VelXY(120,300)` → move2 取 vel=120/acc=300，梯形时长随 acc 变）。真正缺的是**垂直通道**：
 
-即水平参数只要经 `VelXY` 传入即准，垂直参数无处安放，漏设则静默兜底、误差可达一半。
+| fwfii 参数（真机生效） | pyfii 模拟能否表达 |
+|:--|:--|
+| MaxVelXY | ✅ 经 VelXY 的 v |
+| MaxAccXY | ✅ 经 VelXY 的 a |
+| MaxVelZ / MaxAccZ | ❌ read.py 无 `VerticalSpeed` 解析，被忽略 |
+
+故**水平加减速 pyfii 能如实模拟，加速度并未被丢弃**；pyfii 模拟失真仅出在竖直方向——竖直移动只能套用水平速度（见 §3.4），这才是 P3。
 
 ### 2.2 指令间隔不足即打断（实测 244 次）
 
