@@ -289,6 +289,47 @@ metrics['vertical']=dict(
     config_MaxVelZ=[30,60],
     note="pyfii ignores VelZ/AccZ -> vertical moves use last VelXY; here 50 vs real ~25-44")
 
+# ----------------------------------------------------------------------------
+# 7. 指令语义实测：喂 pyfii 自身求解器，验证 §2.2 / §3.4 的数字（不依赖 flight_logs）
+# ----------------------------------------------------------------------------
+def verify_command_semantics():
+    import sys, math
+    sys.path.insert(0, "src")
+    try:
+        from pyfii.drone import Drone
+        from pyfii.read import dots2line
+    except Exception as e:
+        print("跳过语义实测（无法导入 pyfii）:", e); return {}
+
+    # (a) 网格触发多少次“动作未完成”
+    d = Drone(0, 0); d.takeoff(1, 120); d.delay(3000); d.VelXY(120, 300)
+    for row in range(4):
+        yt = min(40+row*80, 320); xt = 320 if row % 2 == 0 else 40
+        d.move2(xt, yt, 120); d.delay(2500)
+    d.land(); d.end()
+    _, _, warns = dots2line(d.outputString, fii=[0, 0])
+    n_undone = sum("completed" in w or "未完成" in w for w in warns)
+
+    # (b) 纯垂直 move2：pyfii 垂直速率是否恒等于 VelXY
+    def climb_secs(velxy):
+        dd = Drone(180, 180); dd.takeoff(1, 80); dd.delay(2000)
+        dd.VelXY(velxy, 400); dd.move2(180, 180, 200); dd.delay(8000)
+        dd.land(); dd.end()
+        lines, _, _ = dots2line(dd.outputString, fii=[180, 180])
+        t0 = t1 = None
+        for l in lines:
+            t, z = l[0], l[3]
+            if t0 is None and z > 80.5: t0 = t
+            if t1 is None and z >= 199.5: t1 = t; break
+        return round((t1-t0)/1000, 2) if t0 and t1 else None
+    vert = {v: climb_secs(v) for v in (150, 50, 30)}
+
+    print("\n[语义实测] 网格 medium: '动作未完成' 告警 =", n_undone, "次")
+    print("[语义实测] 纯垂直升120cm 用时(s) 随 VelXY:", vert, "-> 垂直速率=VelXY")
+    return dict(grid_action_not_completed=n_undone, pure_vertical_climb_s=vert)
+
+metrics['command_semantics'] = verify_command_semantics()
+
 json.dump(metrics,open(f"{OUT}/metrics.json","w"),ensure_ascii=False,indent=2)
 print(json.dumps(metrics,ensure_ascii=False,indent=2))
 print("\nFIGS:",sorted(os.listdir(OUT)))

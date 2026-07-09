@@ -35,5 +35,13 @@
       60
     ],
     "note": "pyfii ignores VelZ/AccZ -> vertical moves use last VelXY; here 50 vs real ~25-44"
+  },
+  "command_semantics": {
+    "grid_action_not_completed": 244,
+    "pure_vertical_climb_s": {
+      "150": 1.07,
+      "50": 2.42,
+      "30": 3.97
+    }
   }
 }
