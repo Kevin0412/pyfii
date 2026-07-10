@@ -892,6 +892,97 @@
       }
     }
   },
+  "failure_prefix_analysis": {
+    "note": "Failure logs are segmented by first critical event; prefixes are compared to the successful 175214 light+flip run where the script family is comparable but not byte-identical.",
+    "prefix_safety": {
+      "flight_20260709_173818": {
+        "effective_start_s": null,
+        "samples": 0
+      },
+      "flight_20260709_173926_pre_flip": {
+        "effective_start_s": 10.07,
+        "window_s": [
+          10.07,
+          41.94
+        ],
+        "samples": 160,
+        "violations": 0,
+        "min_margin_cm": 10.0,
+        "min_xy_cm": 2.0,
+        "min_xy_at_s": 27.71,
+        "dz_at_min_xy_cm": 68.0,
+        "min_dz_cm": 5.0,
+        "xy_at_min_dz_cm": 281.6,
+        "min_3d_cm": 61.8,
+        "min_xy_when_dz_lt_50_cm": 155.4,
+        "min_dz_when_xy_lt_40_cm": 60.0
+      },
+      "flight_20260709_175805_pre_battery": {
+        "effective_start_s": 9.88,
+        "window_s": [
+          9.88,
+          12.48
+        ],
+        "samples": 14,
+        "violations": 0,
+        "min_margin_cm": 235.2,
+        "min_xy_cm": 275.2,
+        "min_xy_at_s": 11.28,
+        "dz_at_min_xy_cm": 66.0,
+        "min_dz_cm": 10.0,
+        "xy_at_min_dz_cm": 276.5,
+        "min_3d_cm": 275.8,
+        "min_xy_when_dz_lt_50_cm": 275.3,
+        "min_dz_when_xy_lt_40_cm": null
+      }
+    },
+    "prefix_vs_success_175214": {
+      "173926_98101_pre_flip": {
+        "window_s": [
+          10.0,
+          41.9
+        ],
+        "samples": 160,
+        "median_xy_cm": 3.6,
+        "p90_xy_cm": 12.0,
+        "median_3d_cm": 4.6,
+        "p90_3d_cm": 19.0
+      },
+      "173926_98102_pre_flip": {
+        "window_s": [
+          10.0,
+          41.9
+        ],
+        "samples": 160,
+        "median_xy_cm": 4.7,
+        "p90_xy_cm": 11.2,
+        "median_3d_cm": 6.3,
+        "p90_3d_cm": 14.3
+      },
+      "175805_98101_same_prefix": {
+        "window_s": [
+          10.0,
+          41.9
+        ],
+        "samples": 160,
+        "median_xy_cm": 3.4,
+        "p90_xy_cm": 10.5,
+        "median_3d_cm": 4.6,
+        "p90_3d_cm": 11.3
+      },
+      "175805_98102_before_battery": {
+        "window_s": [
+          10.0,
+          12.48
+        ],
+        "samples": 13,
+        "median_xy_cm": 3.9,
+        "p90_xy_cm": 4.7,
+        "median_3d_cm": 6.2,
+        "p90_3d_cm": 23.5
+      }
+    }
+  },
   "repeatability_clean": {
     "flight_20260709_162913_vs_flight_20260709_163106": {
       "window_s": [

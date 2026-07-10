@@ -529,6 +529,34 @@ def repeat_distance(a, b, tmin=10, tmax=65):
         max_3d_cm=round(float(np.max(d3)), 1),
     )
 
+def compare_uav_prefix(a, b, uid, tmin, tmax):
+    da, db = load_by_uav(a)[uid], load_by_uav(b)[uid]
+    va = physical_track_mask(da, loose=True)
+    vb = physical_track_mask(db, loose=True)
+    if not np.any(va) or not np.any(vb):
+        return dict(samples=0)
+    lo = max(float(np.nanmin(da["t"][va])), float(np.nanmin(db["t"][vb])), float(tmin))
+    hi = min(float(np.nanmax(da["t"][va])), float(np.nanmax(db["t"][vb])), float(tmax))
+    tt = np.arange(lo, hi, 0.2)
+    if len(tt) == 0:
+        return dict(samples=0, window_s=[round(lo, 2), round(hi, 2)])
+    ax = np.interp(tt, da["t"][va], da["x"][va])
+    ay = np.interp(tt, da["t"][va], da["y"][va])
+    az = np.interp(tt, da["t"][va], da["z"][va])
+    bx = np.interp(tt, db["t"][vb], db["x"][vb])
+    by = np.interp(tt, db["t"][vb], db["y"][vb])
+    bz = np.interp(tt, db["t"][vb], db["z"][vb])
+    dxy = np.hypot(ax - bx, ay - by)
+    d3 = np.hypot(dxy, az - bz)
+    return dict(
+        window_s=[round(lo, 2), round(hi, 2)],
+        samples=int(len(tt)),
+        median_xy_cm=round(float(np.median(dxy)), 1),
+        p90_xy_cm=round(float(np.percentile(dxy, 90)), 1),
+        median_3d_cm=round(float(np.median(d3)), 1),
+        p90_3d_cm=round(float(np.percentile(d3, 90)), 1),
+    )
+
 print("Loaded modules OK")
 
 
@@ -852,6 +880,28 @@ for flight in swarm_flights:
         safety_clean_all_status=summarize_safety(pairs, require_good=False),
     )
 metrics["swarm_safety"] = swarm_metrics
+metrics["failure_prefix_analysis"] = {
+    "note": "Failure logs are segmented by first critical event; prefixes are compared to the successful 175214 light+flip run where the script family is comparable but not byte-identical.",
+    "prefix_safety": {
+        "flight_20260709_173818": swarm_metrics["flight_20260709_173818"]["safety_clean_good"],
+        "flight_20260709_173926_pre_flip": swarm_metrics["flight_20260709_173926"]["safety_clean_good"],
+        "flight_20260709_175805_pre_battery": swarm_metrics["flight_20260709_175805"]["safety_clean_good"],
+    },
+    "prefix_vs_success_175214": {
+        "173926_98101_pre_flip": compare_uav_prefix(
+            "flight_20260709_173926", "flight_20260709_175214", "98101", 10.0, 41.9
+        ),
+        "173926_98102_pre_flip": compare_uav_prefix(
+            "flight_20260709_173926", "flight_20260709_175214", "98102", 10.0, 41.9
+        ),
+        "175805_98101_same_prefix": compare_uav_prefix(
+            "flight_20260709_175805", "flight_20260709_175214", "98101", 10.0, 41.9
+        ),
+        "175805_98102_before_battery": compare_uav_prefix(
+            "flight_20260709_175805", "flight_20260709_175214", "98102", 10.0, 12.48
+        ),
+    },
+}
 
 # --- Fig 9: repeatability of the complex route, after AprilTag cleaning ---
 def interp_track(flight, uid="98101"):
