@@ -2,6 +2,9 @@
   "grid": {
     "model_dur": 26.767529138713368,
     "real_dur": 20.448,
+    "command_timed_model_dur": 15.41,
+    "command_time_offset": 2.849,
+    "command_timed_warning_count": 244,
     "corner_miss_cm": [
       39.1,
       20.1,
@@ -15,6 +18,9 @@
   "complex": {
     "model_dur": 128.51489325786946,
     "real_dur": 73.38,
+    "command_timed_model_dur": 68.385,
+    "command_timed_warning_count": 1310,
+    "command_timed_note": "fwfii z-stairs starts at z=60; pyfii Drone range rejects 60, so command baseline clamps it to 80",
     "n_glitch_162913": 6,
     "glitch_pct": 1.6,
     "vz_max_real": 155.0
@@ -35,6 +41,877 @@
       60
     ],
     "note": "pyfii ignores VelZ/AccZ -> vertical moves use last VelXY; here 50 vs real ~25-44"
+  },
+  "log_inventory": {
+    "flight_20260709_162500": {
+      "98101": {
+        "n": 103,
+        "duration_s": 20.45,
+        "mode_counts": {
+          "STABILIZE": 1,
+          "GUIDED": 90,
+          "LAND": 12
+        },
+        "status_counts": {
+          "Good": 90,
+          "prearm check fail": 11,
+          "pos not ok": 2
+        },
+        "default_pose_samples": 19,
+        "implausible_coord_samples": 0,
+        "speed_gt_250_samples": 6,
+        "max_sample_speed_cm_s": 1371.0,
+        "x_range": [
+          0.0,
+          281.0
+        ],
+        "y_range": [
+          0.0,
+          470.0
+        ],
+        "z_range": [
+          0.0,
+          122.0
+        ]
+      }
+    },
+    "flight_20260709_162913": {
+      "98101": {
+        "n": 367,
+        "duration_s": 73.38,
+        "mode_counts": {
+          "GUIDED": 358,
+          "LAND": 9
+        },
+        "status_counts": {
+          "Good": 351,
+          "prearm check fail": 13,
+          "pos not ok": 3
+        },
+        "default_pose_samples": 19,
+        "implausible_coord_samples": 2,
+        "speed_gt_250_samples": 7,
+        "max_sample_speed_cm_s": 1220.3,
+        "x_range": [
+          0.0,
+          309.0
+        ],
+        "y_range": [
+          -191.0,
+          302.0
+        ],
+        "z_range": [
+          -1.0,
+          202.0
+        ]
+      }
+    },
+    "flight_20260709_163106": {
+      "98101": {
+        "n": 367,
+        "duration_s": 73.38,
+        "mode_counts": {
+          "GUIDED": 357,
+          "LAND": 10
+        },
+        "status_counts": {
+          "Good": 353,
+          "prearm check fail": 11,
+          "pos not ok": 3
+        },
+        "default_pose_samples": 18,
+        "implausible_coord_samples": 0,
+        "speed_gt_250_samples": 2,
+        "max_sample_speed_cm_s": 372.7,
+        "x_range": [
+          0.0,
+          307.0
+        ],
+        "y_range": [
+          0.0,
+          299.0
+        ],
+        "z_range": [
+          0.0,
+          202.0
+        ]
+      }
+    },
+    "flight_20260709_171502": {
+      "98101": {
+        "n": 232,
+        "duration_s": 46.3,
+        "mode_counts": {
+          "GUIDED": 222,
+          "LAND": 10
+        },
+        "status_counts": {
+          "Good": 217,
+          "prearm check fail": 12,
+          "pos not ok": 3
+        },
+        "default_pose_samples": 44,
+        "implausible_coord_samples": 0,
+        "speed_gt_250_samples": 0,
+        "max_sample_speed_cm_s": 204.0,
+        "x_range": [
+          13.0,
+          316.0
+        ],
+        "y_range": [
+          22.0,
+          321.0
+        ],
+        "z_range": [
+          0.0,
+          139.0
+        ]
+      },
+      "98102": {
+        "n": 232,
+        "duration_s": 46.3,
+        "mode_counts": {
+          "GUIDED": 216,
+          "LAND": 16
+        },
+        "status_counts": {
+          "Good": 224,
+          "prearm check fail": 8
+        },
+        "default_pose_samples": 42,
+        "implausible_coord_samples": 0,
+        "speed_gt_250_samples": 1,
+        "max_sample_speed_cm_s": 1518.2,
+        "x_range": [
+          22.0,
+          326.0
+        ],
+        "y_range": [
+          24.0,
+          343.0
+        ],
+        "z_range": [
+          4.0,
+          205.0
+        ]
+      }
+    },
+    "flight_20260709_173818": {
+      "98101": {
+        "n": 12,
+        "duration_s": 2.27,
+        "mode_counts": {
+          "N/A": 12
+        },
+        "status_counts": {
+          "N/A": 12
+        },
+        "default_pose_samples": 0,
+        "implausible_coord_samples": 0,
+        "speed_gt_250_samples": 0,
+        "max_sample_speed_cm_s": 0.0,
+        "x_range": [
+          40.0,
+          40.0
+        ],
+        "y_range": [
+          40.0,
+          40.0
+        ],
+        "z_range": [
+          0.0,
+          0.0
+        ]
+      },
+      "98102": {
+        "n": 12,
+        "duration_s": 2.27,
+        "mode_counts": {
+          "GUIDED": 12
+        },
+        "status_counts": {
+          "Good": 12
+        },
+        "default_pose_samples": 12,
+        "implausible_coord_samples": 0,
+        "speed_gt_250_samples": 0,
+        "max_sample_speed_cm_s": 7.0,
+        "x_range": [
+          22.0,
+          23.0
+        ],
+        "y_range": [
+          23.0,
+          25.0
+        ],
+        "z_range": [
+          4.0,
+          4.0
+        ]
+      }
+    },
+    "flight_20260709_173926": {
+      "98101": {
+        "n": 235,
+        "duration_s": 47.15,
+        "mode_counts": {
+          "GUIDED": 212,
+          "FLIP": 23
+        },
+        "status_counts": {
+          "Good": 223,
+          "Leaning": 12
+        },
+        "default_pose_samples": 42,
+        "implausible_coord_samples": 20,
+        "speed_gt_250_samples": 19,
+        "max_sample_speed_cm_s": 2242.3,
+        "x_range": [
+          22.0,
+          2861.0
+        ],
+        "y_range": [
+          -1259.0,
+          322.0
+        ],
+        "z_range": [
+          -3925.0,
+          289.0
+        ]
+      },
+      "98102": {
+        "n": 235,
+        "duration_s": 47.15,
+        "mode_counts": {
+          "GUIDED": 231,
+          "LAND": 4
+        },
+        "status_counts": {
+          "Good": 235
+        },
+        "default_pose_samples": 39,
+        "implausible_coord_samples": 0,
+        "speed_gt_250_samples": 1,
+        "max_sample_speed_cm_s": 1504.7,
+        "x_range": [
+          22.0,
+          327.0
+        ],
+        "y_range": [
+          24.0,
+          322.0
+        ],
+        "z_range": [
+          4.0,
+          221.0
+        ]
+      }
+    },
+    "flight_20260709_175214": {
+      "98101": {
+        "n": 279,
+        "duration_s": 55.78,
+        "mode_counts": {
+          "GUIDED": 257,
+          "FLIP": 10,
+          "LAND": 12
+        },
+        "status_counts": {
+          "Good": 217,
+          "Leaning": 61,
+          "pos not ok": 1
+        },
+        "default_pose_samples": 43,
+        "implausible_coord_samples": 0,
+        "speed_gt_250_samples": 0,
+        "max_sample_speed_cm_s": 227.4,
+        "x_range": [
+          22.0,
+          308.0
+        ],
+        "y_range": [
+          22.0,
+          323.0
+        ],
+        "z_range": [
+          3.0,
+          199.0
+        ]
+      },
+      "98102": {
+        "n": 279,
+        "duration_s": 55.78,
+        "mode_counts": {
+          "GUIDED": 262,
+          "LAND": 17
+        },
+        "status_counts": {
+          "Good": 272,
+          "prearm check fail": 7
+        },
+        "default_pose_samples": 42,
+        "implausible_coord_samples": 0,
+        "speed_gt_250_samples": 1,
+        "max_sample_speed_cm_s": 1491.9,
+        "x_range": [
+          22.0,
+          329.0
+        ],
+        "y_range": [
+          23.0,
+          323.0
+        ],
+        "z_range": [
+          4.0,
+          204.0
+        ]
+      }
+    },
+    "flight_20260709_175805": {
+      "98101": {
+        "n": 279,
+        "duration_s": 55.97,
+        "mode_counts": {
+          "GUIDED": 256,
+          "FLIP": 10,
+          "LAND": 13
+        },
+        "status_counts": {
+          "Good": 216,
+          "Leaning": 62,
+          "pos not ok": 1
+        },
+        "default_pose_samples": 43,
+        "implausible_coord_samples": 0,
+        "speed_gt_250_samples": 1,
+        "max_sample_speed_cm_s": 264.1,
+        "x_range": [
+          22.0,
+          314.0
+        ],
+        "y_range": [
+          18.0,
+          325.0
+        ],
+        "z_range": [
+          4.0,
+          200.0
+        ]
+      },
+      "98102": {
+        "n": 279,
+        "duration_s": 55.97,
+        "mode_counts": {
+          "GUIDED": 242,
+          "LAND": 37
+        },
+        "status_counts": {
+          "Good": 62,
+          "Dead Battery": 217
+        },
+        "default_pose_samples": 212,
+        "implausible_coord_samples": 0,
+        "speed_gt_250_samples": 6,
+        "max_sample_speed_cm_s": 1675.5,
+        "x_range": [
+          21.0,
+          320.0
+        ],
+        "y_range": [
+          22.0,
+          290.0
+        ],
+        "z_range": [
+          4.0,
+          173.0
+        ]
+      }
+    },
+    "flight_20260709_180602": {
+      "98101": {
+        "n": 392,
+        "duration_s": 78.4,
+        "mode_counts": {
+          "STABILIZE": 1,
+          "GUIDED": 380,
+          "LAND": 11
+        },
+        "status_counts": {
+          "Good": 378,
+          "prearm check fail": 11,
+          "pos not ok": 3
+        },
+        "default_pose_samples": 21,
+        "implausible_coord_samples": 0,
+        "speed_gt_250_samples": 2,
+        "max_sample_speed_cm_s": 288.3,
+        "x_range": [
+          0.0,
+          302.0
+        ],
+        "y_range": [
+          -15.0,
+          298.0
+        ],
+        "z_range": [
+          0.0,
+          203.0
+        ]
+      }
+    }
+  },
+  "cleaning": {
+    "flight_20260709_162500": {
+      "98101": {
+        "raw_samples": 103,
+        "physical_samples": 70,
+        "dropped_samples": 33,
+        "default_pose_after_2s": 10,
+        "implausible_coord": 0,
+        "single_frame_jump": 4,
+        "non_good_status": 13,
+        "non_guided_mode": 13
+      }
+    },
+    "flight_20260709_162913": {
+      "98101": {
+        "raw_samples": 367,
+        "physical_samples": 335,
+        "dropped_samples": 32,
+        "default_pose_after_2s": 10,
+        "implausible_coord": 0,
+        "single_frame_jump": 5,
+        "non_good_status": 16,
+        "non_guided_mode": 9
+      }
+    },
+    "flight_20260709_163106": {
+      "98101": {
+        "raw_samples": 367,
+        "physical_samples": 337,
+        "dropped_samples": 30,
+        "default_pose_after_2s": 9,
+        "implausible_coord": 0,
+        "single_frame_jump": 0,
+        "non_good_status": 14,
+        "non_guided_mode": 10
+      }
+    },
+    "flight_20260709_171502": {
+      "98101": {
+        "raw_samples": 232,
+        "physical_samples": 177,
+        "dropped_samples": 55,
+        "default_pose_after_2s": 34,
+        "implausible_coord": 0,
+        "single_frame_jump": 0,
+        "non_good_status": 15,
+        "non_guided_mode": 10
+      },
+      "98102": {
+        "raw_samples": 232,
+        "physical_samples": 175,
+        "dropped_samples": 57,
+        "default_pose_after_2s": 32,
+        "implausible_coord": 0,
+        "single_frame_jump": 1,
+        "non_good_status": 8,
+        "non_guided_mode": 16
+      }
+    },
+    "flight_20260709_173818": {
+      "98101": {
+        "raw_samples": 12,
+        "physical_samples": 0,
+        "dropped_samples": 12,
+        "default_pose_after_2s": 0,
+        "implausible_coord": 0,
+        "single_frame_jump": 0,
+        "non_good_status": 12,
+        "non_guided_mode": 12
+      },
+      "98102": {
+        "raw_samples": 12,
+        "physical_samples": 10,
+        "dropped_samples": 2,
+        "default_pose_after_2s": 2,
+        "implausible_coord": 0,
+        "single_frame_jump": 0,
+        "non_good_status": 0,
+        "non_guided_mode": 0
+      }
+    },
+    "flight_20260709_173926": {
+      "98101": {
+        "raw_samples": 235,
+        "physical_samples": 176,
+        "dropped_samples": 59,
+        "default_pose_after_2s": 33,
+        "implausible_coord": 20,
+        "single_frame_jump": 18,
+        "non_good_status": 12,
+        "non_guided_mode": 23
+      },
+      "98102": {
+        "raw_samples": 235,
+        "physical_samples": 200,
+        "dropped_samples": 35,
+        "default_pose_after_2s": 30,
+        "implausible_coord": 0,
+        "single_frame_jump": 1,
+        "non_good_status": 0,
+        "non_guided_mode": 4
+      }
+    },
+    "flight_20260709_175214": {
+      "98101": {
+        "raw_samples": 279,
+        "physical_samples": 180,
+        "dropped_samples": 99,
+        "default_pose_after_2s": 33,
+        "implausible_coord": 0,
+        "single_frame_jump": 0,
+        "non_good_status": 62,
+        "non_guided_mode": 22
+      },
+      "98102": {
+        "raw_samples": 279,
+        "physical_samples": 223,
+        "dropped_samples": 56,
+        "default_pose_after_2s": 32,
+        "implausible_coord": 0,
+        "single_frame_jump": 1,
+        "non_good_status": 7,
+        "non_guided_mode": 17
+      }
+    },
+    "flight_20260709_175805": {
+      "98101": {
+        "raw_samples": 279,
+        "physical_samples": 178,
+        "dropped_samples": 101,
+        "default_pose_after_2s": 34,
+        "implausible_coord": 0,
+        "single_frame_jump": 0,
+        "non_good_status": 63,
+        "non_guided_mode": 23
+      },
+      "98102": {
+        "raw_samples": 279,
+        "physical_samples": 28,
+        "dropped_samples": 251,
+        "default_pose_after_2s": 203,
+        "implausible_coord": 0,
+        "single_frame_jump": 4,
+        "non_good_status": 217,
+        "non_guided_mode": 37
+      }
+    },
+    "flight_20260709_180602": {
+      "98101": {
+        "raw_samples": 392,
+        "physical_samples": 358,
+        "dropped_samples": 34,
+        "default_pose_after_2s": 12,
+        "implausible_coord": 0,
+        "single_frame_jump": 0,
+        "non_good_status": 14,
+        "non_guided_mode": 12
+      }
+    }
+  },
+  "swarm_pyfii_baseline_warnings": {
+    "flight_20260709_171502": {
+      "98101": 0,
+      "98102": 57
+    },
+    "flight_20260709_175214": {
+      "98101": 23,
+      "98102": 23
+    }
+  },
+  "swarm_pyfii_baseline_safety": {
+    "flight_20260709_171502": {
+      "effective_start_s": 0.0,
+      "window_s": [
+        0.0,
+        36.0
+      ],
+      "samples": 181,
+      "violations": 0,
+      "min_margin_cm": 18.8,
+      "min_xy_cm": 0.0,
+      "min_xy_at_s": 15.0,
+      "dz_at_min_xy_cm": 80.0,
+      "min_dz_cm": 0.0,
+      "xy_at_min_dz_cm": 280.0,
+      "min_3d_cm": 70.0,
+      "min_xy_when_dz_lt_50_cm": 280.0,
+      "min_dz_when_xy_lt_40_cm": 69.7
+    },
+    "flight_20260709_175214": {
+      "effective_start_s": 0.0,
+      "window_s": [
+        0.0,
+        45.6
+      ],
+      "samples": 229,
+      "violations": 0,
+      "min_margin_cm": 20.0,
+      "min_xy_cm": 0.0,
+      "min_xy_at_s": 14.0,
+      "dz_at_min_xy_cm": 80.0,
+      "min_dz_cm": 0.0,
+      "xy_at_min_dz_cm": 280.0,
+      "min_3d_cm": 70.0,
+      "min_xy_when_dz_lt_50_cm": 143.3,
+      "min_dz_when_xy_lt_40_cm": 70.0
+    }
+  },
+  "swarm_safety": {
+    "flight_20260709_171502": {
+      "safety_clean_good": {
+        "effective_start_s": 9.42,
+        "window_s": [
+          9.42,
+          41.48
+        ],
+        "samples": 161,
+        "violations": 0,
+        "min_margin_cm": 12.0,
+        "min_xy_cm": 6.1,
+        "min_xy_at_s": 32.47,
+        "dz_at_min_xy_cm": 88.0,
+        "min_dz_cm": 4.0,
+        "xy_at_min_dz_cm": 288.0,
+        "min_3d_cm": 64.9,
+        "min_xy_when_dz_lt_50_cm": 284.1,
+        "min_dz_when_xy_lt_40_cm": 62.0
+      },
+      "safety_clean_all_status": {
+        "effective_start_s": 9.42,
+        "window_s": [
+          9.42,
+          45.69
+        ],
+        "samples": 182,
+        "violations": 0,
+        "min_margin_cm": 12.0,
+        "min_xy_cm": 6.1,
+        "min_xy_at_s": 32.47,
+        "dz_at_min_xy_cm": 88.0,
+        "min_dz_cm": 0.0,
+        "xy_at_min_dz_cm": 300.8,
+        "min_3d_cm": 64.9,
+        "min_xy_when_dz_lt_50_cm": 272.1,
+        "min_dz_when_xy_lt_40_cm": 62.0
+      }
+    },
+    "flight_20260709_173818": {
+      "safety_clean_good": {
+        "effective_start_s": null,
+        "samples": 0
+      },
+      "safety_clean_all_status": {
+        "effective_start_s": null,
+        "samples": 0
+      }
+    },
+    "flight_20260709_173926": {
+      "safety_clean_good": {
+        "effective_start_s": 10.07,
+        "window_s": [
+          10.07,
+          41.94
+        ],
+        "samples": 160,
+        "violations": 0,
+        "min_margin_cm": 10.0,
+        "min_xy_cm": 2.0,
+        "min_xy_at_s": 27.71,
+        "dz_at_min_xy_cm": 68.0,
+        "min_dz_cm": 5.0,
+        "xy_at_min_dz_cm": 281.6,
+        "min_3d_cm": 61.8,
+        "min_xy_when_dz_lt_50_cm": 155.4,
+        "min_dz_when_xy_lt_40_cm": 60.0
+      },
+      "safety_clean_all_status": {
+        "effective_start_s": 10.07,
+        "window_s": [
+          10.07,
+          41.94
+        ],
+        "samples": 160,
+        "violations": 0,
+        "min_margin_cm": 10.0,
+        "min_xy_cm": 2.0,
+        "min_xy_at_s": 27.71,
+        "dz_at_min_xy_cm": 68.0,
+        "min_dz_cm": 5.0,
+        "xy_at_min_dz_cm": 281.6,
+        "min_3d_cm": 61.8,
+        "min_xy_when_dz_lt_50_cm": 155.4,
+        "min_dz_when_xy_lt_40_cm": 60.0
+      }
+    },
+    "flight_20260709_175214": {
+      "safety_clean_good": {
+        "effective_start_s": 9.68,
+        "window_s": [
+          9.68,
+          43.35
+        ],
+        "samples": 164,
+        "violations": 0,
+        "min_margin_cm": 10.0,
+        "min_xy_cm": 1.4,
+        "min_xy_at_s": 34.34,
+        "dz_at_min_xy_cm": 77.0,
+        "min_dz_cm": 0.0,
+        "xy_at_min_dz_cm": 279.2,
+        "min_3d_cm": 62.4,
+        "min_xy_when_dz_lt_50_cm": 157.5,
+        "min_dz_when_xy_lt_40_cm": 60.0
+      },
+      "safety_clean_all_status": {
+        "effective_start_s": 9.68,
+        "window_s": [
+          9.68,
+          55.58
+        ],
+        "samples": 220,
+        "violations": 0,
+        "min_margin_cm": 10.0,
+        "min_xy_cm": 1.4,
+        "min_xy_at_s": 34.34,
+        "dz_at_min_xy_cm": 77.0,
+        "min_dz_cm": 0.0,
+        "xy_at_min_dz_cm": 279.2,
+        "min_3d_cm": 62.4,
+        "min_xy_when_dz_lt_50_cm": 157.5,
+        "min_dz_when_xy_lt_40_cm": 60.0
+      }
+    },
+    "flight_20260709_175805": {
+      "safety_clean_good": {
+        "effective_start_s": 9.88,
+        "window_s": [
+          9.88,
+          12.48
+        ],
+        "samples": 14,
+        "violations": 0,
+        "min_margin_cm": 235.2,
+        "min_xy_cm": 275.2,
+        "min_xy_at_s": 11.28,
+        "dz_at_min_xy_cm": 66.0,
+        "min_dz_cm": 10.0,
+        "xy_at_min_dz_cm": 276.5,
+        "min_3d_cm": 275.8,
+        "min_xy_when_dz_lt_50_cm": 275.3,
+        "min_dz_when_xy_lt_40_cm": null
+      },
+      "safety_clean_all_status": {
+        "effective_start_s": 9.88,
+        "window_s": [
+          9.88,
+          21.9
+        ],
+        "samples": 61,
+        "violations": 0,
+        "min_margin_cm": 45.4,
+        "min_xy_cm": 85.4,
+        "min_xy_at_s": 18.5,
+        "dz_at_min_xy_cm": 31.0,
+        "min_dz_cm": 5.0,
+        "xy_at_min_dz_cm": 95.8,
+        "min_3d_cm": 88.1,
+        "min_xy_when_dz_lt_50_cm": 85.4,
+        "min_dz_when_xy_lt_40_cm": null
+      }
+    }
+  },
+  "repeatability_clean": {
+    "flight_20260709_162913_vs_flight_20260709_163106": {
+      "window_s": [
+        10,
+        65
+      ],
+      "median_xy_cm": 4.3,
+      "p90_xy_cm": 32.3,
+      "median_3d_cm": 4.9,
+      "p90_3d_cm": 32.3,
+      "max_3d_cm": 77.0
+    },
+    "flight_20260709_162913_vs_flight_20260709_180602": {
+      "window_s": [
+        10,
+        65
+      ],
+      "median_xy_cm": 6.2,
+      "p90_xy_cm": 17.1,
+      "median_3d_cm": 7.2,
+      "p90_3d_cm": 17.4,
+      "max_3d_cm": 42.0
+    },
+    "flight_20260709_163106_vs_flight_20260709_180602": {
+      "window_s": [
+        10,
+        65
+      ],
+      "median_xy_cm": 7.5,
+      "p90_xy_cm": 30.1,
+      "median_3d_cm": 8.0,
+      "p90_3d_cm": 30.2,
+      "max_3d_cm": 69.9
+    }
+  },
+  "complex_vs_pyfii_command_baseline": {
+    "flight_20260709_162913": {
+      "offset_s": 2.85,
+      "median_3d_cm": 77.5,
+      "p90_3d_cm": 137.5
+    },
+    "flight_20260709_163106": {
+      "offset_s": 3.05,
+      "median_3d_cm": 84.4,
+      "p90_3d_cm": 150.3
+    },
+    "flight_20260709_180602": {
+      "offset_s": 2.85,
+      "median_3d_cm": 71.6,
+      "p90_3d_cm": 126.8
+    }
+  },
+  "yaw_rotation": {
+    "flight_20260709_171502": {
+      "98101": -315.4,
+      "98102": 324.7
+    },
+    "flight_20260709_173818": {
+      "98101": null,
+      "98102": null
+    },
+    "flight_20260709_173926": {
+      "98101": -302.5,
+      "98102": 310.7
+    },
+    "flight_20260709_175214": {
+      "98101": -310.9,
+      "98102": 312.7
+    },
+    "flight_20260709_175805": {
+      "98101": -313.7,
+      "98102": -0.0
+    }
+  },
+  "flight_quality_summary": {
+    "flight_20260709_173818": "abort/connection sample only: 98101 stayed N/A, no usable duet trajectory",
+    "flight_20260709_173926": "98101 FLIP telemetry becomes implausible (x/y/z thousands of cm); useful as flip/localization failure sample",
+    "flight_20260709_175214": "successful light+flip run; clean duet window has no safety-rule violation",
+    "flight_20260709_175805": "98102 reports Dead Battery for most samples; useful as failure/default-pose sample, not normal duet dynamics",
+    "gpsstatus": "NO_GPS is expected for the AprilTag mat positioning system; fcstatus/default pose are the relevant quality signals"
   },
   "command_semantics": {
     "grid_action_not_completed": 244,

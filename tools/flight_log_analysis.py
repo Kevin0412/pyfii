@@ -5,11 +5,12 @@ flight_log_analysis.py — 真实飞行遥测 vs pyfii 运动模型 对照分析
 用法:  python3 tools/flight_log_analysis.py
 依赖:  numpy, matplotlib（CJK 字体 Noto Sans CJK 或回退英文）
 输入:  flight_logs/<flight>/telemetry.csv（本地，未入仓库）
-输出:  doc/images/fig1..6_*.png, doc/images/metrics.json
+输出:  doc/images/fig1..10_*.png, doc/images/metrics.json
 
 见 doc/flight_log_trajectory_analysis.md。
 """
-import csv, os, json
+import csv, os, json, math, collections
+import sys
 import numpy as np
 import matplotlib
 matplotlib.use("Agg")
@@ -27,6 +28,7 @@ plt.rcParams["axes.unicode_minus"] = False
 LOGDIR = "flight_logs"
 OUT = "doc/images"
 os.makedirs(OUT, exist_ok=True)
+DEFAULT_POSE = np.array([22.0, 24.0, 4.0])
 
 # ----------------------------------------------------------------------------
 # 1. Load telemetry
@@ -98,6 +100,183 @@ def sim_route(cmds, start=(0,0,0), fps=200):
             tg += dur
     return np.array(T),np.array(X),np.array(Y),np.array(Z),wpts
 
+def drone_track(drone, fii):
+    """Run pyfii's own command-timed trapezoid solver for a Drone program."""
+    if "src" not in sys.path:
+        sys.path.insert(0, "src")
+    from pyfii.read import dots2line
+    drone.end()
+    lines, _, warns = dots2line(drone.outputString, fii=list(fii))
+    return (
+        np.array([l[0] for l in lines], float) / 1000.0,
+        np.array([l[1] for l in lines], float),
+        np.array([l[2] for l in lines], float),
+        np.array([l[3] for l in lines], float),
+        warns,
+    )
+
+def pyfii_grid_track(vel_xy=120, acc_xy=300, alt=120):
+    if "src" not in sys.path:
+        sys.path.insert(0, "src")
+    from pyfii.drone import Drone
+    d = Drone(0, 0)
+    d.takeoff(1, alt)
+    d.delay(3000)
+    d.VelXY(vel_xy, acc_xy)
+    for row in range(4):
+        yt = min(40 + row * 80, 320)
+        xt = 320 if row % 2 == 0 else 40
+        d.move2(xt, yt, alt)
+        d.delay(2500)
+    d.land()
+    return drone_track(d, (0, 0))
+
+def pyfii_complex_track():
+    if "src" not in sys.path:
+        sys.path.insert(0, "src")
+    from pyfii.drone import Drone
+    d = Drone(0, 0)
+    d.takeoff(1, 120)
+    d.delay(3000)
+    d.VelXY(100, 400)
+    for row in range(4):
+        yt = min(40 + row * 80, 320)
+        xt = 320 if row % 2 == 0 else 40
+        d.move2(xt, yt, 120)
+        d.delay(2500)
+
+    # fly_spiral(): already airborne, so model the repeated Takeoff as a hold.
+    d.delay(3000)
+    d.VelXY(50, 400)
+    d.move2(180, 180, 120)
+    d.delay(3000)
+    for i, r in enumerate([40, 80, 120, 160]):
+        d.VelXY([50, 100, 150, 150][i], 400)
+        for x, y in [(180+r, 180+r), (180-r, 180+r), (180-r, 180-r), (180+r, 180-r)]:
+            d.move2(x, y, 120)
+            d.delay(1500)
+
+    # fly_z_stairs()
+    d.VelXY(50, 400)
+    # pyfii's Drone range rejects z=60, while the fwfii experiment used it.
+    # Clamp the command-timed pyfii baseline to the closest representable height.
+    d.move2(180, 180, 80)
+    d.delay(2000)
+    for z in [80, 120, 160, 200]:
+        d.move2(180, 180, z)
+        d.delay(2000)
+
+    # fly_rectangle()
+    d.VelXY(150, 400)
+    d.move2(300, 300, 100)
+    d.delay(3000)
+    for x, y, z in [(300,300,100), (40,300,100), (40,40,100), (300,40,100), (40,40,100)]:
+        d.move2(x, y, z)
+        d.delay(2000)
+    d.land()
+    return drone_track(d, (0, 0))
+
+def pyfii_swarm_tracks(kind):
+    if "src" not in sys.path:
+        sys.path.insert(0, "src")
+    from pyfii.drone import Drone
+    f1 = Drone(40, 40)
+    f2 = Drone(320, 40)
+    f1.takeoff(1, 100); f2.takeoff(1, 170)
+    for f in (f1, f2):
+        f.VelXY(150, 300)
+    f1.delay(4000); f2.delay(4000)
+
+    def dual_move(x1, y1, z1, x2, y2, z2, hold):
+        f1.move2(x1, y1, z1); f2.move2(x2, y2, z2)
+        f1.delay(hold); f2.delay(hold)
+
+    if kind == "171502":
+        moves = [
+            (40,320,100, 320,320,170, 4000),
+            (320,40,100, 40,40,170, 4000),
+            (180,180,100, 180,180,180, 3000),
+            (40,320,100, 320,40,180, 3000),
+            (320,40,120, 40,320,190, 4000),
+            (180,180,130, 180,180,200, 3000),
+        ]
+        for m in moves:
+            dual_move(*m)
+        f1.delay(4000); f2.delay(4000)  # yaw
+        dual_move(40,40,120, 320,320,180, 3000)
+        dual_move(40,40,100, 320,40,170, 2000)
+    else:
+        moves = [
+            (40,320,100, 320,320,170, 4000),
+            (320,40,100, 40,40,170, 3000),
+            (180,180,100, 180,180,180, 3500),
+            (40,320,100, 320,40,180, 3500),
+            (320,40,120, 40,320,190, 4000),
+            (180,180,130, 180,180,200, 3000),
+        ]
+        for m in moves:
+            dual_move(*m)
+        f1.delay(4000); f2.delay(4000)  # yaw
+        dual_move(40,40,120, 320,320,200, 2000)
+        f1.VelXY(200, 400)
+        f1.move2(180, 180, 120)
+        f2.move2(320, 40, 120)
+        f1.delay(3500); f2.delay(3500)
+        f1.delay(6000); f2.delay(6000)  # flip window; position not modeled
+        dual_move(40,40,120, 320,40,180, 3000)
+    f1.land(); f2.land()
+    return drone_track(f1, (40, 40)), drone_track(f2, (320, 40))
+
+def paired_distance_from_tracks(track_a, track_b, step=0.2):
+    ta, xa, ya, za = track_a[:4]
+    tb, xb, yb, zb = track_b[:4]
+    lo = max(float(np.min(ta)), float(np.min(tb)))
+    hi = min(float(np.max(ta)), float(np.max(tb)))
+    tt = np.arange(lo, hi, step)
+    if len(tt) == 0:
+        return tt, np.array([]), np.array([]), np.array([])
+    ax = np.interp(tt, ta, xa); ay = np.interp(tt, ta, ya); az = np.interp(tt, ta, za)
+    bx = np.interp(tt, tb, xb); by = np.interp(tt, tb, yb); bz = np.interp(tt, tb, zb)
+    xy = np.hypot(ax - bx, ay - by)
+    dz = np.abs(az - bz)
+    d3 = np.hypot(xy, dz)
+    return tt, xy, dz, d3
+
+def first_separated_time_arrays(t, xy, dz):
+    idx = np.where((xy > 100) | (dz > 30))[0]
+    return float(t[idx[0]]) if len(idx) else None
+
+def summarize_safety_arrays(t, xy, dz, d3):
+    """Safety summary for an ideal pyfii two-drone baseline."""
+    start = first_separated_time_arrays(t, xy, dz)
+    if start is None:
+        return dict(effective_start_s=None, samples=0)
+    m = t >= start
+    tt, xxy, ddz, dd3 = t[m], xy[m], dz[m], d3[m]
+    if len(tt) == 0:
+        return dict(effective_start_s=round(start, 2), samples=0)
+    margins = np.maximum(xxy - 40.0, ddz - 50.0)
+    min_xy_idx = int(np.argmin(xxy))
+    min_dz_idx = int(np.argmin(ddz))
+    min_3d_idx = int(np.argmin(dd3))
+    low_dz = xxy[ddz < 50]
+    low_xy = ddz[xxy < 40]
+    return dict(
+        effective_start_s=round(float(start), 2),
+        window_s=[round(float(tt[0]), 2), round(float(tt[-1]), 2)],
+        samples=int(len(tt)),
+        violations=int(np.sum((xxy < 40) & (ddz < 50))),
+        min_margin_cm=round(float(np.min(margins)), 1),
+        min_xy_cm=round(float(xxy[min_xy_idx]), 1),
+        min_xy_at_s=round(float(tt[min_xy_idx]), 2),
+        dz_at_min_xy_cm=round(float(ddz[min_xy_idx]), 1),
+        min_dz_cm=round(float(ddz[min_dz_idx]), 1),
+        xy_at_min_dz_cm=round(float(xxy[min_dz_idx]), 1),
+        min_3d_cm=round(float(dd3[min_3d_idx]), 1),
+        min_xy_when_dz_lt_50_cm=round(float(np.min(low_dz)), 1) if len(low_dz) else None,
+        min_dz_when_xy_lt_40_cm=round(float(np.min(low_xy)), 1) if len(low_xy) else None,
+    )
+
 # ----------------------------------------------------------------------------
 # 3. Reconstruct routes from trajectory_collect.py
 # ----------------------------------------------------------------------------
@@ -152,6 +331,185 @@ def clean_glitches(x,y,z,thresh=60):
     flags[1:]=d>thresh
     return flags
 
+def load_by_uav(flight):
+    """Load one flight directory and split rows by uavid."""
+    p = os.path.join(LOGDIR, flight, "telemetry.csv")
+    rows = list(csv.DictReader(open(p)))
+    out = {}
+    for uid in sorted({r["uavid"] for r in rows}):
+        rr = [r for r in rows if r["uavid"] == uid]
+        out[uid] = dict(
+            t=np.array([float(r["elapsed_ms"]) for r in rr]) / 1000.0,
+            ms=np.array([int(float(r["elapsed_ms"])) for r in rr]),
+            x=np.array([float(r["x_cm"]) for r in rr]),
+            y=np.array([float(r["y_cm"]) for r in rr]),
+            z=np.array([float(r["z_cm"]) for r in rr]),
+            yaw=np.array([float(r["yaw_cdeg"]) for r in rr]) / 100.0,
+            mode=np.array([r["flightmode"] for r in rr], dtype=object),
+            status=np.array([r["fcstatus"] for r in rr], dtype=object),
+            rows=rr,
+        )
+    return out
+
+def coord_valid(d, loose=False):
+    """Telemetry positions that are plausible for the 360cm mat plus overshoot."""
+    low_y = -250 if loose else -100
+    return (
+        (d["x"] >= -100) & (d["x"] <= 500) &
+        (d["y"] >= low_y) & (d["y"] <= 500) &
+        (d["z"] >= -20) & (d["z"] <= 260)
+    )
+
+def default_pose_mask(d, radius=3.0):
+    pos = np.column_stack([d["x"], d["y"], d["z"]])
+    return np.linalg.norm(pos - DEFAULT_POSE, axis=1) <= radius
+
+def physical_track_mask(d, *, allow_flip=False, loose=False):
+    """Samples usable as physical trajectory after AprilTag localization cleaning."""
+    mode_ok = (d["mode"] == "GUIDED") | ((d["mode"] == "FLIP") if allow_flip else False)
+    status_ok = d["status"] == "Good"
+    # AprilTag loss often returns the boot/default pose near (22,24,4) while the
+    # script is already airborne; keep it for quality analysis, drop it from motion.
+    default_airborne = default_pose_mask(d) & (d["t"] > 2.0)
+    jump = clean_glitches(d["x"], d["y"], d["z"], 80)
+    return mode_ok & status_ok & coord_valid(d, loose=loose) & ~default_airborne & ~jump
+
+def break_on_bad_samples(d, thresh=70, loose=False):
+    flags = clean_glitches(d["x"], d["y"], d["z"], thresh) | ~coord_valid(d, loose=loose)
+    return np.where(flags, np.nan, d["x"]), np.where(flags, np.nan, d["y"]), np.where(flags, np.nan, d["z"])
+
+def speed_samples(d):
+    dt = np.diff(d["t"])
+    dt = np.where(dt <= 0, np.nan, dt)
+    v = np.sqrt(np.diff(d["x"])**2 + np.diff(d["y"])**2 + np.diff(d["z"])**2) / dt
+    return d["t"][1:], v
+
+def yaw_delta_deg(d, t0=32, t1=38):
+    m = (d["t"] >= t0) & (d["t"] <= t1)
+    if int(np.sum(m)) < 2:
+        return None
+    y = np.unwrap(np.deg2rad(d["yaw"][m])) * 180 / math.pi
+    return round(float(y[-1] - y[0]), 1)
+
+def summary_one_uav(d):
+    default = default_pose_mask(d)
+    ts, v = speed_samples(d)
+    plausible = coord_valid(d)
+    return dict(
+        n=int(len(d["t"])),
+        duration_s=round(float(d["t"][-1] - d["t"][0]), 2) if len(d["t"]) else 0,
+        mode_counts=dict(collections.Counter(map(str, d["mode"]))),
+        status_counts=dict(collections.Counter(map(str, d["status"]))),
+        default_pose_samples=int(np.sum(default)),
+        implausible_coord_samples=int(np.sum(~plausible)),
+        speed_gt_250_samples=int(np.sum(v > 250)),
+        max_sample_speed_cm_s=round(float(np.nanmax(v)), 1) if len(v) else 0,
+        x_range=[round(float(np.nanmin(d["x"])), 1), round(float(np.nanmax(d["x"])), 1)],
+        y_range=[round(float(np.nanmin(d["y"])), 1), round(float(np.nanmax(d["y"])), 1)],
+        z_range=[round(float(np.nanmin(d["z"])), 1), round(float(np.nanmax(d["z"])), 1)],
+    )
+
+def paired_samples(flight, uid_a="98101", uid_b="98102"):
+    by = load_by_uav(flight)
+    if uid_a not in by or uid_b not in by:
+        return []
+    rows_by_ms = collections.defaultdict(dict)
+    for uid in (uid_a, uid_b):
+        for r in by[uid]["rows"]:
+            rows_by_ms[int(float(r["elapsed_ms"]))][uid] = r
+    pairs = []
+    for ms in sorted(rows_by_ms):
+        dd = rows_by_ms[ms]
+        if uid_a not in dd or uid_b not in dd:
+            continue
+        a, b = dd[uid_a], dd[uid_b]
+        pa = tuple(float(a[k]) for k in ("x_cm", "y_cm", "z_cm"))
+        pb = tuple(float(b[k]) for k in ("x_cm", "y_cm", "z_cm"))
+        xy = math.hypot(pa[0] - pb[0], pa[1] - pb[1])
+        dz = abs(pa[2] - pb[2])
+        d3 = math.hypot(xy, dz)
+        valid = (
+            all(-100 <= v <= 500 for v in pa[:2]) and all(-100 <= v <= 500 for v in pb[:2]) and
+            -20 <= pa[2] <= 260 and -20 <= pb[2] <= 260
+        )
+        pairs.append(dict(
+            t=ms / 1000.0, xy=xy, dz=dz, d3=d3, valid=valid,
+            mode_a=a["flightmode"], mode_b=b["flightmode"],
+            status_a=a["fcstatus"], status_b=b["fcstatus"],
+            default_a=math.dist(pa, tuple(DEFAULT_POSE)) <= 3.0,
+            default_b=math.dist(pb, tuple(DEFAULT_POSE)) <= 3.0,
+            pa=pa, pb=pb,
+        ))
+    return pairs
+
+def first_separated_time(pairs):
+    for p in pairs:
+        if p["xy"] > 100 or p["dz"] > 30:
+            return p["t"]
+    return None
+
+def safety_margin(p):
+    # Safe iff same-height pairs have XY>=40 OR close-XY pairs have Z separation>=50.
+    return max(p["xy"] - 40.0, p["dz"] - 50.0)
+
+def summarize_safety(pairs, require_good=True):
+    start = first_separated_time(pairs)
+    if start is None:
+        return dict(effective_start_s=None, samples=0)
+    ps = [
+        p for p in pairs
+        if p["t"] >= start and p["valid"] and p["mode_a"] != "FLIP" and p["mode_b"] != "FLIP"
+        and not (p["t"] > 2.0 and (p["default_a"] or p["default_b"]))
+    ]
+    if require_good:
+        ps = [p for p in ps if p["mode_a"] == "GUIDED" and p["mode_b"] == "GUIDED" and p["status_a"] == "Good" and p["status_b"] == "Good"]
+    if not ps:
+        return dict(effective_start_s=round(start, 2), samples=0)
+    margins = [safety_margin(p) for p in ps]
+    violations = [p for p in ps if p["xy"] < 40 and p["dz"] < 50]
+    low_dz = [p for p in ps if p["dz"] < 50]
+    low_xy = [p for p in ps if p["xy"] < 40]
+    min_xy = min(ps, key=lambda p: p["xy"])
+    min_dz = min(ps, key=lambda p: p["dz"])
+    min_3d = min(ps, key=lambda p: p["d3"])
+    return dict(
+        effective_start_s=round(start, 2),
+        window_s=[round(ps[0]["t"], 2), round(ps[-1]["t"], 2)],
+        samples=len(ps),
+        violations=len(violations),
+        min_margin_cm=round(float(min(margins)), 1),
+        min_xy_cm=round(float(min_xy["xy"]), 1),
+        min_xy_at_s=round(float(min_xy["t"]), 2),
+        dz_at_min_xy_cm=round(float(min_xy["dz"]), 1),
+        min_dz_cm=round(float(min_dz["dz"]), 1),
+        xy_at_min_dz_cm=round(float(min_dz["xy"]), 1),
+        min_3d_cm=round(float(min_3d["d3"]), 1),
+        min_xy_when_dz_lt_50_cm=round(float(min(p["xy"] for p in low_dz)), 1) if low_dz else None,
+        min_dz_when_xy_lt_40_cm=round(float(min(p["dz"] for p in low_xy)), 1) if low_xy else None,
+    )
+
+def repeat_distance(a, b, tmin=10, tmax=65):
+    da, db = load_by_uav(a)["98101"], load_by_uav(b)["98101"]
+    va = physical_track_mask(da, loose=True)
+    vb = physical_track_mask(db, loose=True)
+    lo = max(float(np.nanmin(da["t"][va])), float(np.nanmin(db["t"][vb])), tmin)
+    hi = min(float(np.nanmax(da["t"][va])), float(np.nanmax(db["t"][vb])), tmax)
+    tt = np.arange(lo, hi, 0.2)
+    if len(tt) == 0:
+        return {}
+    ax = np.interp(tt, da["t"][va], da["x"][va]); ay = np.interp(tt, da["t"][va], da["y"][va]); az = np.interp(tt, da["t"][va], da["z"][va])
+    bx = np.interp(tt, db["t"][vb], db["x"][vb]); byy = np.interp(tt, db["t"][vb], db["y"][vb]); bz = np.interp(tt, db["t"][vb], db["z"][vb])
+    dxy = np.hypot(ax - bx, ay - byy)
+    d3 = np.sqrt(dxy*dxy + (az - bz)**2)
+    return dict(
+        window_s=[round(lo, 1), round(hi, 1)],
+        median_xy_cm=round(float(np.median(dxy)), 1),
+        p90_xy_cm=round(float(np.percentile(dxy, 90)), 1),
+        median_3d_cm=round(float(np.median(d3)), 1),
+        p90_3d_cm=round(float(np.percentile(d3, 90)), 1),
+        max_3d_cm=round(float(np.max(d3)), 1),
+    )
+
 print("Loaded modules OK")
 
 
@@ -166,12 +524,13 @@ metrics={}
 g = load("flight_20260709_162500")
 cmds = route_grid(120,300,alt=120)
 mt,mx,my,mz,wp = sim_route(cmds, start=(0,0,0))
+gct,gcx,gcy,gcz,gcmd_warns = pyfii_grid_track(120,300,alt=120)
 corners=[(320,40),(40,120),(320,200),(40,280)]
 gl = clean_glitches(g['x'],g['y'],g['z'],60)
 
 # --- Fig 1: XY top view ---
 fig,ax=plt.subplots(figsize=(7.2,6.6))
-ax.plot(mx,my,'-',color=C_MODEL,lw=2.2,label="pyfii 模型 (直线+全停)",zorder=3)
+ax.plot(mx,my,'-',color=C_MODEL,lw=2.2,label="pyfii 几何基线 (直线到航点)",zorder=3)
 # real path, break at glitches
 xr=g['x'].copy(); yr=g['y'].copy()
 seg_x=np.where(gl,np.nan,xr); seg_y=np.where(gl,np.nan,yr)
@@ -191,8 +550,10 @@ plt.tight_layout(); plt.savefig(f"{OUT}/fig1_grid_xy.png"); plt.close()
 
 # --- Fig 2: Z vs time (align takeoff) ---
 i_to=np.argmax(g['z']>25); t0_real=g['t'][i_to]
+i_to_model=np.argmax(gcz>25); t0_model=gct[i_to_model]
+grid_time_offset=t0_real-t0_model
 fig,ax=plt.subplots(figsize=(8,3.6))
-ax.plot(mt+ (t0_real-1.10), mz,color=C_MODEL,lw=2,label="pyfii 模型 Z")
+ax.plot(gct+grid_time_offset, gcz,color=C_MODEL,lw=2,label="pyfii 指令时序基线 Z")
 ax.plot(g['t'], g['z'], color=C_REAL,lw=2,label="真实 Z")
 ax.scatter(g['t'][gl],g['z'][gl],s=25,color='orange',zorder=5,label="定位跳变")
 ax.set_xlabel("时间 (s)"); ax.set_ylabel("Z 高度 (cm)")
@@ -201,21 +562,23 @@ ax.legend(fontsize=8.5); plt.tight_layout()
 plt.savefig(f"{OUT}/fig2_grid_z.png"); plt.close()
 
 # --- Fig 3: Speed vs time ---
-mts,mv = speed_series(mt,mx,my,mz)
+gcts,gcv = speed_series(gct,gcx,gcy,gcz)
 rts,rv = speed_series(g['t'],g['x'],g['y'],g['z'])
 rv_clean=rv.copy(); rv_clean[gl[1:]]=np.nan
 fig,ax=plt.subplots(figsize=(8,3.6))
-ax.plot(mts+(t0_real-1.10),mv,color=C_MODEL,lw=1.8,label="pyfii 模型速度 (梯形)")
+ax.plot(gcts+grid_time_offset,gcv,color=C_MODEL,lw=1.8,label="pyfii 指令时序速度 (梯形)")
 ax.plot(rts,rv_clean,color=C_REAL,lw=1.8,label="真实速度 (平滑)")
 ax.axhline(120,ls='--',color='gray',lw=1,label="配置 MaxVelXY=120")
 ax.set_ylim(0,220); ax.set_xlabel("时间 (s)"); ax.set_ylabel("速度 (cm/s)")
-ax.set_title("速度剖面：梯形(瞬时变加速) vs 真实(S形/连续) (162500)")
+ax.set_title("速度剖面：pyfii 梯形基线 vs 真实速度 (162500)")
 ax.legend(fontsize=8.5,ncol=2); plt.tight_layout()
 plt.savefig(f"{OUT}/fig3_grid_speed.png"); plt.close()
 
 # grid metrics
 misses=[float(np.min(np.sqrt((g['x']-cx)**2+(g['y']-cy)**2))) for cx,cy in corners]
 metrics['grid']=dict(model_dur=float(mt[-1]),real_dur=float(g['t'][-1]),
+    command_timed_model_dur=float(gct[-1]), command_time_offset=round(float(grid_time_offset),3),
+    command_timed_warning_count=len(gcmd_warns),
     corner_miss_cm=[round(m,1) for m in misses],mean_miss=round(float(np.mean(misses)),1),
     n_glitch=int(gl.sum()),start_offset_cm=round(float(np.hypot(22,24)),1))
 
@@ -225,10 +588,12 @@ cl = clean_glitches(c['x'],c['y'],c['z'],70)
 # full route: grid -> spiral -> zstairs -> rectangle  (acc 400; grid vel100)
 cmds2 = (route_grid(100,400,alt=120)+route_spiral(400)+route_zstairs(400)+route_rectangle(400))
 mt2,mx2,my2,mz2,wp2 = sim_route(cmds2,start=(0,0,0))
+ct2,cx2,cy2,cz2,cwarns2 = pyfii_complex_track()
 
 # --- Fig 4: complex XY path ---
 fig,ax=plt.subplots(figsize=(7.4,6.8))
-ax.plot(mx2,my2,'-',color=C_MODEL,lw=1.4,alpha=0.85,label="pyfii 模型(全程)")
+ax.plot(mx2,my2,'-',color=C_MODEL,lw=1.4,alpha=0.85,label="pyfii 几何基线(全程)")
+ax.plot(cx2,cy2,'--',color="#1a202c",lw=1.1,alpha=0.75,label="pyfii 指令时序基线")
 xr=np.where(cl,np.nan,c['x']); yr=np.where(cl,np.nan,c['y'])
 ax.plot(xr,yr,'-',color=C_REAL,lw=1.6,label="真实飞行(全程)")
 ax.set_xlabel("X (cm)"); ax.set_ylabel("Y (cm)")
@@ -271,6 +636,9 @@ plt.savefig(f"{OUT}/fig6_glitches.png"); plt.close()
 # complex metrics
 allv=np.concatenate(allv)
 metrics['complex']=dict(model_dur=float(mt2[-1]),real_dur=float(c['t'][-1]),
+    command_timed_model_dur=float(ct2[-1]),
+    command_timed_warning_count=len(cwarns2),
+    command_timed_note="fwfii z-stairs starts at z=60; pyfii Drone range rejects 60, so command baseline clamps it to 80",
     n_glitch_162913=int(cl.sum()),
     glitch_pct=round(100*float(cl.sum())/len(cl),1),
     vz_max_real=round(float(np.nanmax(vz)),0))
@@ -288,6 +656,268 @@ metrics['vertical']=dict(
     pyfii_vertical_vel=50.0,   # z-stairs sets VelXY=50; pyfii uses it for vertical (VelZ ignored)
     config_MaxVelZ=[30,60],
     note="pyfii ignores VelZ/AccZ -> vertical moves use last VelXY; here 50 vs real ~25-44")
+
+# ============================================================ UPDATED LOGS: CLEANING, SWARM, REPEATABILITY
+all_flights = sorted(
+    d for d in os.listdir(LOGDIR)
+    if os.path.exists(os.path.join(LOGDIR, d, "telemetry.csv"))
+)
+swarm_flights = [
+    f for f in all_flights
+    if os.path.exists(os.path.join(LOGDIR, f, "swarm_dance.py"))
+]
+repeat_flights = [
+    "flight_20260709_162913",
+    "flight_20260709_163106",
+    "flight_20260709_180602",
+]
+
+def cleaning_counts(d):
+    default_airborne = default_pose_mask(d) & (d["t"] > 2.0)
+    jump = clean_glitches(d["x"], d["y"], d["z"], 80)
+    physical = physical_track_mask(d, loose=True)
+    return dict(
+        raw_samples=int(len(d["t"])),
+        physical_samples=int(np.sum(physical)),
+        dropped_samples=int(len(d["t"]) - np.sum(physical)),
+        default_pose_after_2s=int(np.sum(default_airborne)),
+        implausible_coord=int(np.sum(~coord_valid(d, loose=True))),
+        single_frame_jump=int(np.sum(jump)),
+        non_good_status=int(np.sum(d["status"] != "Good")),
+        non_guided_mode=int(np.sum(d["mode"] != "GUIDED")),
+    )
+
+inventory = {}
+cleaning = {}
+for flight in all_flights:
+    inventory[flight] = {}
+    cleaning[flight] = {}
+    for uid, d in load_by_uav(flight).items():
+        inventory[flight][uid] = summary_one_uav(d)
+        cleaning[flight][uid] = cleaning_counts(d)
+metrics["log_inventory"] = inventory
+metrics["cleaning"] = cleaning
+
+# --- Fig 7: cleaned swarm XY paths (normal duet + later light/flip run) ---
+fig, axes = plt.subplots(1, 2, figsize=(12, 5.5), sharex=True, sharey=True)
+swarm_ideal_tracks = {
+    "flight_20260709_171502": pyfii_swarm_tracks("171502"),
+    "flight_20260709_175214": pyfii_swarm_tracks("175214"),
+}
+metrics["swarm_pyfii_baseline_warnings"] = {
+    flight: {
+        "98101": len(tracks[0][4]),
+        "98102": len(tracks[1][4]),
+    }
+    for flight, tracks in swarm_ideal_tracks.items()
+}
+metrics["swarm_pyfii_baseline_safety"] = {}
+for flight, tracks in swarm_ideal_tracks.items():
+    itt, ixy, idz, id3 = paired_distance_from_tracks(*tracks)
+    metrics["swarm_pyfii_baseline_safety"][flight] = summarize_safety_arrays(itt, ixy, idz, id3)
+for ax, flight, title in zip(
+    axes,
+    ["flight_20260709_171502", "flight_20260709_175214"],
+    ["171502 双机安全版：真实 vs pyfii基线", "175214 灯光+空翻版：真实 vs pyfii基线"],
+):
+    by = load_by_uav(flight)
+    for uid, col, name in [("98101", "#e8543f", "98101"), ("98102", "#2b6cb0", "98102")]:
+        d = by[uid]
+        m = physical_track_mask(d, allow_flip=False, loose=True)
+        ax.plot(np.where(m, d["x"], np.nan), np.where(m, d["y"], np.nan),
+                lw=2.0, color=col, label=name)
+        dp = default_pose_mask(d) & (d["t"] > 2.0)
+        if np.any(dp):
+            ax.scatter(d["x"][dp], d["y"][dp], s=10, color="0.55", alpha=0.35, marker="x")
+    for track, col in zip(swarm_ideal_tracks[flight], ["#e8543f", "#2b6cb0"]):
+        it, ix, iy, iz = track[:4]
+        ax.plot(ix, iy, "--", lw=1.4, color=col, alpha=0.65, label="pyfii基线")
+    ax.scatter([40, 320], [40, 40], s=55, c=["#e8543f", "#2b6cb0"], marker="s", label="脚本起点")
+    ax.set_title(title)
+    ax.set_xlabel("X (cm)")
+    ax.set_ylabel("Y (cm)")
+    ax.set_aspect("equal")
+    ax.set_xlim(-20, 360); ax.set_ylim(-20, 360)
+    ax.legend(fontsize=8, loc="upper right")
+plt.tight_layout()
+plt.savefig(f"{OUT}/fig7_swarm_clean_xy.png"); plt.close()
+
+# --- Fig 8: real separation after cleaning ---
+fig, axes = plt.subplots(2, 1, figsize=(9, 6.4), sharex=False)
+for ax, flight, title in zip(
+    axes,
+    ["flight_20260709_171502", "flight_20260709_175214"],
+    ["171502 双机间距（Good/GUIDED/非默认位姿）", "175214 双机间距（Good/GUIDED/非默认位姿）"],
+):
+    pairs = paired_samples(flight)
+    start = first_separated_time(pairs) or 0.0
+    ps = [
+        p for p in pairs
+        if p["t"] >= start and p["valid"] and p["mode_a"] == "GUIDED" and p["mode_b"] == "GUIDED"
+        and p["status_a"] == "Good" and p["status_b"] == "Good"
+        and not (p["t"] > 2.0 and (p["default_a"] or p["default_b"]))
+    ]
+    t = [p["t"] for p in ps]
+    xy = [p["xy"] for p in ps]
+    dz = [p["dz"] for p in ps]
+    ax.plot(t, xy, color="#2b6cb0", lw=1.8, label="XY 距离")
+    ax.plot(t, dz, color="#e8543f", lw=1.8, label="Z 差")
+    itt, ixy, idz, _ = paired_distance_from_tracks(*swarm_ideal_tracks[flight])
+    ideal_start = first_separated_time_arrays(itt, ixy, idz)
+    if ideal_start is not None:
+        aligned_t = itt + (start - ideal_start)
+        ax.plot(aligned_t, ixy, "--", color="#2b6cb0", lw=1.0, alpha=0.65, label="pyfii XY")
+        ax.plot(aligned_t, idz, "--", color="#e8543f", lw=1.0, alpha=0.65, label="pyfii Z差")
+    ax.axhline(40, color="#2b6cb0", ls=":", lw=1, label="XY 阈值 40")
+    ax.axhline(50, color="#e8543f", ls=":", lw=1, label="Z 阈值 50")
+    ax.axvline(start, color="0.35", ls="--", lw=1, label="有效编队窗口起点")
+    ax.set_ylim(0, 330)
+    ax.set_ylabel("cm")
+    ax.set_title(title)
+    ax.legend(fontsize=8, ncol=3, loc="upper right")
+axes[-1].set_xlabel("时间 (s)")
+plt.tight_layout()
+plt.savefig(f"{OUT}/fig8_swarm_separation.png"); plt.close()
+
+swarm_metrics = {}
+for flight in swarm_flights:
+    pairs = paired_samples(flight)
+    swarm_metrics[flight] = dict(
+        safety_clean_good=summarize_safety(pairs, require_good=True),
+        safety_clean_all_status=summarize_safety(pairs, require_good=False),
+    )
+metrics["swarm_safety"] = swarm_metrics
+
+# --- Fig 9: repeatability of the complex route, after AprilTag cleaning ---
+def interp_track(flight, uid="98101"):
+    d = load_by_uav(flight)[uid]
+    m = physical_track_mask(d, loose=True)
+    return d["t"][m], d["x"][m], d["y"][m], d["z"][m]
+
+fig, axes = plt.subplots(1, 2, figsize=(12, 5.2))
+colors = {
+    "flight_20260709_162913": "#2b6cb0",
+    "flight_20260709_163106": "#38a169",
+    "flight_20260709_180602": "#805ad5",
+}
+labels = {
+    "flight_20260709_162913": "162913",
+    "flight_20260709_163106": "163106",
+    "flight_20260709_180602": "180602",
+}
+tracks = {}
+for flight in repeat_flights:
+    t, x, y, z = interp_track(flight)
+    tracks[flight] = (t, x, y, z)
+    axes[0].plot(x, y, lw=1.6, color=colors[flight], label=labels[flight])
+axes[0].plot(cx2, cy2, "--", lw=1.5, color="#1a202c", alpha=0.8, label="pyfii基线")
+axes[0].set_title("复合航线三次复飞：清洗后 XY")
+axes[0].set_xlabel("X (cm)"); axes[0].set_ylabel("Y (cm)")
+axes[0].set_aspect("equal"); axes[0].legend(fontsize=8)
+for a, b in [
+    ("flight_20260709_162913", "flight_20260709_163106"),
+    ("flight_20260709_162913", "flight_20260709_180602"),
+    ("flight_20260709_163106", "flight_20260709_180602"),
+]:
+    ta, xa, ya, za = tracks[a]
+    tb, xb, yb, zb = tracks[b]
+    lo = max(float(ta.min()), float(tb.min()), 10.0)
+    hi = min(float(ta.max()), float(tb.max()), 65.0)
+    tt = np.arange(lo, hi, 0.2)
+    if len(tt) == 0:
+        continue
+    d3 = np.sqrt(
+        (np.interp(tt, ta, xa) - np.interp(tt, tb, xb))**2 +
+        (np.interp(tt, ta, ya) - np.interp(tt, tb, yb))**2 +
+        (np.interp(tt, ta, za) - np.interp(tt, tb, zb))**2
+    )
+    axes[1].plot(tt, d3, lw=1.4, label=f"{labels[a]} vs {labels[b]}")
+
+baseline_errors = {}
+cmd_z25_idx = np.argmax(cz2 > 25)
+cmd_z25_t = float(ct2[cmd_z25_idx]) if np.any(cz2 > 25) else 0.0
+for flight in repeat_flights:
+    t, x, y, z = tracks[flight]
+    if not np.any(z > 25):
+        continue
+    real_z25_t = float(t[np.argmax(z > 25)])
+    offset = real_z25_t - cmd_z25_t
+    lo = max(float(t.min()), float(ct2.min() + offset), 10.0)
+    hi = min(float(t.max()), float(ct2.max() + offset), 65.0)
+    tt = np.arange(lo, hi, 0.2)
+    if len(tt) == 0:
+        continue
+    d3 = np.sqrt(
+        (np.interp(tt, t, x) - np.interp(tt - offset, ct2, cx2))**2 +
+        (np.interp(tt, t, y) - np.interp(tt - offset, ct2, cy2))**2 +
+        (np.interp(tt, t, z) - np.interp(tt - offset, ct2, cz2))**2
+    )
+    baseline_errors[flight] = dict(
+        offset_s=round(float(offset), 2),
+        median_3d_cm=round(float(np.median(d3)), 1),
+        p90_3d_cm=round(float(np.percentile(d3, 90)), 1),
+    )
+    axes[1].plot(tt, d3, "--", lw=1.1, alpha=0.55, color=colors[flight],
+                 label=f"{labels[flight]} vs pyfii")
+axes[1].set_title("同一时刻 3D 轨迹差 / 相对 pyfii 基线残差")
+axes[1].set_xlabel("时间 (s)"); axes[1].set_ylabel("距离 (cm)")
+axes[1].set_ylim(0, 160); axes[1].legend(fontsize=7, ncol=2)
+plt.tight_layout()
+plt.savefig(f"{OUT}/fig9_repeatability_clean.png"); plt.close()
+
+metrics["repeatability_clean"] = {
+    f"{a}_vs_{b}": repeat_distance(a, b)
+    for a, b in [
+        ("flight_20260709_162913", "flight_20260709_163106"),
+        ("flight_20260709_162913", "flight_20260709_180602"),
+        ("flight_20260709_163106", "flight_20260709_180602"),
+    ]
+}
+metrics["complex_vs_pyfii_command_baseline"] = baseline_errors
+
+# --- Fig 10: cleaning flags by log/uav ---
+fig, ax = plt.subplots(figsize=(11.5, 5.6))
+labels_bar = []
+vals_default = []
+vals_status = []
+vals_implausible = []
+vals_jump = []
+for flight in all_flights:
+    short = flight.replace("flight_20260709_", "")
+    for uid, d in load_by_uav(flight).items():
+        labels_bar.append(f"{short}-{uid[-1]}")
+        vals_default.append(int(np.sum(default_pose_mask(d) & (d["t"] > 2.0))))
+        vals_status.append(int(np.sum((d["status"] != "Good") | (d["mode"] == "N/A"))))
+        vals_implausible.append(int(np.sum(~coord_valid(d, loose=True))))
+        vals_jump.append(int(np.sum(clean_glitches(d["x"], d["y"], d["z"], 80))))
+x = np.arange(len(labels_bar))
+w = 0.2
+ax.bar(x - 1.5*w, vals_default, width=w, color="#718096", label="默认位姿")
+ax.bar(x - 0.5*w, vals_status, width=w, color="#d69e2e", label="状态异常")
+ax.bar(x + 0.5*w, vals_implausible, width=w, color="#e53e3e", label="坐标越界")
+ax.bar(x + 1.5*w, vals_jump, width=w, color="#805ad5", label="单帧跳变")
+ax.set_xticks(x); ax.set_xticklabels(labels_bar, rotation=55, ha="right", fontsize=8)
+ax.set_ylabel("样本数（标记可重叠）")
+ax.set_title("AprilTag 定位清洗标记：默认位姿/状态异常/越界/跳变")
+ax.legend(fontsize=8, ncol=4)
+plt.tight_layout()
+plt.savefig(f"{OUT}/fig10_cleaning_quality.png"); plt.close()
+
+metrics["yaw_rotation"] = {
+    flight: {
+        uid: yaw_delta_deg(d)
+        for uid, d in load_by_uav(flight).items()
+    }
+    for flight in swarm_flights
+}
+
+metrics["flight_quality_summary"] = {
+    "flight_20260709_173818": "abort/connection sample only: 98101 stayed N/A, no usable duet trajectory",
+    "flight_20260709_173926": "98101 FLIP telemetry becomes implausible (x/y/z thousands of cm); useful as flip/localization failure sample",
+    "flight_20260709_175214": "successful light+flip run; clean duet window has no safety-rule violation",
+    "flight_20260709_175805": "98102 reports Dead Battery for most samples; useful as failure/default-pose sample, not normal duet dynamics",
+    "gpsstatus": "NO_GPS is expected for the AprilTag mat positioning system; fcstatus/default pose are the relevant quality signals",
+}
 
 # ----------------------------------------------------------------------------
 # 7. 指令语义实测：喂 pyfii 自身求解器，验证 §2.2 / §3.4 的数字（不依赖 flight_logs）
