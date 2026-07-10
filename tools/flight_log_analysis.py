@@ -324,6 +324,11 @@ def speed_series(t,x,y,z):
     v=np.sqrt(np.diff(x)**2+np.diff(y)**2+np.diff(z)**2)/np.where(dt==0,1e-9,dt)
     return t[1:], v
 
+def xy_speed_series(t, x, y):
+    dt = np.diff(t)
+    v = np.hypot(np.diff(x), np.diff(y)) / np.where(dt == 0, 1e-9, dt)
+    return t[1:], v
+
 def clean_glitches(x,y,z,thresh=60):
     """flag samples whose jump from previous > thresh cm (localization glitches)"""
     d=np.sqrt(np.diff(x)**2+np.diff(y)**2+np.diff(z)**2)
@@ -383,6 +388,20 @@ def speed_samples(d):
     dt = np.where(dt <= 0, np.nan, dt)
     v = np.sqrt(np.diff(d["x"])**2 + np.diff(d["y"])**2 + np.diff(d["z"])**2) / dt
     return d["t"][1:], v
+
+def first_xy_motion_time(t, x, y, *, z=None, min_t=0.0, min_z=None, threshold=20.0):
+    """First sample time after sustained horizontal motion is visible."""
+    dt = np.diff(t)
+    vxy = np.hypot(np.diff(x), np.diff(y)) / np.where(dt <= 0, np.nan, dt)
+    ok = (t[1:] >= min_t) & (vxy >= threshold)
+    if z is not None and min_z is not None:
+        ok &= z[1:] >= min_z
+    idx = np.where(ok)[0]
+    return float(t[idx[0] + 1]) if len(idx) else None
+
+def first_event_time(d, mask):
+    idx = np.where(mask)[0]
+    return round(float(d["t"][idx[0]]), 3) if len(idx) else None
 
 def yaw_delta_deg(d, t0=32, t1=38):
     m = (d["t"] >= t0) & (d["t"] <= t1)
@@ -551,9 +570,16 @@ plt.tight_layout(); plt.savefig(f"{OUT}/fig1_grid_xy.png"); plt.close()
 # --- Fig 2: Z vs time (align takeoff) ---
 i_to=np.argmax(g['z']>25); t0_real=g['t'][i_to]
 i_to_model=np.argmax(gcz>25); t0_model=gct[i_to_model]
-grid_time_offset=t0_real-t0_model
+grid_z_time_offset=t0_real-t0_model
+grid_xy_time_real = first_xy_motion_time(g["t"], g["x"], g["y"], z=g["z"], min_t=4.5, min_z=80, threshold=20)
+grid_xy_time_model = first_xy_motion_time(gct, gcx, gcy, threshold=20)
+grid_xy_time_offset = (
+    grid_xy_time_real - grid_xy_time_model
+    if grid_xy_time_real is not None and grid_xy_time_model is not None
+    else grid_z_time_offset
+)
 fig,ax=plt.subplots(figsize=(8,3.6))
-ax.plot(gct+grid_time_offset, gcz,color=C_MODEL,lw=2,label="pyfii 指令时序基线 Z")
+ax.plot(gct+grid_z_time_offset, gcz,color=C_MODEL,lw=2,label="pyfii 指令时序基线 Z")
 ax.plot(g['t'], g['z'], color=C_REAL,lw=2,label="真实 Z")
 ax.scatter(g['t'][gl],g['z'][gl],s=25,color='orange',zorder=5,label="定位跳变")
 ax.set_xlabel("时间 (s)"); ax.set_ylabel("Z 高度 (cm)")
@@ -561,23 +587,41 @@ ax.set_title("高度剖面：起飞—巡航—降落 (162500)")
 ax.legend(fontsize=8.5); plt.tight_layout()
 plt.savefig(f"{OUT}/fig2_grid_z.png"); plt.close()
 
-# --- Fig 3: Speed vs time ---
-gcts,gcv = speed_series(gct,gcx,gcy,gcz)
-rts,rv = speed_series(g['t'],g['x'],g['y'],g['z'])
-rv_clean=rv.copy(); rv_clean[gl[1:]]=np.nan
+# --- Fig 3: horizontal speed vs time ---
+gcts,gcv = xy_speed_series(gct,gcx,gcy)
+gd = load_by_uav("flight_20260709_162500")["98101"]
+real_xy_motion_start = grid_xy_time_real if grid_xy_time_real is not None else 3.5
+speed_ok = (
+    ((gd["mode"] == "GUIDED") | (gd["mode"] == "LAND")) &
+    (gd["status"] == "Good") &
+    coord_valid(gd) &
+    (gd["t"] >= real_xy_motion_start) &
+    ~default_pose_mask(gd) &
+    ~clean_glitches(gd["x"], gd["y"], gd["z"], 80)
+)
+sx = np.where(speed_ok, gd["x"], np.nan)
+sy = np.where(speed_ok, gd["y"], np.nan)
+sz = np.where(speed_ok, gd["z"], np.nan)
+rts,rv_clean = xy_speed_series(gd["t"], sx, sy)
+rv_clean[rv_clean > 220] = np.nan
 fig,ax=plt.subplots(figsize=(8,3.6))
-ax.plot(gcts+grid_time_offset,gcv,color=C_MODEL,lw=1.8,label="pyfii 指令时序速度 (梯形)")
-ax.plot(rts,rv_clean,color=C_REAL,lw=1.8,label="真实速度 (平滑)")
+ax.plot(gcts+grid_xy_time_offset,gcv,color=C_MODEL,lw=1.8,label="pyfii 指令时序水平速度 (梯形)")
+ax.plot(rts,rv_clean,color=C_REAL,lw=1.8,label="真实水平速度 (平滑)")
 ax.axhline(120,ls='--',color='gray',lw=1,label="配置 MaxVelXY=120")
 ax.set_ylim(0,220); ax.set_xlabel("时间 (s)"); ax.set_ylabel("速度 (cm/s)")
-ax.set_title("速度剖面：pyfii 梯形基线 vs 真实速度 (162500)")
+ax.set_title("水平速度剖面：pyfii 梯形基线 vs 真实速度 (162500)")
 ax.legend(fontsize=8.5,ncol=2); plt.tight_layout()
 plt.savefig(f"{OUT}/fig3_grid_speed.png"); plt.close()
 
 # grid metrics
 misses=[float(np.min(np.sqrt((g['x']-cx)**2+(g['y']-cy)**2))) for cx,cy in corners]
 metrics['grid']=dict(model_dur=float(mt[-1]),real_dur=float(g['t'][-1]),
-    command_timed_model_dur=float(gct[-1]), command_time_offset=round(float(grid_time_offset),3),
+    command_timed_model_dur=float(gct[-1]),
+    command_time_offset=round(float(grid_z_time_offset),3),
+    command_z_time_offset=round(float(grid_z_time_offset),3),
+    command_xy_time_offset=round(float(grid_xy_time_offset),3),
+    real_first_xy_motion_s=round(float(grid_xy_time_real),3) if grid_xy_time_real is not None else None,
+    model_first_xy_motion_s=round(float(grid_xy_time_model),3) if grid_xy_time_model is not None else None,
     command_timed_warning_count=len(gcmd_warns),
     corner_miss_cm=[round(m,1) for m in misses],mean_miss=round(float(np.mean(misses)),1),
     n_glitch=int(gl.sum()),start_offset_cm=round(float(np.hypot(22,24)),1))
@@ -697,6 +741,27 @@ for flight in all_flights:
         cleaning[flight][uid] = cleaning_counts(d)
 metrics["log_inventory"] = inventory
 metrics["cleaning"] = cleaning
+
+failure_prefix = {}
+for flight in ["flight_20260709_173818", "flight_20260709_173926", "flight_20260709_175805"]:
+    failure_prefix[flight] = {}
+    for uid, d in load_by_uav(flight).items():
+        implausible = ~coord_valid(d)
+        critical = (
+            (d["mode"] == "FLIP") |
+            (d["status"] == "Dead Battery") |
+            (d["status"] == "N/A") |
+            implausible
+        )
+        failure_prefix[flight][uid] = dict(
+            first_critical_s=first_event_time(d, critical),
+            first_flip_s=first_event_time(d, d["mode"] == "FLIP"),
+            first_dead_battery_s=first_event_time(d, d["status"] == "Dead Battery"),
+            first_non_good_s=first_event_time(d, d["status"] != "Good"),
+            first_implausible_s=first_event_time(d, implausible),
+            first_land_s=first_event_time(d, d["mode"] == "LAND"),
+        )
+metrics["failure_prefix"] = failure_prefix
 
 # --- Fig 7: cleaned swarm XY paths (normal duet + later light/flip run) ---
 fig, axes = plt.subplots(1, 2, figsize=(12, 5.5), sharex=True, sharey=True)

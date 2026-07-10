@@ -4,6 +4,10 @@
     "real_dur": 20.448,
     "command_timed_model_dur": 15.41,
     "command_time_offset": 2.849,
+    "command_z_time_offset": 2.849,
+    "command_xy_time_offset": 1.938,
+    "real_first_xy_motion_s": 6.013,
+    "model_first_xy_motion_s": 4.075,
     "command_timed_warning_count": 244,
     "corner_miss_cm": [
       39.1,
@@ -617,6 +621,62 @@
         "single_frame_jump": 0,
         "non_good_status": 14,
         "non_guided_mode": 12
+      }
+    }
+  },
+  "failure_prefix": {
+    "flight_20260709_173818": {
+      "98101": {
+        "first_critical_s": 0.0,
+        "first_flip_s": null,
+        "first_dead_battery_s": null,
+        "first_non_good_s": 0.0,
+        "first_implausible_s": null,
+        "first_land_s": null
+      },
+      "98102": {
+        "first_critical_s": null,
+        "first_flip_s": null,
+        "first_dead_battery_s": null,
+        "first_non_good_s": null,
+        "first_implausible_s": null,
+        "first_land_s": null
+      }
+    },
+    "flight_20260709_173926": {
+      "98101": {
+        "first_critical_s": 42.141,
+        "first_flip_s": 42.141,
+        "first_dead_battery_s": null,
+        "first_non_good_s": 44.948,
+        "first_implausible_s": 42.743,
+        "first_land_s": null
+      },
+      "98102": {
+        "first_critical_s": null,
+        "first_flip_s": null,
+        "first_dead_battery_s": null,
+        "first_non_good_s": null,
+        "first_implausible_s": null,
+        "first_land_s": 46.551
+      }
+    },
+    "flight_20260709_175805": {
+      "98101": {
+        "first_critical_s": 42.346,
+        "first_flip_s": 42.346,
+        "first_dead_battery_s": null,
+        "first_non_good_s": 43.548,
+        "first_implausible_s": null,
+        "first_land_s": 51.163
+      },
+      "98102": {
+        "first_critical_s": 12.681,
+        "first_flip_s": null,
+        "first_dead_battery_s": 12.681,
+        "first_non_good_s": 12.681,
+        "first_implausible_s": null,
+        "first_land_s": 12.681
       }
     }
   },
