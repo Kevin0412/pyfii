@@ -125,9 +125,9 @@ def summarize_action_handoffs(output_string, fii, lines, warns):
         command_time = float(incoming[0]) / 1000.0
         idx = max(0, int(np.searchsorted(t, command_time, side="right")) - 1)
         target = np.asarray(previous[1:4], float)
-        residual_at_command = float(np.linalg.norm(pos[idx] - target))
+        target_remaining_at_command = float(np.linalg.norm(pos[idx] - target))
         incoming_speed = float(speed[max(0, idx - 1)])
-        completed = residual_at_command <= 0.05 and incoming_speed <= 0.05
+        completed = target_remaining_at_command <= 0.05 and incoming_speed <= 0.05
         interrupted = not completed
         event = dict(
             action_start_s=round(float(previous[0]) / 1000.0, 3),
@@ -135,7 +135,7 @@ def summarize_action_handoffs(output_string, fii, lines, warns):
             target_cm=[round(float(value), 3) for value in target],
             incoming_action=str(incoming[-1]),
             completed=completed,
-            residual_at_command_cm=round(residual_at_command, 3),
+            target_remaining_at_command_cm=round(target_remaining_at_command, 3),
             speed_at_command_cm_s=round(incoming_speed, 3),
         )
         if interrupted:
@@ -147,7 +147,7 @@ def summarize_action_handoffs(output_string, fii, lines, warns):
                     stop_time_s=round(float(t[stop_idx]), 3),
                     braking_duration_s=round(float(t[stop_idx] - command_time), 3),
                     stop_position_cm=[round(float(value), 3) for value in stop_pos],
-                    residual_at_stop_cm=round(float(np.linalg.norm(stop_pos - target)), 3),
+                    target_remaining_at_stop_cm=round(float(np.linalg.norm(stop_pos - target)), 3),
                 )
         events.append(event)
 
@@ -468,8 +468,8 @@ def first_event_time(d, mask):
     return round(float(d["t"][idx[0]]), 3) if len(idx) else None
 
 
-def target_residuals_in_windows(d, actions, response_margin_s=0.8):
-    """Measure segment-local target residuals using script-derived time windows."""
+def target_errors_in_windows(d, actions, response_margin_s=0.8):
+    """Measure segment-local target errors using script-derived time windows."""
     valid = physical_track_mask(d, loose=True)
     pos = np.column_stack([d["x"], d["y"], d["z"]])
     speed_t, speed_xy = xy_speed_series(d["t"], d["x"], d["y"])
@@ -496,7 +496,7 @@ def target_residuals_in_windows(d, actions, response_margin_s=0.8):
             window_s=[float(start_s), float(next_command_s + response_margin_s)],
             closest_time_s=round(float(d["t"][idx]), 3),
             closest_position_cm=[round(float(value), 1) for value in pos[idx]],
-            residual_3d_cm=round(float(distance[idx]), 1),
+            target_error_3d_cm=round(float(distance[idx]), 1),
             min_observed_xy_speed_cm_s=(
                 round(float(np.min(local_speed)), 1) if len(local_speed) else None
             ),
@@ -716,6 +716,7 @@ for corner, event in zip(corners, grid_interrupted_events):
 
     model_stop = np.asarray(event["stop_position_cm"], float)
     real_stop = np.array([gd["x"][turn_idx], gd["y"][turn_idx], gd["z"][turn_idx]], float)
+    raw_model_residual = float(np.linalg.norm(model_stop[:2] - real_stop[:2]))
     grid_turns.append(dict(
         target_cm=[float(corner[0]), float(corner[1]), 120.0],
         model_stop_time_s=event["stop_time_s"],
@@ -723,9 +724,10 @@ for corner, event in zip(corners, grid_interrupted_events):
         real_turn_time_s=round(float(gd["t"][turn_idx]), 3),
         model_stop_position_cm=[round(float(value), 1) for value in model_stop],
         real_turn_position_cm=[round(float(value), 1) for value in real_stop],
-        model_stop_residual_cm=round(float(event["residual_at_stop_cm"]), 1),
-        real_turn_residual_xy_cm=round(float(distance[turn_idx]), 1),
-        model_to_real_turn_xy_cm=round(float(np.linalg.norm(model_stop[:2] - real_stop[:2])), 1),
+        model_target_remaining_cm=round(float(event["target_remaining_at_stop_cm"]), 1),
+        real_target_remaining_xy_cm=round(float(distance[turn_idx]), 1),
+        stop_point_model_residual_xy_cm=round(raw_model_residual, 1),
+        model_residual_usable=not localization_contaminated,
         min_observed_xy_speed_cm_s=round(min_speed, 1) if min_speed is not None else None,
         localization_contaminated=localization_contaminated,
     ))
@@ -746,7 +748,7 @@ annotation_offsets = [(-78, 10), (10, 10), (-78, 10), (10, -18)]
 for (cx,cy), turn, offset in zip(corners, grid_turns, annotation_offsets):
     rx, ry = turn["real_turn_position_cm"][:2]
     ax.annotate(
-        f"段内残差 {turn['real_turn_residual_xy_cm']:.0f}cm",
+        f"距目标 {turn['real_target_remaining_xy_cm']:.0f}cm",
         (cx,cy), xytext=offset, textcoords="offset points", fontsize=8, color=C_CMD,
         bbox=dict(facecolor="white", edgecolor="none", alpha=0.72, pad=1.0),
     )
@@ -756,7 +758,7 @@ ax.set_xlabel("X (cm)"); ax.set_ylabel("Y (cm)")
 ax.set_title("网格航线 俯视图：pyfii 模型 vs 真实飞行 (162500)")
 ax.legend(loc="upper left",fontsize=8.5); ax.set_aspect('equal')
 ax.set_xlim(-20,360); ax.set_ylim(-20,360)
-plt.tight_layout(); plt.savefig(f"{OUT}/fig1_grid_xy.png"); plt.close()
+plt.tight_layout(); plt.savefig(f"{OUT}/fig1_grid_completion_conditions.png"); plt.close()
 
 # --- Fig 2: Z vs time (align takeoff) ---
 fig,ax=plt.subplots(figsize=(8,3.6))
@@ -808,9 +810,15 @@ ax.legend(fontsize=8.5,ncol=2); plt.tight_layout()
 plt.savefig(f"{OUT}/fig3_grid_action_speed.png"); plt.close()
 
 # grid metrics
-real_turn_residuals = [turn["real_turn_residual_xy_cm"] for turn in grid_turns]
-model_stop_residuals = [turn["model_stop_residual_cm"] for turn in grid_turns]
-model_to_real_turn = [turn["model_to_real_turn_xy_cm"] for turn in grid_turns]
+real_target_remaining = [turn["real_target_remaining_xy_cm"] for turn in grid_turns]
+model_target_remaining = [turn["model_target_remaining_cm"] for turn in grid_turns]
+stop_point_model_residuals = [
+    turn["stop_point_model_residual_xy_cm"] if turn["model_residual_usable"] else None
+    for turn in grid_turns
+]
+usable_stop_point_model_residuals = [
+    value for value in stop_point_model_residuals if value is not None
+]
 metrics['grid']=dict(model_dur=float(mt[-1]),real_dur=float(g['t'][-1]),
     command_timed_model_dur=float(gct[-1]),
     command_time_offset=round(float(grid_z_time_offset),3),
@@ -821,13 +829,12 @@ metrics['grid']=dict(model_dur=float(mt[-1]),real_dur=float(g['t'][-1]),
     command_timed_warning_frame_count=len(gcmd_warns),
     completed_handoffs=grid_handoffs["completed_handoffs"],
     interrupted_handoffs=grid_handoffs["interrupted_handoffs"],
-    real_turn_residual_xy_cm=real_turn_residuals,
-    model_interrupted_stop_residual_cm=model_stop_residuals,
-    mean_real_turn_residual_xy_cm=round(float(np.mean(real_turn_residuals)),1),
-    mean_model_interrupted_stop_residual_cm=round(float(np.mean(model_stop_residuals)),1),
-    mean_model_to_real_turn_xy_cm=round(float(np.mean(model_to_real_turn)),1),
-    ideal_to_real_turn_mae_cm=round(float(np.mean(real_turn_residuals)),1),
-    interrupted_to_real_turn_mae_cm=round(float(np.mean(np.abs(np.asarray(real_turn_residuals) - np.asarray(model_stop_residuals)))),1),
+    real_target_remaining_xy_cm=real_target_remaining,
+    model_target_remaining_cm=model_target_remaining,
+    stop_point_model_residual_xy_cm=stop_point_model_residuals,
+    mean_real_target_remaining_xy_cm=round(float(np.mean(real_target_remaining)),1),
+    mean_model_target_remaining_cm=round(float(np.mean(model_target_remaining)),1),
+    mean_stop_point_model_residual_xy_cm=round(float(np.mean(usable_stop_point_model_residuals)),1),
     turn_events=grid_turns,
     n_glitch=int(gl.sum()),start_offset_cm=round(float(np.hypot(22,24)),1))
 
@@ -1004,11 +1011,11 @@ ideal_actions_171502 = [
     ("动作7", (40, 40, 120), 36.0, 39.0),
     ("动作8", (40, 40, 100), 39.0, 41.0),
 ]
-ideal_real_endpoints = target_residuals_in_windows(
+ideal_real_endpoints = target_errors_in_windows(
     load_by_uav("flight_20260709_171502")["98101"],
     ideal_actions_171502,
 )
-ideal_endpoint_residuals = [item["residual_3d_cm"] for item in ideal_real_endpoints]
+ideal_endpoint_errors = [item["target_error_3d_cm"] for item in ideal_real_endpoints]
 ideal_min_speeds = [
     item["min_observed_xy_speed_cm_s"] for item in ideal_real_endpoints
     if item["min_observed_xy_speed_cm_s"] is not None
@@ -1018,9 +1025,9 @@ metrics["ideal_condition"] = {
     "uavid": "98101",
     "completed_handoffs": swarm_command_tracks["flight_20260709_171502"][0][5]["completed_handoffs"],
     "interrupted_handoffs": swarm_command_tracks["flight_20260709_171502"][0][5]["interrupted_handoffs"],
-    "real_endpoint_residuals": ideal_real_endpoints,
-    "median_real_endpoint_residual_3d_cm": round(float(np.median(ideal_endpoint_residuals)), 1),
-    "p90_real_endpoint_residual_3d_cm": round(float(np.percentile(ideal_endpoint_residuals, 90)), 1),
+    "real_endpoint_target_errors": ideal_real_endpoints,
+    "median_real_endpoint_target_error_3d_cm": round(float(np.median(ideal_endpoint_errors)), 1),
+    "p90_real_endpoint_target_error_3d_cm": round(float(np.percentile(ideal_endpoint_errors, 90)), 1),
     "median_min_observed_xy_speed_cm_s": round(float(np.median(ideal_min_speeds)), 1),
     "p90_min_observed_xy_speed_cm_s": round(float(np.percentile(ideal_min_speeds, 90)), 1),
 }
@@ -1028,39 +1035,41 @@ metrics["nonideal_condition"] = {
     "flight": "flight_20260709_162500",
     "interrupted_handoffs": grid_handoffs["interrupted_handoffs"],
     "warning_frames": grid_handoffs["warning_frame_count"],
-    "model_stop_residual_cm": model_stop_residuals,
-    "real_turn_residual_xy_cm": real_turn_residuals,
-    "ideal_to_real_turn_mae_cm": metrics["grid"]["ideal_to_real_turn_mae_cm"],
-    "interrupted_to_real_turn_mae_cm": metrics["grid"]["interrupted_to_real_turn_mae_cm"],
+    "model_target_remaining_cm": model_target_remaining,
+    "real_target_remaining_xy_cm": real_target_remaining,
+    "stop_point_model_residual_xy_cm": stop_point_model_residuals,
+    "mean_stop_point_model_residual_xy_cm": metrics["grid"]["mean_stop_point_model_residual_xy_cm"],
 }
 
 # --- Fig 11: keep completed and interrupted action analysis visibly separate ---
 condition_fig, condition_axes = plt.subplots(1, 2, figsize=(11.5, 4.4))
-action_x = np.arange(len(ideal_endpoint_residuals))
-condition_axes[0].bar(action_x, ideal_endpoint_residuals, color=C_REAL, width=0.68, label="真实段内到点残差")
-condition_axes[0].axhline(np.median(ideal_endpoint_residuals), color="#2f855a", ls="--", lw=1.3,
-                          label=f"中位数 {np.median(ideal_endpoint_residuals):.1f} cm")
+action_x = np.arange(len(ideal_endpoint_errors))
+condition_axes[0].bar(action_x, ideal_endpoint_errors, color=C_REAL, width=0.68, label="真实段内到点误差")
+condition_axes[0].axhline(np.median(ideal_endpoint_errors), color="#2f855a", ls="--", lw=1.3,
+                          label=f"中位数 {np.median(ideal_endpoint_errors):.1f} cm")
 condition_axes[0].set_xticks(action_x)
 condition_axes[0].set_xticklabels([item[0] for item in ideal_actions_171502], rotation=35, ha="right")
-condition_axes[0].set_ylabel("目标残差 (cm)")
+condition_axes[0].set_ylabel("到点误差 (cm)")
 condition_axes[0].set_title("理想条件：上一动作完成后再开始下一动作\n171502-98101，pyfii 0 个打断")
 condition_axes[0].legend(fontsize=8)
 
 corner_x = np.arange(1, len(corners) + 1)
-width = 0.34
-condition_axes[1].scatter(corner_x, np.zeros(len(corners)), marker="D", s=40, color=C_MODEL,
-                          label="理想完成基线 (0 cm)", zorder=4)
-condition_axes[1].bar(corner_x - width / 2, model_stop_residuals, width=width, color="#d69e2e",
-                      label="pyfii 打断制动后的残差")
-condition_axes[1].bar(corner_x + width / 2, real_turn_residuals, width=width, color=C_REAL,
-                      label="真实转向点残差")
+plot_stop_residuals = np.array([
+    value if value is not None else np.nan for value in stop_point_model_residuals
+], float)
+condition_axes[1].bar(corner_x, plot_stop_residuals, width=0.62, color="#d69e2e",
+                      label="|真机转向点 - pyfii 制动停点|")
+condition_axes[1].scatter([3], [0], marker="x", s=70, color="#718096",
+                          label="航点3定位污染，不计")
+condition_axes[1].axhline(np.mean(usable_stop_point_model_residuals), color="#2f855a", ls="--", lw=1.3,
+                          label=f"有效均值 {np.mean(usable_stop_point_model_residuals):.1f} cm")
 condition_axes[1].set_xticks(corner_x)
 condition_axes[1].set_xticklabels([f"航点{i}" for i in corner_x])
-condition_axes[1].set_ylabel("目标残差 (cm)")
-condition_axes[1].set_title("非理想条件：下一指令提前到达\n162500，244 warning 帧 = 4 个独立打断")
+condition_axes[1].set_ylabel("停点模型残差 (cm)")
+condition_axes[1].set_title("非理想条件：相同打断事件下比较停点\n162500，244 warning 帧 = 4 个独立打断")
 condition_axes[1].legend(fontsize=8)
 condition_fig.tight_layout()
-condition_fig.savefig(f"{OUT}/fig11_ideal_vs_interrupted.png"); plt.close(condition_fig)
+condition_fig.savefig(f"{OUT}/fig11_completion_vs_interruption.png"); plt.close(condition_fig)
 
 metrics["swarm_pyfii_baseline_safety"] = {}
 for flight, tracks in swarm_command_tracks.items():
@@ -1184,7 +1193,6 @@ for flight in repeat_flights:
     t, x, y, z = interp_track(flight)
     tracks[flight] = (t, x, y, z)
     axes[0].plot(x, y, lw=1.6, color=colors[flight], label=labels[flight])
-axes[0].plot(cx2, cy2, "--", lw=1.5, color="#1a202c", alpha=0.8, label="pyfii基线")
 axes[0].set_title("复合航线三次复飞：清洗后 XY")
 axes[0].set_xlabel("X (cm)"); axes[0].set_ylabel("Y (cm)")
 axes[0].set_aspect("equal"); axes[0].legend(fontsize=8)
@@ -1207,37 +1215,11 @@ for a, b in [
     )
     axes[1].plot(tt, d3, lw=1.4, label=f"{labels[a]} vs {labels[b]}")
 
-baseline_errors = {}
-cmd_z25_idx = np.argmax(cz2 > 25)
-cmd_z25_t = float(ct2[cmd_z25_idx]) if np.any(cz2 > 25) else 0.0
-for flight in repeat_flights:
-    t, x, y, z = tracks[flight]
-    if not np.any(z > 25):
-        continue
-    real_z25_t = float(t[np.argmax(z > 25)])
-    offset = real_z25_t - cmd_z25_t
-    lo = max(float(t.min()), float(ct2.min() + offset), 10.0)
-    hi = min(float(t.max()), float(ct2.max() + offset), 65.0)
-    tt = np.arange(lo, hi, 0.2)
-    if len(tt) == 0:
-        continue
-    d3 = np.sqrt(
-        (np.interp(tt, t, x) - np.interp(tt - offset, ct2, cx2))**2 +
-        (np.interp(tt, t, y) - np.interp(tt - offset, ct2, cy2))**2 +
-        (np.interp(tt, t, z) - np.interp(tt - offset, ct2, cz2))**2
-    )
-    baseline_errors[flight] = dict(
-        offset_s=round(float(offset), 2),
-        median_3d_cm=round(float(np.median(d3)), 1),
-        p90_3d_cm=round(float(np.percentile(d3, 90)), 1),
-    )
-    axes[1].plot(tt, d3, "--", lw=1.1, alpha=0.55, color=colors[flight],
-                 label=f"{labels[flight]} vs pyfii")
-axes[1].set_title("同一时刻 3D 轨迹差 / 相对 pyfii 基线残差")
+axes[1].set_title("相同程序复飞之间的 3D 轨迹差")
 axes[1].set_xlabel("时间 (s)"); axes[1].set_ylabel("距离 (cm)")
-axes[1].set_ylim(0, 160); axes[1].legend(fontsize=7, ncol=2)
+axes[1].set_ylim(0, 90); axes[1].legend(fontsize=8)
 plt.tight_layout()
-plt.savefig(f"{OUT}/fig9_repeatability_clean.png"); plt.close()
+plt.savefig(f"{OUT}/fig9_repeatability_only.png"); plt.close()
 
 metrics["repeatability_clean"] = {
     f"{a}_vs_{b}": repeat_distance(a, b)
@@ -1247,8 +1229,6 @@ metrics["repeatability_clean"] = {
         ("flight_20260709_163106", "flight_20260709_180602"),
     ]
 }
-metrics["complex_vs_pyfii_command_baseline"] = baseline_errors
-
 # --- Fig 10: cleaning flags by log/uav ---
 fig, ax = plt.subplots(figsize=(11.5, 5.6))
 labels_bar = []

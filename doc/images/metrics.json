@@ -11,23 +11,27 @@
     "command_timed_warning_frame_count": 244,
     "completed_handoffs": 1,
     "interrupted_handoffs": 4,
-    "real_turn_residual_xy_cm": [
+    "real_target_remaining_xy_cm": [
       39.1,
       46.1,
       43.7,
       39.2
     ],
-    "model_interrupted_stop_residual_cm": [
+    "model_target_remaining_cm": [
       29.1,
       7.9,
       27.9,
       11.4
     ],
-    "mean_real_turn_residual_xy_cm": 42.0,
-    "mean_model_interrupted_stop_residual_cm": 19.1,
-    "mean_model_to_real_turn_xy_cm": 23.4,
-    "ideal_to_real_turn_mae_cm": 42.0,
-    "interrupted_to_real_turn_mae_cm": 23.0,
+    "stop_point_model_residual_xy_cm": [
+      11.6,
+      38.3,
+      null,
+      27.9
+    ],
+    "mean_real_target_remaining_xy_cm": 42.0,
+    "mean_model_target_remaining_cm": 19.1,
+    "mean_stop_point_model_residual_xy_cm": 25.9,
     "turn_events": [
       {
         "target_cm": [
@@ -48,9 +52,10 @@
           42.0,
           118.0
         ],
-        "model_stop_residual_cm": 29.1,
-        "real_turn_residual_xy_cm": 39.1,
-        "model_to_real_turn_xy_cm": 11.6,
+        "model_target_remaining_cm": 29.1,
+        "real_target_remaining_xy_cm": 39.1,
+        "stop_point_model_residual_xy_cm": 11.6,
+        "model_residual_usable": true,
         "min_observed_xy_speed_cm_s": 22.2,
         "localization_contaminated": false
       },
@@ -73,9 +78,10 @@
           110.0,
           118.0
         ],
-        "model_stop_residual_cm": 7.9,
-        "real_turn_residual_xy_cm": 46.1,
-        "model_to_real_turn_xy_cm": 38.3,
+        "model_target_remaining_cm": 7.9,
+        "real_target_remaining_xy_cm": 46.1,
+        "stop_point_model_residual_xy_cm": 38.3,
+        "model_residual_usable": true,
         "min_observed_xy_speed_cm_s": 25.5,
         "localization_contaminated": false
       },
@@ -98,9 +104,10 @@
           185.0,
           119.0
         ],
-        "model_stop_residual_cm": 27.9,
-        "real_turn_residual_xy_cm": 43.7,
-        "model_to_real_turn_xy_cm": 15.9,
+        "model_target_remaining_cm": 27.9,
+        "real_target_remaining_xy_cm": 43.7,
+        "stop_point_model_residual_xy_cm": 15.9,
+        "model_residual_usable": false,
         "min_observed_xy_speed_cm_s": null,
         "localization_contaminated": true
       },
@@ -123,9 +130,10 @@
           267.0,
           109.0
         ],
-        "model_stop_residual_cm": 11.4,
-        "real_turn_residual_xy_cm": 39.2,
-        "model_to_real_turn_xy_cm": 27.9,
+        "model_target_remaining_cm": 11.4,
+        "real_target_remaining_xy_cm": 39.2,
+        "stop_point_model_residual_xy_cm": 27.9,
+        "model_residual_usable": true,
         "min_observed_xy_speed_cm_s": 5.0,
         "localization_contaminated": false
       }
@@ -827,7 +835,7 @@
     "uavid": "98101",
     "completed_handoffs": 9,
     "interrupted_handoffs": 0,
-    "real_endpoint_residuals": [
+    "real_endpoint_target_errors": [
       {
         "action": "起飞",
         "target_cm": [
@@ -845,7 +853,7 @@
           37.0,
           97.0
         ],
-        "residual_3d_cm": 4.2,
+        "target_error_3d_cm": 4.2,
         "min_observed_xy_speed_cm_s": 0.0
       },
       {
@@ -865,7 +873,7 @@
           315.0,
           97.0
         ],
-        "residual_3d_cm": 7.1,
+        "target_error_3d_cm": 7.1,
         "min_observed_xy_speed_cm_s": 10.0
       },
       {
@@ -885,7 +893,7 @@
           51.0,
           100.0
         ],
-        "residual_3d_cm": 11.7,
+        "target_error_3d_cm": 11.7,
         "min_observed_xy_speed_cm_s": 15.7
       },
       {
@@ -905,7 +913,7 @@
           169.0,
           95.0
         ],
-        "residual_3d_cm": 12.2,
+        "target_error_3d_cm": 12.2,
         "min_observed_xy_speed_cm_s": 5.0
       },
       {
@@ -925,7 +933,7 @@
           320.0,
           97.0
         ],
-        "residual_3d_cm": 3.6,
+        "target_error_3d_cm": 3.6,
         "min_observed_xy_speed_cm_s": 11.2
       },
       {
@@ -945,7 +953,7 @@
           52.0,
           120.0
         ],
-        "residual_3d_cm": 13.9,
+        "target_error_3d_cm": 13.9,
         "min_observed_xy_speed_cm_s": 10.0
       },
       {
@@ -965,7 +973,7 @@
           178.0,
           129.0
         ],
-        "residual_3d_cm": 3.0,
+        "target_error_3d_cm": 3.0,
         "min_observed_xy_speed_cm_s": 7.1
       },
       {
@@ -985,7 +993,7 @@
           51.0,
           119.0
         ],
-        "residual_3d_cm": 17.1,
+        "target_error_3d_cm": 17.1,
         "min_observed_xy_speed_cm_s": 0.0
       },
       {
@@ -1005,12 +1013,12 @@
           47.0,
           100.0
         ],
-        "residual_3d_cm": 7.0,
+        "target_error_3d_cm": 7.0,
         "min_observed_xy_speed_cm_s": 10.0
       }
     ],
-    "median_real_endpoint_residual_3d_cm": 7.1,
-    "p90_real_endpoint_residual_3d_cm": 14.5,
+    "median_real_endpoint_target_error_3d_cm": 7.1,
+    "p90_real_endpoint_target_error_3d_cm": 14.5,
     "median_min_observed_xy_speed_cm_s": 10.0,
     "p90_min_observed_xy_speed_cm_s": 12.1
   },
@@ -1018,20 +1026,25 @@
     "flight": "flight_20260709_162500",
     "interrupted_handoffs": 4,
     "warning_frames": 244,
-    "model_stop_residual_cm": [
+    "model_target_remaining_cm": [
       29.1,
       7.9,
       27.9,
       11.4
     ],
-    "real_turn_residual_xy_cm": [
+    "real_target_remaining_xy_cm": [
       39.1,
       46.1,
       43.7,
       39.2
     ],
-    "ideal_to_real_turn_mae_cm": 42.0,
-    "interrupted_to_real_turn_mae_cm": 23.0
+    "stop_point_model_residual_xy_cm": [
+      11.6,
+      38.3,
+      null,
+      27.9
+    ],
+    "mean_stop_point_model_residual_xy_cm": 25.9
   },
   "swarm_pyfii_baseline_safety": {
     "flight_20260709_171502": {
@@ -1359,23 +1372,6 @@
       "median_3d_cm": 8.0,
       "p90_3d_cm": 30.2,
       "max_3d_cm": 69.9
-    }
-  },
-  "complex_vs_pyfii_command_baseline": {
-    "flight_20260709_162913": {
-      "offset_s": 2.85,
-      "median_3d_cm": 77.5,
-      "p90_3d_cm": 137.5
-    },
-    "flight_20260709_163106": {
-      "offset_s": 3.05,
-      "median_3d_cm": 84.4,
-      "p90_3d_cm": 150.3
-    },
-    "flight_20260709_180602": {
-      "offset_s": 2.85,
-      "median_3d_cm": 71.6,
-      "p90_3d_cm": 126.8
     }
   },
   "yaw_rotation": {
