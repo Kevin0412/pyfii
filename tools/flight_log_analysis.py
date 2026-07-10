@@ -639,7 +639,7 @@ ax.axhline(120,ls='--',color='gray',lw=1,label="配置 MaxVelXY=120")
 ax.set_ylim(0,220); ax.set_xlabel("时间 (s)"); ax.set_ylabel("速度 (cm/s)")
 ax.set_title("水平速度剖面：pyfii 梯形基线 vs 真实速度 (162500)")
 ax.legend(fontsize=8.5,ncol=2); plt.tight_layout()
-plt.savefig(f"{OUT}/fig3_grid_speed.png"); plt.close()
+plt.savefig(f"{OUT}/fig3_grid_xy_speed.png"); plt.close()
 
 # grid metrics
 misses=[float(np.min(np.sqrt((g['x']-cx)**2+(g['y']-cy)**2))) for cx,cy in corners]
