@@ -100,6 +100,68 @@ def sim_route(cmds, start=(0,0,0), fps=200):
             tg += dur
     return np.array(T),np.array(X),np.array(Y),np.array(Z),wpts
 
+def summarize_action_handoffs(output_string, fii, lines, warns):
+    """Collapse frame-level warnings into completed/interrupted action handoffs."""
+    if "src" not in sys.path:
+        sys.path.insert(0, "src")
+    from pyfii.read import read_xml
+
+    dots, _, _, _ = read_xml(output_string, list(fii))
+    motion_dots = [
+        dot for dot in dots
+        if dot[-1] in ("move2", "move", "land", "moved")
+    ]
+    trace = np.array([[line[0] / 1000.0, *line[1:4]] for line in lines], float)
+    t = trace[:, 0]
+    pos = trace[:, 1:]
+    dt = np.diff(t)
+    speed = np.linalg.norm(np.diff(pos, axis=0), axis=1) / np.where(dt <= 0, np.nan, dt)
+
+    events = []
+    # motion_dots[0] is read_xml's initial-position marker, not a commanded action.
+    for previous, incoming in zip(motion_dots[1:-1], motion_dots[2:]):
+        if previous[-1] != "move2":
+            continue
+        command_time = float(incoming[0]) / 1000.0
+        idx = max(0, int(np.searchsorted(t, command_time, side="right")) - 1)
+        target = np.asarray(previous[1:4], float)
+        residual_at_command = float(np.linalg.norm(pos[idx] - target))
+        incoming_speed = float(speed[max(0, idx - 1)])
+        completed = residual_at_command <= 0.05 and incoming_speed <= 0.05
+        interrupted = not completed
+        event = dict(
+            action_start_s=round(float(previous[0]) / 1000.0, 3),
+            command_time_s=round(command_time, 3),
+            target_cm=[round(float(value), 3) for value in target],
+            incoming_action=str(incoming[-1]),
+            completed=completed,
+            residual_at_command_cm=round(residual_at_command, 3),
+            speed_at_command_cm_s=round(incoming_speed, 3),
+        )
+        if interrupted:
+            stop_candidates = np.where((t[:-1] >= command_time) & (speed <= 0.01))[0]
+            if len(stop_candidates):
+                stop_idx = int(stop_candidates[0])
+                stop_pos = pos[stop_idx]
+                event.update(
+                    stop_time_s=round(float(t[stop_idx]), 3),
+                    braking_duration_s=round(float(t[stop_idx] - command_time), 3),
+                    stop_position_cm=[round(float(value), 3) for value in stop_pos],
+                    residual_at_stop_cm=round(float(np.linalg.norm(stop_pos - target)), 3),
+                )
+        events.append(event)
+
+    interrupted = [event for event in events if not event["completed"]]
+    completed = [event for event in events if event["completed"]]
+    return dict(
+        handoff_count=len(events),
+        completed_handoffs=len(completed),
+        interrupted_handoffs=len(interrupted),
+        warning_frame_count=sum("completed" in warning or "未完成" in warning for warning in warns),
+        events=events,
+    )
+
+
 def drone_track(drone, fii):
     """Run pyfii's own command-timed trapezoid solver for a Drone program."""
     if "src" not in sys.path:
@@ -107,12 +169,14 @@ def drone_track(drone, fii):
     from pyfii.read import dots2line
     drone.end()
     lines, _, warns = dots2line(drone.outputString, fii=list(fii))
+    handoffs = summarize_action_handoffs(drone.outputString, fii, lines, warns)
     return (
         np.array([l[0] for l in lines], float) / 1000.0,
         np.array([l[1] for l in lines], float),
         np.array([l[2] for l in lines], float),
         np.array([l[3] for l in lines], float),
         warns,
+        handoffs,
     )
 
 def pyfii_grid_track(vel_xy=120, acc_xy=300, alt=120):
@@ -403,6 +467,42 @@ def first_event_time(d, mask):
     idx = np.where(mask)[0]
     return round(float(d["t"][idx[0]]), 3) if len(idx) else None
 
+
+def target_residuals_in_windows(d, actions, response_margin_s=0.8):
+    """Measure segment-local target residuals using script-derived time windows."""
+    valid = physical_track_mask(d, loose=True)
+    pos = np.column_stack([d["x"], d["y"], d["z"]])
+    speed_t, speed_xy = xy_speed_series(d["t"], d["x"], d["y"])
+    raw_step = np.linalg.norm(np.diff(pos, axis=0), axis=1)
+    speed_valid = valid[1:] & valid[:-1] & (raw_step <= 80)
+    results = []
+    for name, target, start_s, next_command_s in actions:
+        target = np.asarray(target, float)
+        local = (
+            valid & (d["t"] >= start_s) &
+            (d["t"] <= next_command_s + response_margin_s)
+        )
+        candidates = np.where(local)[0]
+        distance = np.linalg.norm(pos - target, axis=1)
+        idx = int(candidates[np.argmin(distance[candidates])])
+        speed_window = (
+            speed_valid & (speed_t >= d["t"][idx] - 0.5) &
+            (speed_t <= d["t"][idx] + 0.5)
+        )
+        local_speed = speed_xy[speed_window]
+        results.append(dict(
+            action=name,
+            target_cm=[float(value) for value in target],
+            window_s=[float(start_s), float(next_command_s + response_margin_s)],
+            closest_time_s=round(float(d["t"][idx]), 3),
+            closest_position_cm=[round(float(value), 1) for value in pos[idx]],
+            residual_3d_cm=round(float(distance[idx]), 1),
+            min_observed_xy_speed_cm_s=(
+                round(float(np.min(local_speed)), 1) if len(local_speed) else None
+            ),
+        ))
+    return results
+
 def yaw_delta_deg(d, t0=32, t1=38):
     m = (d["t"] >= t0) & (d["t"] <= t1)
     if int(np.sum(m)) < 2:
@@ -571,31 +671,12 @@ metrics={}
 g = load("flight_20260709_162500")
 cmds = route_grid(120,300,alt=120)
 mt,mx,my,mz,wp = sim_route(cmds, start=(0,0,0))
-gct,gcx,gcy,gcz,gcmd_warns = pyfii_grid_track(120,300,alt=120)
+gct,gcx,gcy,gcz,gcmd_warns,grid_handoffs = pyfii_grid_track(120,300,alt=120)
 corners=[(320,40),(40,120),(320,200),(40,280)]
 gl = clean_glitches(g['x'],g['y'],g['z'],60)
 
-# --- Fig 1: XY top view ---
-fig,ax=plt.subplots(figsize=(7.2,6.6))
-ax.plot(mx,my,'-',color=C_MODEL,lw=2.2,label="pyfii 几何基线 (直线到航点)",zorder=3)
-# real path, break at glitches
-xr=g['x'].copy(); yr=g['y'].copy()
-seg_x=np.where(gl,np.nan,xr); seg_y=np.where(gl,np.nan,yr)
-ax.plot(seg_x,seg_y,'-',color=C_REAL,lw=2.2,label="真实飞行 (平滑+切角)",zorder=4)
-ax.scatter([c[0] for c in corners],[c[1] for c in corners],s=140,marker='*',
-           color=C_CMD,zorder=5,label="指令航点")
-for i,(cx,cy) in enumerate(corners):
-    d=np.sqrt((g['x']-cx)**2+(g['y']-cy)**2); j=np.argmin(d)
-    ax.annotate(f"欠冲 {d[j]:.0f}cm",(cx,cy),(cx+6,cy+10),fontsize=8,color=C_CMD)
-    ax.plot([cx,g['x'][j]],[cy,g['y'][j]],':',color='gray',lw=1)
-ax.scatter([22],[24],s=60,color='green',zorder=6,label="真实起点(22,24)≠(0,0)")
-ax.set_xlabel("X (cm)"); ax.set_ylabel("Y (cm)")
-ax.set_title("网格航线 俯视图：pyfii 模型 vs 真实飞行 (162500)")
-ax.legend(loc="upper left",fontsize=8.5); ax.set_aspect('equal')
-ax.set_xlim(-20,360); ax.set_ylim(-20,360)
-plt.tight_layout(); plt.savefig(f"{OUT}/fig1_grid_xy.png"); plt.close()
-
-# --- Fig 2: Z vs time (align takeoff) ---
+# Align by the first sustained horizontal motion. The inferred offset is used
+# only to locate corresponding action handoffs, not as a global clock fit.
 i_to=np.argmax(g['z']>25); t0_real=g['t'][i_to]
 i_to_model=np.argmax(gcz>25); t0_model=gct[i_to_model]
 grid_z_time_offset=t0_real-t0_model
@@ -606,6 +687,78 @@ grid_xy_time_offset = (
     if grid_xy_time_real is not None and grid_xy_time_model is not None
     else grid_z_time_offset
 )
+
+grid_interrupted_events = [
+    event for event in grid_handoffs["events"]
+    if not event["completed"]
+]
+gd = load_by_uav("flight_20260709_162500")["98101"]
+grid_valid = (
+    ((gd["mode"] == "GUIDED") | (gd["mode"] == "LAND")) &
+    (gd["status"] == "Good") & coord_valid(gd) & ~default_pose_mask(gd) &
+    ~clean_glitches(gd["x"], gd["y"], gd["z"], 80)
+)
+grid_turns = []
+for corner, event in zip(corners, grid_interrupted_events):
+    expected_stop = event["stop_time_s"] + grid_xy_time_offset
+    local = grid_valid & (gd["t"] >= expected_stop - 0.8) & (gd["t"] <= expected_stop + 0.8)
+    candidates = np.where(local)[0]
+    distance = np.hypot(gd["x"] - corner[0], gd["y"] - corner[1])
+    turn_idx = int(candidates[np.argmin(distance[candidates])])
+
+    raw_step = np.linalg.norm(np.diff(np.column_stack([gd["x"], gd["y"], gd["z"]]), axis=0), axis=1)
+    speed_t, speed_xy = xy_speed_series(gd["t"], gd["x"], gd["y"])
+    speed_local = (speed_t >= expected_stop - 0.8) & (speed_t <= expected_stop + 0.8)
+    pair_valid = grid_valid[1:] & grid_valid[:-1] & (raw_step > 0.01) & (raw_step <= 80)
+    localization_contaminated = bool(np.any(speed_local & ((raw_step <= 0.01) | (raw_step > 80))))
+    usable_speed = speed_xy[speed_local & pair_valid]
+    min_speed = None if localization_contaminated or not len(usable_speed) else float(np.min(usable_speed))
+
+    model_stop = np.asarray(event["stop_position_cm"], float)
+    real_stop = np.array([gd["x"][turn_idx], gd["y"][turn_idx], gd["z"][turn_idx]], float)
+    grid_turns.append(dict(
+        target_cm=[float(corner[0]), float(corner[1]), 120.0],
+        model_stop_time_s=event["stop_time_s"],
+        expected_real_stop_s=round(float(expected_stop), 3),
+        real_turn_time_s=round(float(gd["t"][turn_idx]), 3),
+        model_stop_position_cm=[round(float(value), 1) for value in model_stop],
+        real_turn_position_cm=[round(float(value), 1) for value in real_stop],
+        model_stop_residual_cm=round(float(event["residual_at_stop_cm"]), 1),
+        real_turn_residual_xy_cm=round(float(distance[turn_idx]), 1),
+        model_to_real_turn_xy_cm=round(float(np.linalg.norm(model_stop[:2] - real_stop[:2])), 1),
+        min_observed_xy_speed_cm_s=round(min_speed, 1) if min_speed is not None else None,
+        localization_contaminated=localization_contaminated,
+    ))
+
+# --- Fig 1: XY top view ---
+fig,ax=plt.subplots(figsize=(7.2,6.6))
+ax.plot(mx,my,'-',color=C_MODEL,lw=2.2,label="pyfii 几何基线 (直线到航点)",zorder=3)
+ax.plot(gcx,gcy,'--',color="#1a202c",lw=1.5,label="pyfii 提前打断基线 (制动后换段)",zorder=3)
+# Real path: keep only physically interpretable samples so post-land AprilTag
+# failures do not draw lines through unrelated coordinates.
+xr=g['x'].copy(); yr=g['y'].copy()
+seg_x=np.where(grid_valid,np.asarray(gd["x"]),np.nan)
+seg_y=np.where(grid_valid,np.asarray(gd["y"]),np.nan)
+ax.plot(seg_x,seg_y,'-',color=C_REAL,lw=2.2,label="真实飞行",zorder=4)
+ax.scatter([c[0] for c in corners],[c[1] for c in corners],s=140,marker='*',
+           color=C_CMD,zorder=5,label="指令航点")
+annotation_offsets = [(-78, 10), (10, 10), (-78, 10), (10, -18)]
+for (cx,cy), turn, offset in zip(corners, grid_turns, annotation_offsets):
+    rx, ry = turn["real_turn_position_cm"][:2]
+    ax.annotate(
+        f"段内残差 {turn['real_turn_residual_xy_cm']:.0f}cm",
+        (cx,cy), xytext=offset, textcoords="offset points", fontsize=8, color=C_CMD,
+        bbox=dict(facecolor="white", edgecolor="none", alpha=0.72, pad=1.0),
+    )
+    ax.plot([cx,rx],[cy,ry],':',color='gray',lw=1)
+ax.scatter([22],[24],s=60,color='green',zorder=6,label="真实起点(22,24)≠(0,0)")
+ax.set_xlabel("X (cm)"); ax.set_ylabel("Y (cm)")
+ax.set_title("网格航线 俯视图：pyfii 模型 vs 真实飞行 (162500)")
+ax.legend(loc="upper left",fontsize=8.5); ax.set_aspect('equal')
+ax.set_xlim(-20,360); ax.set_ylim(-20,360)
+plt.tight_layout(); plt.savefig(f"{OUT}/fig1_grid_xy.png"); plt.close()
+
+# --- Fig 2: Z vs time (align takeoff) ---
 fig,ax=plt.subplots(figsize=(8,3.6))
 ax.plot(gct+grid_z_time_offset, gcz,color=C_MODEL,lw=2,label="pyfii 指令时序基线 Z")
 ax.plot(g['t'], g['z'], color=C_REAL,lw=2,label="真实 Z")
@@ -617,7 +770,6 @@ plt.savefig(f"{OUT}/fig2_grid_z.png"); plt.close()
 
 # --- Fig 3: horizontal speed vs time ---
 gcts,gcv = xy_speed_series(gct,gcx,gcy)
-gd = load_by_uav("flight_20260709_162500")["98101"]
 real_xy_motion_start = grid_xy_time_real if grid_xy_time_real is not None else 3.5
 speed_ok = (
     ((gd["mode"] == "GUIDED") | (gd["mode"] == "LAND")) &
@@ -632,17 +784,33 @@ sy = np.where(speed_ok, gd["y"], np.nan)
 sz = np.where(speed_ok, gd["z"], np.nan)
 rts,rv_clean = xy_speed_series(gd["t"], sx, sy)
 rv_clean[rv_clean > 220] = np.nan
+# The third handoff overlaps an AprilTag freeze/jump, so it is excluded from
+# the evidence about whether the aircraft reached zero horizontal speed.
+third_stop = grid_turns[2]["expected_real_stop_s"]
+third_bad = (rts >= third_stop - 1.2) & (rts <= third_stop + 0.8)
+rv_clean[third_bad] = np.nan
 fig,ax=plt.subplots(figsize=(8,3.6))
-ax.plot(gcts+grid_xy_time_offset,gcv,color=C_MODEL,lw=1.8,label="pyfii 指令时序水平速度 (梯形)")
+ax.plot(gcts+grid_xy_time_offset,gcv,color=C_MODEL,lw=1.8,label="pyfii 非理想基线 (梯形+打断制动)")
 ax.plot(rts,rv_clean,color=C_REAL,lw=1.8,label="真实水平速度 (平滑)")
+for idx, event in enumerate(grid_interrupted_events):
+    ax.axvspan(
+        event["command_time_s"] + grid_xy_time_offset,
+        event["stop_time_s"] + grid_xy_time_offset,
+        color="#d69e2e", alpha=0.18,
+        label="pyfii 强制制动窗口" if idx == 0 else None,
+    )
+ax.axvspan(third_stop - 1.2, third_stop + 0.8, color="#718096", alpha=0.14,
+           label="AprilTag 停帧/跳变：不判定速度")
 ax.axhline(120,ls='--',color='gray',lw=1,label="配置 MaxVelXY=120")
 ax.set_ylim(0,220); ax.set_xlabel("时间 (s)"); ax.set_ylabel("速度 (cm/s)")
-ax.set_title("水平速度剖面：pyfii 梯形基线 vs 真实速度 (162500)")
+ax.set_title("非理想动作：pyfii 打断制动与真实转向减速 (162500)")
 ax.legend(fontsize=8.5,ncol=2); plt.tight_layout()
-plt.savefig(f"{OUT}/fig3_grid_xy_speed.png"); plt.close()
+plt.savefig(f"{OUT}/fig3_grid_action_speed.png"); plt.close()
 
 # grid metrics
-misses=[float(np.min(np.sqrt((g['x']-cx)**2+(g['y']-cy)**2))) for cx,cy in corners]
+real_turn_residuals = [turn["real_turn_residual_xy_cm"] for turn in grid_turns]
+model_stop_residuals = [turn["model_stop_residual_cm"] for turn in grid_turns]
+model_to_real_turn = [turn["model_to_real_turn_xy_cm"] for turn in grid_turns]
 metrics['grid']=dict(model_dur=float(mt[-1]),real_dur=float(g['t'][-1]),
     command_timed_model_dur=float(gct[-1]),
     command_time_offset=round(float(grid_z_time_offset),3),
@@ -650,8 +818,17 @@ metrics['grid']=dict(model_dur=float(mt[-1]),real_dur=float(g['t'][-1]),
     command_xy_time_offset=round(float(grid_xy_time_offset),3),
     real_first_xy_motion_s=round(float(grid_xy_time_real),3) if grid_xy_time_real is not None else None,
     model_first_xy_motion_s=round(float(grid_xy_time_model),3) if grid_xy_time_model is not None else None,
-    command_timed_warning_count=len(gcmd_warns),
-    corner_miss_cm=[round(m,1) for m in misses],mean_miss=round(float(np.mean(misses)),1),
+    command_timed_warning_frame_count=len(gcmd_warns),
+    completed_handoffs=grid_handoffs["completed_handoffs"],
+    interrupted_handoffs=grid_handoffs["interrupted_handoffs"],
+    real_turn_residual_xy_cm=real_turn_residuals,
+    model_interrupted_stop_residual_cm=model_stop_residuals,
+    mean_real_turn_residual_xy_cm=round(float(np.mean(real_turn_residuals)),1),
+    mean_model_interrupted_stop_residual_cm=round(float(np.mean(model_stop_residuals)),1),
+    mean_model_to_real_turn_xy_cm=round(float(np.mean(model_to_real_turn)),1),
+    ideal_to_real_turn_mae_cm=round(float(np.mean(real_turn_residuals)),1),
+    interrupted_to_real_turn_mae_cm=round(float(np.mean(np.abs(np.asarray(real_turn_residuals) - np.asarray(model_stop_residuals)))),1),
+    turn_events=grid_turns,
     n_glitch=int(gl.sum()),start_offset_cm=round(float(np.hypot(22,24)),1))
 
 # ============================================================ COMPLEX (162913)
@@ -660,7 +837,7 @@ cl = clean_glitches(c['x'],c['y'],c['z'],70)
 # full route: grid -> spiral -> zstairs -> rectangle  (acc 400; grid vel100)
 cmds2 = (route_grid(100,400,alt=120)+route_spiral(400)+route_zstairs(400)+route_rectangle(400))
 mt2,mx2,my2,mz2,wp2 = sim_route(cmds2,start=(0,0,0))
-ct2,cx2,cy2,cz2,cwarns2 = pyfii_complex_track()
+ct2,cx2,cy2,cz2,cwarns2,complex_handoffs = pyfii_complex_track()
 
 # --- Fig 4: complex XY path ---
 fig,ax=plt.subplots(figsize=(7.4,6.8))
@@ -709,7 +886,9 @@ plt.savefig(f"{OUT}/fig6_glitches.png"); plt.close()
 allv=np.concatenate(allv)
 metrics['complex']=dict(model_dur=float(mt2[-1]),real_dur=float(c['t'][-1]),
     command_timed_model_dur=float(ct2[-1]),
-    command_timed_warning_count=len(cwarns2),
+    command_timed_warning_frame_count=len(cwarns2),
+    completed_handoffs=complex_handoffs["completed_handoffs"],
+    interrupted_handoffs=complex_handoffs["interrupted_handoffs"],
     command_timed_note="fwfii z-stairs starts at z=60; pyfii Drone range rejects 60, so command baseline clamps it to 80",
     n_glitch_162913=int(cl.sum()),
     glitch_pct=round(100*float(cl.sum())/len(cl),1),
@@ -792,22 +971,102 @@ for flight in ["flight_20260709_173818", "flight_20260709_173926", "flight_20260
 metrics["failure_prefix"] = failure_prefix
 
 # --- Fig 7: cleaned swarm XY paths (normal duet + later light/flip run) ---
-fig, axes = plt.subplots(1, 2, figsize=(12, 5.5), sharex=True, sharey=True)
-swarm_ideal_tracks = {
+swarm_command_tracks = {
     "flight_20260709_171502": pyfii_swarm_tracks("171502"),
     "flight_20260709_175214": pyfii_swarm_tracks("175214"),
 }
-metrics["swarm_pyfii_baseline_warnings"] = {
+metrics["swarm_pyfii_action_handoffs"] = {
     flight: {
-        "98101": len(tracks[0][4]),
-        "98102": len(tracks[1][4]),
+        "98101": {
+            "completed": tracks[0][5]["completed_handoffs"],
+            "interrupted": tracks[0][5]["interrupted_handoffs"],
+            "warning_frames": tracks[0][5]["warning_frame_count"],
+        },
+        "98102": {
+            "completed": tracks[1][5]["completed_handoffs"],
+            "interrupted": tracks[1][5]["interrupted_handoffs"],
+            "warning_frames": tracks[1][5]["warning_frame_count"],
+        },
     }
-    for flight, tracks in swarm_ideal_tracks.items()
+    for flight, tracks in swarm_command_tracks.items()
 }
+
+# A no-interruption real-flight case: every 98101 handoff in 171502 completes
+# under pyfii's stop-to-stop trapezoid before the next movement command.
+ideal_actions_171502 = [
+    ("起飞", (40, 40, 100), 7.0, 11.0),
+    ("动作1", (40, 320, 100), 11.0, 15.0),
+    ("动作2", (320, 40, 100), 15.0, 19.0),
+    ("动作3", (180, 180, 100), 19.0, 22.0),
+    ("动作4", (40, 320, 100), 22.0, 25.0),
+    ("动作5", (320, 40, 120), 25.0, 29.0),
+    ("动作6", (180, 180, 130), 29.0, 36.0),
+    ("动作7", (40, 40, 120), 36.0, 39.0),
+    ("动作8", (40, 40, 100), 39.0, 41.0),
+]
+ideal_real_endpoints = target_residuals_in_windows(
+    load_by_uav("flight_20260709_171502")["98101"],
+    ideal_actions_171502,
+)
+ideal_endpoint_residuals = [item["residual_3d_cm"] for item in ideal_real_endpoints]
+ideal_min_speeds = [
+    item["min_observed_xy_speed_cm_s"] for item in ideal_real_endpoints
+    if item["min_observed_xy_speed_cm_s"] is not None
+]
+metrics["ideal_condition"] = {
+    "flight": "flight_20260709_171502",
+    "uavid": "98101",
+    "completed_handoffs": swarm_command_tracks["flight_20260709_171502"][0][5]["completed_handoffs"],
+    "interrupted_handoffs": swarm_command_tracks["flight_20260709_171502"][0][5]["interrupted_handoffs"],
+    "real_endpoint_residuals": ideal_real_endpoints,
+    "median_real_endpoint_residual_3d_cm": round(float(np.median(ideal_endpoint_residuals)), 1),
+    "p90_real_endpoint_residual_3d_cm": round(float(np.percentile(ideal_endpoint_residuals, 90)), 1),
+    "median_min_observed_xy_speed_cm_s": round(float(np.median(ideal_min_speeds)), 1),
+    "p90_min_observed_xy_speed_cm_s": round(float(np.percentile(ideal_min_speeds, 90)), 1),
+}
+metrics["nonideal_condition"] = {
+    "flight": "flight_20260709_162500",
+    "interrupted_handoffs": grid_handoffs["interrupted_handoffs"],
+    "warning_frames": grid_handoffs["warning_frame_count"],
+    "model_stop_residual_cm": model_stop_residuals,
+    "real_turn_residual_xy_cm": real_turn_residuals,
+    "ideal_to_real_turn_mae_cm": metrics["grid"]["ideal_to_real_turn_mae_cm"],
+    "interrupted_to_real_turn_mae_cm": metrics["grid"]["interrupted_to_real_turn_mae_cm"],
+}
+
+# --- Fig 11: keep completed and interrupted action analysis visibly separate ---
+condition_fig, condition_axes = plt.subplots(1, 2, figsize=(11.5, 4.4))
+action_x = np.arange(len(ideal_endpoint_residuals))
+condition_axes[0].bar(action_x, ideal_endpoint_residuals, color=C_REAL, width=0.68, label="真实段内到点残差")
+condition_axes[0].axhline(np.median(ideal_endpoint_residuals), color="#2f855a", ls="--", lw=1.3,
+                          label=f"中位数 {np.median(ideal_endpoint_residuals):.1f} cm")
+condition_axes[0].set_xticks(action_x)
+condition_axes[0].set_xticklabels([item[0] for item in ideal_actions_171502], rotation=35, ha="right")
+condition_axes[0].set_ylabel("目标残差 (cm)")
+condition_axes[0].set_title("理想条件：上一动作完成后再开始下一动作\n171502-98101，pyfii 0 个打断")
+condition_axes[0].legend(fontsize=8)
+
+corner_x = np.arange(1, len(corners) + 1)
+width = 0.34
+condition_axes[1].scatter(corner_x, np.zeros(len(corners)), marker="D", s=40, color=C_MODEL,
+                          label="理想完成基线 (0 cm)", zorder=4)
+condition_axes[1].bar(corner_x - width / 2, model_stop_residuals, width=width, color="#d69e2e",
+                      label="pyfii 打断制动后的残差")
+condition_axes[1].bar(corner_x + width / 2, real_turn_residuals, width=width, color=C_REAL,
+                      label="真实转向点残差")
+condition_axes[1].set_xticks(corner_x)
+condition_axes[1].set_xticklabels([f"航点{i}" for i in corner_x])
+condition_axes[1].set_ylabel("目标残差 (cm)")
+condition_axes[1].set_title("非理想条件：下一指令提前到达\n162500，244 warning 帧 = 4 个独立打断")
+condition_axes[1].legend(fontsize=8)
+condition_fig.tight_layout()
+condition_fig.savefig(f"{OUT}/fig11_ideal_vs_interrupted.png"); plt.close(condition_fig)
+
 metrics["swarm_pyfii_baseline_safety"] = {}
-for flight, tracks in swarm_ideal_tracks.items():
+for flight, tracks in swarm_command_tracks.items():
     itt, ixy, idz, id3 = paired_distance_from_tracks(*tracks)
     metrics["swarm_pyfii_baseline_safety"][flight] = summarize_safety_arrays(itt, ixy, idz, id3)
+fig, axes = plt.subplots(1, 2, figsize=(12, 5.5), sharex=True, sharey=True)
 for ax, flight, title in zip(
     axes,
     ["flight_20260709_171502", "flight_20260709_175214"],
@@ -822,7 +1081,7 @@ for ax, flight, title in zip(
         dp = default_pose_mask(d) & (d["t"] > 2.0)
         if np.any(dp):
             ax.scatter(d["x"][dp], d["y"][dp], s=10, color="0.55", alpha=0.35, marker="x")
-    for track, col in zip(swarm_ideal_tracks[flight], ["#e8543f", "#2b6cb0"]):
+    for track, col in zip(swarm_command_tracks[flight], ["#e8543f", "#2b6cb0"]):
         it, ix, iy, iz = track[:4]
         ax.plot(ix, iy, "--", lw=1.4, color=col, alpha=0.65, label="pyfii基线")
     ax.scatter([40, 320], [40, 40], s=55, c=["#e8543f", "#2b6cb0"], marker="s", label="脚本起点")
@@ -855,7 +1114,7 @@ for ax, flight, title in zip(
     dz = [p["dz"] for p in ps]
     ax.plot(t, xy, color="#2b6cb0", lw=1.8, label="XY 距离")
     ax.plot(t, dz, color="#e8543f", lw=1.8, label="Z 差")
-    itt, ixy, idz, _ = paired_distance_from_tracks(*swarm_ideal_tracks[flight])
+    itt, ixy, idz, _ = paired_distance_from_tracks(*swarm_command_tracks[flight])
     ideal_start = first_separated_time_arrays(itt, ixy, idz)
     if ideal_start is not None:
         aligned_t = itt + (start - ideal_start)
@@ -1046,14 +1305,14 @@ def verify_command_semantics():
     except Exception as e:
         print("跳过语义实测（无法导入 pyfii）:", e); return {}
 
-    # (a) 网格触发多少次“动作未完成”
+    # (a) 网格触发多少个独立“动作未完成”事件
     d = Drone(0, 0); d.takeoff(1, 120); d.delay(3000); d.VelXY(120, 300)
     for row in range(4):
         yt = min(40+row*80, 320); xt = 320 if row % 2 == 0 else 40
         d.move2(xt, yt, 120); d.delay(2500)
-    d.land(); d.end()
-    _, _, warns = dots2line(d.outputString, fii=[0, 0])
-    n_undone = sum("completed" in w or "未完成" in w for w in warns)
+    d.land()
+    grid_result = drone_track(d, (0, 0))
+    grid_completion = grid_result[5]
 
     # (b) 纯垂直 move2：pyfii 垂直速率是否恒等于 VelXY
     def climb_secs(velxy):
@@ -1069,9 +1328,19 @@ def verify_command_semantics():
         return round((t1-t0)/1000, 2) if t0 and t1 else None
     vert = {v: climb_secs(v) for v in (150, 50, 30)}
 
-    print("\n[语义实测] 网格 medium: '动作未完成' 告警 =", n_undone, "次")
+    print(
+        "\n[语义实测] 网格 medium: 独立动作打断 =",
+        grid_completion["interrupted_handoffs"],
+        "个；逐帧 warning =",
+        grid_completion["warning_frame_count"],
+        "条",
+    )
     print("[语义实测] 纯垂直升120cm 用时(s) 随 VelXY:", vert, "-> 垂直速率=VelXY")
-    return dict(grid_action_not_completed=n_undone, pure_vertical_climb_s=vert)
+    return dict(
+        grid_interrupted_handoffs=grid_completion["interrupted_handoffs"],
+        grid_action_warning_frames=grid_completion["warning_frame_count"],
+        pure_vertical_climb_s=vert,
+    )
 
 metrics['command_semantics'] = verify_command_semantics()
 

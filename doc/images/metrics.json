@@ -8,14 +8,128 @@
     "command_xy_time_offset": 1.938,
     "real_first_xy_motion_s": 6.013,
     "model_first_xy_motion_s": 4.075,
-    "command_timed_warning_count": 244,
-    "corner_miss_cm": [
+    "command_timed_warning_frame_count": 244,
+    "completed_handoffs": 1,
+    "interrupted_handoffs": 4,
+    "real_turn_residual_xy_cm": [
       39.1,
-      20.1,
+      46.1,
       43.7,
       39.2
     ],
-    "mean_miss": 35.5,
+    "model_interrupted_stop_residual_cm": [
+      29.1,
+      7.9,
+      27.9,
+      11.4
+    ],
+    "mean_real_turn_residual_xy_cm": 42.0,
+    "mean_model_interrupted_stop_residual_cm": 19.1,
+    "mean_model_to_real_turn_xy_cm": 23.4,
+    "ideal_to_real_turn_mae_cm": 42.0,
+    "interrupted_to_real_turn_mae_cm": 23.0,
+    "turn_events": [
+      {
+        "target_cm": [
+          320.0,
+          40.0,
+          120.0
+        ],
+        "model_stop_time_s": 6.8,
+        "expected_real_stop_s": 8.738,
+        "real_turn_time_s": 8.619,
+        "model_stop_position_cm": [
+          291.1,
+          36.4,
+          120.0
+        ],
+        "real_turn_position_cm": [
+          281.0,
+          42.0,
+          118.0
+        ],
+        "model_stop_residual_cm": 29.1,
+        "real_turn_residual_xy_cm": 39.1,
+        "model_to_real_turn_xy_cm": 11.6,
+        "min_observed_xy_speed_cm_s": 22.2,
+        "localization_contaminated": false
+      },
+      {
+        "target_cm": [
+          40.0,
+          120.0,
+          120.0
+        ],
+        "model_stop_time_s": 9.3,
+        "expected_real_stop_s": 11.238,
+        "real_turn_time_s": 11.026,
+        "model_stop_position_cm": [
+          47.5,
+          117.5,
+          120.0
+        ],
+        "real_turn_position_cm": [
+          85.0,
+          110.0,
+          118.0
+        ],
+        "model_stop_residual_cm": 7.9,
+        "real_turn_residual_xy_cm": 46.1,
+        "model_to_real_turn_xy_cm": 38.3,
+        "min_observed_xy_speed_cm_s": 25.5,
+        "localization_contaminated": false
+      },
+      {
+        "target_cm": [
+          320.0,
+          200.0,
+          120.0
+        ],
+        "model_stop_time_s": 11.8,
+        "expected_real_stop_s": 13.738,
+        "real_turn_time_s": 13.431,
+        "model_stop_position_cm": [
+          293.3,
+          191.9,
+          120.0
+        ],
+        "real_turn_position_cm": [
+          279.0,
+          185.0,
+          119.0
+        ],
+        "model_stop_residual_cm": 27.9,
+        "real_turn_residual_xy_cm": 43.7,
+        "model_to_real_turn_xy_cm": 15.9,
+        "min_observed_xy_speed_cm_s": null,
+        "localization_contaminated": true
+      },
+      {
+        "target_cm": [
+          40.0,
+          280.0,
+          120.0
+        ],
+        "model_stop_time_s": 14.3,
+        "expected_real_stop_s": 16.238,
+        "real_turn_time_s": 16.439,
+        "model_stop_position_cm": [
+          50.7,
+          276.3,
+          120.0
+        ],
+        "real_turn_position_cm": [
+          77.0,
+          267.0,
+          109.0
+        ],
+        "model_stop_residual_cm": 11.4,
+        "real_turn_residual_xy_cm": 39.2,
+        "model_to_real_turn_xy_cm": 27.9,
+        "min_observed_xy_speed_cm_s": 5.0,
+        "localization_contaminated": false
+      }
+    ],
     "n_glitch": 6,
     "start_offset_cm": 32.6
   },
@@ -23,7 +137,9 @@
     "model_dur": 128.51489325786946,
     "real_dur": 73.38,
     "command_timed_model_dur": 68.385,
-    "command_timed_warning_count": 1310,
+    "command_timed_warning_frame_count": 1310,
+    "completed_handoffs": 8,
+    "interrupted_handoffs": 25,
     "command_timed_note": "fwfii z-stairs starts at z=60; pyfii Drone range rejects 60, so command baseline clamps it to 80",
     "n_glitch_162913": 6,
     "glitch_pct": 1.6,
@@ -680,15 +796,242 @@
       }
     }
   },
-  "swarm_pyfii_baseline_warnings": {
+  "swarm_pyfii_action_handoffs": {
     "flight_20260709_171502": {
-      "98101": 0,
-      "98102": 57
+      "98101": {
+        "completed": 9,
+        "interrupted": 0,
+        "warning_frames": 0
+      },
+      "98102": {
+        "completed": 8,
+        "interrupted": 1,
+        "warning_frames": 57
+      }
     },
     "flight_20260709_175214": {
-      "98101": 23,
-      "98102": 23
+      "98101": {
+        "completed": 9,
+        "interrupted": 1,
+        "warning_frames": 23
+      },
+      "98102": {
+        "completed": 9,
+        "interrupted": 1,
+        "warning_frames": 23
+      }
     }
+  },
+  "ideal_condition": {
+    "flight": "flight_20260709_171502",
+    "uavid": "98101",
+    "completed_handoffs": 9,
+    "interrupted_handoffs": 0,
+    "real_endpoint_residuals": [
+      {
+        "action": "起飞",
+        "target_cm": [
+          40.0,
+          40.0,
+          100.0
+        ],
+        "window_s": [
+          7.0,
+          11.8
+        ],
+        "closest_time_s": 11.425,
+        "closest_position_cm": [
+          40.0,
+          37.0,
+          97.0
+        ],
+        "residual_3d_cm": 4.2,
+        "min_observed_xy_speed_cm_s": 0.0
+      },
+      {
+        "action": "动作1",
+        "target_cm": [
+          40.0,
+          320.0,
+          100.0
+        ],
+        "window_s": [
+          11.0,
+          15.8
+        ],
+        "closest_time_s": 14.831,
+        "closest_position_cm": [
+          36.0,
+          315.0,
+          97.0
+        ],
+        "residual_3d_cm": 7.1,
+        "min_observed_xy_speed_cm_s": 10.0
+      },
+      {
+        "action": "动作2",
+        "target_cm": [
+          320.0,
+          40.0,
+          100.0
+        ],
+        "window_s": [
+          15.0,
+          19.8
+        ],
+        "closest_time_s": 19.641,
+        "closest_position_cm": [
+          316.0,
+          51.0,
+          100.0
+        ],
+        "residual_3d_cm": 11.7,
+        "min_observed_xy_speed_cm_s": 15.7
+      },
+      {
+        "action": "动作3",
+        "target_cm": [
+          180.0,
+          180.0,
+          100.0
+        ],
+        "window_s": [
+          19.0,
+          22.8
+        ],
+        "closest_time_s": 22.046,
+        "closest_position_cm": [
+          182.0,
+          169.0,
+          95.0
+        ],
+        "residual_3d_cm": 12.2,
+        "min_observed_xy_speed_cm_s": 5.0
+      },
+      {
+        "action": "动作4",
+        "target_cm": [
+          40.0,
+          320.0,
+          100.0
+        ],
+        "window_s": [
+          22.0,
+          25.8
+        ],
+        "closest_time_s": 25.653,
+        "closest_position_cm": [
+          38.0,
+          320.0,
+          97.0
+        ],
+        "residual_3d_cm": 3.6,
+        "min_observed_xy_speed_cm_s": 11.2
+      },
+      {
+        "action": "动作5",
+        "target_cm": [
+          320.0,
+          40.0,
+          120.0
+        ],
+        "window_s": [
+          25.0,
+          29.8
+        ],
+        "closest_time_s": 29.461,
+        "closest_position_cm": [
+          313.0,
+          52.0,
+          120.0
+        ],
+        "residual_3d_cm": 13.9,
+        "min_observed_xy_speed_cm_s": 10.0
+      },
+      {
+        "action": "动作6",
+        "target_cm": [
+          180.0,
+          180.0,
+          130.0
+        ],
+        "window_s": [
+          29.0,
+          36.8
+        ],
+        "closest_time_s": 34.271,
+        "closest_position_cm": [
+          178.0,
+          178.0,
+          129.0
+        ],
+        "residual_3d_cm": 3.0,
+        "min_observed_xy_speed_cm_s": 7.1
+      },
+      {
+        "action": "动作7",
+        "target_cm": [
+          40.0,
+          40.0,
+          120.0
+        ],
+        "window_s": [
+          36.0,
+          39.8
+        ],
+        "closest_time_s": 39.48,
+        "closest_position_cm": [
+          53.0,
+          51.0,
+          119.0
+        ],
+        "residual_3d_cm": 17.1,
+        "min_observed_xy_speed_cm_s": 0.0
+      },
+      {
+        "action": "动作8",
+        "target_cm": [
+          40.0,
+          40.0,
+          100.0
+        ],
+        "window_s": [
+          39.0,
+          41.8
+        ],
+        "closest_time_s": 41.484,
+        "closest_position_cm": [
+          40.0,
+          47.0,
+          100.0
+        ],
+        "residual_3d_cm": 7.0,
+        "min_observed_xy_speed_cm_s": 10.0
+      }
+    ],
+    "median_real_endpoint_residual_3d_cm": 7.1,
+    "p90_real_endpoint_residual_3d_cm": 14.5,
+    "median_min_observed_xy_speed_cm_s": 10.0,
+    "p90_min_observed_xy_speed_cm_s": 12.1
+  },
+  "nonideal_condition": {
+    "flight": "flight_20260709_162500",
+    "interrupted_handoffs": 4,
+    "warning_frames": 244,
+    "model_stop_residual_cm": [
+      29.1,
+      7.9,
+      27.9,
+      11.4
+    ],
+    "real_turn_residual_xy_cm": [
+      39.1,
+      46.1,
+      43.7,
+      39.2
+    ],
+    "ideal_to_real_turn_mae_cm": 42.0,
+    "interrupted_to_real_turn_mae_cm": 23.0
   },
   "swarm_pyfii_baseline_safety": {
     "flight_20260709_171502": {
@@ -1065,7 +1408,8 @@
     "gpsstatus": "NO_GPS is expected for the AprilTag mat positioning system; fcstatus/default pose are the relevant quality signals"
   },
   "command_semantics": {
-    "grid_action_not_completed": 244,
+    "grid_interrupted_handoffs": 4,
+    "grid_action_warning_frames": 244,
     "pure_vertical_climb_s": {
       "150": 1.07,
       "50": 2.42,
