@@ -5,7 +5,7 @@ flight_log_analysis.py — 真实飞行遥测 vs pyfii 运动模型 对照分析
 用法:  python3 tools/flight_log_analysis.py
 依赖:  numpy, matplotlib（CJK 字体 Noto Sans CJK 或回退英文）
 输入:  flight_logs/<flight>/telemetry.csv（本地，未入仓库）
-输出:  doc/images/fig1..10_*.png, doc/images/metrics.json
+输出:  doc/images/fig1..11_*.png, doc/images/metrics.json
 
 见 doc/flight_log_trajectory_analysis.md。
 """
@@ -468,40 +468,120 @@ def first_event_time(d, mask):
     return round(float(d["t"][idx[0]]), 3) if len(idx) else None
 
 
-def target_errors_in_windows(d, actions, response_margin_s=0.8):
-    """Measure segment-local target errors using script-derived time windows."""
-    valid = physical_track_mask(d, loose=True)
-    pos = np.column_stack([d["x"], d["y"], d["z"]])
-    speed_t, speed_xy = xy_speed_series(d["t"], d["x"], d["y"])
-    raw_step = np.linalg.norm(np.diff(pos, axis=0), axis=1)
-    speed_valid = valid[1:] & valid[:-1] & (raw_step <= 80)
-    results = []
-    for name, target, start_s, next_command_s in actions:
-        target = np.asarray(target, float)
-        local = (
-            valid & (d["t"] >= start_s) &
-            (d["t"] <= next_command_s + response_margin_s)
-        )
-        candidates = np.where(local)[0]
-        distance = np.linalg.norm(pos - target, axis=1)
-        idx = int(candidates[np.argmin(distance[candidates])])
-        speed_window = (
-            speed_valid & (speed_t >= d["t"][idx] - 0.5) &
-            (speed_t <= d["t"][idx] + 0.5)
-        )
-        local_speed = speed_xy[speed_window]
-        results.append(dict(
-            action=name,
-            target_cm=[float(value) for value in target],
-            window_s=[float(start_s), float(next_command_s + response_margin_s)],
-            closest_time_s=round(float(d["t"][idx]), 3),
-            closest_position_cm=[round(float(value), 1) for value in pos[idx]],
-            target_error_3d_cm=round(float(distance[idx]), 1),
-            min_observed_xy_speed_cm_s=(
-                round(float(np.min(local_speed)), 1) if len(local_speed) else None
+def trapezoid_distance(distance, vel, acc, elapsed):
+    """Distance traveled by pyfii's stop-to-stop trapezoid at elapsed seconds."""
+    elapsed = np.asarray(elapsed, float)
+    accel_distance = vel**2 / (2 * acc)
+    if distance >= 2 * accel_distance:
+        accel_time = vel / acc
+        total_time = distance / vel + vel / acc
+        elapsed = np.clip(elapsed, 0.0, total_time)
+        traveled = np.where(
+            elapsed <= accel_time,
+            0.5 * acc * elapsed**2,
+            np.where(
+                elapsed < total_time - accel_time,
+                accel_distance + vel * (elapsed - accel_time),
+                distance - 0.5 * acc * (total_time - elapsed)**2,
             ),
-        ))
-    return results
+        )
+    else:
+        accel_time = math.sqrt(distance / acc)
+        total_time = 2 * accel_time
+        elapsed = np.clip(elapsed, 0.0, total_time)
+        traveled = np.where(
+            elapsed <= accel_time,
+            0.5 * acc * elapsed**2,
+            distance - 0.5 * acc * (total_time - elapsed)**2,
+        )
+    return np.clip(traveled, 0.0, distance), float(total_time)
+
+
+def analyze_ideal_horizontal_action(d, spec, vel, acc, time_scale=1.0):
+    """Action-aligned error for one pyfii-completed, pure-horizontal move2."""
+    name, start, target, command_s, next_command_s = spec
+    start = np.asarray(start, float)
+    target = np.asarray(target, float)
+    delta = target - start
+    distance = float(np.linalg.norm(delta))
+    direction = delta / distance
+    pos = np.column_stack([d["x"], d["y"], d["z"]])
+    valid = physical_track_mask(d, loose=True)
+    dt = np.diff(d["t"])
+    step = np.diff(pos, axis=0)
+    along_speed = (step @ direction) / np.where(dt <= 0, np.nan, dt)
+    xy_speed = np.linalg.norm(step[:, :2], axis=1) / np.where(dt <= 0, np.nan, dt)
+    pair_valid = valid[:-1] & valid[1:] & (np.linalg.norm(step, axis=1) <= 80)
+
+    starts = np.where(
+        pair_valid & (d["t"][:-1] >= command_s) &
+        (d["t"][:-1] <= next_command_s + 0.8) & (along_speed > 15)
+    )[0]
+    if not len(starts):
+        raise ValueError(f"cannot locate ideal action start: {name}")
+    start_idx = int(starts[0])
+    real_start_s = float(d["t"][start_idx])
+
+    local = valid & (d["t"] >= real_start_s) & (d["t"] <= next_command_s + 0.8)
+    candidates = np.where(local)[0]
+    target_distance = np.linalg.norm(pos - target, axis=1)
+    near_target_cm = max(15.0, 0.06 * distance)
+    stop_candidates = np.where(
+        local[:-1] & pair_valid & (target_distance[:-1] <= near_target_cm) &
+        ((xy_speed <= 15.0) | (along_speed <= 0.0))
+    )[0]
+    if len(stop_candidates):
+        end_idx = int(stop_candidates[0])
+        end_detection = "first near-target low-speed/turn sample"
+    else:
+        end_idx = int(candidates[np.argmin(target_distance[candidates])])
+        end_detection = "closest valid target sample fallback"
+    real_end_s = float(d["t"][end_idx])
+
+    _, model_duration = trapezoid_distance(distance, vel, acc, np.array([0.0]))
+    # Compare the whole observed action. If the model arrives first, it remains
+    # at the target while the real aircraft finishes the same action.
+    model_window = valid & (d["t"] >= real_start_s) & (d["t"] <= real_end_s)
+    model_idx = np.where(model_window)[0]
+    model_elapsed = (d["t"][model_idx] - real_start_s) / time_scale
+    modeled_distance, _ = trapezoid_distance(distance, vel, acc, model_elapsed)
+    modeled_pos = start + modeled_distance[:, None] * direction
+    position_residual = np.linalg.norm(pos[model_idx] - modeled_pos, axis=1)
+
+    move_idx = np.where(valid & (d["t"] >= real_start_s) & (d["t"] <= real_end_s))[0]
+    relative = pos[move_idx] - start
+    progress = relative @ direction
+    cross_track = np.linalg.norm(relative - progress[:, None] * direction, axis=1)
+    speed_window = pair_valid & (d["t"][1:] >= real_start_s) & (d["t"][1:] <= real_end_s)
+
+    return dict(
+        action=name,
+        start_cm=[float(value) for value in start],
+        target_cm=[float(value) for value in target],
+        distance_cm=round(distance, 1),
+        real_start_s=round(real_start_s, 3),
+        real_end_s=round(real_end_s, 3),
+        end_detection=end_detection,
+        end_neighborhood_cm=round(near_target_cm, 1),
+        command_time_s=round(float(command_s), 3),
+        next_command_time_s=round(float(next_command_s), 3),
+        time_budget_s=round(float(next_command_s - command_s), 3),
+        model_duration_s=round(model_duration, 3),
+        model_completion_margin_s=round(float(next_command_s - command_s - model_duration), 3),
+        real_duration_s=round(real_end_s - real_start_s, 3),
+        duration_error_s=round(real_end_s - real_start_s - model_duration, 3),
+        duration_ratio=round((real_end_s - real_start_s) / model_duration, 3),
+        endpoint_error_3d_cm=round(float(target_distance[end_idx]), 1),
+        cross_track_median_cm=round(float(np.median(cross_track)), 1),
+        cross_track_p90_cm=round(float(np.percentile(cross_track, 90)), 1),
+        observed_xy_speed_p90_cm_s=round(float(np.percentile(xy_speed[speed_window], 90)), 1),
+        position_residual_median_cm=round(float(np.median(position_residual)), 1),
+        position_residual_p90_cm=round(float(np.percentile(position_residual, 90)), 1),
+        position_residual_rmse_cm=round(float(np.sqrt(np.mean(position_residual**2))), 1),
+        _position_residual=position_residual,
+        _elapsed_s=d["t"][move_idx] - real_start_s,
+        _progress_cm=progress,
+    )
 
 def yaw_delta_deg(d, t0=32, t1=38):
     m = (d["t"] >= t0) & (d["t"] <= t1)
@@ -714,20 +794,11 @@ for corner, event in zip(corners, grid_interrupted_events):
     usable_speed = speed_xy[speed_local & pair_valid]
     min_speed = None if localization_contaminated or not len(usable_speed) else float(np.min(usable_speed))
 
-    model_stop = np.asarray(event["stop_position_cm"], float)
-    real_stop = np.array([gd["x"][turn_idx], gd["y"][turn_idx], gd["z"][turn_idx]], float)
-    raw_model_residual = float(np.linalg.norm(model_stop[:2] - real_stop[:2]))
     grid_turns.append(dict(
         target_cm=[float(corner[0]), float(corner[1]), 120.0],
         model_stop_time_s=event["stop_time_s"],
         expected_real_stop_s=round(float(expected_stop), 3),
         real_turn_time_s=round(float(gd["t"][turn_idx]), 3),
-        model_stop_position_cm=[round(float(value), 1) for value in model_stop],
-        real_turn_position_cm=[round(float(value), 1) for value in real_stop],
-        model_target_remaining_cm=round(float(event["target_remaining_at_stop_cm"]), 1),
-        real_target_remaining_xy_cm=round(float(distance[turn_idx]), 1),
-        stop_point_model_residual_xy_cm=round(raw_model_residual, 1),
-        model_residual_usable=not localization_contaminated,
         min_observed_xy_speed_cm_s=round(min_speed, 1) if min_speed is not None else None,
         localization_contaminated=localization_contaminated,
     ))
@@ -744,15 +815,13 @@ seg_y=np.where(grid_valid,np.asarray(gd["y"]),np.nan)
 ax.plot(seg_x,seg_y,'-',color=C_REAL,lw=2.2,label="真实飞行",zorder=4)
 ax.scatter([c[0] for c in corners],[c[1] for c in corners],s=140,marker='*',
            color=C_CMD,zorder=5,label="指令航点")
-annotation_offsets = [(-78, 10), (10, 10), (-78, 10), (10, -18)]
-for (cx,cy), turn, offset in zip(corners, grid_turns, annotation_offsets):
-    rx, ry = turn["real_turn_position_cm"][:2]
+annotation_offsets = [(-52, 10), (10, 10), (-52, 10), (10, -18)]
+for idx, ((cx,cy), turn, offset) in enumerate(zip(corners, grid_turns, annotation_offsets), start=1):
     ax.annotate(
-        f"距目标 {turn['real_target_remaining_xy_cm']:.0f}cm",
+        f"打断 {idx}",
         (cx,cy), xytext=offset, textcoords="offset points", fontsize=8, color=C_CMD,
         bbox=dict(facecolor="white", edgecolor="none", alpha=0.72, pad=1.0),
     )
-    ax.plot([cx,rx],[cy,ry],':',color='gray',lw=1)
 ax.scatter([22],[24],s=60,color='green',zorder=6,label="真实起点(22,24)≠(0,0)")
 ax.set_xlabel("X (cm)"); ax.set_ylabel("Y (cm)")
 ax.set_title("网格航线 俯视图：pyfii 模型 vs 真实飞行 (162500)")
@@ -809,16 +878,8 @@ ax.set_title("非理想动作：pyfii 打断制动与真实转向减速 (162500)
 ax.legend(fontsize=8.5,ncol=2); plt.tight_layout()
 plt.savefig(f"{OUT}/fig3_grid_action_speed.png"); plt.close()
 
-# grid metrics
-real_target_remaining = [turn["real_target_remaining_xy_cm"] for turn in grid_turns]
-model_target_remaining = [turn["model_target_remaining_cm"] for turn in grid_turns]
-stop_point_model_residuals = [
-    turn["stop_point_model_residual_xy_cm"] if turn["model_residual_usable"] else None
-    for turn in grid_turns
-]
-usable_stop_point_model_residuals = [
-    value for value in stop_point_model_residuals if value is not None
-]
+# grid metrics: this run is outside ideal-model error fitting; keep only the
+# interruption classification and observable deceleration evidence.
 metrics['grid']=dict(model_dur=float(mt[-1]),real_dur=float(g['t'][-1]),
     command_timed_model_dur=float(gct[-1]),
     command_time_offset=round(float(grid_z_time_offset),3),
@@ -829,12 +890,8 @@ metrics['grid']=dict(model_dur=float(mt[-1]),real_dur=float(g['t'][-1]),
     command_timed_warning_frame_count=len(gcmd_warns),
     completed_handoffs=grid_handoffs["completed_handoffs"],
     interrupted_handoffs=grid_handoffs["interrupted_handoffs"],
-    real_target_remaining_xy_cm=real_target_remaining,
-    model_target_remaining_cm=model_target_remaining,
-    stop_point_model_residual_xy_cm=stop_point_model_residuals,
-    mean_real_target_remaining_xy_cm=round(float(np.mean(real_target_remaining)),1),
-    mean_model_target_remaining_cm=round(float(np.mean(model_target_remaining)),1),
-    mean_stop_point_model_residual_xy_cm=round(float(np.mean(usable_stop_point_model_residuals)),1),
+    excluded_from_model_error=True,
+    exclusion_reason="all four horizontal moves are interrupted under pyfii timing",
     turn_events=grid_turns,
     n_glitch=int(gl.sum()),start_offset_cm=round(float(np.hypot(22,24)),1))
 
@@ -998,78 +1055,197 @@ metrics["swarm_pyfii_action_handoffs"] = {
     for flight, tracks in swarm_command_tracks.items()
 }
 
-# A no-interruption real-flight case: every 98101 handoff in 171502 completes
-# under pyfii's stop-to-stop trapezoid before the next movement command.
-ideal_actions_171502 = [
-    ("起飞", (40, 40, 100), 7.0, 11.0),
-    ("动作1", (40, 320, 100), 11.0, 15.0),
-    ("动作2", (320, 40, 100), 15.0, 19.0),
-    ("动作3", (180, 180, 100), 19.0, 22.0),
-    ("动作4", (40, 320, 100), 22.0, 25.0),
-    ("动作5", (320, 40, 120), 25.0, 29.0),
-    ("动作6", (180, 180, 130), 29.0, 36.0),
-    ("动作7", (40, 40, 120), 36.0, 39.0),
-    ("动作8", (40, 40, 100), 39.0, 41.0),
+# Ideal-model error uses only pyfii-completed, pure-horizontal actions whose
+# real start/end can be identified independently. Interrupted and 3D actions are
+# intentionally excluded from every residual and calibration metric.
+ideal_specs = {
+    "动作1": ("动作1", (40, 40, 100), (40, 320, 100), 11.0, 15.0),
+    "动作2": ("动作2", (40, 320, 100), (320, 40, 100), 15.0, 19.0),
+    "动作3": ("动作3", (320, 40, 100), (180, 180, 100), 19.0, 22.0),
+}
+# The first move is identical and ideal-complete in four runs. Failures in
+# 173926/175805 do not contaminate the selected physical window of 98101.
+ideal_action_cases = [
+    ("flight_20260709_171502", "171502-动作1", ideal_specs["动作1"]),
+    ("flight_20260709_173926", "173926-动作1", ideal_specs["动作1"]),
+    ("flight_20260709_175214", "175214-动作1", ideal_specs["动作1"]),
+    ("flight_20260709_175805", "175805-动作1", ideal_specs["动作1"]),
+    ("flight_20260709_171502", "171502-动作2", ideal_specs["动作2"]),
+    ("flight_20260709_171502", "171502-动作3", ideal_specs["动作3"]),
 ]
-ideal_real_endpoints = target_errors_in_windows(
-    load_by_uav("flight_20260709_171502")["98101"],
-    ideal_actions_171502,
-)
-ideal_endpoint_errors = [item["target_error_3d_cm"] for item in ideal_real_endpoints]
-ideal_min_speeds = [
-    item["min_observed_xy_speed_cm_s"] for item in ideal_real_endpoints
-    if item["min_observed_xy_speed_cm_s"] is not None
+ideal_data = {
+    flight: load_by_uav(flight)["98101"]
+    for flight in {case[0] for case in ideal_action_cases}
+}
+
+def analyze_ideal_case(case, time_scale=1.0):
+    flight, sample, spec = case
+    result = analyze_ideal_horizontal_action(
+        ideal_data[flight], spec, 150, 300, time_scale=time_scale
+    )
+    result["flight"] = flight.removeprefix("flight_20260709_")
+    result["sample"] = sample
+    return result
+
+ideal_raw = [analyze_ideal_case(case) for case in ideal_action_cases]
+model_durations = np.array([item["model_duration_s"] for item in ideal_raw], float)
+real_durations = np.array([item["real_duration_s"] for item in ideal_raw], float)
+time_scale = float(np.dot(model_durations, real_durations) / np.dot(model_durations, model_durations))
+ideal_scaled = [analyze_ideal_case(case, time_scale=time_scale) for case in ideal_action_cases]
+raw_position_residual = np.concatenate([item.pop("_position_residual") for item in ideal_raw])
+scaled_position_residual = np.concatenate([item.pop("_position_residual") for item in ideal_scaled])
+ideal_progress = [
+    (item.pop("_elapsed_s"), item.pop("_progress_cm"))
+    for item in ideal_raw
 ]
-metrics["ideal_condition"] = {
-    "flight": "flight_20260709_171502",
+for item in ideal_scaled:
+    item.pop("_elapsed_s")
+    item.pop("_progress_cm")
+for raw, scaled in zip(ideal_raw, ideal_scaled):
+    raw["scaled_model_duration_s"] = round(raw["model_duration_s"] * time_scale, 3)
+    raw["scaled_duration_error_s"] = round(
+        raw["real_duration_s"] - raw["scaled_model_duration_s"], 3
+    )
+    raw["scaled_completion_margin_s"] = round(
+        raw["time_budget_s"] - raw["scaled_model_duration_s"], 3
+    )
+    raw["scaled_position_residual_median_cm"] = scaled["position_residual_median_cm"]
+    raw["scaled_position_residual_p90_cm"] = scaled["position_residual_p90_cm"]
+    raw["scaled_position_residual_rmse_cm"] = scaled["position_residual_rmse_cm"]
+
+flight_ids = np.array([item["flight"] for item in ideal_raw])
+leave_one_flight_errors = []
+leave_one_flight_scales = {}
+for flight in sorted(set(flight_ids)):
+    keep = flight_ids != flight
+    left_out = ~keep
+    loo_scale = float(
+        np.dot(model_durations[keep], real_durations[keep]) /
+        np.dot(model_durations[keep], model_durations[keep])
+    )
+    leave_one_flight_scales[flight] = round(loo_scale, 3)
+    leave_one_flight_errors.extend(
+        model_durations[left_out] * loo_scale - real_durations[left_out]
+    )
+
+metrics["ideal_model_error"] = {
+    "flights": sorted(set(flight_ids)),
     "uavid": "98101",
-    "completed_handoffs": swarm_command_tracks["flight_20260709_171502"][0][5]["completed_handoffs"],
-    "interrupted_handoffs": swarm_command_tracks["flight_20260709_171502"][0][5]["interrupted_handoffs"],
-    "real_endpoint_target_errors": ideal_real_endpoints,
-    "median_real_endpoint_target_error_3d_cm": round(float(np.median(ideal_endpoint_errors)), 1),
-    "p90_real_endpoint_target_error_3d_cm": round(float(np.percentile(ideal_endpoint_errors, 90)), 1),
-    "median_min_observed_xy_speed_cm_s": round(float(np.median(ideal_min_speeds)), 1),
-    "p90_min_observed_xy_speed_cm_s": round(float(np.percentile(ideal_min_speeds, 90)), 1),
+    "selection": "pyfii-completed, pure-horizontal move2, independently observable real action boundary",
+    "position_residual_definition": "per-action start-time aligned 3D error from the scripted start over the observed action; model holds at target after arrival",
+    "action_end_definition": "first near-target sample with observed low speed or turn; closest-target fallback only",
+    "fit_method": "least-squares duration time scale through the origin",
+    "telemetry_rate_hz_approx": 5,
+    "completion_margin_uncertainty_s": 0.2,
+    "selected_action_count": len(ideal_raw),
+    "unique_motion_count": len(ideal_specs),
+    "repeated_action1_count": 4,
+    "selected_window_notes": {
+        "173926": "selected action precedes 98101 FLIP localization failure",
+        "175805": "selected 98101 action is physically valid; failed 98102 is not used",
+    },
+    "excluded_from_fit": [
+        "takeoff",
+        "moves with vertical displacement",
+        "moves without an independently observable boundary",
+        "all interrupted moves",
+    ],
+    "configured_vel_cm_s": 150,
+    "configured_acc_cm_s2": 300,
+    "min_model_completion_margin_s": round(float(min(
+        item["model_completion_margin_s"] for item in ideal_raw
+    )), 3),
+    "selected_actions": ideal_raw,
+    "scaled_marginal_action_count": sum(
+        abs(item["scaled_completion_margin_s"]) <= 0.2 for item in ideal_raw
+    ),
+    "duration_time_scale": round(time_scale, 3),
+    "duration_rmse_s": round(float(np.sqrt(np.mean((real_durations - model_durations)**2))), 3),
+    "scaled_duration_rmse_s": round(float(np.sqrt(np.mean((real_durations - model_durations * time_scale)**2))), 3),
+    "leave_one_flight_scales": leave_one_flight_scales,
+    "leave_one_flight_max_abs_duration_error_s": round(float(np.max(np.abs(leave_one_flight_errors))), 3),
+    "equivalent_vel_cm_s": round(150 / time_scale, 1),
+    "equivalent_acc_cm_s2": round(300 / time_scale**2, 1),
+    "cross_track_p90_median_cm": round(float(np.median([item["cross_track_p90_cm"] for item in ideal_raw])), 1),
+    "raw_position_residual_median_cm": round(float(np.median(raw_position_residual)), 1),
+    "raw_position_residual_p90_cm": round(float(np.percentile(raw_position_residual, 90)), 1),
+    "raw_position_residual_rmse_cm": round(float(np.sqrt(np.mean(raw_position_residual**2))), 1),
+    "scaled_position_residual_median_cm": round(float(np.median(scaled_position_residual)), 1),
+    "scaled_position_residual_p90_cm": round(float(np.percentile(scaled_position_residual, 90)), 1),
+    "scaled_position_residual_rmse_cm": round(float(np.sqrt(np.mean(scaled_position_residual**2))), 1),
 }
 metrics["nonideal_condition"] = {
     "flight": "flight_20260709_162500",
     "interrupted_handoffs": grid_handoffs["interrupted_handoffs"],
     "warning_frames": grid_handoffs["warning_frame_count"],
-    "model_target_remaining_cm": model_target_remaining,
-    "real_target_remaining_xy_cm": real_target_remaining,
-    "stop_point_model_residual_xy_cm": stop_point_model_residuals,
-    "mean_stop_point_model_residual_xy_cm": metrics["grid"]["mean_stop_point_model_residual_xy_cm"],
+    "excluded_from_model_error": True,
+    "reason": "outside pyfii ideal completion scope",
 }
 
-# --- Fig 11: keep completed and interrupted action analysis visibly separate ---
-condition_fig, condition_axes = plt.subplots(1, 2, figsize=(11.5, 4.4))
-action_x = np.arange(len(ideal_endpoint_errors))
-condition_axes[0].bar(action_x, ideal_endpoint_errors, color=C_REAL, width=0.68, label="真实段内到点误差")
-condition_axes[0].axhline(np.median(ideal_endpoint_errors), color="#2f855a", ls="--", lw=1.3,
-                          label=f"中位数 {np.median(ideal_endpoint_errors):.1f} cm")
-condition_axes[0].set_xticks(action_x)
-condition_axes[0].set_xticklabels([item[0] for item in ideal_actions_171502], rotation=35, ha="right")
-condition_axes[0].set_ylabel("到点误差 (cm)")
-condition_axes[0].set_title("理想条件：上一动作完成后再开始下一动作\n171502-98101，pyfii 0 个打断")
-condition_axes[0].legend(fontsize=8)
+# --- Fig 11: ideal-model timing, residual, and trapezoid-integral fit only ---
+condition_fig = plt.figure(figsize=(13.5, 8.0))
+condition_grid = condition_fig.add_gridspec(2, 3, height_ratios=[1.0, 0.95])
+duration_ax = condition_fig.add_subplot(condition_grid[0, :2])
+residual_ax = condition_fig.add_subplot(condition_grid[0, 2])
+action_x = np.arange(len(ideal_raw))
+width = 0.25
+duration_ax.bar(action_x - width, model_durations, width=width, color=C_MODEL, label="pyfii 原始时长")
+duration_ax.bar(action_x, model_durations * time_scale, width=width, color="#d69e2e",
+                label=f"时间缩放 {time_scale:.2f}x")
+duration_ax.bar(action_x + width, real_durations, width=width, color=C_REAL, label="真实时长")
+duration_ax.set_xticks(action_x)
+duration_ax.set_xticklabels([item["sample"] for item in ideal_raw], rotation=25, ha="right", fontsize=8)
+duration_ax.set_ylabel("动作时长 (s)")
+duration_ax.set_title("仅完整纯水平动作：梯形时长")
+duration_ax.legend(fontsize=8)
 
-corner_x = np.arange(1, len(corners) + 1)
-plot_stop_residuals = np.array([
-    value if value is not None else np.nan for value in stop_point_model_residuals
-], float)
-condition_axes[1].bar(corner_x, plot_stop_residuals, width=0.62, color="#d69e2e",
-                      label="|真机转向点 - pyfii 制动停点|")
-condition_axes[1].scatter([3], [0], marker="x", s=70, color="#718096",
-                          label="航点3定位污染，不计")
-condition_axes[1].axhline(np.mean(usable_stop_point_model_residuals), color="#2f855a", ls="--", lw=1.3,
-                          label=f"有效均值 {np.mean(usable_stop_point_model_residuals):.1f} cm")
-condition_axes[1].set_xticks(corner_x)
-condition_axes[1].set_xticklabels([f"航点{i}" for i in corner_x])
-condition_axes[1].set_ylabel("停点模型残差 (cm)")
-condition_axes[1].set_title("非理想条件：相同打断事件下比较停点\n162500，244 warning 帧 = 4 个独立打断")
-condition_axes[1].legend(fontsize=8)
+raw_median = [item["position_residual_median_cm"] for item in ideal_raw]
+scaled_median = [item["scaled_position_residual_median_cm"] for item in ideal_raw]
+cross_p90 = [item["cross_track_p90_cm"] for item in ideal_raw]
+residual_ax.bar(action_x - width / 2, raw_median, width=width, color=C_MODEL,
+                label="原始残差中位数")
+residual_ax.bar(action_x + width / 2, scaled_median, width=width, color="#d69e2e",
+                label="缩放后残差中位数")
+residual_ax.plot(action_x, cross_p90, "o--", color="#2f855a", lw=1.2,
+                 label="横向误差 P90")
+residual_ax.set_xticks(action_x)
+residual_ax.set_xticklabels([item["sample"] for item in ideal_raw], rotation=35, ha="right", fontsize=7)
+residual_ax.set_ylabel("位置误差 (cm)")
+residual_ax.set_title("动作起步对齐后的误差")
+residual_ax.legend(fontsize=7.5)
+
+fit_groups = [
+    ("动作1复飞：280 cm", [0, 1, 2, 3]),
+    ("动作2：396 cm", [4]),
+    ("动作3：198 cm", [5]),
+]
+repeat_colors = ["#e8543f", "#805ad5", "#319795", "#dd6b20"]
+for idx, (title, sample_indices) in enumerate(fit_groups):
+    fit_ax = condition_fig.add_subplot(condition_grid[1, idx])
+    item = ideal_raw[sample_indices[0]]
+    max_duration = max(ideal_raw[sample_idx]["real_duration_s"] for sample_idx in sample_indices)
+    fit_t = np.linspace(0.0, max_duration, 300)
+    raw_fit, _ = trapezoid_distance(item["distance_cm"], 150, 300, fit_t)
+    scaled_fit, _ = trapezoid_distance(
+        item["distance_cm"], 150, 300, fit_t / time_scale
+    )
+    fit_ax.plot(fit_t, raw_fit, "--", lw=1.5, color=C_MODEL,
+                label="原始梯形积分")
+    fit_ax.plot(fit_t, scaled_fit, "-", lw=1.5, color="#d69e2e",
+                label="时间缩放后")
+    for color_idx, sample_idx in enumerate(sample_indices):
+        real_elapsed, real_progress = ideal_progress[sample_idx]
+        sample = ideal_raw[sample_idx]
+        color = repeat_colors[color_idx] if len(sample_indices) > 1 else C_REAL
+        label = sample["flight"] if len(sample_indices) > 1 else "真实沿程位置"
+        fit_ax.plot(real_elapsed, real_progress, "o-", ms=3.0, lw=1.1,
+                    color=color, alpha=0.9, label=label)
+    fit_ax.set_xlabel("动作内时间 (s)")
+    fit_ax.set_ylabel("沿程位移 (cm)")
+    fit_ax.set_title(title)
+    fit_ax.legend(fontsize=7 if idx == 0 else 7.5)
 condition_fig.tight_layout()
-condition_fig.savefig(f"{OUT}/fig11_completion_vs_interruption.png"); plt.close(condition_fig)
+condition_fig.savefig(f"{OUT}/fig11_ideal_model_error.png"); plt.close(condition_fig)
 
 metrics["swarm_pyfii_baseline_safety"] = {}
 for flight, tracks in swarm_command_tracks.items():
@@ -1269,7 +1445,7 @@ metrics["flight_quality_summary"] = {
     "flight_20260709_173818": "abort/connection sample only: 98101 stayed N/A, no usable duet trajectory",
     "flight_20260709_173926": "98101 FLIP telemetry becomes implausible (x/y/z thousands of cm); useful as flip/localization failure sample",
     "flight_20260709_175214": "successful light+flip run; clean duet window has no safety-rule violation",
-    "flight_20260709_175805": "98102 reports Dead Battery for most samples; useful as failure/default-pose sample, not normal duet dynamics",
+    "flight_20260709_175805": "98102 reports Dead Battery for most samples; clean 98101 windows remain usable, but the run is not normal duet dynamics",
     "gpsstatus": "NO_GPS is expected for the AprilTag mat positioning system; fcstatus/default pose are the relevant quality signals",
 }
 
