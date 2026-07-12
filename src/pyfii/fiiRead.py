@@ -1,7 +1,10 @@
 import os
 import shutil
+import sys
+import threading
 import time
 import warnings
+from joblib.externals.loky import ProcessPoolExecutor
 
 import cv2
 import numpy as np
@@ -27,10 +30,12 @@ class DroneTrack:
         self.device = "F400"
 
 
-def from_fii(path, fps=200, ignore_acc=False) -> DroneTrack:
+def from_fii(path, fps=200, ignore_acc=False, workers=None) -> DroneTrack:
     """读取.fii文件"""
     from .read import read_fii
-    dots, t0, music, field, device = read_fii(path, fps=fps, ignore_acc=ignore_acc)
+    dots, t0, music, field, device = read_fii(
+        path, fps=fps, ignore_acc=ignore_acc, workers=workers
+    )
     track = DroneTrack()
     track.dots, track.t0, track.music = dots, t0, music
     track.field, track.device = field, device
@@ -128,7 +133,45 @@ def _build_3d_scene(dots, k, device, use_ring):
 DEFAULT_CONFIG = {
     "FPS": 200, "max_fps": 200, "skin": 1, "size": 1, "ssaa": 1,
     "imshow": [120, -15], "d": (600, 450), "follow": [], "progress": True,
+    "workers": None,
 }
+
+
+def _render_worker_count(configured_workers, frame_count):
+    if frame_count <= 0:
+        return 1
+    if configured_workers is None or int(configured_workers) <= 0:
+        return max(1, min(os.cpu_count() or 1, frame_count))
+    return max(1, min(int(configured_workers), frame_count))
+
+
+def _debugger_active():
+    return sys.gettrace() is not None or "debugpy" in sys.modules
+
+
+def _debugger_multiprocessing_unsafe():
+    return _debugger_active() and os.environ.get(
+        "PYFII_MULTIPROCESS_UNDER_DEBUGGER"
+    ) != "1"
+
+
+_frame_renderer = None
+
+
+def _init_frame_renderer(renderer_class, track, render_config):
+    global _frame_renderer
+    cv2.setNumThreads(1)
+    _frame_renderer = renderer_class(track, render_config)
+    _frame_renderer._saving = True
+    _frame_renderer._prepare(saving=True)
+    _frame_renderer.time_FPS = time.time()
+
+
+def _render_frame(index):
+    with warnings.catch_warnings(record=True) as captured:
+        warnings.simplefilter("always")
+        image = _frame_renderer.getOne(index, draw=True)
+    return image, [(str(item.message), item.category) for item in captured]
 
 
 class FiiRender:
@@ -147,6 +190,7 @@ class FiiRender:
         self._last_scene = None
         self._prepared = False
         self._saving = False
+        self._fps_lock = threading.Lock()
 
     # ---- 子类需要实现/覆盖的钩子 ----
     def getOne(self, k, draw=True):
@@ -198,23 +242,24 @@ class FiiRender:
         # unconditional for 3D) -- called from inside getOne(), at the same point the
         # original measured it (after that frame's compute, right before the fps text
         # is used), so the elapsed-time sample is never taken across ~zero work.
-        if gate:
-            self.f += 1
-            now = time.time()
-            if self.f == 1:
-                try:
-                    self.fps_display = str(int(10/(now-self.time_FPS)+0.5)/10)
-                    self.fs = int(float(self.fps_display)/10+0.5)*10
-                except Exception:
-                    self.fps_display = str(float(self.render_config["max_fps"]))
-                    self.fs = self.render_config["max_fps"]
-                if self.fs == 0:
-                    self.fs = 10
-            elif self.f % self.fs == 0:
-                self.fps_display = str(int(self.fs*10/(now-self.time_FPS)+0.5)/10)
-                self.time_FPS = now
-        if self._saving:
-            self.fps_display = str(int(self.render_config["FPS"]*10+0.5)/10)
+        with self._fps_lock:
+            if gate:
+                self.f += 1
+                now = time.time()
+                if self.f == 1:
+                    try:
+                        self.fps_display = str(int(10/(now-self.time_FPS)+0.5)/10)
+                        self.fs = int(float(self.fps_display)/10+0.5)*10
+                    except Exception:
+                        self.fps_display = str(float(self.render_config["max_fps"]))
+                        self.fs = self.render_config["max_fps"]
+                    if self.fs == 0:
+                        self.fs = 10
+                elif self.f % self.fs == 0:
+                    self.fps_display = str(int(self.fs*10/(now-self.time_FPS)+0.5)/10)
+                    self.time_FPS = now
+            if self._saving:
+                self.fps_display = str(int(self.render_config["FPS"]*10+0.5)/10)
 
     def _start_music(self, start):
         music = self.track.music
@@ -320,18 +365,72 @@ class FiiRender:
         pbar = None
         if cfg["progress"]:
             pbar = tqdm.tqdm(total=self._t0_frames)
-            pbar.set_description('Video Rendering')
-        k_previous = self.k
+        frame_indexes = []
         while self.k < self._t0_frames:
-            img = self.getOne(self.k, draw=True)
-            video.write(img)
+            frame_indexes.append(self.k)
             self.K += max_fps/FPS
             self.k = int(self.K+0.5)
+
+        configured_workers = cfg["workers"]
+        workers = _render_worker_count(configured_workers, len(frame_indexes))
+        debug_serial = workers > 1 and _debugger_multiprocessing_unsafe()
+        if debug_serial:
+            warnings.warn(
+                "Video multiprocessing is disabled while a debugger is attached "
+                "to avoid a debugpy/fork deadlock; run without debugging for full CPU use.",
+                RuntimeWarning,
+                stacklevel=2,
+            )
+            workers = 1
+        if pbar is not None:
+            if debug_serial:
+                pbar.set_description('Video Rendering [debug: serial]')
+            elif workers > 1:
+                pbar.set_description(f'Starting {workers} render workers')
+            else:
+                pbar.set_description('Video Rendering')
+        k_previous = 0
+
+        def write_frame(position, img):
+            nonlocal k_previous
+            video.write(img)
+            next_index = (
+                frame_indexes[position+1]
+                if position+1 < len(frame_indexes)
+                else self._t0_frames
+            )
             if pbar is not None:
-                pbar.update(self.k-k_previous)
-                k_previous = self.k
+                if k_previous == 0 and workers > 1:
+                    pbar.set_description('Video Rendering')
+                pbar.update(next_index-k_previous)
+                k_previous = next_index
+
+        if workers == 1:
+            for position, index in enumerate(frame_indexes):
+                write_frame(position, self.getOne(index, draw=True))
+        else:
+            # CPU-bound frame drawing uses processes to bypass the GIL.  The
+            # main process keeps VideoWriter ordered and overlaps encoding
+            # with rendering.  Batches bound the number of full images in RAM.
+            batch_size = workers
+            with ProcessPoolExecutor(
+                max_workers=workers,
+                initializer=_init_frame_renderer,
+                initargs=(type(self), self.track, cfg),
+                env={
+                    "PYGAME_HIDE_SUPPORT_PROMPT": "1",
+                    "PYTHONWARNINGS": "ignore::UserWarning",
+                },
+            ) as executor:
+                for start in range(0, len(frame_indexes), batch_size):
+                    batch = frame_indexes[start:start+batch_size]
+                    results = executor.map(_render_frame, batch)
+                    for offset, (img, frame_warnings) in enumerate(results):
+                        for message, category in frame_warnings:
+                            warnings.warn(message, category, stacklevel=2)
+                        write_frame(start+offset, img)
         timer = time.time() - self.time_read
-        print('平均帧率：'+str(int(10*self.f/timer+0.5)/10))
+        print('平均帧率：'+str(int(10*len(frame_indexes)/timer+0.5)/10))
         print('飞行总时间：'+str(int((time.time()-self.time_read)*1000+0.5)/1000)+'秒')
         print('视频保存中')
         video.release()
@@ -366,7 +465,8 @@ class FiiRender2D(FiiRender):
 
     def _setup(self):
         img = getGui(self.track.field, self.render_config["size"])
-        cv2.imwrite('gui.png', img)
+        if not self._saving:
+            cv2.imwrite('gui.png', img)
         self._gui_bg = img
 
     @property
@@ -469,7 +569,8 @@ class FiiRender3D(FiiRender):
         imshow = self.render_config["imshow"]
         d = self.render_config["d"]
         img = IIID.show(aixs+self._lines+errors+texts, self._center, 1280, 720, [imshow[0], imshow[1], 1, 0, 0], d)
-        self._last_scene = (aixs, self._lines, errors, texts)
+        if not self._saving:
+            self._last_scene = (aixs, self._lines, errors, texts)
         return img
 
     def _on_pause(self):
@@ -489,7 +590,7 @@ class FiiRenderPanorama(FiiRender):
     def frame_size(self):
         return (3840, 1920)
 
-    def _update_center(self, k):
+    def _center_for_frame(self, k):
         follow = self.render_config["follow"]
         dots = self.track.dots
         if len(follow) == 1:
@@ -498,19 +599,22 @@ class FiiRenderPanorama(FiiRender):
                 x, y, z = dots[idx][k][1], dots[idx][k][2], dots[idx][k][3]
             else:
                 x, y, z = dots[idx][-1][1], dots[idx][-1][2], dots[idx][-1][3]
-            self._center = (x, y, z+5)
+            return (x, y, z+5)
         elif len(follow) == 3:
-            self._center = tuple(follow)
+            return tuple(follow)
+        return self._center
 
     def getOne(self, k, draw=True):
-        self._update_center(k)
+        center = self._center_for_frame(k)
         aixs, errors, texts, t = _build_3d_scene(self.track.dots, k, self.track.device, use_ring=True)
         self._step_fps(True)
         if not draw:
             return None
         texts.append(['FPS:'+self.fps_display, (0,110), 0.5, (255,255,255), 1, 'text'])
-        img = IIID2.show(aixs+self._lines+errors, self._center, 3840, 1920)
-        self._last_scene = (aixs, self._lines, errors, texts)
+        img = IIID2.show(aixs+self._lines+errors, center, 3840, 1920)
+        if not self._saving:
+            self._center = center
+            self._last_scene = (aixs, self._lines, errors, texts)
         return img
 
     def _on_pause(self):

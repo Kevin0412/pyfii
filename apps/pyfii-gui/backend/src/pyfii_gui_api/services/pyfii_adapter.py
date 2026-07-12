@@ -25,6 +25,7 @@ def parse_fii_project(project_dir: Path, fps: int, ignore_acc: bool) -> ParsedFi
     # Import direct modules; avoid pyfii package-level imports that pull in unrelated GUI paths.
     from pyfii.read import read_fii
     from pyfii.show import show as validate_show
+    from pyfii_gui_api.config import settings
 
     stdout = io.StringIO()
     warning_messages: List[str] = []
@@ -36,6 +37,7 @@ def parse_fii_project(project_dir: Path, fps: int, ignore_acc: bool) -> ParsedFi
                 str(project_dir),
                 fps=fps,
                 ignore_acc=ignore_acc,
+                workers=settings.trajectory_workers,
             )
     warning_messages.extend(_warning_messages(read_warnings))
 

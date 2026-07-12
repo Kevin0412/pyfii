@@ -65,6 +65,10 @@ class Settings:
         )
         self.cors_allow_credentials = _bool_env("PYFII_GUI_CORS_ALLOW_CREDENTIALS", True)
         self.default_import_fps = _int_env("PYFII_GUI_DEFAULT_IMPORT_FPS", 60)
+        self.trajectory_workers = max(
+            1,
+            _int_env("PYFII_GUI_TRAJECTORY_WORKERS", max(1, (os.cpu_count() or 1) // 2)),
+        )
         self.max_upload_bytes = _int_env("PYFII_GUI_MAX_UPLOAD_BYTES", 100 * 1024 * 1024)
         self.max_uncompressed_bytes = _int_env(
             "PYFII_GUI_MAX_UNCOMPRESSED_BYTES",

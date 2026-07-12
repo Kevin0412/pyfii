@@ -22,7 +22,8 @@ dependencies = ["opencv-python>=4.10.0.84",
 "tqdm",
 "numpy>=1.26,<3",
 "pygame",
-"ffmpy"]
+"ffmpy",
+"joblib>=1.4"]
 
 [project.urls]
 "Homepage" = "https://github.com/Kevin0412/pyfii"

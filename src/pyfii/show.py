@@ -143,7 +143,7 @@ def draw_drone(img,x,y,color,a=0,led=(-1,-1,-1),up=False,skin=1,device="F400",si
 def drone3d(aixs,x,y,z,c,a,led=(-1,-1,-1),acceleration=(0,0,0),g=np.array([0,0,-980]),device="F400"):
     if device=="F400":
         rotate_matrix=iiid_rotate(np.array([acceleration[0],acceleration[1],acceleration[2]]),g)
-        wing_force=a-g
+        wing_force=np.asarray(acceleration, dtype=float)-g
         unit_wing_force=wing_force/np.sqrt(wing_force[0]**2+wing_force[1]**2+wing_force[2]**2)
         ring1=np.dot(rotate_matrix,np.array([21/2*np.cos(np.pi/4+a),21/2*np.sin(np.pi/4+a),0]))[None, :]
         ring2=np.dot(rotate_matrix,np.array([21/2*np.cos(3*np.pi/4+a),21/2*np.sin(3*np.pi/4+a),0]))[None, :]
@@ -161,7 +161,7 @@ def drone3d(aixs,x,y,z,c,a,led=(-1,-1,-1),acceleration=(0,0,0),g=np.array([0,0,-
             aixs.append([(x,y,z),c,1,-1,'sphere'])
     elif device=="F600":
         rotate_matrix=iiid_rotate(np.array([acceleration[0],acceleration[1],acceleration[2]]),g)
-        wing_force=a-g
+        wing_force=np.asarray(acceleration, dtype=float)-g
         unit_wing_force=wing_force/np.sqrt(wing_force[0]**2+wing_force[1]**2+wing_force[2]**2)
         ring1=np.dot(rotate_matrix,np.array([12.6/2*np.cos(np.pi/4+a),12.6/2*np.sin(np.pi/4+a),0]))[None, :]
         ring2=np.dot(rotate_matrix,np.array([12.6/2*np.cos(3*np.pi/4+a),12.6/2*np.sin(3*np.pi/4+a),0]))[None, :]
@@ -234,12 +234,13 @@ def getGui(field,size):
     cv2.putText(img,'right',(600*size,530*size), font, size,(255,255,255),size)
     return img
 
-def show(data,t0,music,field=6,device="F400",show=True,save="",FPS=200,max_fps=200,ThreeD=False,imshow=[120,-15],d=(600,450),track=[],skin=1,size=1,ssaa=1):
+def show(data,t0,music,field=6,device="F400",show=True,save="",FPS=200,max_fps=200,ThreeD=False,imshow=[120,-15],d=(600,450),track=[],skin=1,size=1,ssaa=1,workers=None):
     from .fiiRead import DroneTrack, FiiRender2D, FiiRender3D, FiiRenderPanorama
     dt = DroneTrack()
     dt.dots, dt.t0, dt.music, dt.field, dt.device = data, t0, music, field, device
     cfg = dict(skin=skin, size=size, ssaa=ssaa, imshow=imshow, d=d,
-               follow=track, FPS=FPS, max_fps=max_fps, progress=show)
+               follow=track, FPS=FPS, max_fps=max_fps, progress=show,
+               workers=workers)
     if not ThreeD:
         renderer = FiiRender2D(dt, cfg)
     elif len(track) == 0:

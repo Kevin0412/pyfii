@@ -202,70 +202,68 @@ def ring(
         d (Vec2, optional): _description_. Defaults to (1, 0).
         normal_vector (Vec3, optional): 圆环平面的法向量. Defaults to (0, 0, 1).
     """
-    x1, y1, z = iiid2iid(point, x, y, a, b, center, d)
+    normal = np.asarray(normal_vector, dtype=float)
+    normal_length = np.linalg.norm(normal)
+    if not np.isfinite(normal_length) or normal_length == 0:
+        raise ValueError("normal_vector must be a finite, non-zero 3D vector")
+    normal /= normal_length
+
+    # Build an orthonormal basis in the ring plane.  Projecting the real 3D
+    # circumference fixes both the missing ellipse rotation and the invalid
+    # constant-depth approximation used by the old perspective path.
+    reference = np.array((0.0, 0.0, 1.0))
+    if abs(normal[2]) > 0.9:
+        reference = np.array((1.0, 0.0, 0.0))
+    axis_u = np.cross(normal, reference)
+    axis_u /= np.linalg.norm(axis_u)
+    axis_v = np.cross(normal, axis_u)
+    origin = np.asarray(point, dtype=float)
+
+    angles = np.linspace(0, 2 * np.pi, 49)[:-1]
+    points3d = origin + r * (
+        np.cos(angles)[:, None] * axis_u + np.sin(angles)[:, None] * axis_v
+    )
+    relative = points3d - np.asarray(center, dtype=float)
+    angle_a = np.radians(a)
+    angle_b = np.radians(b)
+    cos_a, sin_a = np.cos(angle_a), np.sin(angle_a)
+    cos_b, sin_b = np.cos(angle_b), np.sin(angle_b)
+    camera_x1 = relative[:, 0] * cos_a + relative[:, 1] * sin_a
+    camera_y = relative[:, 1] * cos_a - relative[:, 0] * sin_a
+    camera_x = camera_x1 * cos_b + relative[:, 2] * sin_b
+    camera_z = relative[:, 2] * cos_b - camera_x1 * sin_b
     if d[1] == 0:
-        eye_vec = eye_vector(a, b)
-        ratio_ellipse_a_b = abs(
-            dot_3d_v1_v2(eye_vec, normal_vector) / abs_3d_vector(normal_vector)
-        )
-        if int(r * ratio_ellipse_a_b + 0.5) < 1:
-            cv2.ellipse(
-                img, (int(x1), int(y1)), (int(r + 0.5), 1), 0, 0, 360, color, thickness
-            )
-        else:
-            cv2.ellipse(
-                img,
-                (int(x1), int(y1)),
-                (int(r + 0.5), int(r * ratio_ellipse_a_b + 0.5)),
-                0,
-                0,
-                360,
-                color,
-                thickness,
-            )
+        projected_float = np.column_stack((x-camera_y*d[0], y-camera_z*d[0]))
+        visible = np.ones(len(points3d), dtype=bool)
     else:
-        a = np.radians(a)
-        b = np.radians(b)
-        point = rotate3d(
-            (point[0] - center[0], point[1] - center[1], point[2] - center[2]), -a, -b
+        depth = camera_x + d[0]
+        with np.errstate(divide="ignore", invalid="ignore"):
+            projected_float = np.column_stack(
+                (x-camera_y*d[1]/depth, y-camera_z*d[1]/depth)
+            )
+        visible = depth > 1e-6
+    visible &= np.isfinite(projected_float).all(axis=1)
+    visible &= (np.abs(projected_float) < 2**30).all(axis=1)
+    projected_float[~visible] = 0
+    projected = np.rint(projected_float).astype(np.int64)
+
+    # Draw segment-by-segment so a ring crossing the perspective camera plane
+    # does not produce coordinates at infinity or connect hidden points.
+    if thickness < 0 and all(visible):
+        cv2.fillPoly(img, [projected.astype(np.int32)], color, cv2.LINE_AA)
+        return
+    if all(visible):
+        cv2.polylines(
+            img, [projected.astype(np.int32)], True, color, max(1, thickness), cv2.LINE_AA
         )
-        where_eye_is = eye_axis(a, b, d[0])
-        eye_vec = (
-            point[0] - where_eye_is[0],
-            point[1] - where_eye_is[1],
-            point[2] - where_eye_is[2],
-        )
-        ratio_ellipse_a_b = abs(
-            dot_3d_v1_v2(eye_vec, normal_vector)
-            / abs_3d_vector(normal_vector)
-            / abs_3d_vector(eye_vec)
-        )
-        if z > 0:
-            if int(r * d[1] / z * ratio_ellipse_a_b + 0.5) < 1:
-                cv2.ellipse(
-                    img,
-                    (int(x1), int(y1)),
-                    (int(r * d[1] / z + 0.5), 1),
-                    0,
-                    0,
-                    360,
-                    color,
-                    thickness,
-                )
-            else:
-                cv2.ellipse(
-                    img,
-                    (int(x1), int(y1)),
-                    (
-                        int(r * d[1] / z + 0.5),
-                        int(r * d[1] / z * ratio_ellipse_a_b + 0.5),
-                    ),
-                    0,
-                    0,
-                    360,
-                    color,
-                    thickness,
-                )
+        return
+    segments = []
+    for index in range(len(projected)):
+        next_index = (index + 1) % len(projected)
+        if visible[index] and visible[next_index]:
+            segments.append(projected[[index, next_index]].astype(np.int32))
+    if segments:
+        cv2.polylines(img, segments, False, color, max(1, thickness), cv2.LINE_AA)
 
 
 def distance(
@@ -415,8 +413,9 @@ def show(
         cv2.putText(
             img, str(B), (0, 50), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1
         )
-        if not imshow[-1] == 0:
-            cv2.imshow("img", img)
+        if imshow[-1] == 0:
+            break
+        cv2.imshow("img", img)
         key = cv2.waitKey(1) & 0xFF
         if key == 27:  # esc键退出
             break
@@ -448,8 +447,6 @@ def show(
             if l > 49:
                 k = 1
                 l = 0
-        if imshow[-1] == 0:
-            break
     if imshow[-1] == 0:
         return img
     elif imshow[-1] == 1:

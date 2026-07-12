@@ -164,6 +164,7 @@ https://gui.example.com/api/  -> FastAPI backend
 - 上传 Fii 项目 zip。
 - 默认中文界面，支持中文/英文切换。
 - 安全解压并调用 `read_fii()` 解析轨迹。
+- GUI 默认只把一半 CPU 核心分配给单次轨迹解析，为并发请求预留资源；可通过 `PYFII_GUI_TRAJECTORY_WORKERS` 调整。
 - 调用 `show(show=False)` 走 pyfii core 的无渲染距离检查。
 - 返回项目元信息、轨迹数据和由 core warnings 结构化得到的安全日志。
 - Canvas 2D 三视图预览：top / front / right。

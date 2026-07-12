@@ -155,27 +155,40 @@ def line(
     polylines(img, plts, center, color, False, thickness)
 
 
-def ring(img, aixs, color, r, center=(0, 0, 0), n=1):
+def ring(
+    img,
+    aixs,
+    color,
+    r,
+    center=(0, 0, 0),
+    n=1,
+    normal_vector: Vec3 = (0, 0, 1),
+):
     a1, b1, r1 = polar3d(aixs, center)
     plts = []
-    if r1 == 0:
-        cv2.line(
-            img,
-            (0, int(img.shape[0] / 2)),
-            (img.shape[1], int(img.shape[0] / 2)),
-            color,
-            n,
+    normal = np.asarray(normal_vector, dtype=float)
+    normal_length = np.linalg.norm(normal)
+    if not np.isfinite(normal_length) or normal_length == 0:
+        raise ValueError("normal_vector must be a finite, non-zero 3D vector")
+    normal /= normal_length
+    reference = np.array((0.0, 0.0, 1.0))
+    if abs(normal[2]) > 0.9:
+        reference = np.array((1.0, 0.0, 0.0))
+    axis_u = np.cross(normal, reference)
+    axis_u /= np.linalg.norm(axis_u)
+    axis_v = np.cross(normal, axis_u)
+    m = 360 if r1 == 0 else int(r / r1 * 180 + 1)
+    if m < 12:
+        m = 12
+    elif m > 360:
+        m = 360
+    for l in range(m):
+        l = l / m * 2 * np.pi
+        point3d = np.asarray(aixs) + r * (
+            np.cos(l) * axis_u + np.sin(l) * axis_v
         )
-    else:
-        m = int(r / r1 * 180 + 1)
-        if m < 12:
-            m = 12
-        elif m > 360:
-            m = 360
-        for l in range(m):
-            l = l / m * 2 * np.pi
-            plts.append((aixs[0] + r * np.cos(l), aixs[1] + r * np.sin(l), aixs[2]))
-        polylines(img, plts, center, color, True, n)
+        plts.append(tuple(point3d))
+    polylines(img, plts, center, color, True, n)
 
 
 def distance(aixs, center=(0, 0, 0)):  # 计算距离
@@ -207,5 +220,14 @@ def show(
         if obj3d[-1] == "line":
             line(img, obj3d[0], obj3d[1], obj3d[2], obj3d[3], center, obj3d[4])
         elif obj3d[-1] == "ring":
-            ring(img, obj3d[0], obj3d[1], obj3d[2], center, obj3d[3])
+            normal_vector = obj3d[4] if len(obj3d) == 6 else (0, 0, 1)
+            ring(
+                img,
+                obj3d[0],
+                obj3d[1],
+                obj3d[2],
+                center,
+                obj3d[3],
+                normal_vector,
+            )
     return img

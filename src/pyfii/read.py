@@ -1,6 +1,8 @@
 import os
+import sys
 import time
 import warnings
+from joblib.externals.loky import ProcessPoolExecutor
 
 def str2bgr(color):
     return (int(color[5:7],16),int(color[3:5],16),int(color[1:3],16))
@@ -606,7 +608,36 @@ def dots2line(file,fii=[],fps=200,points={},ignore_acc=False):#将指令转换�
         lines.append((time+t,x,y,z))'''
     return(lines,time*fps/1000,warns)
 
-def read_fii(path,getfield=None,getdevice=None,fps=200,ignore_acc=False):
+def _dots2line_job(job):
+    file, position, fps, points, ignore_acc = job
+    return dots2line(
+        file,
+        fii=position,
+        fps=fps,
+        points=points,
+        ignore_acc=ignore_acc,
+    )
+
+
+def _trajectory_worker_count(configured_workers, drone_count):
+    if drone_count <= 0:
+        return 1
+    if configured_workers is None or int(configured_workers) <= 0:
+        return max(1, min(os.cpu_count() or 1, drone_count))
+    return max(1, min(int(configured_workers), drone_count))
+
+
+def _debugger_active():
+    return sys.gettrace() is not None or "debugpy" in sys.modules
+
+
+def _debugger_multiprocessing_unsafe():
+    return _debugger_active() and os.environ.get(
+        "PYFII_MULTIPROCESS_UNDER_DEBUGGER"
+    ) != "1"
+
+
+def read_fii(path,getfield=None,getdevice=None,fps=200,ignore_acc=False,workers=None):
     '''
     读入.fii文件
     path 所在文件夹的路径
@@ -657,12 +688,16 @@ def read_fii(path,getfield=None,getdevice=None,fps=200,ignore_acc=False):
     t0=0
     n=0
     points={}
+    drone_files=[]
     for drone in drones:
         with open(path+'/动作组/'+drone+'/webCodeAll.xml', "r",encoding='utf-8') as F:
             file = F.read()
+        drone_files.append(file)
         for dic in read_xml_points(file).items():
             points[dic[0]]=dic[1]
-    for drone in drones:
+    jobs=[]
+    for drone, file in zip(drones, drone_files):
+        x = y = None
         for k in range(len(xml)):
             if xml[k][1:16]=='ActionFlightPos' and xml[k].split('"')[1][0:4]==drone:
                 if xml[k][16]=='X':
@@ -670,26 +705,43 @@ def read_fii(path,getfield=None,getdevice=None,fps=200,ignore_acc=False):
                 elif xml[k][16]=='Y':
                     y=int(xml[k].split('"')[1].split('pos')[1])
                 #print(xml[k].split('"')[1])
-        with open(path+'/动作组/'+drone+'/webCodeAll.xml', "r",encoding='utf-8') as F:
-            file = F.read()
-        #try:
-            line=dots2line(file,fii=[x,y],fps=fps,points=points,ignore_acc=ignore_acc)
-            '''with open(name+'/动作组/'+drone+'line.csv','w',encoding='utf-8') as F:
-                F.write('time,x,y,z,angle\n')
-                for l in line[0]:
-                    for li in l:
-                        F.write(str(li))
-                        F.write(',')
-                    F.write('\n')'''
-        '''except:
-            raise Exception('No take off place.起飞位置未定义。')'''
-        dots.append(line[0])
-        t0=max(t0,line[1])
-        n+=1
-        if len(line[2])>0:
-            for warn in line[2]:
-                warnings.warn('d'+str(n)+' 无人机'+str(n)+':'+warn,Warning,2)
-        print('\r'+str(n)+'/'+str(len(drones)),end='')
+        if x is None or y is None:
+            raise ValueError('No take off place.起飞位置未定义。')
+        jobs.append((file, [x, y], fps, points, ignore_acc))
+
+    worker_count = _trajectory_worker_count(workers, len(jobs))
+    if worker_count > 1 and _debugger_multiprocessing_unsafe():
+        warnings.warn(
+            "Trajectory multiprocessing is disabled while a debugger is attached "
+            "to avoid a debugpy/fork deadlock; run without debugging for full CPU use.",
+            RuntimeWarning,
+            stacklevel=2,
+        )
+        worker_count = 1
+    if worker_count == 1:
+        lines = map(_dots2line_job, jobs)
+    else:
+        executor = ProcessPoolExecutor(
+            max_workers=worker_count,
+            env={
+                "PYGAME_HIDE_SUPPORT_PROMPT": "1",
+                "PYTHONWARNINGS": "ignore::UserWarning",
+            },
+        )
+        lines = executor.map(_dots2line_job, jobs)
+
+    try:
+        for line in lines:
+            dots.append(line[0])
+            t0=max(t0,line[1])
+            n+=1
+            if len(line[2])>0:
+                for warn in line[2]:
+                    warnings.warn('d'+str(n)+' 无人机'+str(n)+':'+warn,Warning,2)
+            print('\r'+str(n)+'/'+str(len(drones)),end='')
+    finally:
+        if worker_count > 1:
+            executor.shutdown()
     print('\n读取文件与轨迹计算耗时：'+str(int((time.time()-time_start)*1000+0.5)/1000)+'秒')
     return dots,t0,music,field,DeviceType
 
