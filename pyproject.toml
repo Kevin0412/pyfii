@@ -17,10 +17,10 @@ classifiers = [
     "License :: OSI Approved :: GNU General Public License v3 (GPLv3)",
     "Operating System :: OS Independent",
 ]
-dependencies = ["opencv-python",
+dependencies = ["opencv-python>=4.10.0.84",
 "pyqt5",
 "tqdm",
-"numpy",
+"numpy>=1.26,<3",
 "pygame",
 "ffmpy"]
 

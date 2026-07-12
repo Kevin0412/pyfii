@@ -1,7 +1,7 @@
-opencv-python >= 4.9
+opencv-python >= 4.10.0.84
 pyqt5
 tqdm
-numpy == 1.*
+numpy >= 1.26, <3
 pygame
 ffmpy
 librosa >= 0.11

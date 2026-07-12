@@ -52,13 +52,13 @@ def iiid_rotate(a,g=np.array([0,0,-980])):# 无人机旋转
     
     x,y,z=unit_wing_force[0],unit_wing_force[1],unit_wing_force[2]
     if x==0 and y==0:
-        rotate_matrix=np.mat([
+        rotate_matrix=np.array([
         [1,0,0],
         [0,1,0],
         [0,0,1]
     ])
     else:
-        rotate_matrix=np.mat([
+        rotate_matrix=np.array([
             [(x**2*z+y**2)/(x**2+y**2),-x*y/(z+1),x],
             [-x*y/(z+1),(x**2+y**2*z)/(x**2+y**2),y],
             [-x,-y,z]
@@ -145,10 +145,10 @@ def drone3d(aixs,x,y,z,c,a,led=(-1,-1,-1),acceleration=(0,0,0),g=np.array([0,0,-
         rotate_matrix=iiid_rotate(np.array([acceleration[0],acceleration[1],acceleration[2]]),g)
         wing_force=a-g
         unit_wing_force=wing_force/np.sqrt(wing_force[0]**2+wing_force[1]**2+wing_force[2]**2)
-        ring1=np.array(np.dot(rotate_matrix,np.array([21/2*np.cos(np.pi/4+a),21/2*np.sin(np.pi/4+a),0])))
-        ring2=np.array(np.dot(rotate_matrix,np.array([21/2*np.cos(3*np.pi/4+a),21/2*np.sin(3*np.pi/4+a),0])))
-        ring3=np.array(np.dot(rotate_matrix,np.array([21/2*np.cos(-3*np.pi/4+a),21/2*np.sin(-3*np.pi/4+a),0])))
-        ring4=np.array(np.dot(rotate_matrix,np.array([21/2*np.cos(-np.pi/4+a),21/2*np.sin(-np.pi/4+a),0])))
+        ring1=np.dot(rotate_matrix,np.array([21/2*np.cos(np.pi/4+a),21/2*np.sin(np.pi/4+a),0]))[None, :]
+        ring2=np.dot(rotate_matrix,np.array([21/2*np.cos(3*np.pi/4+a),21/2*np.sin(3*np.pi/4+a),0]))[None, :]
+        ring3=np.dot(rotate_matrix,np.array([21/2*np.cos(-3*np.pi/4+a),21/2*np.sin(-3*np.pi/4+a),0]))[None, :]
+        ring4=np.dot(rotate_matrix,np.array([21/2*np.cos(-np.pi/4+a),21/2*np.sin(-np.pi/4+a),0]))[None, :]
         aixs.append([(x+ring1[0][0],y+ring1[0][1],z+ring1[0][2]),c,(14.9-21/4*2**0.5),1,(unit_wing_force[0],unit_wing_force[1],unit_wing_force[2]),'ring'])
         aixs.append([(x+ring2[0][0],y+ring2[0][1],z+ring2[0][2]),c,(14.9-21/4*2**0.5),1,(unit_wing_force[0],unit_wing_force[1],unit_wing_force[2]),'ring'])
         aixs.append([(x+ring3[0][0],y+ring3[0][1],z+ring3[0][2]),c,(14.9-21/4*2**0.5),1,(unit_wing_force[0],unit_wing_force[1],unit_wing_force[2]),'ring'])
@@ -163,10 +163,10 @@ def drone3d(aixs,x,y,z,c,a,led=(-1,-1,-1),acceleration=(0,0,0),g=np.array([0,0,-
         rotate_matrix=iiid_rotate(np.array([acceleration[0],acceleration[1],acceleration[2]]),g)
         wing_force=a-g
         unit_wing_force=wing_force/np.sqrt(wing_force[0]**2+wing_force[1]**2+wing_force[2]**2)
-        ring1=np.array(np.dot(rotate_matrix,np.array([12.6/2*np.cos(np.pi/4+a),12.6/2*np.sin(np.pi/4+a),0])))
-        ring2=np.array(np.dot(rotate_matrix,np.array([12.6/2*np.cos(3*np.pi/4+a),12.6/2*np.sin(3*np.pi/4+a),0])))
-        ring3=np.array(np.dot(rotate_matrix,np.array([12.6/2*np.cos(-3*np.pi/4+a),12.6/2*np.sin(-3*np.pi/4+a),0])))
-        ring4=np.array(np.dot(rotate_matrix,np.array([12.6/2*np.cos(-np.pi/4+a),12.6/2*np.sin(-np.pi/4+a),0])))
+        ring1=np.dot(rotate_matrix,np.array([12.6/2*np.cos(np.pi/4+a),12.6/2*np.sin(np.pi/4+a),0]))[None, :]
+        ring2=np.dot(rotate_matrix,np.array([12.6/2*np.cos(3*np.pi/4+a),12.6/2*np.sin(3*np.pi/4+a),0]))[None, :]
+        ring3=np.dot(rotate_matrix,np.array([12.6/2*np.cos(-3*np.pi/4+a),12.6/2*np.sin(-3*np.pi/4+a),0]))[None, :]
+        ring4=np.dot(rotate_matrix,np.array([12.6/2*np.cos(-np.pi/4+a),12.6/2*np.sin(-np.pi/4+a),0]))[None, :]
         aixs.append([(x+ring1[0][0],y+ring1[0][1],z+ring1[0][2]),c,(17.5/2-12.6/4*2**0.5),1,(unit_wing_force[0],unit_wing_force[1],unit_wing_force[2]),'ring'])
         aixs.append([(x+ring2[0][0],y+ring2[0][1],z+ring2[0][2]),c,(17.5/2-12.6/4*2**0.5),1,(unit_wing_force[0],unit_wing_force[1],unit_wing_force[2]),'ring'])
         aixs.append([(x+ring3[0][0],y+ring3[0][1],z+ring3[0][2]),c,(17.5/2-12.6/4*2**0.5),1,(unit_wing_force[0],unit_wing_force[1],unit_wing_force[2]),'ring'])
