@@ -15,6 +15,8 @@ from ..schemas import (
     ProjectMeta,
     SafetyResponse,
     TracksResponse,
+    VideoExportRequest,
+    VideoExportResponse,
 )
 from ..services.archive_importer import safe_extract_zip
 from ..services.cache import ProjectRecord, project_cache
@@ -27,6 +29,7 @@ from ..services.serializer import (
     serialize_tracks,
 )
 from ..services.storage import cleanup_project, create_project_workspace
+from ..services.video_export import video_export_manager
 
 
 router = APIRouter()
@@ -300,8 +303,46 @@ async def get_music(project_id: str) -> FileResponse:
     return FileResponse(music_path, media_type=media_type, filename=music_path.name)
 
 
+@router.post(
+    "/{project_id}/video-exports",
+    response_model=VideoExportResponse,
+    status_code=202,
+)
+async def create_video_export(
+    project_id: str,
+    request: VideoExportRequest,
+) -> VideoExportResponse:
+    record = project_cache.require(project_id)
+    export = video_export_manager.create(record, request)
+    return VideoExportResponse(**export.as_response())
+
+
+@router.get(
+    "/{project_id}/video-exports/{export_id}",
+    response_model=VideoExportResponse,
+)
+async def get_video_export(project_id: str, export_id: str) -> VideoExportResponse:
+    export = video_export_manager.require(project_id, export_id)
+    return VideoExportResponse(**export.as_response())
+
+
+@router.get("/{project_id}/video-exports/{export_id}/download")
+async def download_video_export(project_id: str, export_id: str) -> FileResponse:
+    export = video_export_manager.require(project_id, export_id)
+    if export.status != "completed":
+        raise AppError(409, "video_export_not_ready", "Video export is not ready for download.")
+    if not export.output_path.is_file():
+        raise AppError(404, "video_export_file_missing", "Exported video file was not found.")
+    return FileResponse(
+        export.output_path,
+        media_type="video/mp4",
+        filename=export.filename,
+    )
+
+
 @router.delete("/{project_id}", response_model=DeleteResponse)
 async def delete_project(project_id: str) -> DeleteResponse:
     project_cache.delete(project_id)
+    video_export_manager.delete_project(project_id)
     cleanup_project(project_id)
     return DeleteResponse(ok=True)

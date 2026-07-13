@@ -67,7 +67,7 @@
         class="export-btn"
         :disabled="!project.hasProject"
         @click="simCanvasRef?.exportVideo()"
-      >{{ tt("exportWebm") }}</button>
+      >{{ tt("exportVideo") }}</button>
     </header>
 
     <main class="workspace">

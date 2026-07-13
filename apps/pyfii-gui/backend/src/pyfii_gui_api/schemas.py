@@ -110,5 +110,27 @@ class SafetyResponse(BaseModel):
     events: List[SafetyEvent]
 
 
+class VideoExportRequest(BaseModel):
+    render_mode: Literal["classic2d", "three3d"] = "classic2d"
+    fps: int = Field(default=30, ge=1, le=60)
+    render_scale: Literal[1, 2] = 1
+    projection: Literal["orthographic", "perspective"] = "perspective"
+    view_angle_a: float = Field(default=90, ge=-180, le=180)
+    view_angle_b: float = Field(default=3, ge=-90, le=90)
+    observer_distance: float = Field(default=600, gt=0)
+    projection_distance: float = Field(default=450, gt=0)
+
+
+class VideoExportResponse(BaseModel):
+    export_id: str
+    project_id: str
+    status: Literal["queued", "running", "completed", "failed"]
+    progress_percent: Optional[float] = None
+    filename: str
+    download_url: Optional[str] = None
+    warnings: List[str] = Field(default_factory=list)
+    error: Optional[str] = None
+
+
 class DeleteResponse(BaseModel):
     ok: bool

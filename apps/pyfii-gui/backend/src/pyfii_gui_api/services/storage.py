@@ -16,6 +16,10 @@ def project_root(project_id: str) -> Path:
     return settings.runtime_dir / project_id
 
 
+def video_export_root(project_id: str) -> Path:
+    return settings.runtime_dir / "_video_exports" / project_id
+
+
 def create_project_workspace(project_id: str) -> ProjectWorkspace:
     root = project_root(project_id)
     upload_dir = root / "upload"
@@ -29,3 +33,6 @@ def cleanup_project(project_id: str) -> None:
     root = project_root(project_id)
     if root.exists():
         shutil.rmtree(root)
+    export_root = video_export_root(project_id)
+    if export_root.exists():
+        shutil.rmtree(export_root)

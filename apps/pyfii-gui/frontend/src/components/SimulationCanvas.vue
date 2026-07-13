@@ -45,19 +45,30 @@
       >{{ player.fullscreen ? '⬚' : '⬙' }}</button>
       <div v-if="exporting" class="export-overlay">
         <div class="export-progress-card">
-          <span>{{ tt("exportingWebm") }}</span>
-          <progress :value="exportProgress" max="100" />
-          <span>{{ Math.round(exportProgress) }}%</span>
+          <span>{{ tt("exportingVideo") }}</span>
+          <progress v-if="exportProgress !== null" :value="exportProgress" max="100" />
+          <progress v-else max="100" />
+          <span>{{ exportProgress === null ? tt("renderingOnServer") : `${Math.round(exportProgress)}%` }}</span>
         </div>
+      </div>
+      <div v-if="exportMessage" class="export-message" :class="{ error: exportFailed }">
+        <span>{{ exportMessage }}</span>
+        <button type="button" @click="exportMessage = ''">×</button>
       </div>
     </div>
   </section>
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, onMounted, onUnmounted, ref, watch } from "vue";
+import { computed, onMounted, onUnmounted, ref, watch } from "vue";
 
-import { projectMusicUrl } from "../api/projects";
+import { ApiError } from "../api/client";
+import {
+  createVideoExport,
+  fetchVideoExport,
+  videoExportDownloadUrl,
+  type VideoExportRequest,
+} from "../api/projects";
 import { text, type MessageKey } from "../i18n";
 import { getFrameAtTime } from "../renderer/frame";
 import { PyfiiCanvasRenderer } from "../renderer/canvas2d/PyfiiCanvasRenderer";
@@ -75,7 +86,9 @@ const shellRef = ref<HTMLElement | null>(null);
 const fw = ref(0);
 const fh = ref(0);
 const exporting = ref(false);
-const exportProgress = ref(0);
+const exportProgress = ref<number | null>(0);
+const exportMessage = ref("");
+const exportFailed = ref(false);
 const renderFps = ref(0);
 const project = useProjectStore();
 const player = usePlayerStore();
@@ -141,10 +154,6 @@ function render(timestamp: number): void {
 
   drawActiveRenderer();
   frameRequest = requestAnimationFrame(render);
-}
-
-function activeCanvas(): HTMLCanvasElement | null {
-  return player.renderMode === "three3d" ? canvas3dRef.value : canvas2dRef.value;
 }
 
 function syncRendererSize(): void {
@@ -225,166 +234,59 @@ function waitMs(ms: number): Promise<void> {
   return new Promise((resolve) => window.setTimeout(resolve, ms));
 }
 
-function waitForPaint(): Promise<void> {
-  return new Promise((resolve) => requestAnimationFrame(() => resolve()));
-}
-
-function waitForAudioReady(audio: HTMLAudioElement): Promise<void> {
-  return new Promise((resolve, reject) => {
-    const cleanup = () => {
-      audio.oncanplaythrough = null;
-      audio.onerror = null;
-    };
-    audio.oncanplaythrough = () => {
-      cleanup();
-      resolve();
-    };
-    audio.onerror = () => {
-      cleanup();
-      reject(new Error(ui.locale === "zh" ? "音频加载失败。" : "Audio load failed."));
-    };
-    audio.load();
-  });
-}
-
-function downloadBlob(blob: Blob, filename: string): void {
-  const url = URL.createObjectURL(blob);
+function downloadFile(url: string, filename: string): void {
   const a = document.createElement("a");
   a.href = url;
   a.download = filename;
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
-  URL.revokeObjectURL(url);
 }
 
 async function exportVideo(): Promise<void> {
-  const canvas = activeCanvas();
-  if (!canvas || !project.meta || project.durationMs <= 0 || exporting.value) return;
-
-  const captureFps = Math.min(project.trackFps, 60);
-  const frameIntervalMs = 1000 / captureFps;
-  const totalFrames = Math.ceil(project.durationMs / frameIntervalMs);
-  const durationMs = project.durationMs;
-  let stream = canvas.captureStream(captureFps);
-  const streamTracks: MediaStreamTrack[] = [...stream.getTracks()];
-  let audioEl: HTMLAudioElement | null = null;
-  let audioCtx: AudioContext | null = null;
-  let audioSource: MediaElementAudioSourceNode | null = null;
-  let audioDest: MediaStreamAudioDestinationNode | null = null;
-
-  if (project.projectId && project.meta.music.available) {
-    try {
-      const musicUrl = projectMusicUrl(project.projectId);
-      audioEl = new Audio(musicUrl);
-      audioEl.preload = "auto";
-      await waitForAudioReady(audioEl);
-      audioCtx = new AudioContext();
-      audioSource = audioCtx.createMediaElementSource(audioEl);
-      audioDest = audioCtx.createMediaStreamDestination();
-      audioSource.connect(audioDest);
-      stream = new MediaStream([
-        ...stream.getVideoTracks(),
-        ...audioDest.stream.getAudioTracks(),
-      ]);
-      streamTracks.push(...audioDest.stream.getTracks());
-    } catch {
-      audioEl = null;
-      audioCtx?.close();
-      audioCtx = null;
-      audioSource = null;
-      audioDest = null;
-    }
-  }
-
-  let mimeType = "";
-  for (const candidate of ["video/webm; codecs=vp9,opus", "video/webm; codecs=vp8,opus", "video/webm"]) {
-    if (MediaRecorder.isTypeSupported(candidate)) { mimeType = candidate; break; }
-  }
-
-  const chunks: Blob[] = [];
-  const recorderOptions: MediaRecorderOptions = { videoBitsPerSecond: 8000000 };
-  if (mimeType) {
-    recorderOptions.mimeType = mimeType;
-  }
-  const recorder = new MediaRecorder(stream, recorderOptions);
-  recorder.ondataavailable = (e: BlobEvent) => { if (e.data.size > 0) chunks.push(e.data); };
-
-  const wasPlaying = player.playing;
-  const savedTime = player.currentTimeMs;
-  const savedScale = player.renderScale;
-
-  if (player.renderScale < 1) {
-    player.setRenderScale(1);
-    syncRendererSize();
-    await nextTick();
-  }
-
-  player.pause();
-  player.setCurrentTime(0);
-  await nextTick();
-  cancelAnimationFrame(frameRequest);
-
-  const exportComplete = new Promise<Blob>((resolve, reject) => {
-    recorder.onstop = () => {
-      resolve(new Blob(chunks, { type: mimeType || "video/webm" }));
-    };
-    recorder.onerror = () => {
-      reject(new Error(ui.locale === "zh" ? "MediaRecorder 录制失败。" : "MediaRecorder failed."));
-    };
-  });
+  if (!project.meta || !project.projectId || project.durationMs <= 0 || exporting.value) return;
 
   exporting.value = true;
   exportProgress.value = 0;
+  exportMessage.value = "";
+  exportFailed.value = false;
 
   try {
-    recorder.start(250);
+    const options: VideoExportRequest = {
+      render_mode: player.renderMode,
+      fps: Math.min(60, Math.max(1, Math.round(project.trackFps))),
+      render_scale: player.renderScale >= 2 ? 2 : 1,
+      projection: player.threeProjection,
+      view_angle_a: player.viewAngleA,
+      view_angle_b: player.viewAngleB,
+      observer_distance: player.observerDistance,
+      projection_distance: player.projectionDistance,
+    };
+    let job = await createVideoExport(project.projectId, options);
+    exportProgress.value = job.progress_percent;
 
-    if (audioEl) {
-      audioEl.currentTime = 0;
-      await audioCtx?.resume();
-      await audioEl.play();
+    while (job.status === "queued" || job.status === "running") {
+      await waitMs(750);
+      job = await fetchVideoExport(project.projectId, job.export_id);
+      exportProgress.value = job.progress_percent;
     }
 
-    for (let i = 0; i <= totalFrames; i += 1) {
-      const simTime = Math.min(i * frameIntervalMs, durationMs);
-      player.setCurrentTime(simTime);
-      drawActiveRenderer();
-      exportProgress.value = durationMs > 0 ? (simTime / durationMs) * 100 : 100;
-      await waitForPaint();
-      if (i < totalFrames) {
-        await waitMs(frameIntervalMs);
-      }
+    if (job.status === "failed") {
+      throw new Error(job.error || tt("videoExportFailed"));
     }
 
-    audioEl?.pause();
-    if (recorder.state !== "inactive") {
-      recorder.stop();
-    }
-    const blob = await exportComplete;
-    downloadBlob(blob, `${project.meta?.name ?? "simulation"}.webm`);
+    downloadFile(videoExportDownloadUrl(project.projectId, job.export_id), job.filename);
+    exportMessage.value = job.warnings.length
+      ? `${tt("videoExportCompleteWithWarnings")} (${job.warnings.length})`
+      : tt("videoExportComplete");
   } catch (error) {
-    console.error(error);
-    audioEl?.pause();
-    if (recorder.state !== "inactive") {
-      recorder.stop();
-    }
+    exportFailed.value = true;
+    exportMessage.value = error instanceof ApiError
+      ? `${error.code}: ${error.message}`
+      : error instanceof Error ? error.message : tt("videoExportFailed");
   } finally {
-    audioSource?.disconnect();
-    audioDest?.disconnect();
-    await audioCtx?.close();
-    streamTracks.forEach((track) => track.stop());
-    player.setCurrentTime(savedTime);
-    if (player.renderScale !== savedScale) {
-      player.setRenderScale(savedScale);
-      syncRendererSize();
-    }
-    if (wasPlaying) {
-      player.play();
-    }
     exporting.value = false;
     exportProgress.value = 0;
-    frameRequest = requestAnimationFrame(render);
   }
 }
 
@@ -527,5 +429,33 @@ onUnmounted(() => {
 .export-progress-card progress {
   width: 240px;
   height: 8px;
+}
+
+.export-message {
+  position: absolute;
+  right: 12px;
+  bottom: 12px;
+  z-index: 21;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  max-width: min(520px, calc(100% - 24px));
+  padding: 9px 12px;
+  border: 1px solid var(--ok);
+  color: var(--text);
+  background: var(--panel-bg-raised);
+  font-size: 12px;
+}
+
+.export-message.error {
+  border-color: var(--danger);
+}
+
+.export-message button {
+  border: 0;
+  color: inherit;
+  background: transparent;
+  cursor: pointer;
+  font-size: 16px;
 }
 </style>

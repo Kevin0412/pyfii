@@ -69,6 +69,11 @@ class Settings:
             1,
             _int_env("PYFII_GUI_TRAJECTORY_WORKERS", max(1, (os.cpu_count() or 1) // 2)),
         )
+        self.video_export_jobs = max(1, _int_env("PYFII_GUI_VIDEO_EXPORT_JOBS", 1))
+        self.video_render_workers = max(
+            1,
+            _int_env("PYFII_GUI_VIDEO_RENDER_WORKERS", max(1, (os.cpu_count() or 1) // 2)),
+        )
         self.max_upload_bytes = _int_env("PYFII_GUI_MAX_UPLOAD_BYTES", 100 * 1024 * 1024)
         self.max_uncompressed_bytes = _int_env(
             "PYFII_GUI_MAX_UNCOMPRESSED_BYTES",
