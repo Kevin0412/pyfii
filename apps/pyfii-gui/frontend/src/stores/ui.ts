@@ -12,6 +12,7 @@ interface DeploymentState {
 
 const THEME_STORAGE_KEY = "pyfii-gui-theme";
 const LOCALE_STORAGE_KEY = "pyfii-gui-locale-v2";
+const GUIDE_STORAGE_KEY = "pyfii-gui-guide-seen-v1";
 
 function savedTheme(): ThemeMode {
   if (typeof window === "undefined") {
@@ -29,10 +30,18 @@ function savedLocale(): LocaleMode {
   return window.localStorage.getItem(LOCALE_STORAGE_KEY) === "en" ? "en" : "zh";
 }
 
+function shouldOpenGuide(): boolean {
+  if (typeof window === "undefined") {
+    return false;
+  }
+  return window.localStorage.getItem(GUIDE_STORAGE_KEY) !== "1";
+}
+
 export const useUiStore = defineStore("ui", {
   state: () => ({
     theme: savedTheme() as ThemeMode,
     locale: savedLocale() as LocaleMode,
+    guideOpen: shouldOpenGuide(),
     localProjectImportEnabled: false,
     deployment: {
       icp_beian: "",
@@ -73,6 +82,13 @@ export const useUiStore = defineStore("ui", {
     },
     toggleLocale() {
       this.setLocale(this.locale === "en" ? "zh" : "en");
+    },
+    openGuide() {
+      this.guideOpen = true;
+    },
+    closeGuide() {
+      this.guideOpen = false;
+      window.localStorage.setItem(GUIDE_STORAGE_KEY, "1");
     },
     setAppConfig(config: { features: { local_project_import: boolean }; deployment: DeploymentState }) {
       this.localProjectImportEnabled = Boolean(config.features.local_project_import);

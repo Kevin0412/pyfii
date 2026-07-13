@@ -9,6 +9,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "marked": "^15.0.12",
     "pinia": "^2.1.7",
     "three": "^0.184.0",
     "vue": "^3.4.21"

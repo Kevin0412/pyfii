@@ -5,6 +5,9 @@
         <span class="brand-title">Pyfii GUI</span>
         <span class="brand-subtitle">{{ tt("brandSubtitle") }}</span>
       </div>
+      <button class="theme-toggle" type="button" @click="ui.openGuide()">{{ tt("guide") }}</button>
+      <a class="topbar-link" href="#/docs">{{ tt("docs") }}</a>
+      <a class="topbar-link" href="#/tutorial">{{ tt("tutorials") }}</a>
       <button
         class="theme-toggle"
         type="button"
@@ -92,11 +95,13 @@
         {{ link.label }}
       </a>
     </footer>
+    <GuideDialog />
   </div>
 </template>
 
 <script setup lang="ts">
 import { fetchAppConfig } from "../api/config";
+import GuideDialog from "../components/GuideDialog.vue";
 import ProjectInfoPanel from "../components/ProjectInfoPanel.vue";
 import ProjectUpload from "../components/ProjectUpload.vue";
 import SafetyLogPanel from "../components/SafetyLogPanel.vue";
@@ -241,6 +246,22 @@ onUnmounted(() => {
 
 .theme-toggle {
   min-width: 56px;
+}
+
+.topbar-link {
+  min-height: 28px;
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 8px;
+  border: 1px solid var(--border-control);
+  color: var(--text);
+  font-size: 11px;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.topbar-link:hover {
+  background: var(--control-hover-bg);
 }
 
 .scale-select,
