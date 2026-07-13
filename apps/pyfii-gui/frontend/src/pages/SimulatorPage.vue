@@ -1,28 +1,8 @@
 <template>
   <div class="sim-page" :class="[`theme-${ui.theme}`, `locale-${ui.locale}`]">
+    <SiteHeader active="studio" />
     <header class="topbar">
-      <div class="brand">
-        <span class="brand-title">Pyfii GUI</span>
-        <span class="brand-subtitle">{{ tt("brandSubtitle") }}</span>
-      </div>
       <button class="theme-toggle" type="button" @click="ui.openGuide()">{{ tt("guide") }}</button>
-      <a class="topbar-link" href="#/docs">{{ tt("docs") }}</a>
-      <a class="topbar-link" href="#/tutorial">{{ tt("tutorials") }}</a>
-      <button
-        class="theme-toggle"
-        type="button"
-        :aria-pressed="ui.theme === 'light'"
-        @click="ui.toggleTheme()"
-      >
-        {{ ui.theme === "dark" ? tt("themeLight") : tt("themeDark") }}
-      </button>
-      <button
-        class="theme-toggle"
-        type="button"
-        @click="ui.toggleLocale()"
-      >
-        {{ tt("languageSwitch") }}
-      </button>
       <label class="scale-select">
         {{ tt("scale") }}
         <select v-model.number="player.renderScale">
@@ -84,28 +64,17 @@
     </main>
 
     <SafetyLogPanel />
-    <footer v-if="ui.complianceLinks.length" class="compliance-footer">
-      <a
-        v-for="link in ui.complianceLinks"
-        :key="link.label"
-        :href="link.url"
-        target="_blank"
-        rel="noopener noreferrer"
-      >
-        {{ link.label }}
-      </a>
-    </footer>
     <GuideDialog />
   </div>
 </template>
 
 <script setup lang="ts">
-import { fetchAppConfig } from "../api/config";
 import GuideDialog from "../components/GuideDialog.vue";
 import ProjectInfoPanel from "../components/ProjectInfoPanel.vue";
 import ProjectUpload from "../components/ProjectUpload.vue";
 import SafetyLogPanel from "../components/SafetyLogPanel.vue";
 import SimulationCanvas from "../components/SimulationCanvas.vue";
+import SiteHeader from "../components/SiteHeader.vue";
 import TimelineControl from "../components/TimelineControl.vue";
 import { onMounted, onUnmounted, ref, watch } from "vue";
 import { text, type MessageKey } from "../i18n";
@@ -141,11 +110,6 @@ watch(() => player.fullscreen, async (v) => {
 
 onMounted(() => {
   document.addEventListener("fullscreenchange", onFullscreenChange);
-  fetchAppConfig()
-    .then((config) => ui.setAppConfig(config))
-    .catch(() => {
-      /* Config is optional for local static previews. */
-    });
 });
 
 onUnmounted(() => {
@@ -181,7 +145,7 @@ onUnmounted(() => {
   --shadow: rgba(0, 0, 0, 0.45);
   min-height: 100vh;
   display: grid;
-  grid-template-rows: auto minmax(0, 1fr) minmax(180px, 28vh) auto;
+  grid-template-rows: auto auto minmax(0, 1fr) minmax(180px, 28vh);
   background: var(--app-bg);
   color: var(--text);
 }
@@ -227,41 +191,8 @@ onUnmounted(() => {
   overflow-y: hidden;
 }
 
-.brand {
-  flex: 0 0 auto;
-  min-width: 132px;
-  display: grid;
-  gap: 2px;
-}
-
-.brand-title {
-  font-size: 18px;
-  letter-spacing: 0;
-}
-
-.brand-subtitle {
-  color: var(--text-subtle);
-  font-size: 11px;
-}
-
 .theme-toggle {
   min-width: 56px;
-}
-
-.topbar-link {
-  min-height: 28px;
-  display: inline-flex;
-  align-items: center;
-  padding: 4px 8px;
-  border: 1px solid var(--border-control);
-  color: var(--text);
-  font-size: 11px;
-  text-decoration: none;
-  white-space: nowrap;
-}
-
-.topbar-link:hover {
-  background: var(--control-hover-bg);
 }
 
 .scale-select,
@@ -315,29 +246,6 @@ onUnmounted(() => {
   grid-template-columns: 280px minmax(0, 1fr);
 }
 
-.compliance-footer {
-  min-height: 28px;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  gap: 16px;
-  padding: 6px 12px;
-  border-top: 1px solid var(--border-soft);
-  color: var(--text-muted);
-  background: var(--panel-bg-alt);
-  font-size: 11px;
-}
-
-.compliance-footer a {
-  color: inherit;
-  text-decoration: none;
-}
-
-.compliance-footer a:hover {
-  color: var(--text);
-  text-decoration: underline;
-}
-
 .project-column {
   border-right: 1px solid var(--border-control);
   background: var(--panel-bg);
@@ -358,7 +266,7 @@ onUnmounted(() => {
 
 @media (max-width: 900px) {
   .sim-page {
-    grid-template-rows: auto auto minmax(180px, 34vh);
+    grid-template-rows: auto auto auto minmax(180px, 34vh);
   }
 
   .topbar {

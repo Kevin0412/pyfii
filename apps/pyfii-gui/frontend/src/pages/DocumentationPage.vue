@@ -1,18 +1,6 @@
 <template>
   <div class="docs-page" :class="`theme-${ui.theme}`">
-    <header class="docs-header">
-      <a class="docs-brand" href="#/">PyFii GUI</a>
-      <nav aria-label="Documentation navigation">
-        <a href="#/guide">{{ label("guide") }}</a>
-        <a href="#/docs">{{ label("core") }}</a>
-        <a href="#/tutorial">{{ label("tutorial") }}</a>
-        <a href="#/">{{ tt("backToSimulator") }}</a>
-      </nav>
-      <button type="button" @click="ui.toggleTheme()">
-        {{ ui.theme === "dark" ? tt("themeLight") : tt("themeDark") }}
-      </button>
-      <button type="button" @click="ui.toggleLocale()">{{ tt("languageSwitch") }}</button>
-    </header>
+    <SiteHeader :active="activeSection" />
 
     <div class="docs-layout">
       <aside>
@@ -37,13 +25,12 @@
 <script setup lang="ts">
 import { computed } from "vue";
 
+import SiteHeader from "../components/SiteHeader.vue";
 import {
   documentHtml,
   documentNavigation,
-  documentSource,
   type DocumentId,
 } from "../content/documentation";
-import { text, type MessageKey } from "../i18n";
 import { useUiStore } from "../stores/ui";
 
 const props = defineProps<{ documentId: DocumentId }>();
@@ -51,6 +38,12 @@ const ui = useUiStore();
 
 const html = computed(() => documentHtml(props.documentId));
 const navigation = documentNavigation();
+const activeSection = computed<"guide" | "docs" | "tutorial">(() => {
+  if (props.documentId === "guide") {
+    return "guide";
+  }
+  return props.documentId === "core" || props.documentId === "gui" ? "docs" : "tutorial";
+});
 const groups = computed(() => [
   {
     id: "start",
@@ -68,73 +61,36 @@ const groups = computed(() => [
     items: navigation.filter((item) => item.source.group === "tutorial"),
   },
 ]);
-
-function label(id: DocumentId): string {
-  return documentSource(id).title[ui.locale];
-}
-
-function tt(key: MessageKey): string {
-  return text(ui.locale, key);
-}
 </script>
 
 <style scoped>
 .docs-page {
-  --docs-bg: #0b0b0b;
-  --docs-panel: #111;
-  --docs-text: #ececec;
-  --docs-muted: #949494;
-  --docs-border: #303030;
+  --app-bg: #0b0b0b;
+  --panel-bg: #111;
+  --panel-bg-alt: #111;
+  --text: #ececec;
+  --text-muted: #949494;
+  --border-soft: #303030;
+  --border-control: #d8d8d8;
+  --control-bg: #141414;
+  --control-hover-bg: #202020;
   --docs-code: #171717;
   min-height: 100vh;
-  background: var(--docs-bg);
-  color: var(--docs-text);
+  background: var(--app-bg);
+  color: var(--text);
 }
 
 .theme-light {
-  --docs-bg: #f7f7f7;
-  --docs-panel: #fff;
-  --docs-text: #181818;
-  --docs-muted: #626262;
-  --docs-border: #d2d2d2;
+  --app-bg: #f7f7f7;
+  --panel-bg: #fff;
+  --panel-bg-alt: #fff;
+  --text: #181818;
+  --text-muted: #626262;
+  --border-soft: #d2d2d2;
+  --border-control: #555;
+  --control-bg: #fff;
+  --control-hover-bg: #ededed;
   --docs-code: #ededed;
-}
-
-.docs-header {
-  position: sticky;
-  top: 0;
-  z-index: 10;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  min-height: 54px;
-  padding: 8px 18px;
-  border-bottom: 1px solid var(--docs-border);
-  background: var(--docs-panel);
-}
-
-.docs-brand {
-  margin-right: 12px;
-  color: var(--docs-text);
-  font-size: 18px;
-  text-decoration: none;
-}
-
-nav {
-  display: flex;
-  gap: 6px;
-  flex: 1;
-}
-
-nav a,
-.docs-header button {
-  padding: 6px 9px;
-  border: 1px solid var(--docs-border);
-  background: transparent;
-  color: var(--docs-text);
-  font-size: 12px;
-  text-decoration: none;
-  cursor: pointer;
 }
 
 .docs-layout {
@@ -159,7 +115,7 @@ aside section + section {
 
 aside h2 {
   margin: 0 0 7px;
-  color: var(--docs-muted);
+  color: var(--text-muted);
   font-size: 11px;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -169,7 +125,7 @@ aside a {
   display: block;
   padding: 5px 8px;
   border-left: 2px solid transparent;
-  color: var(--docs-muted);
+  color: var(--text-muted);
   font-size: 12px;
   line-height: 1.35;
   text-decoration: none;
@@ -177,8 +133,8 @@ aside a {
 
 aside a:hover,
 aside a.active {
-  border-left-color: var(--docs-text);
-  color: var(--docs-text);
+  border-left-color: var(--text);
+  color: var(--text);
 }
 
 .markdown-body {
@@ -195,7 +151,7 @@ aside a.active {
 .markdown-body :deep(h2) {
   margin: 42px 0 14px;
   padding-bottom: 8px;
-  border-bottom: 1px solid var(--docs-border);
+  border-bottom: 1px solid var(--border-soft);
   font-size: 24px;
 }
 
@@ -206,7 +162,7 @@ aside a.active {
 
 .markdown-body :deep(p),
 .markdown-body :deep(li) {
-  color: var(--docs-text);
+  color: var(--text);
 }
 
 .markdown-body :deep(a) {
@@ -216,7 +172,7 @@ aside a.active {
 .markdown-body :deep(pre) {
   overflow: auto;
   padding: 16px;
-  border: 1px solid var(--docs-border);
+  border: 1px solid var(--border-soft);
   background: var(--docs-code);
   line-height: 1.5;
 }
@@ -244,20 +200,10 @@ aside a.active {
 .markdown-body :deep(th),
 .markdown-body :deep(td) {
   padding: 7px 10px;
-  border: 1px solid var(--docs-border);
+  border: 1px solid var(--border-soft);
 }
 
 @media (max-width: 820px) {
-  .docs-header {
-    flex-wrap: wrap;
-  }
-
-  nav {
-    order: 3;
-    width: 100%;
-    overflow: auto;
-  }
-
   .docs-layout {
     grid-template-columns: 1fr;
     gap: 24px;

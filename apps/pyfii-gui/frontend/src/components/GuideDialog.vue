@@ -27,7 +27,7 @@
         </li>
       </ol>
       <footer>
-        <a href="#/guide" @click="ui.closeGuide()">{{ tt("openFullGuide") }}</a>
+        <a href="/guide" @click="ui.closeGuide()">{{ tt("openFullGuide") }}</a>
         <button type="button" @click="ui.closeGuide()">{{ tt("startUsing") }}</button>
       </footer>
     </section>
