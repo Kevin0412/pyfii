@@ -3,11 +3,13 @@ import sys
 import time
 import warnings
 from joblib.externals.loky import ProcessPoolExecutor
+from .fii_parser import FiiParseError, parse_fii
+from .xml_parser import XmlParseError, collect_points, parse_web_code
 
 def str2bgr(color):
     return (int(color[5:7],16),int(color[3:5],16),int(color[1:3],16))
 
-def read_xml_points(data):
+def _read_xml_points_legacy(data):
     data=data.split('\n')
     xml=[]
     n=0
@@ -22,7 +24,7 @@ def read_xml_points(data):
                 points[xml[k+1][19:-8]]=[int(xml[k+2][16:-8]),int(xml[k+3][16:-8]),int(xml[k+4][16:-8])]
     return points
 
-def read_xml(data,fii=[],time=0,x=0,y=0,z=0,vel=0,acc=0,w=0,points={}):#格式转换,xml指令转换为python指令
+def _read_xml_legacy(data,fii=[],time=0,x=0,y=0,z=0,vel=0,acc=0,w=0,points={}):#格式转换,xml指令转换为python指令
     data=data.split('\n')
     xml=[]
     lenxml=[]
@@ -101,7 +103,7 @@ def read_xml(data,fii=[],time=0,x=0,y=0,z=0,vel=0,acc=0,w=0,points={}):#格式�
                     newxml+='\n'
                 #print(newxml)
                 if int(xml[k+1][20:-8])!=1:
-                    repeat=read_xml(newxml*(int(xml[k+1][20:-8])-1),[],time,x,y,z,vel,acc,w,points)
+                    repeat=_read_xml_legacy(newxml*(int(xml[k+1][20:-8])-1),[],time,x,y,z,vel,acc,w,points)
                     #print(repeat[0])
                     for dot in repeat[0]:
                         dots.append(dot)
@@ -156,6 +158,42 @@ def read_xml(data,fii=[],time=0,x=0,y=0,z=0,vel=0,acc=0,w=0,points={}):#格式�
                 dots.append([time,'TurnOffAll'])
                 end=max(time,end)
     return(dots,warns,time,end)
+
+
+def read_xml_points(data):
+    """Read named points with the tree parser, falling back for broken XML."""
+    try:
+        return collect_points(data)
+    except XmlParseError as error:
+        warnings.warn(
+            f"Tree XML point parser failed ({error}); using the legacy parser.",
+            RuntimeWarning,
+            stacklevel=2,
+        )
+        return _read_xml_points_legacy(data)
+
+
+def read_xml(data,fii=[],time=0,x=0,y=0,z=0,vel=0,acc=0,w=0,points={}):
+    """Compile action XML with the tree parser and retain legacy fallback."""
+    # Non-zero interpreter state belongs to the legacy recursive API.  Normal
+    # project reads always start from zero and use the tree parser below.
+    if any((time, x, y, z, vel, acc, w)):
+        return _read_xml_legacy(data, fii, time, x, y, z, vel, acc, w, points)
+
+    start_position = fii if len(fii) >= 2 else None
+    try:
+        return parse_web_code(
+            data,
+            start_position=start_position,
+            points=points,
+        ).as_legacy_tuple()
+    except XmlParseError as error:
+        warnings.warn(
+            f"Tree XML parser failed ({error}); using the legacy parser.",
+            RuntimeWarning,
+            stacklevel=2,
+        )
+        return _read_xml_legacy(data, fii, time, x, y, z, vel, acc, w, points)
 
 def dots2angle(dots,warns,end,fps=200):#将指令转化为转圈动作
     time=0
@@ -637,6 +675,59 @@ def _debugger_multiprocessing_unsafe():
     ) != "1"
 
 
+def _read_fii_metadata_legacy(data):
+    """Original line-based metadata reader, kept only as a fallback."""
+    xml = [line.split('  ')[-1] for line in data.split('\n')]
+    drones = []
+    music_name = None
+    field = None
+    device_type = None
+
+    for line in xml:
+        if line[1:10] == 'MusicName':
+            music_name = line.split('"')[1]
+        if line[1:8] == 'Actions':
+            drones.append(line.split('"')[1])
+        if line[1:6] == 'AreaL':
+            field = int(line.split('"')[1][0])
+        if line[1:11] == 'DeviceType':
+            device_type = line.split('"')[1]
+
+    positions = {}
+    for drone in drones:
+        x = y = None
+        for line in xml:
+            if line[1:16] == 'ActionFlightPos' and line.split('"')[1][0:4] == drone:
+                if line[16] == 'X':
+                    x = int(line.split('"')[1].split('pos')[1])
+                elif line[16] == 'Y':
+                    y = int(line.split('"')[1].split('pos')[1])
+        if x is not None and y is not None:
+            positions[drone] = (x, y)
+
+    return device_type, field, music_name, drones, positions
+
+
+def _read_fii_metadata(data):
+    """Use XML metadata parsing first and retain the old reader as fallback."""
+    try:
+        metadata = parse_fii(data)
+        return (
+            metadata.device_type,
+            metadata.field,
+            metadata.music_name,
+            metadata.actions,
+            metadata.takeoff_positions,
+        )
+    except FiiParseError as error:
+        warnings.warn(
+            f"XML .fii parser failed ({error}); using the legacy parser.",
+            RuntimeWarning,
+            stacklevel=2,
+        )
+        return _read_fii_metadata_legacy(data)
+
+
 def read_fii(path,getfield=None,getdevice=None,fps=200,ignore_acc=False,workers=None):
     '''
     读入.fii文件
@@ -647,8 +738,6 @@ def read_fii(path,getfield=None,getdevice=None,fps=200,ignore_acc=False,workers=
     if getdevice!=None:
         warnings.warn('getdevice argument can be ingored since pyfii1.6.0. pyfii1.6.0及以后版本可忽略getdevice参数。',Warning)
     
-    DeviceType = None
-    field = None
     fii_path = None
     time_start=time.time()
     for root, dirs, files in os.walk(path):
@@ -662,28 +751,8 @@ def read_fii(path,getfield=None,getdevice=None,fps=200,ignore_acc=False,workers=
         raise FileNotFoundError(f"No .fii file found under path: {path}")
     with open(fii_path, "r",encoding='utf-8') as F:
         data = F.read()
-    data=data.split('\n')
-    xml=[]
-    n=0
-    for d in data:
-        n+=1
-        #print(d.split('  ')[-1],str(len(d.split('  '))))
-        xml.append(d.split('  ')[-1])
-    drones=[]
-    music=[path+"/动作组/"]
-    for k in range(len(xml)):
-        #print(xml[k].split('"'))
-        if xml[k][1:10]=='MusicName':
-            music.append(xml[k].split('"')[1])
-        if xml[k][1:8]=='Actions':
-            #print(xml[k].split('"')[1][0])
-            drones.append(xml[k].split('"')[1])
-        if xml[k][1:6]=='AreaL':
-            field=int(xml[k].split('"')[1][0])
-        if xml[k][1:11]=='DeviceType':
-            DeviceType=xml[k].split('"')[1]
-    if len(music)==1:
-        music=[]
+    DeviceType, field, music_name, drones, positions = _read_fii_metadata(data)
+    music = [path+"/动作组/", music_name] if music_name is not None else []
     dots=[]
     t0=0
     n=0
@@ -697,17 +766,10 @@ def read_fii(path,getfield=None,getdevice=None,fps=200,ignore_acc=False,workers=
             points[dic[0]]=dic[1]
     jobs=[]
     for drone, file in zip(drones, drone_files):
-        x = y = None
-        for k in range(len(xml)):
-            if xml[k][1:16]=='ActionFlightPos' and xml[k].split('"')[1][0:4]==drone:
-                if xml[k][16]=='X':
-                    x=int(xml[k].split('"')[1].split('pos')[1])
-                elif xml[k][16]=='Y':
-                    y=int(xml[k].split('"')[1].split('pos')[1])
-                #print(xml[k].split('"')[1])
-        if x is None or y is None:
+        position = positions.get(drone)
+        if position is None:
             raise ValueError('No take off place.起飞位置未定义。')
-        jobs.append((file, [x, y], fps, points, ignore_acc))
+        jobs.append((file, list(position), fps, points, ignore_acc))
 
     worker_count = _trajectory_worker_count(workers, len(jobs))
     if worker_count > 1 and _debugger_multiprocessing_unsafe():
