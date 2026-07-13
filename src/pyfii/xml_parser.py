@@ -105,7 +105,16 @@ class _WebCodeParser:
                 "webCodeAll.xml must contain exactly one top-level Goertek_Start"
             )
 
-        # Other top-level blocks are loose Blockly pieces and are not executed.
+        loose_blocks = [block for block in top_blocks if block is not start_blocks[0]]
+        if loose_blocks:
+            block_count = sum(_count_blocks(block) for block in loose_blocks)
+            self.warnings.append(
+                f"Ignored {len(loose_blocks)} disconnected Blockly group(s) "
+                f"containing {block_count} block(s). "
+                f"检测到{len(loose_blocks)}组未拼接积木（共{block_count}个），已忽略。"
+            )
+
+        # Only the chain connected to Goertek_Start is executable.
         self._run_chain(start_blocks[0])
 
         return XmlParseResult(
@@ -373,6 +382,10 @@ def _copy_points(
 
 def _tag_name(element: ET.Element) -> str:
     return element.tag.rsplit("}", 1)[-1]
+
+
+def _count_blocks(element: ET.Element) -> int:
+    return sum(_tag_name(child) == "block" for child in element.iter())
 
 
 def _direct_children(element: ET.Element, name: str) -> List[ET.Element]:

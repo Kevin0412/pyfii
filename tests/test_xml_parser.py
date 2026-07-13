@@ -266,6 +266,38 @@ class XmlParserTests(unittest.TestCase):
             ],
         )
         self.assertEqual(result.time_ms, 65000.0)
+        self.assertEqual(
+            result.warnings,
+            [
+                "Ignored 2 disconnected Blockly group(s) containing 2 block(s). "
+                "检测到2组未拼接积木（共2个），已忽略。"
+            ],
+        )
+
+    def test_counts_nested_blocks_in_disconnected_group_warning(self):
+        xml = """
+        <xml xmlns="http://www.w3.org/1999/xhtml">
+          <block type="Goertek_Start" />
+          <block type="block_inittime">
+            <statement name="functionIntit">
+              <block type="Goertek_Land" />
+            </statement>
+            <next>
+              <block type="block_delay" />
+            </next>
+          </block>
+        </xml>
+        """
+
+        result = parse_web_code(xml, start_position=(10, 20))
+
+        self.assertEqual(
+            result.warnings,
+            [
+                "Ignored 1 disconnected Blockly group(s) containing 3 block(s). "
+                "检测到1组未拼接积木（共3个），已忽略。"
+            ],
+        )
 
     def test_reports_ignored_blocks_and_rejects_bad_supported_blocks(self):
         ignored = parse_web_code(
