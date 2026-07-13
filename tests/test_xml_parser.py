@@ -232,13 +232,53 @@ class XmlParserTests(unittest.TestCase):
 
         self.assertEqual(dots, [[0, 10, 20, 0, 200, 400, "move2"]])
 
+    def test_ignores_unconnected_top_level_blocks(self):
+        xml = """
+        <xml xmlns="http://www.w3.org/1999/xhtml">
+          <block type="Goertek_Start" x="0" y="0">
+            <next>
+              <block type="block_inittime">
+                <field name="time">01:05</field>
+                <statement name="functionIntit">
+                  <block type="Goertek_Land" />
+                </statement>
+              </block>
+            </next>
+          </block>
+          <block type="block_inittime" x="0" y="4528">
+            <field name="time">00:00</field>
+          </block>
+          <block type="Goertek_MoveToCoord2" x="0" y="4614">
+            <field name="X">999</field>
+            <field name="Y">999</field>
+            <field name="Z">999</field>
+          </block>
+        </xml>
+        """
+
+        result = parse_web_code(xml, start_position=(10, 20))
+
+        self.assertEqual(
+            result.dots,
+            [
+                [0, 10.0, 20.0, 0, 200, 400, "move2"],
+                [65000.0, "land"],
+            ],
+        )
+        self.assertEqual(result.time_ms, 65000.0)
+
     def test_reports_ignored_blocks_and_rejects_bad_supported_blocks(self):
         ignored = parse_web_code(
             """
             <xml xmlns="http://www.w3.org/1999/xhtml">
-              <block type="Goertek_UnLock" />
+              <block type="Goertek_Start" x="0" y="0">
+                <next>
+                  <block type="Goertek_UnLock" />
+                </next>
+              </block>
             </xml>
-            """
+            """,
+            start_position=(0, 0),
         )
         self.assertEqual(ignored.ignored_blocks, ["Goertek_UnLock"])
 
@@ -246,12 +286,17 @@ class XmlParserTests(unittest.TestCase):
             parse_web_code(
                 """
                 <xml xmlns="http://www.w3.org/1999/xhtml">
-                  <block type="Goertek_MoveToCoord">
-                    <field name="X">1</field>
-                    <field name="Y">2</field>
+                  <block type="Goertek_Start" x="0" y="0">
+                    <next>
+                      <block type="Goertek_MoveToCoord">
+                        <field name="X">1</field>
+                        <field name="Y">2</field>
+                      </block>
+                    </next>
                   </block>
                 </xml>
-                """
+                """,
+                start_position=(0, 0),
             )
 
 

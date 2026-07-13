@@ -90,11 +90,23 @@ class _WebCodeParser:
         self.ignored_blocks: Set[str] = set()
 
     def parse(self, root: ET.Element) -> XmlParseResult:
-        if _tag_name(root) == "block":
-            self._run_chain(root)
-        else:
-            for block in _direct_children(root, "block"):
-                self._run_chain(block)
+        top_blocks = (
+            [root]
+            if _tag_name(root) == "block"
+            else _direct_children(root, "block")
+        )
+        start_blocks = [
+            block
+            for block in top_blocks
+            if block.attrib.get("type", "").startswith("Goertek_Start")
+        ]
+        if len(start_blocks) != 1:
+            raise XmlParseError(
+                "webCodeAll.xml must contain exactly one top-level Goertek_Start"
+            )
+
+        # Other top-level blocks are loose Blockly pieces and are not executed.
+        self._run_chain(start_blocks[0])
 
         return XmlParseResult(
             dots=self.dots,
