@@ -42,7 +42,7 @@ def _read_xml_legacy(data,fii=[],time=0,x=0,y=0,z=0,vel=0,acc=0,w=0,points={}):#
             #print(xml[k].split('"')[1])
             if xml[k].split('"')[1][0:14]=='block_inittime':
                 if time>int(xml[k+1][19:21])*60000+int(xml[k+1][22:24])*1000:
-                    raise Warning("Block intime error.时间开始模块摆放错误")
+                    raise Warning("Block inittime error.时间开始模块摆放错误")
                 time=int(xml[k+1][19:21])*60000+int(xml[k+1][22:24])*1000
                 #print(time)
             elif xml[k].split('"')[1][0:11]=='block_delay':
