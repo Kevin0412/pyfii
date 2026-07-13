@@ -12,7 +12,7 @@ from ffmpy import FFmpeg
 def video_add_audio(video_path: str, audio_path: str,output_path:str):
     _ext_video = os.path.basename(video_path).strip().split('.')[-1]
     _ext_audio = os.path.basename(audio_path).strip().split('.')[-1]
-    if _ext_audio not in ['mp3', 'wav']:
+    if _ext_audio not in ['mp3', 'wav','flac','ogg']:
         print('No music!')
         shutil.copy(video_path,video_path[0:-12]+'.mp4')
     else:
