@@ -10,6 +10,7 @@ _ACTION_INCOMPLETE_RE = re.compile(r"In\s+(?P<seconds>\d+(?:\.\d+)?)s,\s*action 
 _DRONE_PREFIX_RE = re.compile(r"^d(?P<drone>\d+)\s+无人机(?P=drone):")
 
 CATEGORY_META = {
+    "core_warning": {"label": "核心警告", "rank": 5},
     "action_incomplete": {"label": "动作未完成", "rank": 10},
     "distance_51": {"label": "距离过近", "rank": 20},
     "distance_34": {"label": "碰撞风险", "rank": 30},
@@ -49,7 +50,7 @@ def _distance_category(threshold_cm: float) -> str:
     return "distance_51"
 
 
-def _classify_core_warning(message: str) -> Optional[Dict[str, Any]]:
+def _classify_core_warning(message: str) -> Dict[str, Any]:
     distance = _DISTANCE_RE.search(message)
     if distance:
         threshold_cm = float(distance.group("threshold"))
@@ -81,7 +82,18 @@ def _classify_core_warning(message: str) -> Optional[Dict[str, Any]]:
             "dedupe_key": ("action_incomplete", drone),
         }
 
-    return None
+    drone = _drone_from_prefix(message)
+    return {
+        "level": "warning",
+        "type": "core_warning",
+        "time_ms": _warning_time_ms(message),
+        "drone_a": drone,
+        "drone_b": None,
+        "distance_cm": None,
+        "threshold_cm": None,
+        **_event_category("core_warning"),
+        "dedupe_key": ("core_warning", drone, message),
+    }
 
 
 def analyze_safety(
@@ -99,8 +111,6 @@ def analyze_safety(
 
     for message in warnings or []:
         classified = _classify_core_warning(str(message))
-        if classified is None:
-            continue
         time_ms = classified["time_ms"]
         dedupe_key = classified["dedupe_key"]
         last = last_event_at.get(dedupe_key)

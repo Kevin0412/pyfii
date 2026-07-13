@@ -154,12 +154,14 @@ const messages = {
 
 const categoryMessages: Record<LocaleMode, Record<SafetyCategory, { label: string; short: string }>> = {
   en: {
+    core_warning: { label: "Core Warning", short: "Core" },
     distance_17: { label: "Collision Warning", short: "Collision" },
     distance_34: { label: "Collision Risk", short: "Risk" },
     distance_51: { label: "Too Close", short: "Too Close" },
     action_incomplete: { label: "Incomplete Action", short: "Incomplete" },
   },
   zh: {
+    core_warning: { label: "核心警告", short: "核心警告" },
     distance_17: { label: "碰撞警告", short: "碰撞警告" },
     distance_34: { label: "碰撞风险", short: "碰撞风险" },
     distance_51: { label: "距离过近", short: "距离过近" },

@@ -1,5 +1,5 @@
 export type SafetyLevel = "ok" | "warning" | "error";
-export type SafetyCategory = "action_incomplete" | "distance_51" | "distance_34" | "distance_17";
+export type SafetyCategory = "core_warning" | "action_incomplete" | "distance_51" | "distance_34" | "distance_17";
 
 export interface MusicInfo {
   available: boolean;

@@ -125,6 +125,7 @@ const categories: CategoryOption[] = [
   { value: "distance_34" },
   { value: "distance_51" },
   { value: "action_incomplete" },
+  { value: "core_warning" },
 ];
 
 function tt(key: MessageKey): string {
@@ -452,6 +453,11 @@ td:nth-child(3) {
 
 .category-action_incomplete {
   color: var(--neutral);
+  font-weight: 700;
+}
+
+.category-core_warning {
+  color: var(--text-muted);
   font-weight: 700;
 }
 

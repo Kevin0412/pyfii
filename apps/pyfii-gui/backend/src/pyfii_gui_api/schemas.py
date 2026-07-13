@@ -18,7 +18,13 @@ class SafetySummary(BaseModel):
     min_distance_cm: Optional[float] = None
     category_counts: Dict[str, int] = Field(default_factory=dict)
     max_category: Optional[
-        Literal["action_incomplete", "distance_51", "distance_34", "distance_17"]
+        Literal[
+            "core_warning",
+            "action_incomplete",
+            "distance_51",
+            "distance_34",
+            "distance_17",
+        ]
     ] = None
 
 
@@ -86,7 +92,13 @@ class SafetyEvent(BaseModel):
     drone_b: Optional[int] = None
     distance_cm: Optional[float] = None
     threshold_cm: Optional[float] = None
-    category: Literal["action_incomplete", "distance_51", "distance_34", "distance_17"]
+    category: Literal[
+        "core_warning",
+        "action_incomplete",
+        "distance_51",
+        "distance_34",
+        "distance_17",
+    ]
     category_label: str
     category_rank: int
     message: str
