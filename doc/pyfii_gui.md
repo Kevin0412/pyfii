@@ -1,6 +1,6 @@
 # Pyfii GUI 原型
 
-`pyfii-gui` 是 Pyfii 仓库中的独立 Web GUI 原型，目录为 `apps/pyfii-gui/`。它用于上传 Fii 项目、读回轨迹、安全日志查看和 Canvas 三视图预览。
+`pyfii-gui` 是 Pyfii 仓库中的独立 Web GUI，目录为 `apps/pyfii-gui/`。它用于上传 Fii 项目、读回轨迹、查看安全日志、进行 2D/3D 预览，并通过 core renderer 导出 MP4。
 
 它不属于 `src/pyfii/` core 包，也不改变 pyfii 作为独立 PyPI 库的定位。依赖方向只能是：
 
@@ -13,8 +13,8 @@ pyfii-gui -> pyfii core
 - core 代码仍在 `src/pyfii/`，负责 Fii 读写、轨迹采样、OpenCV 预览和原有 warning。
 - GUI 后端在 `apps/pyfii-gui/backend/`，使用 FastAPI 做薄适配层。
 - GUI 前端在 `apps/pyfii-gui/frontend/`，使用 Vue 3、Vite、TypeScript 和 Pinia。
-- 后端只直接导入 `pyfii.read.read_fii` 和 core 的无渲染校验能力，不把 FastAPI、Vue、Electron 或 GUI 专属代码放进 core。
-- 前端渲染由 Canvas 2D 完成，不调用后端做视频渲染。
+- 后端只适配 `pyfii.read.read_fii`、core 的无窗口校验能力和 `FiiRender2D/FiiRender3D`，不把 FastAPI、Vue、Electron 或 GUI 专属代码放进 core。
+- 浏览器交互预览使用 Canvas 2D / Three.js；交付视频使用后端 core renderer。两条路径消费同一份轨迹，但绘制后端不同。
 
 ## 后端职责
 
@@ -25,6 +25,9 @@ pyfii-gui -> pyfii core
 - `GET /api/projects/{project_id}`：返回项目元信息。
 - `GET /api/projects/{project_id}/tracks?fps=60`：返回前端渲染用轨迹，支持简单降采样。
 - `GET /api/projects/{project_id}/safety`：返回结构化安全日志。
+- `POST /api/projects/{project_id}/video-exports`：创建异步 MP4 任务。
+- `GET /api/projects/{project_id}/video-exports/{export_id}`：读取任务状态。
+- `GET /api/projects/{project_id}/video-exports/{export_id}/download`：下载完成的 MP4。
 - `DELETE /api/projects/{project_id}`：删除缓存和临时文件。
 
 上传 zip 会经过 zip slip 检查、上传体积限制、解压后总体积限制、文件数量限制和单文件大小限制。运行时文件默认放在：
@@ -44,6 +47,8 @@ apps/pyfii-gui/backend/.runtime/projects/
 
 GUI 后端会把这些 warning 结构化成前端可展示的事件，例如 `action_incomplete`、`min_distance` 和 `core_warning`。这保证 GUI 的安全判断尽量贴近现有 pyfii core 行为。
 
+无法归入距离或动作未完成的 core warning 不再丢弃，而是保留原消息、无人机前缀和 `core_warning` 类别。近期树形 XML 解析器的“未拼接积木”提示会走这条路径。warning 不阻止项目加载、预览或导出；压缩包无效、解析异常和视频任务失败仍作为 fatal error 终止对应操作。
+
 已知老版本 Fii 项目可能无法被当前 core 解析，例如 `output/d/比赛用无人机` 使用早期 XML/LED 格式；批量回归脚本会把这类样例记录为 `expected_failure`，不把它当作 GUI 回归失败。
 
 ## 前端职责
@@ -60,13 +65,29 @@ GUI 后端会把这些 warning 结构化成前端可展示的事件，例如 `ac
 - 3D 模式显示高度标尺、地面投影、左上角时间/FPS/坐标 HUD，以及按 9 机编队设计的稳定机体颜色。
 - 右下角信息栏使用 2 行 5 列布局：D1..D9 + STATUS。
 - 时间轴播放、暂停、倍速、拖动跳转。
-- 安全日志按四类展示，并支持类似 Excel/文件夹列表的按列筛选和排序。
+- 安全日志按距离、动作未完成和通用 core warning 五类展示，并支持类似 Excel/文件夹列表的按列筛选和排序。
 - 距离事件沿用 core 的 51cm / 34cm / 17cm 档位，分别对应距离过近、碰撞风险、碰撞警告。
 - 点击安全日志跳转到对应时间。
 - 音乐文件播放和基础时间轴同步。
-- 浏览器 MediaRecorder WebM 导出，目前作为实验功能。
+- 第一次访问显示使用引导，顶部可随时重新打开。
+- `#/guide`、`#/docs`、`#/docs/gui` 和 `#/tutorial/*` 提供静态 Guide、PyFii 文档和教程。
+- 后端异步 MP4 导出，前端只负责创建任务、轮询状态、展示失败和下载。
 
 Canvas 内部虚拟画布固定为 `1200x600`，按容器缩放显示。渲染器位于 `frontend/src/renderer/`，不依赖 Vue，便于后续复用。
+
+静态文档在 Vite 构建时直接导入 `doc/` 和 `doc/tutorial/` 的 Markdown 源，经 `marked` 渲染，并通过 dynamic import 独立打包，避免复制文档或增加模拟器首屏体积。
+
+## 视频渲染封装
+
+`backend/src/pyfii_gui_api/services/video_export.py` 是 GUI 与 core 的边界：
+
+1. 把已解析的 `ProjectRecord` 数据装入 core `DroneTrack`。
+2. 把 GUI 的 2D/3D、FPS、缩放和相机参数转换为现有 renderer config。
+3. 2D 选择 `FiiRender2D`，3D 选择 `FiiRender3D`，统一调用 `save()`。
+4. 单线程任务池控制同时导出的项目数；core renderer 内部仍可按 `PYFII_GUI_VIDEO_RENDER_WORKERS` 并行画帧。
+5. core 负责 OpenCV MP4 编码和现有 ffmpeg 音频封装，GUI 不复制逐帧渲染逻辑。
+
+任务状态存在后端内存中。renderer 当前没有进度回调，所以运行时 `progress_percent` 为 `null`，前端显示不确定进度；完成后为 100%。
 
 ## 开发启动
 
@@ -116,10 +137,17 @@ PYFII_GUI_CORS_ORIGINS=https://gui.example.com
 PYFII_GUI_CORS_ORIGIN_REGEX='^https://.*\.example\.com$'
 PYFII_GUI_CORS_ALLOW_CREDENTIALS=true
 PYFII_GUI_DEFAULT_IMPORT_FPS=60
+PYFII_GUI_TRAJECTORY_WORKERS=4
+PYFII_GUI_VIDEO_EXPORT_JOBS=1
+PYFII_GUI_VIDEO_RENDER_WORKERS=4
 PYFII_GUI_MAX_UPLOAD_BYTES=104857600
 PYFII_GUI_MAX_UNCOMPRESSED_BYTES=524288000
 PYFII_GUI_MAX_ZIP_FILES=5000
+PYFII_GUI_ENABLE_LOCAL_PROJECT_IMPORT=false
+PYFII_GUI_DEPLOY_CONFIG=/path/to/deploy.local.json
 ```
+
+ICP备案配置示例为 `apps/pyfii-gui/deploy.example.json`。示例中的备案字段为空，默认 footer 不存在；只有在 `deploy.local.json` 或 `PYFII_GUI_ICP_BEIAN` / `PYFII_GUI_GONGAN_BEIAN` 中明确填写后才显示。仓库不包含真实备案号。
 
 前端构建环境变量：
 
@@ -146,8 +174,10 @@ https://gui.example.com/api/  -> FastAPI backend
 
 ```bash
 python -m compileall apps/pyfii-gui/backend/src apps/pyfii-gui/backend/scripts
+PYTHONPATH=apps/pyfii-gui/backend/src:src pytest -q apps/pyfii-gui/backend/tests
 cd apps/pyfii-gui/frontend
 npm run build
+npm audit --omit=dev
 ```
 
 批量导入人类作品经验池：
@@ -166,10 +196,11 @@ python apps/pyfii-gui/backend/scripts/batch_import_human_pool.py \
 ## 当前不做
 
 - 不做 Electron。
-- 不做真正 MP4 导出。
+- 不做跨进程持久化视频队列、取消/恢复和精确逐帧进度。
+- 不做专业级音视频编辑和通用转码服务。
 - 不完整复刻旧 OpenCV/cv3d 的全部 3D 机体细节。
 - 不把 GUI 后端或前端移入 `src/pyfii/`。
 - 不为了 GUI 兼容旧项目而修改 core 行为。
-- 不把浏览器 WebM 导出当作最终视频交付链路。
+- 不保证浏览器 Three.js 预览和 core OpenCV 3D 导出逐像素一致。
 
-未来可在保持 core/GUI 分离的前提下补充更稳健的 WebM 导出队列、Electron + ffmpeg MP4 导出、更完整的 Three.js 3D 交互和更完整的 F400/F600 机体外形复刻。
+未来可在保持 core/GUI 分离的前提下补充持久化任务队列、core 渲染进度回调、更完整的 Three.js 3D 交互和更完整的 F400/F600 机体外形复刻。

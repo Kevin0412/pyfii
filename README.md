@@ -14,8 +14,10 @@
 
 - **二维三视图模拟**：top / front / right 三个视角实时预览无人机编队飞行轨迹
 - **加速度感知模拟**：模拟基于实际加速度数据，真实还原无人机飞行动态
-- **清晰的报错展示**：安全距离检测结果按四类分级展示（距离过近 / 碰撞风险 / 碰撞警告），支持按列筛选和排序，点击事件可跳转到对应时间点
-- 上传 Fii 项目 zip，浏览器端完成轨迹解析、安全分析和可视化预览
+- **清晰的 error / warning 展示**：距离、动作未完成和其他 core warning 分开展示，支持按列筛选和排序，点击带时间事件可跳转
+- 上传 Fii 项目 zip，由 FastAPI 后端调用 pyfii core 完成轨迹解析和安全分析，浏览器提供可视化预览
+- 首次使用 Guide，以及直接复用仓库 Markdown 源的 PyFii 文档和教程静态页
+- 复用 core `FiiRender2D/FiiRender3D` 的后端 MP4 导出
 
 GUI 作为 pyfii core 的上层应用，依赖方向为：
 
@@ -53,6 +55,7 @@ FastAPI、Vue、Vite 等 GUI 依赖都放在 `apps/pyfii-gui/` 下，不放进 `
 - [进阶用法](doc/tutorial/more.md)
 - [灯光编写](doc/tutorial/light.md)
 - [Pyfii GUI 原型](doc/pyfii_gui.md)
+- [Pyfii GUI 使用引导](doc/pyfii_gui_guide.md)
 - [AI 编舞探索](doc/ai_choreography_exploration.md)
 
 ## 目录结构说明

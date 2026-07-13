@@ -8,7 +8,7 @@ Pyfii core 仍然保持独立 PyPI 库定位。GUI 的依赖方向只允许是�
 pyfii-gui -> pyfii core
 ```
 
-GUI 后端只作为 `pyfii.read.read_fii()` 的薄适配层，不把 FastAPI、Vue、Electron 或前端代码放进 `src/pyfii/`。
+GUI 后端是 `read_fii()`、无窗口校验和 `FiiRender2D/FiiRender3D` 的薄适配层，不把 FastAPI、Vue、Electron 或前端代码放进 `src/pyfii/`。
 
 ## 开发启动
 
@@ -59,6 +59,9 @@ PYFII_GUI_CORS_ORIGINS=https://gui.example.com,https://admin.example.com
 PYFII_GUI_CORS_ORIGIN_REGEX='^https://.*\.example\.com$'
 PYFII_GUI_CORS_ALLOW_CREDENTIALS=true
 PYFII_GUI_DEFAULT_IMPORT_FPS=60
+PYFII_GUI_TRAJECTORY_WORKERS=4
+PYFII_GUI_VIDEO_EXPORT_JOBS=1
+PYFII_GUI_VIDEO_RENDER_WORKERS=4
 PYFII_GUI_MAX_UPLOAD_BYTES=104857600
 PYFII_GUI_MAX_UNCOMPRESSED_BYTES=524288000
 PYFII_GUI_MAX_ZIP_FILES=5000
@@ -112,13 +115,13 @@ tools/choreo_agent/agent_projects/stability_flash_3/output
 
 ## 部署备案配置
 
-备案号属于部署实例配置，不提交到 git。复制示例文件：
+备案号属于部署实例配置，不提交到 git。默认配置为空，前端不会显示备案 footer。需要启用时复制示例文件：
 
 ```bash
 cp apps/pyfii-gui/deploy.example.json apps/pyfii-gui/deploy.local.json
 ```
 
-填写：
+填写部署实例自己的信息；下面仍是占位示例，不是真实备案号：
 
 ```json
 {
@@ -140,7 +143,7 @@ PYFII_GUI_GONGAN_URL=
 
 ## 服务器部署建议
 
-启动后端（生产环境**不要加 `--reload`**，否则上传项目后 WatchFiles 检测 `.runtime/` 下的文件变化会触发重载，内存缓存清空导致 tracks/safety/music 全部 404）：
+启动后端（生产环境**不要加 `--reload`**，否则上传项目后 WatchFiles 检测 `.runtime/` 下的文件变化会触发重载，内存缓存清空导致 tracks/safety/music/video exports 全部失效）：
 
 ```bash
 cd apps/pyfii-gui/backend
@@ -159,10 +162,24 @@ https://gui.example.com/api/  -> FastAPI backend
 - 前端：`VITE_API_BASE_URL=https://api.example.com`
 - 后端：`PYFII_GUI_CORS_ORIGINS=https://gui.example.com`
 
+当前项目和视频任务使用进程内缓存，生产环境应先使用单个 Uvicorn worker。多 worker 或多实例部署需要先增加共享项目存储和任务队列，否则同一项目的后续请求可能落到另一个进程。
+
+## Guide 与静态文档
+
+模拟器第一次打开会显示四步使用引导，之后仍可从顶部“使用引导”按钮重新打开。静态入口使用 hash 路由，不要求反向代理额外处理 history fallback：
+
+- `#/guide`：完整 GUI 使用引导和常见问题。
+- `#/docs`：直接打包仓库 `doc/doc_zh_CN.md`。
+- `#/docs/gui`：GUI 架构和部署说明。
+- `#/tutorial`：教程目录；各子页直接打包 `doc/tutorial/*.md`。
+
+文档在构建时从原 Markdown 源导入，并按需加载为独立前端 chunk，避免维护一套复制内容，也不增加模拟器首次加载的文档体积。
+
 ## 当前支持
 
 - 上传 Fii 项目 zip。
 - 默认中文界面，支持中文/英文切换。
+- 首次使用 Guide，以及可访问的 PyFii 文档和教程静态页。
 - 安全解压并调用 `read_fii()` 解析轨迹。
 - GUI 默认只把一半 CPU 核心分配给单次轨迹解析，为并发请求预留资源；可通过 `PYFII_GUI_TRAJECTORY_WORKERS` 调整。
 - 调用 `show(show=False)` 走 pyfii core 的无渲染距离检查。
@@ -174,13 +191,34 @@ https://gui.example.com/api/  -> FastAPI backend
 - 3D 模式显示高度标尺、地面投影、左上角时间/FPS/坐标 HUD，以及按 9 机编队设计的稳定机体颜色。
 - 右下角 2 行 5 列无人机信息栏：D1..D9 + STATUS。
 - 安全日志以 pyfii core warning 为准，GUI 后端只做结构化整理。
-- 安全日志按四类展示，并支持类似 Excel/文件夹列表的按列筛选和排序。
+- 安全日志按距离、动作未完成和通用 core warning 五类展示，并支持类似 Excel/文件夹列表的按列筛选和排序。
+- 新 XML 解析器产生的未拼接积木 warning 会作为 `core_warning` 展示；warning 不阻止预览，工程导入失败等 fatal error 仍终止当前操作。
 - 距离事件沿用 core 的 51cm / 34cm / 17cm 档位，分别对应距离过近、碰撞风险、碰撞警告。
 - 点击安全日志跳转到对应时间。
 - 音乐文件播放和基础时间轴同步。
-- 浏览器 MediaRecorder WebM 导出占位能力，当前作为实验功能使用。
+- 后端异步 MP4 导出。2D/3D 分别复用 core 的 `DroneTrack + FiiRender2D/FiiRender3D.save()`，前端创建任务、轮询状态并下载结果，不再使用浏览器 MediaRecorder 录屏。
+- core 能定位到音乐且服务器可执行 ffmpeg 时，视频导出沿用 core 的音频封装流程。
+
+视频接口：
+
+- `POST /api/projects/{project_id}/video-exports`：创建任务。
+- `GET /api/projects/{project_id}/video-exports/{export_id}`：读取 `queued/running/completed/failed` 状态。
+- `GET /api/projects/{project_id}/video-exports/{export_id}/download`：下载完成的 MP4。
+
+现有 core renderer 没有进度回调，因此 `running` 时前端显示真实的不确定进度，不伪造百分比；完成时为 100%。
 
 ## 批量导入回归
+
+后端单元/API 测试和前端构建：
+
+```bash
+cd <repo-root>
+PYTHONPATH=apps/pyfii-gui/backend/src:src pytest -q apps/pyfii-gui/backend/tests
+python -m compileall -q apps/pyfii-gui/backend/src apps/pyfii-gui/backend/tests
+cd apps/pyfii-gui/frontend
+npm run build
+npm audit --omit=dev
+```
 
 可用后端脚本把 `doc/ai_choreography_exploration.md` 中的人类作品经验池跑一遍，覆盖 clean zip 打包、安全解压、`read_fii()`、`show(show=False)`、安全日志和轨迹 JSON 序列化：
 
@@ -198,13 +236,13 @@ python apps/pyfii-gui/backend/scripts/batch_import_human_pool.py \
 ## 当前不支持
 
 - Electron。
-- MP4 导出。
-- 专业级音频/视频导出同步和离线转码。
+- 跨进程共享的持久化项目缓存、任务队列、取消/恢复和精确逐帧进度。
+- 专业级音频/视频编辑、时间线混音和多格式转码。
 - 完整复刻旧 OpenCV/cv3d 的全部 3D 机体细节。
+- 保证浏览器 Three.js 预览与 core OpenCV 3D 视频逐像素一致；两者共享轨迹和相机语义，但使用不同绘制后端。
 
 ## 未来计划
 
-- Electron + ffmpeg MP4 导出。
-- 更稳健的 WebM 导出队列和导出错误提示。
+- 持久化视频任务、取消和 core 渲染进度回调。
 - 更完整的 Three.js 3D 交互、轨迹尾迹和相机预设。
 - 更完整的 F400/F600 机体外形复刻。
