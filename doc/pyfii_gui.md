@@ -53,7 +53,7 @@ GUI 后端会把这些 warning 结构化成前端可展示的事件，例如 `ac
 
 ## 前端职责
 
-前端是单页模拟器，主要能力：
+前端是包含门户、静态文档和飞行工作台的单页应用。站点首页 `/` 提供项目简介、GitHub、B 站视频教程和主要入口，`/studio` 承载原模拟器。主要能力：
 
 - 上传 Fii 项目 zip。
 - 展示项目名、field、device、无人机数量、时长、FPS、安全等级。
@@ -70,7 +70,8 @@ GUI 后端会把这些 warning 结构化成前端可展示的事件，例如 `ac
 - 点击安全日志跳转到对应时间。
 - 音乐文件播放和基础时间轴同步。
 - 第一次访问显示使用引导，顶部可随时重新打开。
-- `#/guide`、`#/docs`、`#/docs/gui` 和 `#/tutorial/*` 提供静态 Guide、PyFii 文档和教程。
+- `/guide`、`/docs`、`/docs/gui` 和 `/tutorial/*` 提供静态 Guide、PyFii 文档和教程。
+- `/doc` 兼容跳转到 `/docs`，`/gui` 兼容跳转到 `/studio`；旧 `#/...` 文档链接也会自动转换。
 - 后端异步 MP4 导出，前端只负责创建任务、轮询状态、展示失败和下载。
 
 Canvas 内部虚拟画布固定为 `1200x600`，按容器缩放显示。渲染器位于 `frontend/src/renderer/`，不依赖 Vue，便于后续复用。
@@ -147,7 +148,7 @@ PYFII_GUI_ENABLE_LOCAL_PROJECT_IMPORT=false
 PYFII_GUI_DEPLOY_CONFIG=/path/to/deploy.local.json
 ```
 
-ICP备案配置示例为 `apps/pyfii-gui/deploy.example.json`。示例中的备案字段为空，默认 footer 不存在；只有在 `deploy.local.json` 或 `PYFII_GUI_ICP_BEIAN` / `PYFII_GUI_GONGAN_BEIAN` 中明确填写后才显示。仓库不包含真实备案号。
+ICP备案配置示例为 `apps/pyfii-gui/deploy.example.json`。示例中的备案字段为空，默认备案区域不存在；只有在 `deploy.local.json` 或 `PYFII_GUI_ICP_BEIAN` / `PYFII_GUI_GONGAN_BEIAN` 中明确填写后才在门户页 footer 显示。仓库不包含真实备案号，工作台和文档页也不显示备案信息。
 
 前端构建环境变量：
 
@@ -167,6 +168,8 @@ https://gui.example.com/api/  -> FastAPI backend
 ```
 
 这种方式不需要在前端写死 API 主机。
+
+无 hash 页面使用浏览器 History API。部署前端静态文件时，需要配置类似 Nginx `try_files $uri $uri/ /index.html` 的 SPA fallback，确保直接访问 `/guide`、`/docs`、`/tutorial` 和 `/studio` 仍返回前端入口。Vite 开发服务器已自动处理。
 
 ## 回归测试
 

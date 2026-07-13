@@ -8,6 +8,8 @@
 
 `apps/pyfii-gui/` 是 pyfii 的 Web GUI，已成功部署上线：**[pyfii.cn](https://pyfii.cn/)**
 
+首页是 PyFii 门户；使用引导、文档、教程和飞行工作台分别位于 `/guide`、`/docs`、`/tutorial` 和 `/studio`。
+
 ![Pyfii GUI 截图](docs/images/pyfii-gui-screenshot.png)
 
 支持功能：
@@ -15,6 +17,7 @@
 - **二维三视图模拟**：top / front / right 三个视角实时预览无人机编队飞行轨迹
 - **加速度感知模拟**：模拟基于实际加速度数据，真实还原无人机飞行动态
 - **清晰的 error / warning 展示**：距离、动作未完成和其他 core warning 分开展示，支持按列筛选和排序，点击带时间事件可跳转
+- 门户页提供项目简介、GitHub 入口和 B 站视频教程；备案信息保持部署配置为空时不显示
 - 上传 Fii 项目 zip，由 FastAPI 后端调用 pyfii core 完成轨迹解析和安全分析，浏览器提供可视化预览
 - 首次使用 Guide，以及直接复用仓库 Markdown 源的 PyFii 文档和教程静态页
 - 复用 core `FiiRender2D/FiiRender3D` 的后端 MP4 导出

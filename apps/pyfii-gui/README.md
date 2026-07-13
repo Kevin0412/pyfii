@@ -115,7 +115,7 @@ tools/choreo_agent/agent_projects/stability_flash_3/output
 
 ## 部署备案配置
 
-备案号属于部署实例配置，不提交到 git。默认配置为空，前端不会显示备案 footer。需要启用时复制示例文件：
+备案号属于部署实例配置，不提交到 git。默认配置为空，门户页不会显示备案信息。需要启用时复制示例文件：
 
 ```bash
 cp apps/pyfii-gui/deploy.example.json apps/pyfii-gui/deploy.local.json
@@ -162,22 +162,39 @@ https://gui.example.com/api/  -> FastAPI backend
 - 前端：`VITE_API_BASE_URL=https://api.example.com`
 - 后端：`PYFII_GUI_CORS_ORIGINS=https://gui.example.com`
 
+前端使用 History API 路由。生产静态服务器必须把不存在的文件路径回退到 `index.html`，否则直接打开 `/guide`、`/docs` 或 `/studio` 会返回 404。Nginx 的前端 location 可使用：
+
+```nginx
+location / {
+    root /path/to/pyfii-gui/frontend/dist;
+    try_files $uri $uri/ /index.html;
+}
+```
+
+`/api/` 仍应由更具体的 location 反向代理到 FastAPI。Vite 开发服务器已经提供该回退，不需要额外配置。
+
 当前项目和视频任务使用进程内缓存，生产环境应先使用单个 Uvicorn worker。多 worker 或多实例部署需要先增加共享项目存储和任务队列，否则同一项目的后续请求可能落到另一个进程。
 
 ## Guide 与静态文档
 
-模拟器第一次打开会显示四步使用引导，之后仍可从顶部“使用引导”按钮重新打开。静态入口使用 hash 路由，不要求反向代理额外处理 history fallback：
+站点首页 `/` 是门户页，包含项目简介、主要页面入口、GitHub 链接和 B 站视频教程。模拟器第一次打开会显示四步使用引导，之后仍可从工作台顶部“使用引导”按钮重新打开。主要入口为：
 
-- `#/guide`：完整 GUI 使用引导和常见问题。
-- `#/docs`：直接打包仓库 `doc/doc_zh_CN.md`。
-- `#/docs/gui`：GUI 架构和部署说明。
-- `#/tutorial`：教程目录；各子页直接打包 `doc/tutorial/*.md`。
+- `/guide`：完整 GUI 使用引导和常见问题。
+- `/docs`：直接打包仓库 `doc/doc_zh_CN.md`；`/doc` 是兼容入口。
+- `/docs/gui`：GUI 架构和部署说明。
+- `/tutorial`：教程目录；各子页直接打包 `doc/tutorial/*.md`。
+- `/studio`：工程校验、飞行预览和视频导出工作台；`/gui` 是兼容入口。
+
+旧的 `#/guide`、`#/docs`、`#/tutorial/*` 链接会在浏览器中自动转换为无 hash 的新路径。
 
 文档在构建时从原 Markdown 源导入，并按需加载为独立前端 chunk，避免维护一套复制内容，也不增加模拟器首次加载的文档体积。
+
+备案信息只显示在门户页 footer。只有后端返回了显式配置的 ICP 或公安备案号时该区域才存在；文档页和工作台不重复展示。
 
 ## 当前支持
 
 - 上传 Fii 项目 zip。
+- 项目门户页和跨页面一致的站点导航。
 - 默认中文界面，支持中文/英文切换。
 - 首次使用 Guide，以及可访问的 PyFii 文档和教程静态页。
 - 安全解压并调用 `read_fii()` 解析轨迹。
