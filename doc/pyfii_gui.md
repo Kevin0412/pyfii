@@ -176,6 +176,7 @@ https://gui.example.com/api/  -> FastAPI backend
 python -m compileall apps/pyfii-gui/backend/src apps/pyfii-gui/backend/scripts
 PYTHONPATH=apps/pyfii-gui/backend/src:src pytest -q apps/pyfii-gui/backend/tests
 cd apps/pyfii-gui/frontend
+npm run typecheck
 npm run build
 npm audit --omit=dev
 ```
