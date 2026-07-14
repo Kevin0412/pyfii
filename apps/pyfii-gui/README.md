@@ -196,7 +196,7 @@ location / {
 
 - 上传 Fii 项目 zip。
 - 项目门户页和跨页面一致的站点导航。
-- 默认中文界面，支持中文/英文切换。
+- 未保存主题选择时，门户、Guide、文档和教程默认浅色，飞行工作台默认深色；支持手动切换并记住用户选择。默认中文界面，支持中文/英文切换。
 - 首次使用 Guide，以及可访问的 PyFii 文档和教程静态页。
 - 安全解压并调用 `read_fii()` 解析轨迹。
 - GUI 默认只把一半 CPU 核心分配给单次轨迹解析，为并发请求预留资源；可通过 `PYFII_GUI_TRAJECTORY_WORKERS` 调整。
@@ -223,7 +223,7 @@ location / {
 - `GET /api/projects/{project_id}/video-exports/{export_id}`：读取 `queued/running/completed/failed` 状态。
 - `GET /api/projects/{project_id}/video-exports/{export_id}/download`：下载完成的 MP4。
 
-现有 core renderer 没有进度回调，因此 `running` 时前端显示真实的不确定进度，不伪造百分比；完成时为 100%。
+core renderer 在每帧写入后通过可选回调报告真实帧进度。后端把逐帧阶段映射为 0–95%，剩余区间表示视频/音频封装，任务完成时为 100%；排队、渲染和封装在前端进度条中分别显示。
 
 ## 批量导入回归
 
@@ -255,13 +255,13 @@ python apps/pyfii-gui/backend/scripts/batch_import_human_pool.py \
 ## 当前不支持
 
 - Electron。
-- 跨进程共享的持久化项目缓存、任务队列、取消/恢复和精确逐帧进度。
+- 跨进程共享的持久化项目缓存、任务队列、取消/恢复和音频封装内部的细粒度进度。
 - 专业级音频/视频编辑、时间线混音和多格式转码。
 - 完整复刻旧 OpenCV/cv3d 的全部 3D 机体细节。
 - 保证浏览器 Three.js 预览与 core OpenCV 3D 视频逐像素一致；两者共享轨迹和相机语义，但使用不同绘制后端。
 
 ## 未来计划
 
-- 持久化视频任务、取消和 core 渲染进度回调。
+- 持久化视频任务、取消和音频封装进度。
 - 更完整的 Three.js 3D 交互、轨迹尾迹和相机预设。
 - 更完整的 F400/F600 机体外形复刻。

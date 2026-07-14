@@ -55,6 +55,8 @@ GUI 后端会把这些 warning 结构化成前端可展示的事件，例如 `ac
 
 前端是包含门户、静态文档和飞行工作台的单页应用。站点首页 `/` 提供项目简介、GitHub、B 站视频教程和主要入口，`/studio` 承载原模拟器。主要能力：
 
+没有保存过主题偏好时，内容页面默认浅色，`/studio` 默认深色；用户手动切换后以本地保存的选择为准。
+
 - 上传 Fii 项目 zip。
 - 展示项目名、field、device、无人机数量、时长、FPS、安全等级。
 - 请求并缓存轨迹和安全日志。
@@ -88,7 +90,7 @@ Canvas 内部虚拟画布固定为 `1200x600`，按容器缩放显示。渲染�
 4. 单线程任务池控制同时导出的项目数；core renderer 内部仍可按 `PYFII_GUI_VIDEO_RENDER_WORKERS` 并行画帧。
 5. core 负责 OpenCV MP4 编码和现有 ffmpeg 音频封装，GUI 不复制逐帧渲染逻辑。
 
-任务状态存在后端内存中。renderer 当前没有进度回调，所以运行时 `progress_percent` 为 `null`，前端显示不确定进度；完成后为 100%。
+任务状态存在后端内存中。`FiiRender.save()` 的可选回调在主进程每写入一帧后报告 `(completed, total)`，不改变未使用回调时的 core 行为。GUI 将真实帧进度映射为 0–95%，剩余区间用于视频/音频封装，完成后为 100%。
 
 ## 开发启动
 
@@ -200,11 +202,11 @@ python apps/pyfii-gui/backend/scripts/batch_import_human_pool.py \
 ## 当前不做
 
 - 不做 Electron。
-- 不做跨进程持久化视频队列、取消/恢复和精确逐帧进度。
+- 不做跨进程持久化视频队列、取消/恢复和音频封装内部的细粒度进度。
 - 不做专业级音视频编辑和通用转码服务。
 - 不完整复刻旧 OpenCV/cv3d 的全部 3D 机体细节。
 - 不把 GUI 后端或前端移入 `src/pyfii/`。
 - 不为了 GUI 兼容旧项目而修改 core 行为。
 - 不保证浏览器 Three.js 预览和 core OpenCV 3D 导出逐像素一致。
 
-未来可在保持 core/GUI 分离的前提下补充持久化任务队列、core 渲染进度回调、更完整的 Three.js 3D 交互和更完整的 F400/F600 机体外形复刻。
+未来可在保持 core/GUI 分离的前提下补充持久化任务队列、音频封装进度、更完整的 Three.js 3D 交互和更完整的 F400/F600 机体外形复刻。
