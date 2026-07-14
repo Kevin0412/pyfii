@@ -72,10 +72,18 @@ check_cmd() {
   fi
 }
 
+check_optional_cmd() {
+  if ! command -v "$1" &>/dev/null; then
+    warn "$2"
+  fi
+}
+
 step "检查运行环境..."
 check_cmd "$PYTHON_BIN"
 check_cmd node
 check_cmd npm
+check_optional_cmd ffmpeg \
+  "未找到 ffmpeg：无声 MP4 仍可导出，但包含音乐的工程无法合并音频。Ubuntu/Debian 可运行 sudo apt install ffmpeg。"
 
 # ── 依赖安装 ──────────────────────────────────────────────
 if ! $SKIP_INSTALL; then

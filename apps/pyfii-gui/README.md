@@ -29,6 +29,8 @@ GUI 后端是 `read_fii()`、无窗口校验和 `FiiRender2D/FiiRender3D` 的薄
 
 每次启动都会在 `apps/pyfii-gui/logs/<启动时间>-<进程号>/` 下分别保存 `backend.log` 和 `frontend.log`；日志每行带本地时间和时区，同时保留终端实时输出。可用 `PYFII_GUI_LOG_DIR=/path/to/logs` 修改日志根目录。
 
+启动脚本会检查 Python、Node.js 和 npm，缺少这些必需命令时停止启动。FFmpeg 只用于给导出视频合并工程音乐，因此未安装时脚本会给出 warning，但仍会继续启动，无声 MP4 导出不受影响。
+
 可通过 `PYTHON=/path/to/python` 指定 Python 环境。其余 `PYFII_GUI_*` 部署配置会原样传给后端。
 
 ### 分别启动
