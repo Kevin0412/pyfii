@@ -5,6 +5,7 @@
 # 用法:
 #   ./start.sh              # 默认: backend :8000 + frontend :5173
 #   ./start.sh --port 9000  # 自定义后端端口
+#   ./start.sh --frontend-port 5174
 #   ./start.sh --no-install # 跳过依赖安装
 #   ./start.sh --help
 #
@@ -14,6 +15,7 @@ set -euo pipefail
 BACKEND_PORT=8000
 FRONTEND_PORT=5173
 SKIP_INSTALL=false
+PYTHON_BIN="${PYTHON:-python3}"
 
 # ── 路径推导 ──────────────────────────────────────────────
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -31,13 +33,21 @@ step()  { echo -e "${CYAN}==>${NC} $*"; }
 # ── 参数解析 ──────────────────────────────────────────────
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --port)       BACKEND_PORT="$2"; shift 2 ;;
+    --port)
+      [[ $# -ge 2 ]] || { warn "--port 需要端口号"; exit 1; }
+      BACKEND_PORT="$2"; shift 2
+      ;;
+    --frontend-port)
+      [[ $# -ge 2 ]] || { warn "--frontend-port 需要端口号"; exit 1; }
+      FRONTEND_PORT="$2"; shift 2
+      ;;
     --no-install) SKIP_INSTALL=true; shift ;;
     -h|--help)
       echo "用法: $0 [选项]"
       echo ""
       echo "选项:"
       echo "  --port PORT      后端端口 (默认 8000)"
+      echo "  --frontend-port PORT  前端端口 (默认 5173)"
       echo "  --no-install     跳过依赖安装"
       echo "  -h, --help       显示帮助"
       exit 0
@@ -45,6 +55,13 @@ while [[ $# -gt 0 ]]; do
     *) warn "未知参数: $1"; exit 1 ;;
   esac
 done
+
+valid_port() {
+  [[ "$1" =~ ^[0-9]+$ ]] && (( 1 <= 10#$1 && 10#$1 <= 65535 ))
+}
+
+valid_port "$BACKEND_PORT" || { warn "无效的后端端口: $BACKEND_PORT"; exit 1; }
+valid_port "$FRONTEND_PORT" || { warn "无效的前端端口: $FRONTEND_PORT"; exit 1; }
 
 # ── 环境检查 ──────────────────────────────────────────────
 check_cmd() {
@@ -55,46 +72,61 @@ check_cmd() {
 }
 
 step "检查运行环境..."
-check_cmd python3
+check_cmd "$PYTHON_BIN"
 check_cmd node
 check_cmd npm
 
 # ── 依赖安装 ──────────────────────────────────────────────
 if ! $SKIP_INSTALL; then
   step "安装 pyfii core (editable)..."
-  (cd "$REPO_ROOT" && pip install -e . 2>&1 | tail -2)
+  "$PYTHON_BIN" -m pip install -e "$REPO_ROOT"
 
   step "安装 backend 依赖..."
-  (cd "$BACKEND_DIR" && pip install -e . 2>&1 | tail -2)
+  "$PYTHON_BIN" -m pip install -e "$BACKEND_DIR"
 
   step "安装 frontend 依赖..."
-  (cd "$FRONTEND_DIR" && npm install --silent)
+  npm --prefix "$FRONTEND_DIR" install
+fi
+
+if [[ ! -x "$FRONTEND_DIR/node_modules/.bin/vite" ]]; then
+  warn "前端依赖未安装，请去掉 --no-install 后重试。"
+  exit 1
 fi
 
 # ── 清理函数 ──────────────────────────────────────────────
 cleanup() {
+  local status=$?
+  trap - EXIT INT TERM
   info "正在停止服务..."
   [ -n "${BACKEND_PID:-}" ] && kill "$BACKEND_PID" 2>/dev/null || true
   [ -n "${FRONTEND_PID:-}" ] && kill "$FRONTEND_PID" 2>/dev/null || true
   wait "${BACKEND_PID:-}" "${FRONTEND_PID:-}" 2>/dev/null || true
   info "已停止。"
+  exit "$status"
 }
-trap cleanup EXIT INT TERM
+trap cleanup EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
 
 # ── 启动服务 ──────────────────────────────────────────────
 
 step "启动后端 (FastAPI :$BACKEND_PORT)..."
-PYTHONPATH="$BACKEND_DIR/src:$REPO_ROOT/src" \
-  python3 -m uvicorn pyfii_gui_api.main:app \
-  --host 0.0.0.0 --port "$BACKEND_PORT" \
-  --log-level info &
+(
+  cd "$REPO_ROOT"
+  export PYTHONPATH="$BACKEND_DIR/src:$REPO_ROOT/src${PYTHONPATH:+:$PYTHONPATH}"
+  exec "$PYTHON_BIN" -m uvicorn pyfii_gui_api.main:app \
+    --host 0.0.0.0 --port "$BACKEND_PORT" --log-level info
+) &
 BACKEND_PID=$!
 
 step "启动前端 (Vite :$FRONTEND_PORT)..."
-(cd "$FRONTEND_DIR" && \
-  VITE_DEV_PORT="$FRONTEND_PORT" \
-  VITE_API_PROXY_TARGET="http://localhost:$BACKEND_PORT" \
-  npm run dev -- --host 0.0.0.0) &
+(
+  cd "$FRONTEND_DIR"
+  export VITE_DEV_HOST=0.0.0.0
+  export VITE_DEV_PORT="$FRONTEND_PORT"
+  export VITE_API_PROXY_TARGET="http://localhost:$BACKEND_PORT"
+  exec ./node_modules/.bin/vite
+) &
 FRONTEND_PID=$!
 
 echo ""
@@ -106,4 +138,9 @@ info "  Ctrl+C    停止所有服务"
 info "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo ""
 
-wait
+set +e
+wait -n "$BACKEND_PID" "$FRONTEND_PID"
+STATUS=$?
+set -e
+warn "有服务已退出，正在停止另一端。"
+exit "$STATUS"

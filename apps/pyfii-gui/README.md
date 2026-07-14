@@ -12,6 +12,25 @@ GUI 后端是 `read_fii()`、无窗口校验和 `FiiRender2D/FiiRender3D` 的薄
 
 ## 开发启动
 
+### 一键启动
+
+从仓库根目录运行：
+
+```bash
+./apps/pyfii-gui/start.sh
+```
+
+脚本会安装 core、GUI 后端和前端依赖，然后同时启动后端 `:8000` 与前端 `:5173`；按 `Ctrl+C` 会停止两个服务。依赖已经安装时可以跳过安装，也可以调整端口：
+
+```bash
+./apps/pyfii-gui/start.sh --no-install
+./apps/pyfii-gui/start.sh --port 9000 --frontend-port 5174
+```
+
+可通过 `PYTHON=/path/to/python` 指定 Python 环境。其余 `PYFII_GUI_*` 部署配置会原样传给后端。
+
+### 分别启动
+
 后端依赖当前仓库的 PyFii 1.6 renderer。请从仓库根目录先安装 core，再安装 GUI backend：
 
 ```bash
