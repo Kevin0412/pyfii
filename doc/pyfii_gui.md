@@ -154,7 +154,7 @@ PYFII_GUI_ENABLE_LOCAL_PROJECT_IMPORT=false
 PYFII_GUI_DEPLOY_CONFIG=/path/to/deploy.json
 ```
 
-ICP备案配置示例为 `apps/pyfii-gui/deploy.example.json`。复制得到的 `apps/pyfii-gui/deploy.json` 是被 git 忽略的云服务器实例配置；示例中的备案字段为空，默认备案区域不存在。只有在该文件或 `PYFII_GUI_ICP_BEIAN` / `PYFII_GUI_GONGAN_BEIAN` 中明确填写后才在门户页 footer 显示，公安备案项同时显示标准备案图标。仓库不包含真实备案号，工作台和文档页也不显示备案信息。
+ICP备案配置示例为 `apps/pyfii-gui/deploy.example.json`。复制得到的 `apps/pyfii-gui/deploy.json` 是被 git 忽略的云服务器实例配置；其中 `domain` 只填写主机名，Vite 开发服务器和 `vite preview` 会将其加入 `allowedHosts`。示例中的备案字段为空，默认备案区域不存在。只有在该文件或 `PYFII_GUI_ICP_BEIAN` / `PYFII_GUI_GONGAN_BEIAN` 中明确填写后才在门户页 footer 显示，公安备案项同时显示标准备案图标。仓库不包含真实备案号，工作台和文档页也不显示备案信息。
 
 前端构建环境变量：
 

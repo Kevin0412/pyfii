@@ -145,6 +145,7 @@ cp apps/pyfii-gui/deploy.example.json apps/pyfii-gui/deploy.json
 
 ```json
 {
+  "domain": "gui.example.com",
   "icp_beian": "ICP备案号",
   "icp_url": "https://beian.miit.gov.cn/",
   "gongan_beian": "公安备案号",
@@ -152,7 +153,9 @@ cp apps/pyfii-gui/deploy.example.json apps/pyfii-gui/deploy.json
 }
 ```
 
-`deploy.json` 是云服务器实例的本地配置，已被 `.gitignore` 忽略；后端默认读取该文件。也可以通过 `PYFII_GUI_DEPLOY_CONFIG` 指向服务器上的其他路径，或通过环境变量逐项覆盖：
+`domain` 只填写主机名，不带 `https://`、端口或路径。Vite 开发服务器和 `vite preview` 会把非空值加入 `allowedHosts`；修改后需要重启前端进程。正式使用 Nginx 提供构建产物时，域名放行仍由 Nginx 配置负责。
+
+`deploy.json` 是云服务器实例的本地配置，已被 `.gitignore` 忽略；后端和 Vite 默认读取该文件。也可以通过 `PYFII_GUI_DEPLOY_CONFIG` 指向服务器上的其他路径，或通过环境变量逐项覆盖备案字段：
 
 ```bash
 PYFII_GUI_ICP_BEIAN=
