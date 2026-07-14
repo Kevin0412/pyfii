@@ -1,14 +1,15 @@
 :root {
-  color-scheme: dark;
+  color-scheme: light;
   font-family: "JetBrains Mono", "SFMono-Regular", Consolas, "Liberation Mono", monospace;
-  background: #090909;
-  color: #e8e8e8;
+  background: #f3f3f3;
+  color: #151515;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
 }
 
 body[data-theme="dark"] {
   color-scheme: dark;
+  background: #090909;
 }
 
 body[data-theme="light"] {

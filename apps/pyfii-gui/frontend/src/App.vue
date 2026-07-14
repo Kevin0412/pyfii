@@ -27,9 +27,11 @@ const ui = useUiStore();
 const route = ref<AppRoute>(
   appRouteFromPath(legacyPathFromHash(window.location.hash) ?? window.location.pathname),
 );
+ui.applyDefaultTheme(route.value.page === "studio" ? "dark" : "light");
 
 function syncRoute(): void {
   route.value = appRouteFromPath(window.location.pathname);
+  ui.applyDefaultTheme(route.value.page === "studio" ? "dark" : "light");
 }
 
 function normalizeInitialLocation(): void {

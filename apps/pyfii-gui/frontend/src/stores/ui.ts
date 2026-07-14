@@ -14,12 +14,13 @@ const THEME_STORAGE_KEY = "pyfii-gui-theme";
 const LOCALE_STORAGE_KEY = "pyfii-gui-locale-v2";
 const GUIDE_STORAGE_KEY = "pyfii-gui-guide-seen-v1";
 
-function savedTheme(): ThemeMode {
+function storedTheme(): ThemeMode | null {
   if (typeof window === "undefined") {
-    return "dark";
+    return null;
   }
 
-  return window.localStorage.getItem(THEME_STORAGE_KEY) === "light" ? "light" : "dark";
+  const theme = window.localStorage.getItem(THEME_STORAGE_KEY);
+  return theme === "dark" || theme === "light" ? theme : null;
 }
 
 function savedLocale(): LocaleMode {
@@ -39,7 +40,8 @@ function shouldOpenGuide(): boolean {
 
 export const useUiStore = defineStore("ui", {
   state: () => ({
-    theme: savedTheme() as ThemeMode,
+    theme: (storedTheme() ?? "light") as ThemeMode,
+    themePreferenceSaved: storedTheme() !== null,
     locale: savedLocale() as LocaleMode,
     guideOpen: shouldOpenGuide(),
     localProjectImportEnabled: false,
@@ -71,7 +73,13 @@ export const useUiStore = defineStore("ui", {
   actions: {
     setTheme(theme: ThemeMode) {
       this.theme = theme;
+      this.themePreferenceSaved = true;
       window.localStorage.setItem(THEME_STORAGE_KEY, theme);
+    },
+    applyDefaultTheme(theme: ThemeMode) {
+      if (!this.themePreferenceSaved) {
+        this.theme = theme;
+      }
     },
     toggleTheme() {
       this.setTheme(this.theme === "dark" ? "light" : "dark");
