@@ -25,18 +25,22 @@
         @contextmenu.prevent
       />
       <div v-if="player.renderMode === 'three3d'" class="three-hud">
-        <span>A:{{ player.viewAngleA.toFixed(0) }}</span>
-        <span>B:{{ player.viewAngleB.toFixed(0) }}</span>
-        <span>T+{{ (player.currentTimeMs / 1000).toFixed(3) }}</span>
-        <span>FPS:{{ renderFpsText }}</span>
-        <span
-          v-for="drone in hudDrones"
-          :key="drone.id"
-          class="hud-drone"
-          :style="{ color: droneColorCss(drone.id) }"
-        >
-          D{{ drone.id }}({{ drone.xCm.toFixed(0) }},{{ drone.yCm.toFixed(0) }},{{ drone.zCm.toFixed(0) }})
-        </span>
+        <div class="hud-status">
+          <span>A:{{ player.viewAngleA.toFixed(0) }}</span>
+          <span>B:{{ player.viewAngleB.toFixed(0) }}</span>
+          <span>T+{{ (player.currentTimeMs / 1000).toFixed(3) }}</span>
+          <span>FPS:{{ renderFpsText }}</span>
+        </div>
+        <div class="hud-coordinates">
+          <span
+            v-for="drone in hudDrones"
+            :key="drone.id"
+            class="hud-drone"
+            :style="{ color: droneColorCss(drone.id) }"
+          >
+            D{{ drone.id }}({{ drone.xCm.toFixed(0) }},{{ drone.yCm.toFixed(0) }},{{ drone.zCm.toFixed(0) }})
+          </span>
+        </div>
       </div>
       <div
         v-if="player.renderMode === 'three3d' && (threeLoading || threeLoadFailed)"
@@ -445,8 +449,6 @@ onUnmounted(() => {
   top: 0;
   left: 0;
   z-index: 8;
-  display: grid;
-  row-gap: 10px;
   padding: 0;
   color: #ffffff;
   font-family: "JetBrains Mono", "SFMono-Regular", Consolas, "Liberation Mono", monospace;
@@ -454,6 +456,16 @@ onUnmounted(() => {
   font-weight: 400;
   line-height: 20px;
   pointer-events: none;
+}
+
+.hud-status,
+.hud-coordinates {
+  display: grid;
+  row-gap: 10px;
+}
+
+.hud-coordinates {
+  margin-top: 10px;
 }
 
 .render-loading {
@@ -610,14 +622,40 @@ onUnmounted(() => {
   opacity: 0.85;
 }
 
-:global(body[data-device="phone"] .three-hud) {
-  row-gap: 2px;
+:global(body[data-device="phone"] .three-hud),
+:global(body[data-device="tablet"][data-orientation="portrait"] .three-hud) {
+  top: 3px;
+  left: 3px;
+  right: 54px;
+  padding: 3px 4px;
+  background: rgba(0, 0, 0, 0.72);
   font-size: 10px;
-  line-height: 13px;
+  line-height: 12px;
 }
 
-:global(body[data-device="phone"] .hud-drone) {
-  display: none;
+:global(body[data-device="phone"] .hud-status),
+:global(body[data-device="tablet"][data-orientation="portrait"] .hud-status) {
+  grid-template-columns: repeat(4, minmax(0, auto));
+  justify-content: start;
+  gap: 1px 7px;
+}
+
+:global(body[data-device="phone"] .hud-coordinates),
+:global(body[data-device="tablet"][data-orientation="portrait"] .hud-coordinates) {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1px 5px;
+  margin-top: 2px;
+}
+
+:global(body[data-device="phone"] .hud-drone),
+:global(body[data-device="tablet"][data-orientation="portrait"] .hud-drone) {
+  min-width: 0;
+  overflow: hidden;
+  font-size: 9px;
+  font-weight: 600;
+  text-overflow: clip;
+  text-shadow: 0 1px 2px #000, 0 0 2px #000;
+  white-space: nowrap;
 }
 
 :global(body[data-device="phone"] .export-progress-card) {
