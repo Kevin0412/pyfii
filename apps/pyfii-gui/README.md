@@ -12,21 +12,22 @@ GUI 后端是 `read_fii()`、无窗口校验和 `FiiRender2D/FiiRender3D` 的薄
 
 ## 开发启动
 
-后端：
+后端依赖当前仓库的 PyFii 1.6 renderer。请从仓库根目录先安装 core，再安装 GUI backend：
 
 ```bash
-cd apps/pyfii-gui/backend
-pip install -e .
-PYTHONPATH=src:../../../src uvicorn pyfii_gui_api.main:app --reload --host 0.0.0.0 --port 8000
+python -m pip install -e .
+python -m pip install -e apps/pyfii-gui/backend
+PYTHONPATH=apps/pyfii-gui/backend/src:src \
+uvicorn pyfii_gui_api.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
-`PYTHONPATH=src:../../../src` 会同时加载 GUI backend 包和本仓库的本地 `src/pyfii` core，适合在 monorepo 中直接开发测试。如果当前环境已经安装本仓库的 pyfii core，也可使用普通 uvicorn 命令。
-
-也可以先在仓库根目录安装 core：
+两个 editable 包的版本均从各自的 `__version__` 生成；当前 core 安装元数据应为 `1.6.0`。可这样确认 pip 看到的版本：
 
 ```bash
-pip install -e .
+python -c "from importlib.metadata import version; print(version('pyfii'), version('pyfii-gui-api'))"
 ```
+
+`PYTHONPATH=apps/pyfii-gui/backend/src:src` 会同时优先加载 GUI backend 和本仓库 core，适合 monorepo 开发。editable install 完成后也可以省略 `PYTHONPATH`，直接运行 uvicorn。
 
 前端：
 

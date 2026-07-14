@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "pyfii"
-version = "1.5.0"
+dynamic = ["version"]
 authors = [
   { name="Kevin0412", email="kevin0412_xlt@qq.com" },
   { name="miaooo0000OOOO", email="1683618861@qq.com"}
@@ -28,3 +28,6 @@ dependencies = ["opencv-python>=4.10.0.84",
 [project.urls]
 "Homepage" = "https://github.com/Kevin0412/pyfii"
 "Bug Tracker" = "https://github.com/Kevin0412/pyfii/issues"
+
+[tool.setuptools.dynamic]
+version = {attr = "pyfii.__version__"}

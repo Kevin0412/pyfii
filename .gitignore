@@ -24,6 +24,7 @@ gui.png
 .history
 *.spec
 build
+*.egg-info/
 *.csv
 .deepseek/
 tools/choreo_agent/agent_projects/
