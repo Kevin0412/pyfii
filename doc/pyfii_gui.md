@@ -78,6 +78,8 @@ GUI 后端会把这些 warning 结构化成前端可展示的事件，例如 `ac
 
 Canvas 内部虚拟画布固定为 `1200x600`，按容器缩放显示。渲染器位于 `frontend/src/renderer/`，不依赖 Vue，便于后续复用。
 
+Three.js 预览从轨迹帧读取加速度，并沿用 core 的 `wing_force = acceleration - (0, 0, -980)`：先把单位升力方向从 PyFii 坐标映射到 Three.js 坐标，再叠加航向角，因此机体会随加速度产生俯仰和横滚。地面投影仍保持水平，用来表示实际 XY 位置。
+
 静态文档在 Vite 构建时直接导入 `doc/` 和 `doc/tutorial/` 的 Markdown 源，经 `marked` 渲染，并通过 dynamic import 独立打包，避免复制文档或增加模拟器首屏体积。
 
 ## 视频渲染封装

@@ -17,6 +17,33 @@ type DroneRenderParts = {
 const BASE_WIDTH = 1200;
 const BASE_HEIGHT = 600;
 const HEIGHT_MAX = 300;
+const GRAVITY_CM_S2 = 980;
+const LOCAL_UP = new THREE.Vector3(0, 1, 0);
+const wingForce = new THREE.Vector3();
+const tiltQuaternion = new THREE.Quaternion();
+const yawQuaternion = new THREE.Quaternion();
+
+function setDroneAttitude(
+  target: THREE.Quaternion,
+  acceleration: [number, number, number],
+  yawDeg: number,
+): void {
+  const [ax, ay, az] = acceleration;
+
+  // core: wing_force = acceleration - (0, 0, -980)
+  // PyFii (x, y, z) maps to Three.js (x, z, -y).
+  wingForce.set(ax, az + GRAVITY_CM_S2, -ay);
+  const lengthSquared = wingForce.lengthSq();
+  if (!Number.isFinite(lengthSquared) || lengthSquared < 1e-12) {
+    wingForce.copy(LOCAL_UP);
+  } else {
+    wingForce.multiplyScalar(1 / Math.sqrt(lengthSquared));
+  }
+
+  tiltQuaternion.setFromUnitVectors(LOCAL_UP, wingForce);
+  yawQuaternion.setFromAxisAngle(LOCAL_UP, THREE.MathUtils.degToRad(yawDeg));
+  target.copy(tiltQuaternion).multiply(yawQuaternion).normalize();
+}
 
 function fieldSize(field: number | null | undefined): number {
   return field === 4 ? 360 : 560;
@@ -293,7 +320,7 @@ export class PyfiiThreeRenderer {
       parts.projectionLine.visible = true;
       parts.shadow.visible = true;
       parts.group.position.copy(pyfiiPoint(drone.xCm, drone.yCm, drone.zCm));
-      parts.group.rotation.y = -THREE.MathUtils.degToRad(drone.yawDeg);
+      setDroneAttitude(parts.group.quaternion, drone.acceleration, drone.yawDeg);
       parts.body.visible = !ledIsOn(drone);
       parts.led.visible = ledIsOn(drone);
       materialColor(parts.body.material, baseColor);
