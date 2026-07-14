@@ -107,7 +107,7 @@ Three.js 预览从轨迹帧读取加速度，并沿用 core 的 `wing_force = ac
 ./apps/pyfii-gui/start.sh
 ```
 
-脚本会同时启动前后端，并在 `apps/pyfii-gui/logs/<启动时间>-<进程号>/` 中分别保存两端日志；终端仍会实时显示相同输出。日志根目录可通过 `PYFII_GUI_LOG_DIR` 覆盖。
+脚本会同时启动前后端，并在 `apps/pyfii-gui/logs/<启动时间>-<进程号>/` 中分别保存两端日志；文件中的每一行带本地时间和时区，终端仍会实时显示服务原始输出。日志根目录可通过 `PYFII_GUI_LOG_DIR` 覆盖。
 
 先安装 pyfii core：
 

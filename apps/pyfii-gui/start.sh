@@ -76,7 +76,6 @@ step "检查运行环境..."
 check_cmd "$PYTHON_BIN"
 check_cmd node
 check_cmd npm
-check_cmd tee
 
 # ── 依赖安装 ──────────────────────────────────────────────
 if ! $SKIP_INSTALL; then
@@ -96,13 +95,25 @@ if [[ ! -x "$FRONTEND_DIR/node_modules/.bin/vite" ]]; then
 fi
 
 # ── 运行日志 ──────────────────────────────────────────────
-# 每次启动使用独立目录，避免覆盖上一次运行。服务输出仍会经 tee
-# 实时显示在终端，便于开发时直接观察。
+# 每次启动使用独立目录，避免覆盖上一次运行。
 LOG_ROOT="${PYFII_GUI_LOG_DIR:-$GUI_DIR/logs}"
 RUN_LOG_DIR="$LOG_ROOT/$(date '+%Y%m%d-%H%M%S')-$$"
 BACKEND_LOG="$RUN_LOG_DIR/backend.log"
 FRONTEND_LOG="$RUN_LOG_DIR/frontend.log"
 mkdir -p "$RUN_LOG_DIR"
+
+# 终端保持服务的原始输出；写入文件时统一补上本地时间和时区。
+timestamp_log_stream() {
+  local log_file="$1"
+  local line
+  exec 3>>"$log_file"
+  while IFS= read -r line || [[ -n "$line" ]]; do
+    line="${line%$'\r'}"
+    printf '%s\n' "$line"
+    printf '[%(%Y-%m-%d %H:%M:%S %z)T] %s\n' -1 "$line" >&3
+  done
+  exec 3>&-
+}
 
 # ── 清理函数 ──────────────────────────────────────────────
 cleanup() {
@@ -127,7 +138,7 @@ step "启动后端 (FastAPI :$BACKEND_PORT)..."
   export PYTHONPATH="$BACKEND_DIR/src:$REPO_ROOT/src${PYTHONPATH:+:$PYTHONPATH}"
   exec "$PYTHON_BIN" -m uvicorn pyfii_gui_api.main:app \
     --host 0.0.0.0 --port "$BACKEND_PORT" --log-level info \
-    > >(tee -a "$BACKEND_LOG") 2>&1
+    > >(timestamp_log_stream "$BACKEND_LOG") 2>&1
 ) &
 BACKEND_PID=$!
 
@@ -137,7 +148,7 @@ step "启动前端 (Vite :$FRONTEND_PORT)..."
   export VITE_DEV_HOST=0.0.0.0
   export VITE_DEV_PORT="$FRONTEND_PORT"
   export VITE_API_PROXY_TARGET="http://localhost:$BACKEND_PORT"
-  exec ./node_modules/.bin/vite > >(tee -a "$FRONTEND_LOG") 2>&1
+  exec ./node_modules/.bin/vite > >(timestamp_log_stream "$FRONTEND_LOG") 2>&1
 ) &
 FRONTEND_PID=$!
 
