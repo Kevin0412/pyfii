@@ -29,6 +29,7 @@ build
 .deepseek/
 tools/choreo_agent/agent_projects/
 apps/pyfii-gui/backend/.runtime/
+apps/pyfii-gui/logs/
 apps/pyfii-gui/deploy.json
 apps/pyfii-gui/deploy.local.json
 apps/pyfii-gui/frontend/dist/

@@ -27,6 +27,8 @@ GUI 后端是 `read_fii()`、无窗口校验和 `FiiRender2D/FiiRender3D` 的薄
 ./apps/pyfii-gui/start.sh --port 9000 --frontend-port 5174
 ```
 
+每次启动都会在 `apps/pyfii-gui/logs/<启动时间>-<进程号>/` 下分别保存 `backend.log` 和 `frontend.log`，同时保留终端实时输出。可用 `PYFII_GUI_LOG_DIR=/path/to/logs` 修改日志根目录。
+
 可通过 `PYTHON=/path/to/python` 指定 Python 环境。其余 `PYFII_GUI_*` 部署配置会原样传给后端。
 
 ### 分别启动

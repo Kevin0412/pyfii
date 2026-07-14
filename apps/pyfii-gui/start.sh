@@ -7,6 +7,7 @@
 #   ./start.sh --port 9000  # 自定义后端端口
 #   ./start.sh --frontend-port 5174
 #   ./start.sh --no-install # 跳过依赖安装
+#   PYFII_GUI_LOG_DIR=/path/to/logs ./start.sh
 #   ./start.sh --help
 #
 set -euo pipefail
@@ -75,6 +76,7 @@ step "检查运行环境..."
 check_cmd "$PYTHON_BIN"
 check_cmd node
 check_cmd npm
+check_cmd tee
 
 # ── 依赖安装 ──────────────────────────────────────────────
 if ! $SKIP_INSTALL; then
@@ -92,6 +94,15 @@ if [[ ! -x "$FRONTEND_DIR/node_modules/.bin/vite" ]]; then
   warn "前端依赖未安装，请去掉 --no-install 后重试。"
   exit 1
 fi
+
+# ── 运行日志 ──────────────────────────────────────────────
+# 每次启动使用独立目录，避免覆盖上一次运行。服务输出仍会经 tee
+# 实时显示在终端，便于开发时直接观察。
+LOG_ROOT="${PYFII_GUI_LOG_DIR:-$GUI_DIR/logs}"
+RUN_LOG_DIR="$LOG_ROOT/$(date '+%Y%m%d-%H%M%S')-$$"
+BACKEND_LOG="$RUN_LOG_DIR/backend.log"
+FRONTEND_LOG="$RUN_LOG_DIR/frontend.log"
+mkdir -p "$RUN_LOG_DIR"
 
 # ── 清理函数 ──────────────────────────────────────────────
 cleanup() {
@@ -115,7 +126,8 @@ step "启动后端 (FastAPI :$BACKEND_PORT)..."
   cd "$REPO_ROOT"
   export PYTHONPATH="$BACKEND_DIR/src:$REPO_ROOT/src${PYTHONPATH:+:$PYTHONPATH}"
   exec "$PYTHON_BIN" -m uvicorn pyfii_gui_api.main:app \
-    --host 0.0.0.0 --port "$BACKEND_PORT" --log-level info
+    --host 0.0.0.0 --port "$BACKEND_PORT" --log-level info \
+    > >(tee -a "$BACKEND_LOG") 2>&1
 ) &
 BACKEND_PID=$!
 
@@ -125,7 +137,7 @@ step "启动前端 (Vite :$FRONTEND_PORT)..."
   export VITE_DEV_HOST=0.0.0.0
   export VITE_DEV_PORT="$FRONTEND_PORT"
   export VITE_API_PROXY_TARGET="http://localhost:$BACKEND_PORT"
-  exec ./node_modules/.bin/vite
+  exec ./node_modules/.bin/vite > >(tee -a "$FRONTEND_LOG") 2>&1
 ) &
 FRONTEND_PID=$!
 
@@ -134,6 +146,7 @@ info "━━━━━━━━━━━━━━━━━━━━━━━━�
 info "  Backend   → http://localhost:$BACKEND_PORT"
 info "  Frontend  → http://localhost:$FRONTEND_PORT"
 info "  API docs  → http://localhost:$BACKEND_PORT/docs"
+info "  Logs      → $RUN_LOG_DIR"
 info "  Ctrl+C    停止所有服务"
 info "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo ""

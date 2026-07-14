@@ -101,6 +101,14 @@ Three.js 预览从轨迹帧读取加速度，并沿用 core 的 `wing_force = ac
 
 ## 开发启动
 
+仓库根目录提供一键启动脚本：
+
+```bash
+./apps/pyfii-gui/start.sh
+```
+
+脚本会同时启动前后端，并在 `apps/pyfii-gui/logs/<启动时间>-<进程号>/` 中分别保存两端日志；终端仍会实时显示相同输出。日志根目录可通过 `PYFII_GUI_LOG_DIR` 覆盖。
+
 先安装 pyfii core：
 
 ```bash
