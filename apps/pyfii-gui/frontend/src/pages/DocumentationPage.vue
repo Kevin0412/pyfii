@@ -4,7 +4,11 @@
 
     <div class="docs-layout">
       <aside>
-        <details ref="navigationRef" class="docs-navigation">
+        <details
+          ref="navigationRef"
+          class="docs-navigation"
+          :open="navigationInitiallyOpen"
+        >
           <summary>
             <span>{{ ui.locale === "zh" ? "文档目录" : "Contents" }}</span>
             <strong>{{ currentTitle }}</strong>
@@ -56,6 +60,7 @@ const ui = useUiStore();
 
 const html = ref("");
 const navigationRef = ref<HTMLDetailsElement | null>(null);
+const navigationInitiallyOpen = document.body.dataset.device !== "phone";
 const loading = ref(true);
 const loadFailed = ref(false);
 const navigation = documentNavigation();

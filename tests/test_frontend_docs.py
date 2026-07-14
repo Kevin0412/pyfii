@@ -11,6 +11,9 @@ DOCUMENTATION_SOURCE = (
 DOCUMENT_ROUTE_SOURCE = (
     REPO_ROOT / "apps/pyfii-gui/frontend/src/content/documentRoutes.ts"
 )
+DOCUMENTATION_PAGE_SOURCE = (
+    REPO_ROOT / "apps/pyfii-gui/frontend/src/pages/DocumentationPage.vue"
+)
 SIMULATION_CANVAS_SOURCE = (
     REPO_ROOT / "apps/pyfii-gui/frontend/src/components/SimulationCanvas.vue"
 )
@@ -117,6 +120,14 @@ class FrontendDocumentationTest(unittest.TestCase):
         self.assertIn('import("../renderer/three/PyfiiThreeRenderer")', source)
         self.assertNotIn(
             'import { PyfiiThreeRenderer } from "../renderer/three/PyfiiThreeRenderer";',
+            source,
+        )
+
+    def test_document_navigation_opens_outside_phone_layout(self):
+        source = DOCUMENTATION_PAGE_SOURCE.read_text(encoding="utf-8")
+        self.assertIn(':open="navigationInitiallyOpen"', source)
+        self.assertIn(
+            'const navigationInitiallyOpen = document.body.dataset.device !== "phone";',
             source,
         )
 
