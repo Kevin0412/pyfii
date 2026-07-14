@@ -121,9 +121,15 @@
     读取.fii
     ```python
     name='比赛现场程序'
-    data,t0,music=pf.read_fii(name)
-    pf.show(data,t0,music)
+    track=pf.from_fii(name)
+    pf.show(track)
     #把所在文件夹的路径写下来即可
+    ```
+
+    原来的参数调用仍然可用：
+    ```python
+    data,t0,music,field,device=pf.read_fii(name)
+    pf.show(data,t0,music,field=field,device=device)
     ```
 
     直接在python中展示

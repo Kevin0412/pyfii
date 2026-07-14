@@ -43,7 +43,7 @@ apps/pyfii-gui/backend/.runtime/projects/
 当前 GUI 不重新实现一套独立 Fii 解析器。安全日志主要来自 pyfii core：
 
 - `read_fii()` 捕获的 warning，例如动作未完成。
-- `show(show=False)` 捕获的 warning，例如无人机间距过近。
+- `show(track, show=False)` 捕获的 warning，例如无人机间距过近。
 
 GUI 后端会把这些 warning 结构化成前端可展示的事件，例如 `action_incomplete`、`min_distance` 和 `core_warning`。这保证 GUI 的安全判断尽量贴近现有 pyfii core 行为。
 

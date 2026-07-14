@@ -21,25 +21,28 @@ from .show import color, draw_drone, drone3d, getGui, video_add_audio
 
 
 class DroneTrack:
-    """无人机轨迹"""
-    def __init__(self):
-        self.dots = []      # 每架无人机一条轨迹：[(t_ms,x,y,z,angle,led,acceleration), ...]
-        self.t0 = 0
-        self.music = []
-        self.field = 6
-        self.device = "F400"
+    """渲染所需的完整轨迹和工程元数据。"""
+
+    def __init__(self, dots=None, t0=0, music=None, field=6, device="F400"):
+        # 每架无人机一条轨迹：[(t_ms,x,y,z,angle,led,acceleration), ...]
+        self.dots = [] if dots is None else dots
+        self.t0 = t0
+        no_music = music is None or music == [""] or (
+            len(music) == 1 and str(music[0]).endswith(("/", "\\"))
+        )
+        self.music = [] if no_music else music
+        self.field = field
+        self.device = device
 
 
 def from_fii(path, fps=200, ignore_acc=False, workers=None) -> DroneTrack:
-    """读取.fii文件"""
+    """读取 Fii 工程并返回可直接渲染的轨迹对象。"""
     from .read import read_fii
+
     dots, t0, music, field, device = read_fii(
         path, fps=fps, ignore_acc=ignore_acc, workers=workers
     )
-    track = DroneTrack()
-    track.dots, track.t0, track.music = dots, t0, music
-    track.field, track.device = field, device
-    return track
+    return DroneTrack(dots, t0, music, field, device)
 
 
 def _field_3d_lines(field):

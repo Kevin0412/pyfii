@@ -203,7 +203,7 @@
     2. 渲染
 
         ```python
-        show(data,t0,music,field=6,device="F400",show=True,save="",FPS=200,max_fps=200,ThreeD=False,imshow=[120,-15],d=(600,450),track=[],skin=1,workers=None)
+        show(data,t0=None,music=None,field=6,device="F400",show=True,save="",FPS=200,max_fps=200,ThreeD=False,imshow=[120,-15],d=(600,450),track=[],skin=1,workers=None)
         ```
 
         这里参数比较多，需要一一介绍
@@ -215,8 +215,11 @@
         ```show=False```时，直接打印是否存在距离过近的情况，没有图像渲染
 
         ```python
-        pf.show(data,t0,music,field,show=False,max_fps=200)
+        flight=pf.from_fii(name)
+        pf.show(flight,show=False,max_fps=200)
         ```
+
+        `from_fii()`返回一个`DroneTrack`，其中集中保存轨迹、总时长、音乐、场地和机型。`show(flight)`是推荐入口；原来的`show(data,t0,music,...)`调用仍然保留。
 
         ```show==True```时，要分类讨论，```show```默认为```True```，不用写
 

@@ -23,6 +23,7 @@ def _warning_messages(captured: List[warnings.WarningMessage]) -> List[str]:
 
 def parse_fii_project(project_dir: Path, fps: int, ignore_acc: bool) -> ParsedFiiProject:
     # Import direct modules; avoid pyfii package-level imports that pull in unrelated GUI paths.
+    from pyfii.fiiRead import DroneTrack
     from pyfii.read import read_fii
     from pyfii.show import show as validate_show
     from pyfii_gui_api.config import settings
@@ -41,16 +42,14 @@ def parse_fii_project(project_dir: Path, fps: int, ignore_acc: bool) -> ParsedFi
             )
     warning_messages.extend(_warning_messages(read_warnings))
 
+    track = DroneTrack(data, t0, music, field, device)
+
     # show(show=False) is the current core path that performs distance warnings without rendering.
     with warnings.catch_warnings(record=True) as show_warnings:
         warnings.simplefilter("always")
         with contextlib.redirect_stdout(stdout):
             validate_show(
-                data,
-                t0,
-                music,
-                field=field,
-                device=device,
+                track,
                 show=False,
                 save="",
                 FPS=fps,

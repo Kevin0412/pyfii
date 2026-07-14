@@ -65,12 +65,13 @@ def render_project_video(
 
     from pyfii.fiiRead import DroneTrack, FiiRender2D, FiiRender3D
 
-    track = DroneTrack()
-    track.dots = project.data
-    track.t0 = project.t0
-    track.music = project.music
-    track.field = project.field
-    track.device = project.device
+    track = DroneTrack(
+        project.data,
+        project.t0,
+        project.music,
+        project.field,
+        project.device,
+    )
 
     projection = (
         (1, 0)
