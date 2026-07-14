@@ -46,7 +46,7 @@
             d.delay(500)
             # 全部亮绿灯
             d.TurnOnAll((0,255,0))
-            # 等待1312ms
+            # 等待2046ms
             # t = s_匀速 / v = ( s_总 - s_加速 - s_减速 ) / v
             # = ( sqrt ( ( x_1 - x_0 ) ^ 2 + ( y_1 - y_0 ) ^ 2 + ( z_1 - z_0 ) ^ 2 ) - v ^ 2 / a ) / v
             # = ( sqrt ( ( 520cm - 40cm ) ^ 2 + ( y - y ) ^2 + ( 250cm - 80cm ) ^ 2 ) - 200cm/s ^ 2 / 400cm/s^2 ) / 200cm/s
@@ -92,17 +92,17 @@
         ```python
         name='output/group_flight_6m_2'
         F=pf.Fii(name,ds)
-        F.save(field=6)
+        F.save()
         ```
 
     5. 模拟
         ```python
-        # 读取
-        data,t0,music,field,device,*_=pf.read_fii(name)
+        # 读取为DroneTrack
+        track=pf.from_fii(name)
         # 储存二维模拟视频
-        pf.show(data,t0,music,field=field,device=device,save=name,FPS=25)
+        pf.show(track,save=name,FPS=25)
         # 储存三维模拟视频
-        pf.show(data,t0,music,field=field,device=device,save=name+'_3D',ThreeD=True,imshow=[90,0],d=(600,550),FPS=25)
+        pf.show(track,save=name+'_3D',ThreeD=True,imshow=[90,0],d=(600,550),FPS=25)
         ```
 
 2. 4m毯
@@ -179,15 +179,15 @@
         ```python
         name='output/group_flight_4m_2'
         F=pf.Fii(name,ds)
-        F.save(field=4)
+        F.save()
         ```
 
     5. 模拟
         ```python
-        # 读取
-        data,t0,music,field,device,*_=pf.read_fii(name)
+        # 读取为DroneTrack
+        track=pf.from_fii(name)
         # 储存二维模拟视频
-        pf.show(data,t0,music,field=field,device=device,save=name,FPS=25)
+        pf.show(track,save=name,FPS=25)
         # 储存三维模拟视频
-        pf.show(data,t0,music,field=field,device=device,save=name+'_3D',ThreeD=True,imshow=[90,0],d=(600,550),FPS=25)
+        pf.show(track,save=name+'_3D',ThreeD=True,imshow=[90,0],d=(600,550),FPS=25)
         ```

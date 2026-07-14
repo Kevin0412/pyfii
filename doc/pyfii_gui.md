@@ -1,4 +1,4 @@
-# Pyfii GUI 原型
+# PyFii GUI 架构与部署
 
 `pyfii-gui` 是 Pyfii 仓库中的独立 Web GUI，目录为 `apps/pyfii-gui/`。它用于上传 Fii 项目、读回轨迹、查看安全日志、进行 2D/3D 预览，并通过 core renderer 导出 MP4。
 
@@ -81,6 +81,8 @@ Canvas 内部虚拟画布固定为 `1200x600`，按容器缩放显示。渲染�
 Three.js 预览从轨迹帧读取加速度，并沿用 core 的 `wing_force = acceleration - (0, 0, -980)`：先把单位升力方向从 PyFii 坐标映射到 Three.js 坐标，再叠加航向角，因此机体会随加速度产生俯仰和横滚。地面投影仍保持水平，用来表示实际 XY 位置。
 
 静态文档在 Vite 构建时直接导入 `doc/` 和 `doc/tutorial/` 的 Markdown 源，经 `marked` 渲染，并通过 dynamic import 独立打包，避免复制文档或增加模拟器首屏体积。
+
+站点控件支持中文/英文切换；当前导入的 Markdown 正文只有中文版本，切换到英文时导航会翻译，但正文仍显示中文。
 
 ## 视频渲染封装
 

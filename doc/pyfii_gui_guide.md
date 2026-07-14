@@ -45,14 +45,17 @@ GUI 的交互预览使用浏览器 Canvas/Three.js；它适合快速查看和交
 ```python
 from pyfii import Drone, Fii, drone_config_4m
 
-d1 = Drone(config=drone_config_4m)
-d2 = Drone(config=drone_config_4m)
+d1 = Drone(40, 40, config=drone_config_4m)
+d1.takeoff(1, 100)
+d1.inittime(4)
+d1.land()
+d1.end()
 
-# 在这里为 d1、d2 编写动作。
-
-project = Fii("demo", [d1, d2])
-project.save(field=4)
+project = Fii("demo", [d1])
+project.save()
 ```
+
+PyFii 1.6.0会从无人机配置推断场地；旧的`field=`参数已被忽略。多机完整示例见“编队飞行”。
 
 ## 常见问题
 

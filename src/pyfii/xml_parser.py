@@ -2,7 +2,8 @@
 
 This module is intentionally independent from :mod:`pyfii.read`.  It parses
 Blockly XML into the same ``dots`` event format used by the existing trajectory
-code, but does not replace the legacy parser yet.
+code.  :mod:`pyfii.read` uses it by default and retains the legacy parser as a
+fallback for malformed or unsupported documents.
 """
 
 from dataclasses import dataclass

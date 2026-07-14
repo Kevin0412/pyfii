@@ -1,71 +1,63 @@
-- ## 安装python
+# 安装
 
-    这里有安装python的两条路线
+PyFii 要求 Python 3.9 或更高版本。建议使用虚拟环境，避免和系统中的其他 Python 项目冲突。
 
-    1. 安装Anaconda/Miniconda，并使用conda管理python环境
+## 使用 conda
 
-    2. 从官网下载python并安装
+```bash
+conda create -n pyfii_env python=3.10
+conda activate pyfii_env
+python -m pip install pyfii
+```
 
-    为了避免和你之前在电脑上安装过的python冲突，建议安装Miniconda，安装Miniconda可以参考[我在b站的视频](https://www.bilibili.com/video/BV1Rh411h7HB)
-    
-    在参照视频配置完成后，你需要了解基本的conda命令
+Miniconda 的安装和基础使用可以参考[视频教程](https://www.bilibili.com/video/BV1Rh411h7HB)。
 
-        conda create -n 环境名 python=3.10
+PyPI 安装得到的是已经发布的版本。需要使用当前仓库的 1.6.0 接口时，请按下一节从仓库安装，不在文档中假设尚未核对的 PyPI 发布状态。
 
-    环境名比如 : pyfii_env
+## 从仓库安装
 
-    这个命令创建了一个名叫`环境名`的虚拟环境，且python版本为3.10及以上
+在仓库根目录执行：
 
-        conda env list
+```bash
+python -m pip install -e .
+python -c "import pyfii; print(pyfii.__version__)"
+```
 
-    这个命令会列出所有conda的虚拟环境
+项目依赖由 `pyproject.toml` 声明，正常情况下不需要逐个手动安装 OpenCV、pygame、FFmpeg Python 封装等依赖。视频音乐封装还需要系统能够执行 FFmpeg。
 
-        conda activate 环境名
+## 启动 Web GUI
 
-    这个命令会切换当前环境为`环境名`
+最简单的开发启动方式是在仓库根目录运行：
 
-    这时候命令提示符会在前面显示一个括号包裹的`环境名`
+```bash
+./apps/pyfii-gui/start.sh
+```
 
-    在你当前创建的环境下使用pip install命令安装pyfii
+脚本会安装 core、GUI 后端和前端依赖，并启动后端 `:8000` 与前端 `:5173`。依赖已经安装时可以跳过安装：
 
-        pip install -i https://pypi.org/simple pyfii
+```bash
+./apps/pyfii-gui/start.sh --no-install
+```
 
-    这个命令会从pypi官网下载pyfii。若需要固定版本，可以在包名后追加版本号，例如：
+也可以分别启动。
 
-        pip install -i https://pypi.org/simple pyfii==1.5.0
+后端：
 
-    如果你正在开发本仓库源码版本，可以在仓库根目录安装为可编辑包：
+```bash
+python -m pip install -e .
+python -m pip install -e apps/pyfii-gui/backend
+PYTHONPATH=apps/pyfii-gui/backend/src:src \
+uvicorn pyfii_gui_api.main:app --reload --host 0.0.0.0 --port 8000
+```
 
-        pip install -e .
+前端：
 
-        pip install opencv-python pygame ffmpy
+```bash
+cd apps/pyfii-gui/frontend
+npm install
+npm run dev
+```
 
-    这个命令会从镜像源下载pyfii的依赖库
+浏览器打开 `http://localhost:5173`。局域网设备可以使用开发机的局域网 IP 访问。
 
-    安装就完成了
-
-    你可以运行pyfii源码库的示例程序测试安装是否成功
-
-- ## GUI 原型开发环境
-
-    Pyfii 的 Web GUI 原型位于 `apps/pyfii-gui/`，它是独立应用，不属于 `src/pyfii/` core 包。开发 GUI 前建议先在仓库根目录安装 core：
-
-        pip install -e .
-
-    启动后端：
-
-        cd apps/pyfii-gui/backend
-        pip install -e .
-        uvicorn pyfii_gui_api.main:app --reload --host 0.0.0.0 --port 8000
-
-    启动前端：
-
-        cd apps/pyfii-gui/frontend
-        npm install
-        npm run dev
-
-    前端默认监听 `0.0.0.0:5173`，可在局域网另一台设备访问：
-
-        http://<开发机局域网IP>:5173
-
-    更多说明见 [Pyfii GUI 原型](../pyfii_gui.md)。
+部署配置、ICP备案示例和生产启动注意事项见 [GUI 架构与部署](../pyfii_gui.md)。

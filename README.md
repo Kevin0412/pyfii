@@ -42,23 +42,19 @@ FastAPI、Vue、Vite 等 GUI 依赖都放在 `apps/pyfii-gui/` 下，不放进 `
     在命令行输入
 
         git clone https://github.com/Kevin0412/pyfii.git
+        cd pyfii
+        python -m pip install -e .
 
-    pyfii 就会被下载到当前目录下，使用时将 pyfii 文件夹复制到项目目录下
+    仓库使用 `src/` 布局，不要只复制仓库中的某个文件夹；使用 editable install 才能确保依赖和版本元数据正确。
 
 ## 文档索引
 
-如果你的目标不是简单使用 pyfii，而是想复刻整个项目，请优先阅读 [内部原理](doc/tutorial/principle.md)。
-
-- [安装说明](doc/tutorial/install.md)
-- [文档与教程中心](doc/pyfii_docs.md)
-- [教程目录](doc/tutorial/contents.md)
-- [编队飞行](doc/tutorial/group_flight.md)
-- [脚本模式](doc/tutorial/script_mode.md)
-- [内部原理](doc/tutorial/principle.md)
-- [灯光编写](doc/tutorial/light.md)
-- [Pyfii GUI 原型](doc/pyfii_gui.md)
-- [Pyfii GUI 使用引导](doc/pyfii_gui_guide.md)
-- [AI 编舞探索](doc/ai_choreography_exploration.md)
+- [文档与教程中心](doc/pyfii_docs.md)：普通用户从这里开始。
+- [PyFii core 文档](doc/doc_zh_CN.md)：动作、工程、读取和渲染接口。
+- [GUI 使用引导](doc/pyfii_gui_guide.md)：上传、warning、预览和视频导出。
+- [GUI 架构与部署](doc/pyfii_gui.md)：开发、配置和生产部署。
+- [内部原理](doc/tutorial/principle.md)：面向维护或复刻项目的开发者。
+- [仓库完整文档索引](doc/INDEX.md)：研究资料与历史归档。
 
 ## 目录结构说明
 
@@ -69,9 +65,12 @@ FastAPI、Vue、Vite 等 GUI 依赖都放在 `apps/pyfii-gui/` 下，不放进 `
     │   └── transfer.py
     ├── drone.py
     ├── fii.py
-    ├── __init__.py
+    ├── fii_parser.py
+    ├── xml_parser.py
     ├── read.py
-    └── show.py
+    ├── fiiRead.py
+    ├── show.py
+    └── __init__.py
 
 项目结构 (核心部分) 如上图
 
@@ -81,9 +80,9 @@ drone.py 定义了 Drone 类，实现无人机的基本指令
 
 fii.py 定义了 Fii 类，保存无人机和音乐，并能将其保存为*.fii 文件
 
-read.py 用来读取和转换无人机动作文件
+fii_parser.py 和 xml_parser.py 负责树形 XML 解析，read.py 负责兼容入口和轨迹计算
 
-show.py 用来预览无人机飞行效果
+fiiRead.py 封装 DroneTrack 与二维/三维渲染器，show.py 提供兼容的预览入口
 
 GUI 位于 `apps/pyfii-gui/`，详细结构见 [apps/pyfii-gui/README.md](apps/pyfii-gui/README.md)。
 
@@ -109,4 +108,4 @@ pyfii 2.0 的重点不是简单 Web 化，而是把编队核心、轨迹采样�
 - `pyfii-render`：统一渲染接口，保留 OpenCV 参考后端，并试验桌面 3D / Web viewer。
 - `pyfii-app`：面向实际调试的交互式预览工具。
 
-AI 编舞探索记录放在 [doc/ai_choreography_exploration.md](doc/ai_choreography_exploration.md)。已归档的 AI 编舞探索见 [archive/nl_choreo_ai_exploration](archive/nl_choreo_ai_exploration)；后续主线是强模型生成 motion brief / phrase spec / PyFii 脚本，再由本地读回、密采样、安全检查和 2D/3D 视频验收。
+早期 AI 编舞探索已经归档，入口见 [仓库完整文档索引](doc/INDEX.md)；后续主线是强模型生成 motion brief / phrase spec / PyFii 脚本，再由本地读回、密采样、安全检查和 2D/3D 视频验收。

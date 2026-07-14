@@ -124,7 +124,7 @@ for d in ds:
     d.end()
 
 F = pf.Fii('大闹天宫', ds, music=music_path)
-F.save(True, field=6)
+F.save(infii=True)
 
 pf.show(F.dots, F.t0, [F.music], field=6, save='大闹天宫', FPS=25)
 ```

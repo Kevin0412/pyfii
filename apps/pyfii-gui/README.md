@@ -120,7 +120,7 @@ VITE_API_PROXY_TARGET=http://localhost:8000
 cd apps/pyfii-gui/backend
 PYTHONPATH=src:../../../src \
 PYFII_GUI_ENABLE_LOCAL_PROJECT_IMPORT=true \
-PYFII_GUI_LOCAL_PROJECT_ROOTS=/media/kevin0412/Data/pyfii1.5.0/pyfii/tools/choreo_agent/agent_projects \
+PYFII_GUI_LOCAL_PROJECT_ROOTS=/path/to/pyfii/tools/choreo_agent/agent_projects \
 uvicorn pyfii_gui_api.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
@@ -216,7 +216,7 @@ location / {
 
 - 上传 Fii 项目 zip。
 - 项目门户页和跨页面一致的站点导航。
-- 未保存主题选择时，门户、Guide、文档和教程默认浅色，飞行工作台默认深色；支持手动切换并记住用户选择。默认中文界面，支持中文/英文切换。
+- 未保存主题选择时，门户、Guide、文档和教程默认浅色，飞行工作台默认深色；支持手动切换并记住用户选择。界面控件支持中文/英文切换，当前 Markdown 文档正文以中文为准。
 - 统一的文档与教程中心，内部包含 Guide、PyFii 文档和专题教程静态页。
 - 安全解压并调用 `read_fii()` 解析轨迹。
 - GUI 默认只把一半 CPU 核心分配给单次轨迹解析，为并发请求预留资源；可通过 `PYFII_GUI_TRAJECTORY_WORKERS` 调整。

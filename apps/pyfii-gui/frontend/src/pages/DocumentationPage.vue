@@ -17,7 +17,12 @@
         </section>
       </aside>
       <!-- Markdown is bundled from trusted repository documentation sources. -->
-      <article class="markdown-body" v-html="html" />
+      <article class="markdown-body">
+        <p v-if="ui.locale === 'en'" class="language-note">
+          The documentation body is currently maintained in Chinese.
+        </p>
+        <div v-html="html" />
+      </article>
     </div>
   </div>
 </template>
@@ -134,6 +139,15 @@ aside a.active {
 .markdown-body {
   min-width: 0;
   line-height: 1.72;
+}
+
+.language-note {
+  margin: 0 0 24px;
+  padding: 10px 12px;
+  border-left: 3px solid var(--border-control);
+  background: var(--docs-code);
+  color: var(--text-muted);
+  font-size: 13px;
 }
 
 .markdown-body :deep(h1) {

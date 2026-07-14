@@ -1,5 +1,7 @@
 # 原理
 
+> 本文面向准备维护或复刻PyFii的开发者。普通使用请先阅读[PyFii core 文档](../doc_zh_CN.md)。源码行为优先于历史版本说明。
+
 1. 小鸟飞飞文件
 
         test
@@ -52,7 +54,7 @@
         │   └── xxx.mp3
         └── test.fii
 
-    pyfii-1.1.1和pyfii-1.5.0及后续版本，加入了[脚本模式](script_mode.md)
+    pyfii 1.5.0及后续版本生成的工程包含[脚本模式](script_mode.md)所需文件
 
         test
         ├── 动作组
@@ -74,7 +76,7 @@
     1. 读入文件并计算轨迹
 
         ```python
-        data,t0,music,field=pf.read_fii(name,getfield=True,fps=200)
+        data,t0,music,field,device=pf.read_fii(name,fps=200)
         ```
 
         这一模块实现了读入小鸟飞飞文件并输出飞行轨迹的功能
@@ -87,18 +89,19 @@
 
         ```data```是一个列表，列表的长度是无人机数，每一个元素也是列表
 
-        ```data[n]```列表储存了第n+1架无人机飞行轨迹及旋转数据，每一个元素是长度为6的元组
+        ```data[n]```列表储存了第n+1架无人机的飞行轨迹、旋转、灯光和加速度数据，每一个元素是长度为7的元组
 
         ```python
         data=[
-            [(time,x,y,z,degree,(R,G,B)),(time,x,y,z,degree,(R,G,B)),...],
-            [(time,x,y,z,degree,(R,G,B)),(time,x,y,z,degree,(R,G,B)),...],
+            [(time,x,y,z,degree,(R,G,B),(ax,ay,az)), ...],
+            [(time,x,y,z,degree,(R,G,B),(ax,ay,az)), ...],
             ...
         ]
         # time单位为ms，每隔5ms一个动作数据采样
         # x,y,z单位为cm
         # degree单位为°
         # (R,G,B)表示颜色，如果值为-1则表示不亮
+        # (ax,ay,az)表示加速度，单位为cm/s^2
         ```
         
         ```t0```表示模拟结束的帧数（即动作时长```t0/fps```秒）
@@ -117,11 +120,11 @@
 
         一个可复刻的最小设计可以拆成四步：
 
-        1. 工程发现：`read_fii()`先遍历目录找到顶层`.fii`，读取其中的`MusicName`、`Actions`、`AreaL`、`DeviceType`和每个动作组的起飞坐标。
+        1. 工程发现：`read_fii()`先遍历目录找到顶层`.fii`，交给`fii_parser.parse_fii()`按XML节点读取`MusicName`、`Actions`、`AreaL`、`DeviceType`和每个动作组的起飞坐标。`.fii`节点可以乱序；解析器以完整飞机名为前缀匹配`UAVID`和`pos`字段，再把飞机归到最长匹配的动作组前缀。
 
-        2. 单机程序读取：对每个动作组读取`webCodeAll.xml`，并先用`read_xml_points()`预扫所有`Goertek_Point`命名点，构造点名到三维坐标的字典。
+        2. 单机程序读取：对每个动作组读取`webCodeAll.xml`，并先用树形`collect_points()`预扫所有`Goertek_Point`命名点，构造点名到三维坐标的字典。
 
-        3. 指令编译：`read_xml()`把XML文本按行拆开，只保留去掉前导缩进后的块描述，同时记录每一行的缩进层级。之后不走通用XML解析器，而是用“扫描当前块类型 + 按固定偏移读取后续field”的办法识别指令，并编译成统一事件列表`dots`。
+        3. 指令编译：`read_xml()`默认调用`xml_parser.parse_web_code()`把Blockly XML解析成元素树，从唯一的顶层`Goertek_Start`开始遍历`statement`和`next`执行链，维护时间、位置、速度和角速度状态，并编译成统一事件列表`dots`。没有连接到执行链的顶层积木组会被忽略并产生warning。只有树形解析失败或调用旧递归接口时，才回退到原来的按行扫描解析器。
 
         4. 轨迹求值：`dots2angle()`、`dots2led()`、`dots2line()`分别把`dots`解释为姿态、灯光和位移序列，最后合并成仿真输出。不同无人机互不依赖，`read_fii()`默认按`min(CPU核心数, 无人机数)`启用进程池并行求值；传`workers=1`可恢复串行，传正整数可指定上限。
 
@@ -142,27 +145,18 @@
 
         2. 转译层：这些方法调用时不会立刻写文件，而是把动作封装成`DroneAction`/`LightAction`回调，等到`drone.end()`时统一执行，生成`outputString`与`outpy`两份中间结果。前者是块状XML程序，后者是线性Python脚本。
 
-        3. “编译”层：`read_xml()`再反向把块状XML扫描成统一的事件表示`dots`。从编译器视角看，`dots`就相当于一个更接近执行语义的IR，后续的`dots2line`、`dots2angle`、`dots2led`则分别把它编译到位置、姿态和灯光三条时间序列上。
+        3. “编译”层：`read_xml()`再反向把块状XML树遍历成统一的事件表示`dots`。从编译器视角看，`dots`就相当于一个更接近执行语义的IR，后续的`dots2line`、`dots2angle`、`dots2led`则分别把它编译到位置、姿态和灯光三条时间序列上。
 
-        `read_xml()`本身的关键不是语法，而是状态维护。它在单次扫描中持续维护`time, x, y, z, vel, acc, w, points`这几个运行时状态：
+        `read_xml()`本身的关键不是XML语法，而是遍历过程中的状态维护。树形解析器持续维护`time, x, y, z, velocity, acceleration, angular_velocity, points`这些运行时状态：
 
         - `block_inittime`直接把时间光标跳到绝对时刻。
         - `block_delay`把时间光标向后推进。
         - `Goertek_HorizontalSpeed`和`Goertek_AngularVelocity`更新后续动作默认使用的速度参数。
         - `Goertek_MoveToCoord`和`Goertek_Move`把当前位置变化编译成位移事件。
         - `Goertek_Point` / `Goertek_MoveToPoint`把命名点解析成坐标跳转。
-        - `controls_repeat`通过缩进层级截出子程序文本，再递归调用`read_xml()`展开循环体。
+        - `controls_repeat`读取`statement`中的子树，并按`TIMES`次数重复遍历。
 
-        因而它更像一个单遍解释器：边扫描、边更新运行时状态、边发出IR事件，而不是先建树再执行。
-
-        不过，如果要做新一代实现，我更推荐另一条编译路线：先把XML解析成树，再用DFS访问语法树。当前版本依赖“块类型后面第几行就是哪个field”的文本偏移规则，写起来快，但对格式变化比较脆弱；而DFS路线可以把`next`、`statement`、`controls_repeat`这些嵌套结构显式建成树节点，再在遍历过程中维护同样的运行时状态`time/x/y/z/vel/acc/w/points`。这样做的好处是：
-
-        1. 结构更稳，不依赖缩进和行号偏移；
-        2. 更容易支持新块类型；
-        3. 更适合把“编译XML到dots IR”单独做成一个清晰模块；
-        4. 循环、条件、嵌套statement在语义上更容易解释清楚。
-
-        也就是说，当前仓库的`read.py`适合学习“最小可用实现”，而如果目标是复刻并长期维护，建议把它重写成“XML树 → DFS遍历 → dots IR”的编译器。
+        因而它是“XML树 → 执行链遍历 → dots IR”的单遍解释器：边遍历、边更新运行时状态、边发出IR事件。旧的文本偏移实现保留在`read.py`中只作为兼容回退，不是正常工程读取的主路。
 
         真正难复刻的是`dots2line()`，因为它内部写了一个离散时间状态机。可以把它理解成“取当前有效移动事件 → 生成一段局部运动计划 → 逐帧执行 → 随时检查是否被下一条指令打断”。
 
@@ -203,7 +197,7 @@
     2. 渲染
 
         ```python
-        show(data,t0=None,music=None,field=6,device="F400",show=True,save="",FPS=200,max_fps=200,ThreeD=False,imshow=[120,-15],d=(600,450),track=[],skin=1,workers=None)
+        show(data,t0=None,music=None,field=6,device="F400",show=True,save="",FPS=200,max_fps=200,ThreeD=False,imshow=[120,-15],d=(600,450),track=[],skin=1,size=1,ssaa=1,workers=None)
         ```
 
         这里参数比较多，需要一一介绍
@@ -612,19 +606,7 @@
         }
         ```
 
-        上述参数可以修改，比方说你想让最大速度更大一点，你可以
-
-        ```python
-        d1.config['velRange']=(20,250)
-        ```
-
-        这样做存在一定危险，但实践已经证明了，F400可以飞到300cm的高度
-        
-        对此，可以对于超出小鸟飞飞官方程序所设定的参数范围进行一定尝试
-
-        此时，实际飞行显得尤为重要，虽然F400飞到了300cm，但在比赛时，它吸上了上层防护网，造成了失分
-
-        不过，通过合理地扩大参数范围，可以使你在创造时有更大的发挥空间，做到官方软件所做不到的动作，在比赛中脱颖而出
+        这些范围同时参与PyFii的参数检查和工程场地判断，不应为了消除异常或追求视觉效果而扩大。模拟器不是飞控安全证明；真机参数必须遵守设备说明、场地条件和比赛规则，并经过有资质人员的安全复核。
 
         ```python
         d1.X=100
@@ -652,16 +634,16 @@
 
         水平速度200cm/s
 
-        水平加速度400cm/s
+        水平加速度400cm/s^2
 
         竖直速度200cm/s
 
-        竖直加速度400cm/s
+        竖直加速度400cm/s^2
 
         直线移动至(250,250,250)
 
         ```python
-        d1.inittime(7）
+        d1.inittime(7)
         d1.land()
         ```
 
@@ -675,7 +657,7 @@
 
         结束
         
-        以上是一个示例，下文将介绍```drone```类pyfii1.1.1中的所有模块
+        以上是一个示例，下文列出当前常用的```Drone```动作
 
         ```python
         d1.takeoff(1,100)
@@ -763,7 +745,7 @@
         d1.HorseRace(colors)
         # 走马灯(颜色)
         ```
-        pyfii 1.5.0及后续版本中加入了灯光模拟支持，但是只支持显示点灯和灭灯
+        当前轨迹模拟会保留灯光状态；复杂灯效在预览中的表现可能比真机简化。
 
         在编写移动时，建议使用```d1.move2(x,y,z)```，如果想要使用```d1.move(x,y,z)```，可以使用```d1.move2(d1.x+x,d1.y+y,d1.z+z)```代替
 
@@ -808,12 +790,12 @@
         ```music```是一个字符串，是音乐的文件名，如```"xxx.mp3"```，如果不写```music```就是没音乐
 
         ```python
-        F.save(field=4)
+        F.save()
         ```
 
         这就是储存文件
 
-        ```field```为地毯大小
+        PyFii 1.6.0会根据无人机配置自动写入地毯大小。旧的```field```参数会被忽略并产生兼容性warning。
 
         从源码看，`Fii`类做的不是单纯“存文件”，而是工程装配。它一方面把每架无人机在`drone.end()`后生成的`outputString`落盘为各自的`webCodeAll.xml`，另一方面把工程级信息写入顶层`.fii`：包括`DeviceType`、场地尺寸、音乐、动作组目录、动作组与UAVID映射、起飞坐标和控制时间节点。
 
@@ -826,7 +808,7 @@
         如
 
         ```python
-        F.save(addlights=True,field=6)
+        F.save(addlights=True)
         ```
 
         此时，pyfii会删去原来的灯光，覆写上新的
@@ -837,7 +819,7 @@
 
         在解释DroneAction类和LightAction类的原理之前，你可能需要一些关于回调函数(callback)的知识
 
-        你可以查看[tests/class_callback_test.py](../../tests/class_callback_test.py)来了解回调函数的行为
+        可以查看仓库中的```tests/class_callback_test.py```了解回调函数的行为。该测试文件不会随前端静态文档一起部署。
 
         使用回调函数，是为了延迟函数或方法的执行。可以实现写一段代码（即回调函数），但不立即执行，之后可以对回调函数进行重新排序，在需要的时间被调用。
 
@@ -850,50 +832,37 @@
         以上叙述可能理解起来比较复杂，这里举个例子：
 
         ```python
-        # Drone类中
-            def move2(self, x, y, z, timestamp=None):
-                # 代码段 1
-                x,y,z=int(x+0.5),int(y+0.5),int(z+0.5)
-                if self.outRange(x,'xyRange') or self.outRange(y,'xyRange') or self.outRange(z,'zRange'):   # 超出范围提醒
-                    raise Warning("Out of range.超出范围。")
+        # Drone类中的简化结构
+        def move2(self, x, y, z, timestamp=None):
+            # 代码段1：调用API时立即更新目标位置，供后续编排读取。
+            x, y, z = int(x + 0.5), int(y + 0.5), int(z + 0.5)
+            if self.outRange(x, "xyRange") or self.outRange(y, "xyRange") or self.outRange(z, "zRange"):
+                raise Warning("Out of range.超出范围。")
+            self.x, self.y, self.z = x, y, z
+
+            def move2_callback(self, x, y, z):
+                # 代码段2：end()执行回调时再次更新状态。
                 self.x, self.y, self.z = x, y, z
-                # 代码段 1 结束
-                def move2_callback(self, x, y, z):
-                    # 代码段 2
-                    x,y,z=int(x+0.5),int(y+0.5),int(z+0.5)
-                    self.x, self.y, self.z = x, y, z
-                    # 代码段 2 结束
-                    # 代码段 3
-                    spaces='  '*(self.space+self.block)
-                    if self.inT:
-                        self.outputString += spaces+'''<next>
-            '''
-                        self.block+=1
-                        spaces+='  '
-                    self.outputString += spaces+'''<block type="Goertek_MoveToCoord">
-        '''+spaces+'''  <field name="X">'''+str(x)+'''</field>
-        '''+spaces+'''  <field name="Y">'''+str(y)+'''</field>
-        '''+spaces+'''  <field name="Z">'''+str(z)+'''</field>
-        '''
-                    self.block+=1
-                    self.inT=True
-                    self.outpy+='''move2('''+str(x)+''','''+str(y)+''','''+str(z)+''')
-        '''
-                    # 代码段 3 结束
-                self.append_action(DroneAction(move2_callback, [self, x,y,z], timestamp))   # 将动作添加到动作列表里去
+                # 代码段3：把对应XML片段和Python语句追加到输出缓冲区。
+                self.outputString += "...Goertek_MoveToCoord..."
+                self.outpy += f"move2({x},{y},{z})\n"
+
+            self.append_action(
+                DroneAction(move2_callback, [self, x, y, z], timestamp)
+            )
 
         ```
-        示例代码是移动无人机到特定位置的代码，代码段1计算了无人机位置（`self.x, self.y, self.z`储存无人机当前位置），同时给出超出范围提醒。代码段23在`move2_callback`这个回调函数当中，代码段2又重复了一遍代码段1的操作，但是没有超出范围提醒，因为在合并动作和灯光时，会将无人机放回起始位置，之后重复一遍位置计算，这是因为第一次位置计算用来方便用户调取d`rone.x，drone.y, drone.z`的位置信息，第二次位置计算用来生成fii工程。
+        示例代码省略了实际XML字符串。代码段1计算无人机目标位置并检查范围；代码段2、3位于`move2_callback`中，在合并动作和灯光时再次更新状态并生成工程内容。第一次位置计算方便用户读取`drone.x, drone.y, drone.z`，第二次位置计算服务于最终代码生成。
 
         代码段3主要修改了`self.outputString`和`self.outpy`，这两个变量分别写入到`webCodeAll.xml`和`pyfiiCode.py`中，`self.inT`和`self.block`主要来满足xml文件的格式要求。
 
         最后一行代码创建了一个`DroneAction`对象，其定义如下：
 
         ```python
-        DroneAction(self, action_callback, parameter, timestamp)
+        DroneAction(action_callback, parameter, timestamp)
         ```
 
-        这是`DroneActon`的构造函数，`action_callback`是无人机动作回调函数，`parameter`是回调函数的参数，`timestamp`是时间戳。
+        这是`DroneAction`的构造函数，`action_callback`是无人机动作回调函数，`parameter`是回调函数的参数，`timestamp`是时间戳。
 
         可见最后一段代码创建了一个无人机动作并将其添加到无人机动作列表里。
 
@@ -901,19 +870,22 @@
 
         ```python
 
-        def action(self, ..., timestamp):
+        def action(self, *parameters, timestamp=None):
             # 首先计算位置
 
             # 再输出提示信息
 
-            def action_callback(self, ...):
+            def action_callback(self, *parameters):
                 # 相同的计算位置
 
                 # 但是没有提示信息
 
                 # 在fii工程文件变量里添加动作对应的字符串
+                pass
             
-            self.append_action(DroneAction(action_callback, [self, ...], timestamp))
+            self.append_action(
+                DroneAction(action_callback, [self, *parameters], timestamp)
+            )
             # 把动作添加到无人机动作列表
 
         ```

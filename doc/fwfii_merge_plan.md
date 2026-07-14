@@ -12,7 +12,7 @@
 | 上下线 | 纯离线，产物是 `.fii` 文件喂给厂商软件（src 内无任何 socket/upload/串口代码） | 直连真机 / 生成 `.ls` 任务上传 |
 | 依赖 | 重（opencv/pyqt5/numpy/pygame/ffmpy） | core 零依赖，serial/monitor 为可选 extra |
 | License | GPLv3 | MIT |
-| 版本/布局 | 1.5.0，src 布局，已部署 pyfii.cn | 1.0.1，flat 布局，仅 mock 测试、未上真机 |
+| 版本/布局 | 1.6.0，src 布局，已部署 pyfii.cn | 1.0.1，flat 布局，仅 mock 测试、未上真机 |
 
 **关系：互补的两层，不是重复造轮子。** 唯一真正重叠的是命令 DSL
 （两边都有 Takeoff/Land/Move2/LED），但语义不同：pyfii 的指令在时间轴上累积、

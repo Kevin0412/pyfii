@@ -212,15 +212,43 @@
     # 保存
     name='group_flight_6m_2'
     F=pf.Fii(name,ds)
-    F.save(addlights=True,field=6)
+    F.save(addlights=True)
     ```
 
     其中，最关键的一行是
 
     ```python
-    F.save(addlights=True,field=6)
+    F.save(addlights=True)
     ```
 
     运行结果就是原来的灯光被删除，新的灯光被加入了进去
+
+3. F600 灯光
+
+    F600 使用`Drone6`，灯光接口与F400不同：
+
+    ```python
+    d1 = pf.Drone6(40, 40, pf.drone_config_4m)
+
+    d1.AllOn("#66ccff")
+    d1.AllOff()
+    d1.BodyOn((255, 255, 255))
+    d1.BodyOff()
+
+    # color, 亮起时长ms, 熄灭/渐暗时长ms, 亮度1..5
+    d1.AllBlink("#ff0000", 300, 300, 5)
+    d1.AllBreath("#0000ff", 800, 800, 4)
+    d1.BodyBlink("#00ff00", 300, 300, 5)
+    d1.BodyBreath("#66ccff", 800, 800, 4)
+
+    # motor取0..4，0表示全部电机
+    d1.MotorOn(1, "#ff0000")
+    d1.MotorOff(1)
+    d1.MotorBlink(2, "#00ff00", 300, 300, 5)
+    d1.MotorBreath(3, "#0000ff", 800, 800, 4)
+    d1.MotorHorse(["#ff0000", "#00ff00", "#0000ff"], True, 1200)
+    ```
+
+    `timestamp`和`order`参数的对齐规则与F400相同。复杂灯效可以写入工程，但模拟器可能只显示简化后的当前颜色状态，最终效果应以设备和官方软件为准。
 
 
