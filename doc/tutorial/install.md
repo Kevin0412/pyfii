@@ -56,6 +56,8 @@ sudo apt install -y libgl1 libglib2.0-0
 ./apps/pyfii-gui/start.sh --no-install
 ```
 
+脚本会检查 Python、Node.js 和 npm，缺少时停止启动。未安装 FFmpeg 时只显示 warning 并继续运行：无声 MP4 仍可导出，但工程音乐不能合并到视频中。
+
 也可以分别启动。
 
 后端：

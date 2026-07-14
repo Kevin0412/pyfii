@@ -77,7 +77,7 @@ GUI 后端会把这些 warning 结构化成前端可展示的事件，例如 `ac
 - `/doc`、`/guide`、`/tutorial/*` 和旧 `#/...` 链接会转换到新的 `/docs/...` 层级，`/gui` 兼容跳转到 `/studio`。
 - 后端异步 MP4 导出，前端只负责创建任务、轮询状态、展示失败和下载。
 
-移动布局按设备类型和屏幕方向处理，而不是只按浏览器窗口宽度处理。普通电脑缩窄窗口仍保持电脑端界面；手机和平板竖屏的工作台都把模拟画布放在项目信息之前，画布按 `2:1` 占满屏幕宽度；平板横屏保持电脑端工作台。手机文档页将完整目录折叠在当前文档标题下，平板竖屏则显示双列目录。
+移动布局按设备类型和屏幕方向处理，而不是只按浏览器窗口宽度处理。普通电脑缩窄窗口仍保持电脑端界面；手机和平板竖屏的工作台都把模拟画布放在项目信息之前，画布按 `2:1` 占满屏幕宽度；平板横屏保持电脑端工作台。手机文档页将完整目录折叠在当前文档标题下，桌面和平板目录默认展开，其中平板竖屏显示双列目录。
 
 Canvas 内部虚拟画布固定为 `1200x600`，按容器缩放显示。渲染器位于 `frontend/src/renderer/`，不依赖 Vue，便于后续复用。
 
@@ -108,6 +108,8 @@ Three.js 预览从轨迹帧读取加速度，并沿用 core 的 `wing_force = ac
 ```
 
 脚本会同时启动前后端，并在 `apps/pyfii-gui/logs/<启动时间>-<进程号>/` 中分别保存两端日志；文件中的每一行带本地时间和时区，终端仍会实时显示服务原始输出。日志根目录可通过 `PYFII_GUI_LOG_DIR` 覆盖。
+
+脚本会检查 Python、Node.js 和 npm，缺少这些必需命令时停止。FFmpeg 只用于把工程音乐封装进导出视频，因此缺少时只显示 warning 并继续启动；无声 MP4 导出仍可使用。
 
 先安装 pyfii core：
 
@@ -290,6 +292,7 @@ test -f apps/pyfii-gui/frontend/dist/index.html
 
 ```bash
 python -m compileall apps/pyfii-gui/backend/src apps/pyfii-gui/backend/scripts
+python -m pytest -q tests/test_frontend_docs.py
 PYTHONPATH=apps/pyfii-gui/backend/src:src pytest -q apps/pyfii-gui/backend/tests
 cd apps/pyfii-gui/frontend
 npm run test:geometry

@@ -337,7 +337,7 @@ test -f apps/pyfii-gui/frontend/dist/index.html
 - 项目载入显示确定百分比：ZIP 已上传字节映射到 0–25%，后端解压和解析完成后到 50%，轨迹与安全日志两个响应各完成后推进到 75% 和 100%；不会用循环动画冒充进度。
 - 项目门户页和跨页面一致的站点导航。
 - 未保存主题选择时，门户、Guide、文档和教程默认浅色，飞行工作台默认深色；支持手动切换并记住用户选择。界面控件支持中文/英文切换，当前 Markdown 文档正文以中文为准。
-- 移动布局区分手机、平板和屏幕方向，不会因为电脑浏览器窗口变窄就切到手机界面。手机和平板竖屏的工作台都让画布按 `2:1` 铺满屏幕宽度并优先显示；平板横屏沿用电脑端工作台。手机文档目录默认折叠，平板竖屏显示双列目录。
+- 移动布局区分手机、平板和屏幕方向，不会因为电脑浏览器窗口变窄就切到手机界面。手机和平板竖屏的工作台都让画布按 `2:1` 铺满屏幕宽度并优先显示；平板横屏沿用电脑端工作台。手机文档目录默认折叠，桌面和平板目录保持展开，其中平板竖屏显示双列目录。
 - 统一的文档与教程中心，内部包含 Guide、PyFii 文档、专题教程、编舞与 Agent、工程研究静态页。
 - 安全解压并调用 `read_fii()` 解析轨迹。
 - GUI 默认只把一半 CPU 核心分配给单次轨迹解析，为并发请求预留资源；可通过 `PYFII_GUI_TRAJECTORY_WORKERS` 调整。
@@ -372,6 +372,7 @@ core renderer 在每帧写入后通过可选回调报告真实帧进度。后端
 
 ```bash
 cd <repo-root>
+python -m pytest -q tests/test_frontend_docs.py
 PYTHONPATH=apps/pyfii-gui/backend/src:src pytest -q apps/pyfii-gui/backend/tests
 python -m compileall -q apps/pyfii-gui/backend/src apps/pyfii-gui/backend/tests
 cd apps/pyfii-gui/frontend
