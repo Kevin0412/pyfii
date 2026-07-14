@@ -16,7 +16,8 @@ from .cache import ProjectRecord
 from .storage import video_export_root
 
 
-RenderVideo = Callable[[ProjectRecord, VideoExportRequest, Path], Path]
+RenderProgress = Callable[[int, int], None]
+RenderVideo = Callable[[ProjectRecord, VideoExportRequest, Path, RenderProgress], Path]
 
 
 @dataclass
@@ -58,6 +59,7 @@ def render_project_video(
     project: ProjectRecord,
     options: VideoExportRequest,
     output_path: Path,
+    progress_callback: RenderProgress,
 ) -> Path:
     """Adapt a GUI project record to the current PyFii core renderers."""
 
@@ -86,9 +88,9 @@ def render_project_video(
         "workers": settings.video_render_workers,
     }
     renderer = (
-        FiiRender3D(track, config)
+        FiiRender3D(track, config, progress_callback=progress_callback)
         if options.render_mode == "three3d"
-        else FiiRender2D(track, config)
+        else FiiRender2D(track, config, progress_callback=progress_callback)
     )
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -141,14 +143,24 @@ class VideoExportManager:
         record = self.require(project.project_id, export_id)
         with self._lock:
             record.status = "running"
-            record.progress_percent = None
+            record.progress_percent = 0.0
+
+        def report_progress(completed: int, total: int) -> None:
+            frame_fraction = completed / total if total > 0 else 0.0
+            with self._lock:
+                record.progress_percent = round(max(0.0, min(1.0, frame_fraction)) * 95, 1)
 
         captured_stdout = io.StringIO()
         try:
             with warnings.catch_warnings(record=True) as captured:
                 warnings.simplefilter("always")
                 with contextlib.redirect_stdout(captured_stdout):
-                    self._render_video(project, options, record.output_path)
+                    self._render_video(
+                        project,
+                        options,
+                        record.output_path,
+                        report_progress,
+                    )
             unique_warnings = list(dict.fromkeys(str(item.message) for item in captured))
             with self._lock:
                 record.status = "completed"

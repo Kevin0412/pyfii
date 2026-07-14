@@ -46,9 +46,20 @@
       <div v-if="exporting" class="export-overlay">
         <div class="export-progress-card">
           <span>{{ tt("exportingVideo") }}</span>
-          <progress v-if="exportProgress !== null" :value="exportProgress" max="100" />
-          <progress v-else max="100" />
-          <span>{{ exportProgress === null ? tt("renderingOnServer") : `${Math.round(exportProgress)}%` }}</span>
+          <div class="export-progress-row">
+            <div
+              class="export-progress-track"
+              :class="{ indeterminate: exportProgress === null }"
+              role="progressbar"
+              aria-valuemin="0"
+              aria-valuemax="100"
+              :aria-valuenow="exportProgress === null ? undefined : Math.round(exportProgress)"
+            >
+              <span :style="{ width: exportProgress === null ? undefined : `${exportProgress}%` }" />
+            </div>
+            <strong>{{ exportProgress === null ? "…" : `${Math.round(exportProgress)}%` }}</strong>
+          </div>
+          <span class="export-phase">{{ exportPhaseText }}</span>
         </div>
       </div>
       <div v-if="exportMessage" class="export-message" :class="{ error: exportFailed }">
@@ -87,6 +98,7 @@ const fw = ref(0);
 const fh = ref(0);
 const exporting = ref(false);
 const exportProgress = ref<number | null>(0);
+const exportStatus = ref<"queued" | "running">("queued");
 const exportMessage = ref("");
 const exportFailed = ref(false);
 const renderFps = ref(0);
@@ -105,6 +117,11 @@ const canvasImageRendering = computed(() => player.renderScale >= 1 ? "auto" : "
 const hudFrame = computed(() => getFrameAtTime(project.tracks, player.currentTimeMs));
 const hudDrones = computed(() => [...hudFrame.value.drones].sort((a, b) => a.id - b.id));
 const renderFpsText = computed(() => renderFps.value > 0 ? renderFps.value.toFixed(1) : project.trackFps.toFixed(1));
+const exportPhaseText = computed(() => {
+  if (exportStatus.value === "queued") return tt("waitingForRenderer");
+  if (exportProgress.value !== null && exportProgress.value >= 95) return tt("finalizingVideo");
+  return tt("renderingOnServer");
+});
 
 let canvasRenderer: PyfiiCanvasRenderer | null = null;
 let threeRenderer: PyfiiThreeRenderer | null = null;
@@ -248,6 +265,7 @@ async function exportVideo(): Promise<void> {
 
   exporting.value = true;
   exportProgress.value = 0;
+  exportStatus.value = "queued";
   exportMessage.value = "";
   exportFailed.value = false;
 
@@ -264,11 +282,15 @@ async function exportVideo(): Promise<void> {
     };
     let job = await createVideoExport(project.projectId, options);
     exportProgress.value = job.progress_percent;
+    exportStatus.value = job.status === "queued" ? "queued" : "running";
 
     while (job.status === "queued" || job.status === "running") {
       await waitMs(750);
       job = await fetchVideoExport(project.projectId, job.export_id);
       exportProgress.value = job.progress_percent;
+      if (job.status === "queued" || job.status === "running") {
+        exportStatus.value = job.status;
+      }
     }
 
     if (job.status === "failed") {
@@ -287,6 +309,7 @@ async function exportVideo(): Promise<void> {
   } finally {
     exporting.value = false;
     exportProgress.value = 0;
+    exportStatus.value = "queued";
   }
 }
 
@@ -426,9 +449,47 @@ onUnmounted(() => {
   font-size: 14px;
 }
 
-.export-progress-card progress {
-  width: 240px;
-  height: 8px;
+.export-progress-row {
+  width: min(320px, 70vw);
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 44px;
+  align-items: center;
+  gap: 12px;
+}
+
+.export-progress-row strong {
+  text-align: right;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.export-progress-track {
+  height: 10px;
+  overflow: hidden;
+  border: 1px solid var(--border-control);
+  background: var(--panel-bg-alt);
+}
+
+.export-progress-track span {
+  display: block;
+  height: 100%;
+  background: var(--text-strong);
+  transition: width 0.25s ease;
+}
+
+.export-progress-track.indeterminate span {
+  width: 38%;
+  animation: export-progress-slide 1.1s ease-in-out infinite;
+}
+
+.export-phase {
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
+@keyframes export-progress-slide {
+  from { transform: translateX(-110%); }
+  to { transform: translateX(270%); }
 }
 
 .export-message {

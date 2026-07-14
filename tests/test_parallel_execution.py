@@ -101,6 +101,27 @@ class ParallelExecutionTests(unittest.TestCase):
             any("disabled while a debugger is attached" in str(item.message) for item in captured)
         )
 
+    def test_video_reports_written_frame_progress(self):
+        track = DroneTrack()
+        track.t0 = 1
+        writer = _VideoWriter()
+        progress = []
+        renderer = _ConcurrentRenderer(
+            track,
+            {"FPS": 1, "max_fps": 1, "workers": 1, "progress": False},
+            progress_callback=lambda completed, total: progress.append((completed, total)),
+        )
+        renderer._mux_audio = lambda path: None
+
+        with (
+            warnings.catch_warnings(),
+            patch("pyfii.fiiRead.cv2.VideoWriter", return_value=writer),
+        ):
+            warnings.simplefilter("ignore")
+            renderer.save("unused")
+
+        self.assertEqual(progress, [(0, 4), (1, 4), (2, 4), (3, 4), (4, 4)])
+
 
 if __name__ == "__main__":
     unittest.main()

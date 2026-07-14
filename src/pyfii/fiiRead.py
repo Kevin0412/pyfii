@@ -177,9 +177,10 @@ def _render_frame(index):
 class FiiRender:
     """渲染器基类：负责播放/保存的公共编排，具体绘制交给子类"""
 
-    def __init__(self, track: DroneTrack, render_config: dict = None):
+    def __init__(self, track: DroneTrack, render_config: dict = None, progress_callback=None):
         self.track = track
         self.render_config = {**DEFAULT_CONFIG, **(render_config or {})}
+        self._progress_callback = progress_callback
         self.f = 0
         self.time_FPS = None
         self.time_read = None
@@ -370,6 +371,8 @@ class FiiRender:
             frame_indexes.append(self.k)
             self.K += max_fps/FPS
             self.k = int(self.K+0.5)
+        if self._progress_callback is not None:
+            self._progress_callback(0, len(frame_indexes))
 
         configured_workers = cfg["workers"]
         workers = _render_worker_count(configured_workers, len(frame_indexes))
@@ -394,6 +397,8 @@ class FiiRender:
         def write_frame(position, img):
             nonlocal k_previous
             video.write(img)
+            if self._progress_callback is not None:
+                self._progress_callback(position+1, len(frame_indexes))
             next_index = (
                 frame_indexes[position+1]
                 if position+1 < len(frame_indexes)

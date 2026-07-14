@@ -1,5 +1,6 @@
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from threading import Event
 from time import monotonic, sleep
 from unittest.mock import patch
 import unittest
@@ -49,7 +50,7 @@ class VideoExportManagerTests(unittest.TestCase):
         with TemporaryDirectory() as temporary_dir:
             output_root = Path(temporary_dir)
 
-            def render(_project, _options, output_path):
+            def render(_project, _options, output_path, _progress):
                 output_path.parent.mkdir(parents=True, exist_ok=True)
                 output_path.write_bytes(b"mp4")
                 return output_path
@@ -72,7 +73,7 @@ class VideoExportManagerTests(unittest.TestCase):
             )
 
     def test_failed_render_is_reported_without_download(self):
-        def render(_project, _options, _output_path):
+        def render(_project, _options, _output_path, _progress):
             raise RuntimeError("codec unavailable")
 
         manager = VideoExportManager(max_workers=1, render_video=render)
@@ -82,6 +83,30 @@ class VideoExportManagerTests(unittest.TestCase):
         self.assertEqual(finished.status, "failed")
         self.assertEqual(finished.error, "codec unavailable")
         self.assertIsNone(finished.as_response()["download_url"])
+
+    def test_reports_real_frame_progress_before_finalizing(self):
+        progress_reported = Event()
+        allow_completion = Event()
+
+        def render(_project, _options, output_path, progress):
+            progress(1, 2)
+            progress_reported.set()
+            allow_completion.wait(timeout=1)
+            output_path.parent.mkdir(parents=True, exist_ok=True)
+            output_path.write_bytes(b"mp4")
+            return output_path
+
+        manager = VideoExportManager(max_workers=1, render_video=render)
+        export = manager.create(project_record(), VideoExportRequest())
+
+        self.assertTrue(progress_reported.wait(timeout=1))
+        running = manager.require("project-1", export.export_id)
+        self.assertEqual(running.status, "running")
+        self.assertEqual(running.progress_percent, 47.5)
+
+        allow_completion.set()
+        finished = wait_until_finished(manager, export.export_id)
+        self.assertEqual(finished.progress_percent, 100.0)
 
 
 if __name__ == "__main__":
