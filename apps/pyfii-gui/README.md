@@ -87,7 +87,7 @@ PYFII_GUI_MAX_UNCOMPRESSED_BYTES=524288000
 PYFII_GUI_MAX_ZIP_FILES=5000
 PYFII_GUI_ENABLE_LOCAL_PROJECT_IMPORT=false
 PYFII_GUI_LOCAL_PROJECT_ROOTS=/path/to/pyfii/tools/choreo_agent/agent_projects
-PYFII_GUI_DEPLOY_CONFIG=/path/to/deploy.local.json
+PYFII_GUI_DEPLOY_CONFIG=/path/to/deploy.json
 ```
 
 默认 CORS 允许 `http://localhost:5173` 和常见私有局域网 IP 的 `:5173` 开发源；生产部署建议显式设置 `PYFII_GUI_CORS_ORIGINS`。
@@ -138,7 +138,7 @@ tools/choreo_agent/agent_projects/stability_flash_3/output
 备案号属于部署实例配置，不提交到 git。默认配置为空，门户页不会显示备案信息。需要启用时复制示例文件：
 
 ```bash
-cp apps/pyfii-gui/deploy.example.json apps/pyfii-gui/deploy.local.json
+cp apps/pyfii-gui/deploy.example.json apps/pyfii-gui/deploy.json
 ```
 
 填写部署实例自己的信息；下面仍是占位示例，不是真实备案号：
@@ -152,7 +152,7 @@ cp apps/pyfii-gui/deploy.example.json apps/pyfii-gui/deploy.local.json
 }
 ```
 
-`deploy.local.json` 已被 `.gitignore` 忽略。也可以通过环境变量覆盖：
+`deploy.json` 是云服务器实例的本地配置，已被 `.gitignore` 忽略；后端默认读取该文件。也可以通过 `PYFII_GUI_DEPLOY_CONFIG` 指向服务器上的其他路径，或通过环境变量逐项覆盖：
 
 ```bash
 PYFII_GUI_ICP_BEIAN=
@@ -213,7 +213,7 @@ location / {
 
 文档在构建时从 `doc/` 下全部 22 篇 Markdown 源导入，并随文档页按需加载为独立前端 chunk，避免维护一套复制内容，也不增加模拟器首次加载的文档体积。真实飞行分析使用的 `doc/images/` 图表和指标文件也由 Vite 一并打包。
 
-备案信息只显示在门户页 footer。只有后端返回了显式配置的 ICP 或公安备案号时该区域才存在；文档页和工作台不重复展示。
+备案信息只显示在门户页 footer。只有后端返回了显式配置的 ICP 或公安备案号时该区域才存在；公安备案项会显示标准备案图标，链接使用 `gongan_url`。文档页和工作台不重复展示。
 
 ## 当前支持
 

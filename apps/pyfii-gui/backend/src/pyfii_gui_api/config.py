@@ -90,7 +90,7 @@ class Settings:
         ]
 
         deploy_config_path = Path(
-            os.environ.get("PYFII_GUI_DEPLOY_CONFIG", str(gui_root / "deploy.local.json"))
+            os.environ.get("PYFII_GUI_DEPLOY_CONFIG", str(gui_root / "deploy.json"))
         )
         if not deploy_config_path.is_absolute():
             deploy_config_path = repo_root / deploy_config_path

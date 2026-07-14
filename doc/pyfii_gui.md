@@ -151,10 +151,10 @@ PYFII_GUI_MAX_UPLOAD_BYTES=104857600
 PYFII_GUI_MAX_UNCOMPRESSED_BYTES=524288000
 PYFII_GUI_MAX_ZIP_FILES=5000
 PYFII_GUI_ENABLE_LOCAL_PROJECT_IMPORT=false
-PYFII_GUI_DEPLOY_CONFIG=/path/to/deploy.local.json
+PYFII_GUI_DEPLOY_CONFIG=/path/to/deploy.json
 ```
 
-ICP备案配置示例为 `apps/pyfii-gui/deploy.example.json`。示例中的备案字段为空，默认备案区域不存在；只有在 `deploy.local.json` 或 `PYFII_GUI_ICP_BEIAN` / `PYFII_GUI_GONGAN_BEIAN` 中明确填写后才在门户页 footer 显示。仓库不包含真实备案号，工作台和文档页也不显示备案信息。
+ICP备案配置示例为 `apps/pyfii-gui/deploy.example.json`。复制得到的 `apps/pyfii-gui/deploy.json` 是被 git 忽略的云服务器实例配置；示例中的备案字段为空，默认备案区域不存在。只有在该文件或 `PYFII_GUI_ICP_BEIAN` / `PYFII_GUI_GONGAN_BEIAN` 中明确填写后才在门户页 footer 显示，公安备案项同时显示标准备案图标。仓库不包含真实备案号，工作台和文档页也不显示备案信息。
 
 前端构建环境变量：
 

@@ -53,16 +53,26 @@ export const useUiStore = defineStore("ui", {
     } as DeploymentState,
   }),
   getters: {
-    complianceLinks: (state): Array<{ label: string; url: string }> => {
-      const links: Array<{ label: string; url: string }> = [];
+    complianceLinks: (state): Array<{
+      kind: "icp" | "gongan";
+      label: string;
+      url: string;
+    }> => {
+      const links: Array<{
+        kind: "icp" | "gongan";
+        label: string;
+        url: string;
+      }> = [];
       if (state.deployment.icp_beian) {
         links.push({
+          kind: "icp",
           label: state.deployment.icp_beian,
           url: state.deployment.icp_url || "https://beian.miit.gov.cn/",
         });
       }
       if (state.deployment.gongan_beian) {
         links.push({
+          kind: "gongan",
           label: state.deployment.gongan_beian,
           url: state.deployment.gongan_url || "#",
         });

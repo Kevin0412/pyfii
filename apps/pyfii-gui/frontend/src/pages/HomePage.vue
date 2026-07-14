@@ -81,7 +81,8 @@
           target="_blank"
           rel="noopener noreferrer"
         >
-          {{ link.label }}
+          <img v-if="link.kind === 'gongan'" :src="beianIcon" alt="" />
+          <span>{{ link.label }}</span>
         </a>
       </div>
     </footer>
@@ -89,6 +90,7 @@
 </template>
 
 <script setup lang="ts">
+import beianIcon from "../assets/beian-icon.png";
 import SiteHeader from "../components/SiteHeader.vue";
 import { text, type MessageKey } from "../i18n";
 import { useUiStore } from "../stores/ui";
@@ -340,6 +342,18 @@ h1 {
   gap: 18px;
   padding-top: 18px;
   border-top: 1px solid var(--border-soft);
+}
+
+.compliance-links a {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.compliance-links img {
+  width: 18px;
+  height: 20px;
+  object-fit: contain;
 }
 
 @media (max-width: 880px) {
