@@ -1,4 +1,4 @@
-> **已归档** — 见 [INDEX.md](INDEX.md)
+> **编舞与 Agent 研究资料。** 2026-07-14 已复核文中仓库路径和当前验证入口。逐段生成、验证和角色分配经验仍直接服务于当前 Agent；固定“零 warning 即完成”和早期路线图部分由当前 Tier 0/1/2 验证体系补充。最新状态以 `tools/choreo_agent/PLAN.md` 为准，文档索引见 [INDEX.md](INDEX.md)。
 
 # DeepSeek Cannon 设计全流程经验总结
 
@@ -387,7 +387,7 @@ for segment in music_segments:
 3. 在 AST 层面修改（替换函数体、修改变量值）
 4. 用 ast.unparse() 写回
 5. 语法检查（compile）
-6. 运行验证（read_fii + show）
+6. 运行验证（`track = pf.from_fii(...)` + `pf.show(track, show=False)`）
 ```
 
 若 AST 不可用，退而求其次：用精确的行号范围替换，避免字符串匹配。
@@ -403,7 +403,7 @@ cp script.py script.py.bak.$(date +%s)
 **原则三：单次修改单次验证**
 
 ```
-修改 → compile检查语法 → 运行 → read_fii → 警告为0 → 提交
+修改 → compile检查语法 → 运行 → `from_fii`读回 → Tier 0物理安全通过 → 预览与章法检查 → 提交
 ```
 
 不在一个修改中做多件事。一次只改一个参数（速度、间距、delay）。

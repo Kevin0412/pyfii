@@ -1,6 +1,6 @@
 # 原理
 
-> 本文面向准备维护或复刻PyFii的开发者。普通使用请先阅读[PyFii core 文档](../doc_zh_CN.md)。源码行为优先于历史版本说明。
+> 本文面向准备维护或复刻 PyFii 的开发者。2026-07-14 已按 PyFii 1.6.0、新 XML 主解析器和 `DroneTrack`/renderer 封装复核。普通使用请先阅读 [PyFii core 文档](../doc_zh_CN.md)，源码行为优先于历史版本说明。
 
 1. 小鸟飞飞文件
 
@@ -24,20 +24,20 @@
         └── test.fii
 
     其中，
-    
-    ```test.fii```文件记录的是工程级元数据。按当前源码实现，pyfii在导出时会写入无人机型号、地毯尺寸、音乐名、动作组列表、每架无人机的动作组名、UAVID、起飞位置以及控制时间标记；读入时则主要解析```MusicName```、```Actions```、```AreaL```、```DeviceType```和各动作组起飞坐标等信息。
 
-    ```checksums.xml```文件在当前pyfii实现中会为每个动作组写入一个```CheckSums```节点，用来补全工程结构；但仓库内暂未看到进一步消费这个文件的解析逻辑，因此更适合把它理解为工程打包所需的配套元数据，而不是仿真核心输入。
+    `test.fii`文件记录的是工程级元数据。按当前源码实现，pyfii在导出时会写入无人机型号、地毯尺寸、音乐名、动作组列表、每架无人机的动作组名、UAVID、起飞位置以及控制时间标记；读入时则主要解析`MusicName`、`Actions`、`AreaL`、`DeviceType`和各动作组起飞坐标等信息。
 
-    ```xxx.mp3```就是你的音乐，渲染预览时由pygame加载，导出视频后再由FFmpeg混流到mp4中。
+    `checksums.xml`文件在当前pyfii实现中会为每个动作组写入一个`CheckSums`节点，用来补全工程结构；但仓库内暂未看到进一步消费这个文件的解析逻辑，因此更适合把它理解为工程打包所需的配套元数据，而不是仿真核心输入。
 
-    ```webCodeAll.xml```是单机动作的核心表示。pyfii并不是先生成python再转xml，而是由```Drone```类的方法直接拼接```Goertek_*```和```block_*```节点，形成块状XML程序。
+    `xxx.mp3`就是你的音乐，渲染预览时由pygame加载，导出视频后再由FFmpeg混流到mp4中。
 
-    ```pyfiiCode.py```是脚本模式下的等价python表示。它和```webCodeAll.xml```是并行生成的：前者便于回放、覆写和二次编辑，后者才是fii工程中的主动作描述。
+    `webCodeAll.xml`是单机动作的核心表示。pyfii并不是先生成python再转xml，而是由`Drone`类的方法直接拼接`Goertek_*`和`block_*`节点，形成块状XML程序。
 
-    ```offlineExcuteScript.py```与pyfii当前源码主链路没有直接耦合；从仓库现状看，它更像是官方软件上传或离线执行阶段生成的中间脚本。
+    `pyfiiCode.py`是脚本模式下的等价python表示。它和`webCodeAll.xml`是并行生成的：前者便于回放、覆写和二次编辑，后者才是fii工程中的主动作描述。
 
-    ```.ls```文件同样不在pyfii当前实现的生成与解析范围内，更可能属于官方工具链面向设备下发的产物。
+    `offlineExcuteScript.py`与pyfii当前源码主链路没有直接耦合；从仓库现状看，它更像是官方软件上传或离线执行阶段生成的中间脚本。
+
+    `.ls`文件同样不在pyfii当前实现的生成与解析范围内，更可能属于官方工具链面向设备下发的产物。
 
 2. pyfii生成文件
 
@@ -70,26 +70,29 @@
         ├── readme.md
         ├── test.md
         └── test.py
-    
+
 3. pyfii模拟
 
     1. 读入文件并计算轨迹
 
         ```python
-        data,t0,music,field,device=pf.read_fii(name,fps=200)
+        flight = pf.from_fii(name, fps=200)
+        data = flight.dots
         ```
 
         这一模块实现了读入小鸟飞飞文件并输出飞行轨迹的功能
 
         其中
 
-        ```fps```是能够生成视频的最大帧率，动作采样率，值越小，运行速度越快
+        `fps`是能够生成视频的最大帧率，动作采样率，值越小，运行速度越快
 
-        ```name```是```.fii```文件所在的文件夹
+        `name`是`.fii`文件所在的文件夹
 
-        ```data```是一个列表，列表的长度是无人机数，每一个元素也是列表
+        `flight` 是 `DroneTrack`，集中保存 `dots`、`t0`、`music`、`field` 和 `device`。这里的 `data = flight.dots` 是兼容旧文档的简称；旧的五项 `read_fii()` 返回值仍然保留。
 
-        ```data[n]```列表储存了第n+1架无人机的飞行轨迹、旋转、灯光和加速度数据，每一个元素是长度为7的元组
+        `data`是一个列表，列表的长度是无人机数，每一个元素也是列表
+
+        `data[n]`列表储存了第n+1架无人机的飞行轨迹、旋转、灯光和加速度数据，每一个元素是长度为7的元组
 
         ```python
         data=[
@@ -103,18 +106,18 @@
         # (R,G,B)表示颜色，如果值为-1则表示不亮
         # (ax,ay,az)表示加速度，单位为cm/s^2
         ```
-        
-        ```t0```表示模拟结束的帧数（即动作时长```t0/fps```秒）
 
-        ```music```表示音乐，数据类型为列表，长度为1或2，元素的数据类型为字符串
+        `flight.t0`表示模拟结束的帧数（即动作时长`flight.t0/fps`秒）
+
+        `flight.music`表示音乐，数据类型为列表，元素的数据类型为字符串
 
         ```python
         music=[musicdir,musicname] # musicname不需要后缀
-        
+
         music=[musicname] # musicname为音乐的路径及名称，包括后缀
         ```
 
-        ```field```表示地毯大小，```4```表示4米毯，```6```表示6米毯
+        `flight.field`表示地毯大小，`4`表示4米毯，`6`表示6米毯；`flight.device` 保存 F400/F600 机型。
 
         如果目标是复刻这个库，那么`read.py`这一层应该理解为“从块状XML到统一时序IR，再到离散轨迹”的执行器，而不是普通读文件工具。
 
@@ -182,7 +185,7 @@
 
         对于速度加速度未定义的情况，`read_xml()`会写入默认值：水平速度60cm/s、水平加速度100cm/s^2、角速度60°/s，并追加warning。这意味着默认值是在编译XML到IR时注入的，不是在渲染层补的。
 
-        对于旋转与移动的耦合，当前实现是解耦处理的：平移由```dots2line```生成，朝向由```dots2angle```按角速度单独积分，灯光由```dots2led```独立采样，最后在统一时间轴上按索引合并。因此当前仿真没有建模角加速度，也没有让姿态反作用于位移。
+        对于旋转与移动的耦合，当前实现是解耦处理的：平移由`dots2line`生成，朝向由`dots2angle`按角速度单独积分，灯光由`dots2led`独立采样，最后在统一时间轴上按索引合并。因此当前仿真没有建模角加速度，也没有让姿态反作用于位移。
 
         `dots2angle()`也使用了一个简化状态机：它总是取当前生效的转向事件，如果是`turn`就解释成相对旋转，如果是`turn2`就解释成绝对朝向；随后以`w/fps`的角步长逐帧逼近目标角。为了避免跨越0/360度时走远路，它会先把当前角和目标角调整到最近角距离。
 
@@ -202,11 +205,11 @@
 
         这里参数比较多，需要一一介绍
 
-        ```data,t0,music,field```这四个在上文介绍过了，这里不多赘述
+        旧签名中的 `data,t0,music,field` 已在上文介绍；新代码直接传 `DroneTrack`。
 
-        ```max_fps```需要与上文```read_fii()```中的```fps```一致，否则视频速率会不正常
+        `max_fps`需要与上文`read_fii()`中的`fps`一致，否则视频速率会不正常
 
-        ```show=False```时，直接打印是否存在距离过近的情况，没有图像渲染
+        `show=False`时，直接打印是否存在距离过近的情况，没有图像渲染
 
         ```python
         flight=pf.from_fii(name)
@@ -215,43 +218,43 @@
 
         `from_fii()`返回一个`DroneTrack`，其中集中保存轨迹、总时长、音乐、场地和机型。`show(flight)`是推荐入口；原来的`show(data,t0,music,...)`调用仍然保留。
 
-        ```show==True```时，要分类讨论，```show```默认为```True```，不用写
+        `show==True`时，要分类讨论，`show`默认为`True`，不用写
 
         二维模拟：
 
-        二维模拟时，需要的参数有```skin```，因为只有二维模拟时有皮肤
+        二维模拟时，需要的参数有`skin`，因为只有二维模拟时有皮肤
 
         ```python
-        pf.show(data,t0,music,field,max_fps=200,skin=1)
+        pf.show(flight, max_fps=200, skin=1)
         #有0,1,2三种皮肤
         ```
 
         三维模拟：
 
-        三维模拟时，需要的参数有```ThreeD,imshow,d```
+        三维模拟时，需要的参数有`ThreeD,imshow,d`
 
         ```python
-        pf.show(data,t0,music,field,max_fps=200,ThreeD=True,imshow=[120,-15],d=(1,0))
+        pf.show(flight, max_fps=200, ThreeD=True, imshow=[120,-15], d=(1,0))
         # 正交
-        pf.show(data,t0,music,field,max_fps=200,ThreeD=True,imshow=[90,0],d=(600,450))
+        pf.show(flight, max_fps=200, ThreeD=True, imshow=[90,0], d=(600,450))
         # 透视
         ```
 
         其中，
 
         三维渲染使用的是cv3d，由github@Kevin0412编写，右手系
-        
-        ```imshow```这个列表表示观察者视线向量的方位角和俯仰角
 
-        ```imshow[0]==90```时，相当于视线的方位角为y轴正方向，即观察者位于正前方
+        `imshow`这个列表表示观察者视线向量的方位角和俯仰角
 
-        ```imshow[1]```为正，相当于抬头看，为负，相当于低头看
+        `imshow[0]==90`时，相当于视线的方位角为y轴正方向，即观察者位于正前方
 
-        ```d```这个元组，第一个值表示观察者距离画面中心的距离，第二个值表示距离观察者多远处画面大小比例为1（1个像素代表1cm）（可以理解为缩放或视角大小）
+        `imshow[1]`为正，相当于抬头看，为负，相当于低头看
 
-        对透视渲染有所了解的人就会知道，近大远小，当距离为0时，画面会无限大，这是不可能的，因此当第二个值为```0```时，就是正交投影，此时第一个值为画面大小比例（多少像素代表1cm）
+        `d`这个元组，第一个值表示观察者距离画面中心的距离，第二个值表示距离观察者多远处画面大小比例为1（1个像素代表1cm）（可以理解为缩放或视角大小）
 
-        推荐透视模拟6米毯时，```d=(600,450)```，4米毯时，```d=(600,550)```
+        对透视渲染有所了解的人就会知道，近大远小，当距离为0时，画面会无限大，这是不可能的，因此当第二个值为`0`时，就是正交投影，此时第一个值为画面大小比例（多少像素代表1cm）
+
+        推荐透视模拟6米毯时，`d=(600,450)`，4米毯时，`d=(600,550)`
 
         为了便于理解，我讲一讲小鸟飞飞官方软件模拟所涉及的参数。官方的三维模拟涉及了三个可由用户调整的参数，分别是方位角、俯仰角和距离。
 
@@ -261,44 +264,44 @@
 
         三维模拟时，长按空格暂停，长按q后退，长按e前进，按esc退出，在暂停时，可以通过按w,a,s,d转动视角，此时需要按esc退出暂停状态
 
-        在三维模拟的窗口中，```imshow```的两个参数会显示在画面左上角
+        在三维模拟的窗口中，`imshow`的两个参数会显示在画面左上角
 
-        此外，如果在上述模拟的参数不变的前提下，加入```save,FPS```参数，就会生成视频，此时不会跳出窗口
+        此外，如果在上述模拟的参数不变的前提下，加入`save,FPS`参数，就会生成视频，此时不会跳出窗口
 
         视频导出默认按`min(CPU核心数, 输出帧数)`并行绘制帧，仍由主线程按时间顺序写入`VideoWriter`，因此不会打乱视频。`workers=1`可关闭并行，正整数可指定线程数。
 
         ```python
-        pf.show(data,t0,music,field,max_fps=200,save='test',FPS=25)
+        pf.show(flight, max_fps=200, save='test', FPS=25)
         # skin默认值为1，可不写
         ```
-        这就是生成二维模拟的视频的方法，输出的视频为```test.mp4```，25帧/秒
+        这就是生成二维模拟的视频的方法，输出的视频为`test.mp4`，25帧/秒
 
         三维视频以次类推
 
          ```python
-        pf.show(data,t0,music,field,max_fps=200,save='test',FPS=25,ThreeD=True,imshow=[120,-15],d=(1,0))
+        pf.show(flight, max_fps=200, save='test', FPS=25, ThreeD=True, imshow=[120,-15], d=(1,0))
         # 正交
-        pf.show(data,t0,music,field,max_fps=200,save='test',FPS=25,ThreeD=True,imshow=[90,0],d=(600,450))
+        pf.show(flight, max_fps=200, save='test', FPS=25, ThreeD=True, imshow=[90,0], d=(600,450))
         # 透视
         ```
 
         例外，
 
-        全景模式不能跳出窗口，只能生成视频，这里需要```ThreeD,save,FPS,track```四个参数
+        全景模式不能跳出窗口，只能生成视频，这里需要`ThreeD,save,FPS,track`四个参数
         ```python
-        pf.show(data,t0,music,field,max_fps=200,ThreeD=True,save='test',FPS=20,track=[0])
+        pf.show(flight, max_fps=200, ThreeD=True, save='test', FPS=20, track=[0])
         # 无人机1的视角全景
-        pf.show(data,t0,music,field,max_fps=200,ThreeD=True,save='test',FPS=20,track=(280,280,165))
+        pf.show(flight, max_fps=200, ThreeD=True, save='test', FPS=20, track=(280,280,165))
         # (280,280,165)为中心的视角全景
         ```
 
-        ```track```有两种使用法，
-        
-        当它为长度为1的列表```[n]```时，表示以第n+1架无人机的视角生成全景视频
+        `track`有两种使用法，
 
-        当它为元组```(x,y,z)```时，表示以(x,y,z)为中心的视角生成全景视频
+        当它为长度为1的列表`[n]`时，表示以第n+1架无人机的视角生成全景视频
 
-        原理是用OpenCV完成2D/视频帧绘制，pygame负责预览时的音乐同步播放，导出视频时先由OpenCV写入无声```*_process.mp4```，再用FFmpeg把背景音乐混流成最终mp4。2D渲染会分别绘制俯视、正视、侧视三视图；3D渲染则调用```cv3d```里的投影器，把三维对象列表投到二维画面。
+        当它为元组`(x,y,z)`时，表示以(x,y,z)为中心的视角生成全景视频
+
+        原理是用OpenCV完成2D/视频帧绘制，pygame负责预览时的音乐同步播放，导出视频时先由OpenCV写入无声`*_process.mp4`，再用FFmpeg把背景音乐混流成最终mp4。2D渲染会分别绘制俯视、正视、侧视三视图；3D渲染则调用`cv3d`里的投影器，把三维对象列表投到二维画面。
 
         `show()`本身的核心并不复杂，本质上就是“一个时钟驱动的离散帧渲染器”：维护当前帧索引`k`，把它映射到`data[a][k]`这类采样结果上，再根据当前时间渲染一帧。源码里实时预览模式直接取
 
@@ -576,17 +579,17 @@
 
 4. pyfii编程
 
-    pyfii编程主要涉及了```drone```和```Fii```两个类
+    pyfii编程主要涉及了`drone`和`Fii`两个类
 
-    1. ```drone```类
+    1. `drone`类
         ```python
         d1=pf.Drone(x,y,config)
         ```
-        新建一架无人机```d1```，起飞位置(x,y)
-        
-        ```config```是一个字典，记录了无人机的参数
+        新建一架无人机`d1`，起飞位置(x,y)
 
-        pyfii内置的```config```有两种，一种是```pf.drone_config_6m```，另一种是```pf.drone_config_4m```，分别对应F400飞6米毯和4米毯
+        `config`是一个字典，记录了无人机的参数
+
+        pyfii内置的`config`有两种，一种是`pf.drone_config_6m`，另一种是`pf.drone_config_4m`，分别对应F400飞6米毯和4米毯
 
         ```python
         drone_config_6m={
@@ -656,8 +659,8 @@
         ```
 
         结束
-        
-        以上是一个示例，下文列出当前常用的```Drone```动作
+
+        以上是一个示例，下文列出当前常用的`Drone`动作
 
         ```python
         d1.takeoff(1,100)
@@ -703,7 +706,7 @@
         # 结束时必加
         ```
 
-        以上动作支持pyfii模拟飞行，此外由于未对其运动轨迹进行研究，有部分动作不支持pyfii中的模拟飞行，但会保存在```.fii```中
+        以上动作支持pyfii模拟飞行，此外由于未对其运动轨迹进行研究，有部分动作不支持pyfii中的模拟飞行，但会保存在`.fii`中
 
         ```python
         d1.VelZ(v,a)
@@ -747,11 +750,11 @@
         ```
         当前轨迹模拟会保留灯光状态；复杂灯效在预览中的表现可能比真机简化。
 
-        在编写移动时，建议使用```d1.move2(x,y,z)```，如果想要使用```d1.move(x,y,z)```，可以使用```d1.move2(d1.x+x,d1.y+y,d1.z+z)```代替
+        在编写移动时，建议使用`d1.move2(x,y,z)`，如果想要使用`d1.move(x,y,z)`，可以使用`d1.move2(d1.x+x,d1.y+y,d1.z+z)`代替
 
-        ```d1.outputString```表示写入```webCodeAll.xml```的内容
+        `d1.outputString`表示写入`webCodeAll.xml`的内容
 
-        ```d1.outpy```表示写入```pyfiiCode.py```的内容
+        `d1.outpy`表示写入`pyfiiCode.py`的内容
 
         Python转XML这一步本身也值得单独讲，因为这是整个库最像“编译器前端”的部分。当前实现不是用模板把整份XML一次性填出来，而是每个动作方法各自负责生成自己对应的XML片段。
 
@@ -775,19 +778,19 @@
 
         如果只是为了做出兼容版，我建议先复刻当前字符串写出方案；如果目标是长期维护的二代实现，则建议把“Python动作序列 -> 块树 -> XML”独立成正式后端。
 
-    2. ```Fii```类
+    2. `Fii`类
 
         ```python
         F=pf.Fii(name,drones,music)
         ```
 
-        ```name```为字符串，即文件名
+        `name`为字符串，即文件名
 
-        ```drones```为一个列表，列表里每一个元素都是```drone```类
+        `drones`为一个列表，列表里每一个元素都是`drone`类
 
-        ```Fii```类的功能是整合多个```drone```类
+        `Fii`类的功能是整合多个`drone`类
 
-        ```music```是一个字符串，是音乐的文件名，如```"xxx.mp3"```，如果不写```music```就是没音乐
+        `music`是一个字符串，是音乐的文件名，如`"xxx.mp3"`，如果不写`music`就是没音乐
 
         ```python
         F.save()
@@ -795,15 +798,15 @@
 
         这就是储存文件
 
-        PyFii 1.6.0会根据无人机配置自动写入地毯大小。旧的```field```参数会被忽略并产生兼容性warning。
+        PyFii 1.6.0会根据无人机配置自动写入地毯大小。旧的`field`参数会被忽略并产生兼容性warning。
 
         从源码看，`Fii`类做的不是单纯“存文件”，而是工程装配。它一方面把每架无人机在`drone.end()`后生成的`outputString`落盘为各自的`webCodeAll.xml`，另一方面把工程级信息写入顶层`.fii`：包括`DeviceType`、场地尺寸、音乐、动作组目录、动作组与UAVID映射、起飞坐标和控制时间节点。
 
         如果不是`infii`模式，`Fii.save()`还会额外生成一个可回放的`test.py`骨架：它逐个读取`pyfiiCode.py`并用`exec()`重新驱动`Drone`对象，再次构造出整个工程。这说明pyfii实际维护了两套等价表示：一套是给官方工程使用的XML，一套是给脚本回放与再加工使用的Python线性脚本。
-        
-        ```inFii```参数为脚本模式使用
 
-        ```addlights```功能是覆写灯光
+        `inFii`参数为脚本模式使用
+
+        `addlights`功能是覆写灯光
 
         如
 
@@ -819,7 +822,7 @@
 
         在解释DroneAction类和LightAction类的原理之前，你可能需要一些关于回调函数(callback)的知识
 
-        可以查看仓库中的```tests/class_callback_test.py```了解回调函数的行为。该测试文件不会随前端静态文档一起部署。
+        可以查看仓库中的`tests/class_callback_test.py`了解回调函数的行为。该测试文件不会随前端静态文档一起部署。
 
         使用回调函数，是为了延迟函数或方法的执行。可以实现写一段代码（即回调函数），但不立即执行，之后可以对回调函数进行重新排序，在需要的时间被调用。
 
@@ -882,7 +885,7 @@
 
                 # 在fii工程文件变量里添加动作对应的字符串
                 pass
-            
+
             self.append_action(
                 DroneAction(action_callback, [self, *parameters], timestamp)
             )
@@ -913,4 +916,4 @@
 
     见[脚本模式](script_mode.md)
 
-    原理是使用python的```exec()```功能执行单行代码
+    原理是使用python的`exec()`功能执行单行代码

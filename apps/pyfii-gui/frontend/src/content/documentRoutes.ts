@@ -1,5 +1,6 @@
 export type DocumentId =
   | "overview"
+  | "index"
   | "guide"
   | "core"
   | "gui"
@@ -8,7 +9,18 @@ export type DocumentId =
   | "group-flight"
   | "script-mode"
   | "principle"
-  | "light";
+  | "light"
+  | "human-choreography"
+  | "human-script-patterns"
+  | "choreo-agent-lessons"
+  | "choreo-agent-roadmap"
+  | "flight-log-analysis"
+  | "fwfii-merge-plan"
+  | "ai-choreography"
+  | "ai-generated-distillation"
+  | "cannon-design-lessons"
+  | "deepseek-cannon-reflection"
+  | "ai-script-patterns";
 
 export type AppRoute =
   | { page: "home" }
@@ -17,6 +29,7 @@ export type AppRoute =
 
 const routeDocuments: Record<string, DocumentId> = {
   "/docs": "overview",
+  "/docs/index": "index",
   "/docs/guide": "guide",
   "/docs/core": "core",
   "/docs/gui": "gui",
@@ -26,6 +39,17 @@ const routeDocuments: Record<string, DocumentId> = {
   "/docs/tutorial/script-mode": "script-mode",
   "/docs/tutorial/principle": "principle",
   "/docs/tutorial/light": "light",
+  "/docs/choreo/human-choreography": "human-choreography",
+  "/docs/choreo/human-script-patterns": "human-script-patterns",
+  "/docs/choreo/agent-lessons": "choreo-agent-lessons",
+  "/docs/choreo/agent-roadmap": "choreo-agent-roadmap",
+  "/docs/choreo/ai-exploration": "ai-choreography",
+  "/docs/choreo/ai-output-distillation": "ai-generated-distillation",
+  "/docs/choreo/cannon-design-lessons": "cannon-design-lessons",
+  "/docs/choreo/deepseek-cannon-reflection": "deepseek-cannon-reflection",
+  "/docs/choreo/ai-script-patterns": "ai-script-patterns",
+  "/docs/research/flight-log-analysis": "flight-log-analysis",
+  "/docs/research/fwfii-merge-plan": "fwfii-merge-plan",
 };
 
 const pathAliases: Record<string, string> = {
@@ -34,6 +58,15 @@ const pathAliases: Record<string, string> = {
   "/gui": "/studio",
   "/docs/tutorial/programme-challenge": "/docs/tutorial",
   "/docs/tutorial/more": "/docs/tutorial",
+  "/docs/research/human-choreography": "/docs/choreo/human-choreography",
+  "/docs/research/human-script-patterns": "/docs/choreo/human-script-patterns",
+  "/docs/research/choreo-agent-lessons": "/docs/choreo/agent-lessons",
+  "/docs/research/choreo-agent-roadmap": "/docs/choreo/agent-roadmap",
+  "/docs/archive/ai-choreography": "/docs/choreo/ai-exploration",
+  "/docs/archive/ai-generated-distillation": "/docs/choreo/ai-output-distillation",
+  "/docs/archive/cannon-design-lessons": "/docs/choreo/cannon-design-lessons",
+  "/docs/archive/deepseek-cannon-reflection": "/docs/choreo/deepseek-cannon-reflection",
+  "/docs/archive/ai-script-patterns": "/docs/choreo/ai-script-patterns",
 };
 
 export function normalizePath(pathname: string): string {

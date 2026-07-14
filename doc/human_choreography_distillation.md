@@ -1,5 +1,7 @@
 # 人类编队作品蒸馏
 
+> 状态：持续使用的研究资料。2026-07-14 已按 PyFii 1.6.0 的 `DroneTrack`、新 XML 主解析器和默认加速度模型复核；样本指标仍是对应作品当时的读回结果，不应理解为当前推荐参数。
+
 这里记录 `output/` 中人类设计作品的蒸馏方法和可复用经验。目标不是把 `.fii`、`webCodeAll.xml` 或 `pyfiiCode.py` 原文塞进系统提示词，而是把其中的段落组织、动作语言、空间意识、灯光节奏和失败修复方式提炼成未来 DeepSeek/GPT agent 能使用的知识库。
 
 ## 双模式读取原则
@@ -7,12 +9,12 @@
 这些作品的创作语境很重要：当时的视觉设计基本以无加速度模拟为准。PyFii 现在的默认模型会考虑加速、减速和未完成动作，因此同一份作品必须用两个模式一起看。
 
 ```python
-data, t0, music, field, device = pf.read_fii(path, fps=60, ignore_acc=True)
-data2, t02, music2, field2, device2 = pf.read_fii(path, fps=60, ignore_acc=False)
+visual_track = pf.from_fii(path, fps=60, ignore_acc=True)
+execution_track = pf.from_fii(path, fps=60, ignore_acc=False)
 ```
 
-- `ignore_acc=True` 是历史视觉模式，用来还原当时设计者希望看到的队形、节奏、轨迹和空间构图。
-- `ignore_acc=False` 是现代执行验证模式，用来发现今天重做时必须解决的动作未完成、刹停重规划、距离过近和速度/时间不合理问题。
+- `visual_track.dots` 是历史视觉模式轨迹，用来还原当时设计者希望看到的队形、节奏、轨迹和空间构图。
+- `execution_track.dots` 是现代执行验证轨迹，用来发现今天重做时必须解决的动作未完成、刹停重规划、距离过近和速度/时间不合理问题。
 - 两个模式都要看。不能只用默认加速度模式否定旧作品的设计价值，也不能只用无加速度模式放过现代实现风险。
 - `ignore_acc=True` 仍然保留速度限制，不等于任意瞬移；如果这个模式下仍有 `action isn't completed`，说明原始时间、速度或动作密度本身也需要重构。
 
@@ -718,100 +720,10 @@ conda run -n pyfii env PYTHONPATH=src python tools/analyze_music_motion_alignmen
 - 音乐：`output/d/比赛用无人机/动作组/背景音乐.mp3`，63s。
 - 视频：无
 - pyfiiCode.py：无（pyfii 诞生前设计）
-- 特殊说明：无 inittime 标签。XML 使用老格式 LED 标签（`Goertek_LEDTurnOnAllSingleColor2/3/4`），当前 pyfii read_fii 无法解析。以下分析基于 XML 手工统计。
+- 特殊说明：无 inittime 标签。XML 使用老格式 LED 标签（`Goertek_LEDTurnOnAllSingleColor2/3/4`）。2026-07-14 用 `pf.from_fii("output/d/比赛用无人机", fps=20, workers=1)` 实测，新 XML 主解析器可以读出 7 架 F600；仍会报告未拼接积木、默认速度/加速度和动作未完成等 warning。下列动作密度统计保留原先的 XML 手工统计口径。
 - 结构：无 inittime 段落标志。MoveToCoord 9-22/机，动作密度低于 2021比赛。LED 2-3/机——灯光极简。
 - 历史视觉价值：与 2021比赛同期，代表了早期"稀疏动作 + 极简灯光"的设计风格。可作为"最低动作密度"的参照基线。
-- 现代验证风险：read_fii 不可用，无法做轨迹验证。从动作密度推断安全性优于 2021比赛，但需实际运行确认。
-- 可蒸馏原则：早期设计风格参照、最低动作密度基线。
-
-## 可进入知识库的经验### output/d/比赛现场程序（修改版）（早期设计，2021比赛 补灯光版）
-
-- 来源：`output/d/比赛现场程序（修改版）/比赛现场程序（修改版）.fii`
-- 音乐：`output/d/2021比赛/Positive Outlook 剪辑背景.mp3`，72.5s，能量多峰结构（12-16s、24-28s、36-40s、44-48s 峰值），编舞用前 57s。
-- 视频：无
-- pyfiiCode.py：无（pyfii 诞生前设计）
-- 特殊说明：动作与 `output/d/2021比赛` 完全一致（move2 数量逐机相同：67/21/20/40/21/27/47），但在相同动作序列上补充了灯光——每机 5-9 个 LED 指令（HorseRacel 跑马灯 ×2、TurnOnAll 2-4、TurnOnAllSingleColor 1-3）。无 `inittime` 标签。代表了"先编排动作，再补灯光"的早期设计流程。
-- 灯光设计：HorseRace（跑马灯）是亮点——7 机同时跑马灯效果（`#ffff00`→`#ff0000`），是早期灯光表达的主要手段。TurnOnAll 用 `#ffffff`/`#0000ff`/`#00ff00` 等纯色，不是后来的渐变序列。整体灯光密度远低于后来的大闹天宫（2100 指令），但高于 2021比赛（0 指令）。
-- 历史视觉价值：展示了"动作→灯光"的叠加式设计流程——先跑通动作，再在关键节点补灯光。与后来的 dntg→大闹天宫（灯光与动作同步数学驱动）形成对比，两种设计流程各有适用场景。
-- 现代验证风险：ignore_acc=True 下 340 次未完成，ignore_acc=False 下 1332 次。最小距离 2.3-6.0cm。早期设计与现代加速度模型不兼容。
-- 可蒸馏原则：叠加式灯光设计流程、HorseRace 跑马灯应用、动作密度分级的早期实践。
-
-段落卡片：
-
-```json
-{
-  "source": "output/d/比赛现场程序（修改版）",
-  "note": "无 inittime，段落从 Controls time 反推。动作与 2021比赛 完全一致，此为补灯光版。",
-  "segments": [
-    {
-      "time_range": [0, 3],
-      "intent": "全体起飞，各机从分散起始位（覆盖全场四角+中心）到达起飞高度",
-      "formation_notes_2d": "起始位分散：d1(280,460)上中、d2(160,175)左、d3(100,61)左下、d4(400,403)右上、d5(280,118)下中、d6(460,289)右、d7(400,175)中右",
-      "spatial_notes_3d": "Z 0→起飞高度",
-      "motion_primitives": ["takeoff", "分散起始"],
-      "light_notes": "HorseRace 跑马灯（#ffff00→#ff0000）在起飞段"
-    },
-    {
-      "time_range": [3, 7],
-      "intent": "首段编队展开，全体同步",
-      "beat_policy": "3s→7s 两节点",
-      "formation_notes_2d": "XY 开始覆盖全场",
-      "motion_primitives": ["队形展开"],
-      "light_notes": "TurnOnAll #ffffff 首次全白"
-    },
-    {
-      "time_range": [7, 13],
-      "intent": "第二段：持续队形变换",
-      "beat_policy": "7s→13s 单段 6s",
-      "motion_primitives": ["队形变换"],
-      "light_notes": "TurnOnAll 颜色切换"
-    },
-    {
-      "time_range": [13, 22],
-      "intent": "密集切换段：13→15→16→17→22s 五节点，机4 有独段 15s，机5/6 独段 16s",
-      "beat_policy": "1-2s 级密集切换，部分机错峰",
-      "formation_notes_2d": "分组差异初显",
-      "motion_primitives": ["密集切换", "分组错峰"],
-      "light_notes": "TurnOnAllSingleColor #ff0000 红色标记切换点"
-    },
-    {
-      "time_range": [22, 40],
-      "intent": "中场段：22→33→35→38→40s，机4 有 38s 独段，机1/7 有 33s 同步点",
-      "beat_policy": "5-11s 大段 + 错峰独段",
-      "formation_notes_2d": "全场覆盖，焦点机（d1/d4/d7）承担更多动作",
-      "motion_primitives": ["中场展开", "焦点机突出"],
-      "light_notes": "TurnOnAll #0000ff 蓝色切换"
-    },
-    {
-      "time_range": [40, 52],
-      "intent": "高潮段：40→52s 大段 12s，全体同步密集动作",
-      "beat_policy": "12s 连续动作",
-      "formation_notes_2d": "XY 464×401 接近全场极限",
-      "motion_primitives": ["高潮", "全场极限展开"],
-      "light_notes": "HorseRace 跑马灯回归 + TurnOnAll #00ff00 绿色"
-    },
-    {
-      "time_range": [52, 57],
-      "intent": "收束降落",
-      "motion_primitives": ["收束", "land"],
-      "light_notes": "无此段灯光记录"
-    }
-  ]
-}
-```
-
-> 另见 `output/d/2021比赛`（同动作、无灯光版本），可作为"灯光有无"的对照样本。
-
-### output/d/比赛用无人机（早期设计，pyfii 诞生前）
-
-- 来源：`output/d/比赛用无人机/比赛用无人机.fii`
-- 音乐：`output/d/比赛用无人机/动作组/背景音乐.mp3`，63s。
-- 视频：无
-- pyfiiCode.py：无（pyfii 诞生前设计）
-- 特殊说明：无 inittime 标签。XML 使用老格式 LED 标签（`Goertek_LEDTurnOnAllSingleColor2/3/4`），当前 pyfii read_fii 无法解析。以下分析基于 XML 手工统计。
-- 结构：无 inittime 段落标志。MoveToCoord 9-22/机，动作密度低于 2021比赛。LED 2-3/机——灯光极简。
-- 历史视觉价值：与 2021比赛同期，代表了早期"稀疏动作 + 极简灯光"的设计风格。可作为"最低动作密度"的参照基线。
-- 现代验证风险：read_fii 不可用，无法做轨迹验证。从动作密度推断安全性优于 2021比赛，但需实际运行确认。
+- 现代验证风险：工程现在可以读回，但会产生大量时序 warning，不能仅凭动作密度推断安全性；应以默认加速度模式下的结构化 warning、密采样距离检查和实际预览为准。
 - 可蒸馏原则：早期设计风格参照、最低动作密度基线。
 
 ## 可进入知识库的经验

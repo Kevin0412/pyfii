@@ -1,4 +1,4 @@
-> **已归档** — 见 [INDEX.md](INDEX.md)
+> **编舞与 Agent 研究资料。** 2026-07-14 已复核文中路径和 PyFii 1.6.0 API；“未来设计规划”和 2026-05-28 agent 进展保留当时实验语境，继续作为当前方案的来源与对照。当前状态以 `tools/choreo_agent/PLAN.md` 为准，文档索引见 [INDEX.md](INDEX.md)。
 
 # AI 编舞探索
 

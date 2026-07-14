@@ -1,4 +1,4 @@
-> **已归档** — 见 [INDEX.md](INDEX.md)
+> **编舞与 Agent 研究资料。** 2026-07-14 已按 PyFii 1.6.0 和当前 Choreo Agent 校正明显失效结论。具体版本数据保留对应实验口径，并继续作为失败模式与设计决策的依据；最新实现以 `tools/choreo_agent/PLAN.md` 为准，文档索引见 [INDEX.md](INDEX.md)。
 
 # DeepSeek Cannon 开发反思与 Agent 设计启示
 
@@ -50,11 +50,11 @@
 
 
 
-### 5. 预验证函数多余
+### 5. 重复预验证会限制设计，但规划层预检仍然必要
 
-AI 脚本(gpt55)中的`validate_planned_keypoints()`函数是多余的——pyfii 自身的`drone_config`约束已足够保证可执行性。额外添加安全距离常量（如`F400_SAFE_DISTANCE_CM = 70`）不仅多余，还会限制动作设计。
+旧 AI 脚本把一套固定安全边界复制进最终编舞脚本，容易过早钳制动作范围；这部分确实应避免。可是 `drone_config` 只负责单机范围，并不能代替多机路径、时间可达性、动作完成和中途对穿检查。
 
-**正确**：信任 pyfii 的约束。事后用`read_fii`和`show(show=False)`做验收。
+**当前做法**：最终 `design.py` 不重复定义规划 helper；agent 侧保留坐标可行性预检、路径分配和时间预算，保存工程后再用 `pf.from_fii()`、结构化 warning、密采样碰撞检查和 `pf.show(track, show=False)` 做 Tier 0 验收。
 
 ### 6. 音乐理解不能表面化
 
@@ -72,9 +72,9 @@ AI 脚本(gpt55)中的`validate_planned_keypoints()`函数是多余的——pyfi
 反复触发的错误：
 - 坐标越界（XY 0-560, Z 80-250 for F400）
 - 时间倒退（intime 不能早于当前时间）
-- float坐标需手动int()——GPT未遇到此问题，可能是pyfii潜在bug待查
+- 坐标会由当前动作接口取整，但 agent 仍应在计划层使用明确的厘米单位，避免取整掩盖过小间距
 - 段间时间冲突（需留 > 1s 过渡余量）
-- `np.mat` 在新 numpy 被移除（需用 pyfii conda 环境）
+- NumPy 2 兼容问题已经由当前矩阵实现和 `tests/test_numpy_compat.py` 覆盖，不再要求固定使用旧 conda 环境
 
 **正确**：agent 在生成代码前必须检查这些硬性约束。
 
@@ -91,7 +91,7 @@ zero-warning 是可以做到的，但代价是动作幅度受限。本次设计�
 3. **约束知识库**：XY [0,560], Z [80,250], 时间不可倒退, 段间留 1s 余量, 必须用 pyfii conda 环境
 4. **退化检测**：生成后自动检查绕圈（角度排序冻结）、车道（单轴范围<150cm）、悬停（某机范围<30cm）
 5. **音乐理解升级**：不简单映射"渐强→加大幅度"，应支持队形复杂度、灯光密度、角色交换等多维度响应
-6. **不额外加安全常量**：信任 pyfii 默认约束，不定义 SAFE_DISTANCE_CM
+6. **安全规则分层**：不在最终脚本复制固定安全常量；规划器和 validator 仍要检查多机路径、时间和密采样距离
 
 ### Agent 应避免的行为
 

@@ -1,5 +1,6 @@
 # 真实飞行轨迹、编队与定位质量：pyfii 运动模型校核
 
+> 状态：数据驱动的技术报告。2026-07-14 已重新核对 `src/pyfii/read.py` 的理想梯形/三角速度模型、动作打断分支和 `tools/flight_log_analysis.py`；结论只适用于文中列出的采样条件，实验性时间标定尚未进入 PyFii 默认模型。
 > 数据来源：`flight_logs/`（真实采集，未纳入仓库）。
 > 分析脚本：[tools/flight_log_analysis.py](../tools/flight_log_analysis.py)（可复现全部图表与指标）。
 > 关键指标：[doc/images/metrics.json](images/metrics.json)。

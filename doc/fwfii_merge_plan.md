@@ -1,83 +1,79 @@
-# fwfii 与 pyfii 合并方案（调研）
+# fwfii 与 PyFii 集成调研
 
-> 状态：仅方案调研，未实操。License 不动，只并代码。
-> 涉及仓库：本仓 `pyfii`（GPLv3, github.com/Kevin0412/pyfii）与
-> `/media/kevin0412/Data/fwfii`（MIT, github.com/Xing-yuyu/fwfii）。
+> 状态：方案研究，尚未合并代码。2026-07-14 重新核对本仓库和公开的 [Xing-yuyu/fwfii](https://github.com/Xing-yuyu/fwfii) `master`；不要再以旧本地目录或旧版 1.0.1 结构作为实施依据。
 
-## 1. 两个项目是什么
+## 1. 当前边界
 
-| | pyfii（本仓库） | fwfii |
+| | PyFii 1.6.0 | fwfii 1.3.1 |
 |---|---|---|
-| 定位 | 创作 + 仿真：Python 写编队 → 生成 `.fii` → 三视图/3D 预览、安全审查、Web GUI | 硬件运行时：wire protocol、runtime、transport(Mock/TCP/Serial)、mission 上传、急停、LED/lightshow |
-| 上下线 | 纯离线，产物是 `.fii` 文件喂给厂商软件（src 内无任何 socket/upload/串口代码） | 直连真机 / 生成 `.ls` 任务上传 |
-| 依赖 | 重（opencv/pyqt5/numpy/pygame/ffmpy） | core 零依赖，serial/monitor 为可选 extra |
-| License | GPLv3 | MIT |
-| 版本/布局 | 1.6.0，src 布局，已部署 pyfii.cn | 1.0.1，flat 布局，仅 mock 测试、未上真机 |
+| 主要定位 | Python 编舞、`.fii` 工程生成与解析、轨迹仿真、安全检查、2D/3D 渲染和 Web GUI | F400/F600 在线控制、任务编译与上传、蜂群、遥测、灯光和 `.fii` 导出 |
+| 当前仓库 | 本仓库 `src/pyfii/` 与 `apps/pyfii-gui/` | 独立公开仓库，当前未出现在本仓库 `packages/` 下 |
+| Python 要求 | `>=3.9` | `>=3.6` |
+| 打包 | `pyproject.toml` + `src` 布局 | `setup.py` + flat package |
+| License | GPL-3.0 | MIT |
 
-**关系：互补的两层，不是重复造轮子。** 唯一真正重叠的是命令 DSL
-（两边都有 Takeoff/Land/Move2/LED），但语义不同：pyfii 的指令在时间轴上累积、
-用于生成 `.fii` 与仿真；fwfii 的 `fc.basic/advanced` 是发包给硬件或生成 `.ls`。
-这正是集成层（adapter）该建的位置。
+两者已经不只是“离线创作”和“硬件运行时”的简单互补：fwfii 现在也包含 `fii_exporter`、`offline_multi`、`SwarmProject`、三视图和灯光秀等能力，与 PyFii 的工程生成、编队 DSL 和预览存在实质重叠。因此集成前必须先确定唯一职责，不能直接把两个 API 全部并排暴露。
 
-## 2. 目标布局
+## 2. 建议职责
 
-fwfii 作为子包整体搬入，内部结构与 License 原样保留：
+- PyFii 保持创作与离线验证核心：现有 `Drone`/`Fii` DSL、`.fii` 兼容解析、`DroneTrack`、warning、安全分析和 renderer。
+- fwfii 保持设备通信核心：连接、心跳、在线飞控、任务编译/上传、紧急控制和遥测。
+- 共同能力先对比测试再选择实现，不在第一步合并：`.fii` 导出、离线多机 DSL、灯光接口和三视图。
+- 集成层只消费双方公开 API，把经过 PyFii 验证的时间轴转换为 fwfii 可上传的任务；不要让 PyFii core 直接依赖 socket、串口或设备状态。
 
-```
-pyfii/
-├── src/pyfii/            # 创作+仿真，不动
-├── apps/pyfii-gui/       # Web GUI，不动
-├── packages/fwfii/       # ← fwfii 原样落地
-│   ├── fwfii/            #   包体（flat 布局保留）
-│   ├── tests/            #   自带 mock/loopback 测试
-│   ├── examples/
-│   ├── pyproject.toml    #   保留独立打包
-│   └── LICENSE (MIT)     #   不动 License，就地保留
-└── (future) integration/ # 桥：pyfii 时间轴 → fwfii 上传，本次不写
-```
+## 3. 实施前置工作
 
-顶层 GPLv3 LICENSE 不动，fwfii 子目录 MIT LICENSE 不动，两者并存。
-代码合了，License 一个没改。
+1. 为同一组 Takeoff/Land/Move2/Yaw/LED 动作建立语义对照表，明确单位、坐标系、绝对/相对移动、时间戳和速度/加速度差异。
+2. 准备一个最小双机工程，同时经过 PyFii 导出、fwfii 导出和厂商软件打开，比较 `.fii`、Blockly XML 与 `.ls`。
+3. 记录真实硬件的发送、接收和遥测时间，验证离线时间轴映射；不能只用 mock 证明可上真机。
+4. 明确重复模块的长期所有者，避免修复需要在两个工程重复提交。
+5. 在搬代码前核对依赖、Python 版本、测试收集规则、CI 和分发方式。
 
-## 3. 合并步骤
+## 4. 仓库组织选项
 
-### 3.1 搬代码并保留 fwfii git 历史（推荐 subtree）
+### 选项 A：保持独立仓库，先做 adapter（推荐起点）
+
+在独立实验项目中同时安装 `pyfii` 和 `fwfii`，只实现时间轴转换与端到端测试。该方式最容易确认 API 边界，也不会提前制造单仓打包和发布问题。
+
+### 选项 B：subtree 放入 `packages/fwfii/`
+
+只有 adapter 已经跑通、确实需要同仓发布或同步修改时再考虑：
 
 ```bash
-git remote add fwfii /media/kevin0412/Data/fwfii
-git fetch fwfii
+git remote add fwfii https://github.com/Xing-yuyu/fwfii.git
+git fetch fwfii master
 git subtree add --prefix=packages/fwfii fwfii master
 ```
 
-若不在乎历史，直接 `cp -r` 到 `packages/fwfii/` 再一次性提交也行。
+保留 fwfii 自己的包名、提交历史和 `LICENSE`。根构建必须明确排除 `packages/*`，两套测试也要有清晰的收集边界。
 
-### 3.2 打包与命名冲突
+### 选项 C：submodule
 
-- fwfii 保持独立可安装包：`packages/fwfii/pyproject.toml` 不动。
-- 根 `pyproject.toml` 的 `[tool.setuptools.packages.find]` 需**排除** `packages/*`，
-  避免根构建误抓 fwfii。
-- pytest：fwfii 有自己的 `pytest.ini`，限定在 `packages/fwfii/` 下
-  （`testpaths` 或根配置 `--ignore`），否则两套测试互相污染 collection。
-- 两边 `requires-python` 均 `>=3.9`，无冲突。fwfii core 零依赖，不污染 pyfii 依赖树。
-- import 名不同（`pyfii` vs `fwfii`），无命名空间冲突，可共存。
+如果只需要固定并测试某个 fwfii revision，而不准备在 PyFii 仓库直接修改它，submodule 比复制源码更能表达独立项目关系；代价是开发者和部署流程需要显式初始化子模块。
 
-### 3.3 需人工核对的小摩擦
+## 5. 最小 adapter 草案
 
-- `.gitignore` 合并：fwfii 规则并入根，注意别让 `packages/fwfii/` 被顶层规则误忽略。
-- `.github/` CI：fwfii 自带三平台 py3.10/3.12 workflow。合并后并入 pyfii matrix
-  或保留独立 workflow——实操阶段再定。
+adapter 的输入应是经过验证的 `DroneTrack` 或更靠前的结构化动作时间轴，而不是渲染帧。渲染帧已经丢失动作边界、指令类型和原始时间语义，不适合反推上传任务。
 
-## 4. 集成层（本次不写，仅标位置）
+第一阶段只映射：
 
-真正的价值点：pyfii 里创作+仿真通过的编队（动作时间轴）→ 转成 fwfii 的 `Flight`
-指令序列 → `MissionUploader` 上真机。
+- 起飞、降落；
+- 绝对坐标移动；
+- 水平/竖直速度与加速度；
+- 偏航；
+- 基础全灯开关和颜色；
+- 显式等待或绝对时间戳。
 
-- 桥的接口放在 `packages/fwfii` 之外（如根 `integration/`），**只依赖两包公开 API**，
-  这样 GPL/MIT 边界清晰、fwfii 仍可独立发 PyPI。
-- 命令 DSL 语义差异（pyfii 累积时间轴 vs fwfii 发包/生成 `.ls`）在这一层做映射。
+空翻、简谐运动、螺旋、跑马灯等高级动作等基础闭环通过真机验证后再处理。任何无法无损映射的动作都应返回明确 error，不能静默降级。
 
-## 5. License 风险提示（暂不处理）
+## 6. 测试门槛
 
-"只并代码不动 License"在**仓库内**没问题；但一旦把合并后的整体**对外分发/发布**，
-GPLv3 会传染到组合作品，MIT 子包单独抽出仍是 MIT。等要发版时再定顶层 License 即可，
-现阶段无需决策。此外 fwfii 属于不同 GitHub 账号（Xing-yuyu），实操搬仓前需确认授权。
+- 双方原有测试分别通过，且安装其中一个包不会改变另一个包的 import 结果。
+- adapter 对单位、时间顺序、无人机身份和灯光颜色有确定性测试。
+- `.fii`/XML 对拍只比较语义，不依赖缩进、节点顺序等无关文本差异。
+- mock 测试通过后，还需断网、超时、急停和至少一次受控真机测试。
+- 任何真机上传入口不得直接暴露给 GUI 匿名请求；设备控制需要独立权限与部署边界。
+
+## 7. License 与发布
+
+两个项目都是公开源码，但 License 不同。搬入或分发时应保留各自版权与许可文本，并在确定最终仓库和二进制/源码分发方式后做专门的兼容性审查。本调研不替代法律意见，也不再使用“代码直接合并但 License 不需要处理”这一过度简化的结论。

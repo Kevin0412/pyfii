@@ -59,6 +59,16 @@ const groups = computed(() => [
     label: ui.locale === "zh" ? "教程" : "Tutorials",
     items: navigation.filter((item) => item.source.group === "tutorial"),
   },
+  {
+    id: "choreo",
+    label: ui.locale === "zh" ? "编舞与 Agent" : "Choreography & Agent",
+    items: navigation.filter((item) => item.source.group === "choreo"),
+  },
+  {
+    id: "research",
+    label: ui.locale === "zh" ? "工程研究" : "Engineering Research",
+    items: navigation.filter((item) => item.source.group === "research"),
+  },
 ]);
 </script>
 

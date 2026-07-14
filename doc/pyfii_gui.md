@@ -72,7 +72,7 @@ GUI 后端会把这些 warning 结构化成前端可展示的事件，例如 `ac
 - 点击安全日志跳转到对应时间。
 - 音乐文件播放和基础时间轴同步。
 - 第一次访问显示逐控件聚焦的六步使用引导，顶部可随时重新打开；其中会明确指出模拟区域右上角的全屏按钮。
-- `/docs` 是统一文档中心；`/docs/guide`、`/docs/core`、`/docs/gui` 和 `/docs/tutorial/*` 分别提供 Guide、PyFii core 文档、GUI 部署说明和专题教程。
+- `/docs` 是统一文档中心；`/docs/index` 提供全部文档索引，`/docs/guide`、`/docs/core`、`/docs/gui` 和 `/docs/tutorial/*` 分别提供 Guide、PyFii core 文档、GUI 部署说明和专题教程，`/docs/choreo/*` 收录编舞与 Agent 资料，`/docs/research/*` 收录工程研究。
 - `/doc`、`/guide`、`/tutorial/*` 和旧 `#/...` 链接会转换到新的 `/docs/...` 层级，`/gui` 兼容跳转到 `/studio`。
 - 后端异步 MP4 导出，前端只负责创建任务、轮询状态、展示失败和下载。
 
@@ -80,7 +80,7 @@ Canvas 内部虚拟画布固定为 `1200x600`，按容器缩放显示。渲染�
 
 Three.js 预览从轨迹帧读取加速度，并沿用 core 的 `wing_force = acceleration - (0, 0, -980)`：先把单位升力方向从 PyFii 坐标映射到 Three.js 坐标，再叠加航向角，因此机体会随加速度产生俯仰和横滚。地面投影仍保持水平，用来表示实际 XY 位置。
 
-静态文档在 Vite 构建时直接导入 `doc/` 和 `doc/tutorial/` 的 Markdown 源，经 `marked` 渲染，并通过 dynamic import 独立打包，避免复制文档或增加模拟器首屏体积。
+静态文档在 Vite 构建时直接导入 `doc/` 下全部 Markdown 源，经 `marked` 渲染，并随文档页面通过 dynamic import 独立打包，避免复制文档或增加模拟器首屏体积。`doc/images/` 中由真实飞行分析引用的图表和指标文件也会作为前端资源打包。
 
 站点控件支持中文/英文切换；当前导入的 Markdown 正文只有中文版本，切换到英文时导航会翻译，但正文仍显示中文。
 

@@ -1,8 +1,8 @@
 # 文档索引
 
-这里是仓库文档的总索引。前端 `/docs` 只发布面向用户和部署者的公开文档；研究记录和历史资料保留在仓库中，不进入网站导航。
+这里是仓库文档的总索引。项目文档完全公开，`doc/` 下的全部 Markdown 都直接进入 GUI 文档中心，并按基础使用与维护、编舞与 Agent、工程研究分组。分组表示主题，不表示公开级别或文档价值。
 
-## 公开文档（前端 `/docs`）
+## 基础使用与维护文档
 
 | 文档 | 用途 |
 |------|------|
@@ -17,9 +17,9 @@
 | [tutorial/light.md](tutorial/light.md) | 灯光编写 |
 | [tutorial/principle.md](tutorial/principle.md) | 内部实现原理 |
 
-这些文件由 GUI 在构建时直接读取，不要在前端复制第二份正文。
+这些文件由 GUI 在构建时直接读取，不要在前端复制第二份正文。网站中的总索引入口是 `/docs/index`。
 
-## 当前开发与研究参考
+## 编舞与 Agent
 
 | 文档 | 用途 |
 |------|------|
@@ -27,17 +27,19 @@
 | [pyfii_script_patterns_human.md](pyfii_script_patterns_human.md) | 人类作品编码模式 |
 | [choreo_agent_lessons.md](choreo_agent_lessons.md) | 编舞 agent 开发经验 |
 | [choreo_agent_roadmap.md](choreo_agent_roadmap.md) | 编舞 agent 后续计划 |
+| [ai_choreography_exploration.md](ai_choreography_exploration.md) | AI 编舞路线、知识库和 Agent 演进 |
+| [ai_generated_distillation.md](ai_generated_distillation.md) | AI 产物指标、退化样本与对照结论 |
+| [pyfii_script_patterns_ai.md](pyfii_script_patterns_ai.md) | AI 编码模式和反例 |
+| [cannon_design_lessons.md](cannon_design_lessons.md) | Cannon 编舞设计与验证经验 |
+| [deepseek_cannon_reflection.md](deepseek_cannon_reflection.md) | Cannon 开发复盘和 Agent 启示 |
+
+这些资料包含不同阶段的实验数据，但共同构成当前 Choreo Agent 的知识来源、反例库和设计依据。阶段性数据会注明时间与口径，不因此归入“历史归档”。
+
+## 工程研究
+
+| 文档 | 用途 |
+|------|------|
 | [flight_log_trajectory_analysis.md](flight_log_trajectory_analysis.md) | 真实飞行与模拟轨迹分析 |
-| [fwfii_merge_plan.md](fwfii_merge_plan.md) | fwfii 合并调研，尚未实操 |
+| [fwfii_merge_plan.md](fwfii_merge_plan.md) | fwfii 集成调研，尚未实操 |
 
-这组资料可能包含实验路径、机器本地路径或阶段性结论，引用前应重新核对当前代码和数据。
-
-## 归档（历史参考，不再维护）
-
-| 文档 | 归档原因 |
-|------|----------|
-| [ai_choreography_exploration.md](ai_choreography_exploration.md) | 已被人类作品蒸馏和当前 agent 流程取代 |
-| [ai_generated_distillation.md](ai_generated_distillation.md) | 旧模型产物分析 |
-| [cannon_design_lessons.md](cannon_design_lessons.md) | 旧的人工迭代经验 |
-| [deepseek_cannon_reflection.md](deepseek_cannon_reflection.md) | 旧 Cannon 开发反思 |
-| [pyfii_script_patterns_ai.md](pyfii_script_patterns_ai.md) | 与当前人类作品模式重复 |
+工程研究可能包含实验性结论或尚未实施的方案，使用前应结合当前代码和数据复核。

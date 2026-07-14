@@ -19,7 +19,7 @@
 - **清晰的 error / warning 展示**：距离、动作未完成和其他 core warning 分开展示，支持按列筛选和排序，点击带时间事件可跳转
 - 门户页提供项目简介、GitHub 入口和 B 站视频教程；备案信息保持部署配置为空时不显示
 - 上传 Fii 项目 zip，由 FastAPI 后端调用 pyfii core 完成轨迹解析和安全分析，浏览器提供可视化预览
-- 首次使用 Guide，以及直接复用仓库 Markdown 源的 PyFii 文档和教程静态页
+- 首次使用 Guide，以及直接复用 `doc/` 下全部 Markdown 源的文档、教程、编舞与 Agent、工程研究静态页
 - 复用 core `FiiRender2D/FiiRender3D` 的后端 MP4 导出
 
 GUI 作为 pyfii core 的上层应用，依赖方向为：
@@ -54,7 +54,7 @@ FastAPI、Vue、Vite 等 GUI 依赖都放在 `apps/pyfii-gui/` 下，不放进 `
 - [GUI 使用引导](doc/pyfii_gui_guide.md)：上传、warning、预览和视频导出。
 - [GUI 架构与部署](doc/pyfii_gui.md)：开发、配置和生产部署。
 - [内部原理](doc/tutorial/principle.md)：面向维护或复刻项目的开发者。
-- [仓库完整文档索引](doc/INDEX.md)：研究资料与历史归档。
+- [仓库完整文档索引](doc/INDEX.md)：编舞与 Agent、工程研究及全部专题资料。
 
 ## 目录结构说明
 
@@ -108,4 +108,4 @@ pyfii 2.0 的重点不是简单 Web 化，而是把编队核心、轨迹采样�
 - `pyfii-render`：统一渲染接口，保留 OpenCV 参考后端，并试验桌面 3D / Web viewer。
 - `pyfii-app`：面向实际调试的交互式预览工具。
 
-早期 AI 编舞探索已经归档，入口见 [仓库完整文档索引](doc/INDEX.md)；后续主线是强模型生成 motion brief / phrase spec / PyFii 脚本，再由本地读回、密采样、安全检查和 2D/3D 视频验收。
+AI 编舞探索、人工/AI 产物蒸馏和 Cannon 复盘共同构成 Choreo Agent 的研究资料，入口见 [仓库完整文档索引](doc/INDEX.md)；当前主线是强模型生成 motion brief / phrase spec / PyFii 脚本，再由本地读回、密采样、安全检查和 2D/3D 视频验收。

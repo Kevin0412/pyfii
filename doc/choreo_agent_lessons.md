@@ -1,33 +1,44 @@
 # Choreo Agent 踩坑记录
 
-## 设计哲学
-- **别替 agent 写规则，教它选模式**：强制 breathe 规则导致僵化，safe_geo(mode) 让 agent 自由选模式
-- **minD 是门槛不是目标**：安全通过 ≠ 好编舞。人类蒸馏文档（doc/human_choreography_distillation.md）有丰富的 motion_primitives
-- **guide < 60 行**：超过则 prompt 太大，API 超时。当前 40 行安全
-- **prompt 和 guide 必须一致**：guide 写 move2=(x,y,z,t)，prompt 别说 VelXY
+> 状态：当前研究总结，2026-07-14 按 `tools/choreo_agent/` 现有实现复核。完整设计、实验矩阵和最新进度以仓库中的 `tools/choreo_agent/PLAN.md` 为准。
 
-## API 稳定性
-- **Retry 必须全面**：ConnectTimeout, ReadTimeout, ConnectError, RemoteProtocolError
-- **连接超时 ≥ 60s**：DeepSeek API SSL 握手长期 30s+
-- **单轮耗时 ~60s**：3 温度 × 5s 生成 + 3 × 3s 验证 = 24s 理想，实际带重试 ~60s
+## 产品主线
 
-## 代码提取
-- **只用 fenced markdown**：CoT 格式（"代码："段）提取不稳定，统一 ` ```python ``` `
-- **禁止空段**：agent 输出非代码文本时，提取为空，导致 SEGMENT_END 间无代码
+- 产品不是“一次生成整场”，而是人类逐段导演：说明意图、生成、验证、反馈、锁定，再进入下一段。
+- `run_pipeline.py`、`run_matrix.py` 和 `run_director_cases.py` 是自动测试台，不应替代交互导演流程。
+- 锁定段必须有指纹和 checkpoint。人工修改后要显式 `adopt` 并重新验证，不能让出口坐标静默失真。
 
-## 时序
-- **auto_init 不是万能的**：agent 段出口时间不精确，后续段 inittime 可能冲突
-- **ignore_acc=True 出视频**：False 模式 process.mp4 只有 3 秒
+## 验证分层
 
-## 状态管理
-- **单进程跑 agent**：多后台任务互相覆盖 state.json
-- **每个测试前重置 state**：残留 locked 标记导致跳过实际生成
+- Tier 0 是物理安全：语法、运行、工程读回、越界、距离和动作完成。任何自动模式或人工 override 都不能绕过。
+- Tier 1 是演出完整性：整体悬停、有效运动、时间窗口填充和动作包络。自动模式阻断；交互模式允许导演说明理由后 override。
+- Tier 2 是章法与审美：composition、motion quality 和退化提示。自动模式可作为门，交互模式主要给导演判断。
+- `minD` 只是安全门槛，不是编舞质量目标。只追求安全距离会退化成固定车道、刚性圆环或模板换点。
 
-## safe_geo
-- **算法保几何，agent 选模式**：4 种模式（expand/rotate/breathe/contract），泊松圆盘 + 随机环
-- **geo 间距预检**：代码插入前检查坐标间距 < 80cm，精确定位哪两点过近
+## 生成与修复
 
-## 统计规律
-- S02 平均 2-4 轮通过（61cm）
-- S03 需 8-12 轮（同逻辑，收敛慢）
-- S04+ 手工 fallback 最可靠
+- 先生成音乐/动作意图和 keyframe 计划，再生成 PyFii 命令链；不要让模型边写坐标边猜整段结构。
+- `best_assign`、时间预算和碰撞预检属于规划层；最终 `design.py` 应保留具体坐标表和 PyFii 动作，避免把规划 helper 泄漏到交付脚本。
+- 组合指令的服从率明显低于单一指令。复杂灯光、换位、限速和身份保持应拆成可验证的小要求逐轮下达。
+- 安全失败要返回具体无人机、时间和距离，而不是只说“重试”。连续黑洞需要重规划或熔断，不能无限消耗调用。
+
+## 模型与 API 稳定性
+
+- 网络错误、首包慢和模型能力不足要分开记录；重试至少覆盖连接、读取和协议中断。
+- 所有模型都需要会话级 `max_llm_calls` 保险丝。较慢或较弱模型不能靠无限轮次伪装成稳定。
+- Prompt、context pack 和 validator 必须使用同一套 PyFii API 与时间语义；修改生产 prompt 后需要跑双模型矩阵，避免只对单模型过拟合。
+- 代码提取只接受 fenced Python；空代码段、改写 locked 段和规划 helper 泄漏都应在执行前拒绝。
+
+## 已确认的退化与误区
+
+- `safe_geo` 可以提供安全候选，但不能成为反复套用的队形模板。正式段仍需要不同中心、Z 层、角色、灯光和节奏。
+- 长时间不动不等于留白。亮灯定格可以是设计，黑灯悬停和小范围抖动通常是时间线空洞。
+- `ignore_acc=True` 适合研究历史视觉意图，不是当前 agent 的交付门。交付验证和视频使用默认加速度模型。
+- 旧记录中“S04+ 手工 fallback 最可靠”“只能用 `ignore_acc=True` 出视频”等结论已经失效；当前流水线已经支持完整自动修复、默认加速度读回和 2D/3D 验收，但稳定性仍需矩阵持续验证。
+
+## 仍然有效的经验
+
+- 分段增量、每段验证通过后再锁定。
+- Prompt 与 guide 保持一致，少写重复规则，多给结构化状态和失败反馈。
+- 多进程实验必须隔离项目目录和状态文件，不能共享 `state.json`。
+- 先保证 Tier 0，再谈视觉；通过 Tier 0 后仍要人工看 2D/3D 视频，安全不等于好看。

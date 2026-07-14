@@ -1,10 +1,12 @@
 # 人类设计的 pyfii 编码模式
 
+> 状态：研究资料，2026-07-14 复核。动作片段保留 `tests/dntg20220730_v3.py` 当时的写法，用于分析编舞结构；新项目的读取和渲染示例已改为 `DroneTrack` 入口。
+
 分析 `tests/dntg20220730_v3.py` 的代码组织方式。这是人工设计的优秀作品，展示了成熟编舞的 pyfii 编码方法。
 
 ## 一、直接式 pyfii 调用模式
 
-dntg20220730_v3.py 不经过声明层，直接用 pyfii API 编排动作。每段有明确的 `startTime/endTime` 注释。
+`dntg20220730_v3.py` 不经过声明层，直接用 PyFii API 编排动作。每段有明确的 `startTime/endTime` 注释。下面的 `intime()` 和直接修改 `X/Y` 是历史样本原写法，不是新教程模板；新代码优先使用 `inittime()` 和构造函数起飞坐标。
 
 ```python
 # 起飞
@@ -126,10 +128,11 @@ for d in ds:
 F = pf.Fii('大闹天宫', ds, music=music_path)
 F.save(infii=True)
 
-pf.show(F.dots, F.t0, [F.music], field=6, save='大闹天宫', FPS=25)
+track = pf.from_fii('大闹天宫', fps=200)
+pf.show(track, save='大闹天宫', FPS=25)
 ```
 
-`Fii.save()` + `show()` 完成闭环。
+当前闭环是 `Fii.save()` → `from_fii()` → `show(track)`。原脚本中的 `show(data, t0, music, ...)` 多参数调用仍保留兼容，但新封装和 GUI 应传 `DroneTrack`。
 
 ## 七、编码原则
 

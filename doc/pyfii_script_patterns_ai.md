@@ -1,4 +1,4 @@
-> **已归档** — 见 [INDEX.md](INDEX.md)
+> **编舞与 Agent 研究资料。** 2026-07-14 已区分可执行示例与伪代码，并校正当前安全验证口径。本文分析的早期 GPT-5.5/Codex 产物仍是当前 Agent 的模式来源和退化反例，不等同于当前生成器实现；文档索引见 [INDEX.md](INDEX.md)。
 
 # AI 生成的 pyfii 编码模式
 
@@ -38,7 +38,7 @@ original_phrase_motion_v4 使用了 formations + phrases 双层声明：`FORMATI
 
 ## 二、数学工具函数
 
-```python
+```text
 def smoothstep(t):      return t * t * (3 - 2 * t)
 def mix_point(a, b, t): return tuple(a[i]*(1-t) + b[i]*t for i in range(3))
 def clamp(value, low, high): return max(low, min(high, value))
@@ -92,11 +92,11 @@ def phrase_step_count(phrase):
 
 ## 五、安全验证
 
-pyfii 的 `drone_config` 已定义完整的合法范围。AI 脚本中额外的 `validate_planned_keypoints()` 和 `F400_SAFE_DISTANCE_CM` 等常量是多余的——所有产物 uf=0 说明 pyfii 自身约束已足够保证可执行性。
+PyFii 的 `drone_config` 定义单机合法范围，但不负责证明多机路径和时间安全。早期 AI 脚本把 `validate_planned_keypoints()` 和固定 `F400_SAFE_DISTANCE_CM` 复制进最终交付代码，既不完整又容易限制动作范围。
 
 更严重的是，gpt55 系列四产物的 XY 跨度完全一致（477×492），始终小于场地极限（560×560）。这说明额外的安全钳制可能过早截断了动作野心，安全边界变成了动作上限。
 
-**做法**：不额外定义安全常量。真正的安全验收交给 `read_fii` 的 warning。有冲突风险时调整时间、速度、中间点和错峰，而不是降低设计目标。
+**当前做法**：规划层可以使用路径分配、时间预算和密采样预检，但最终脚本只保留具体 PyFii 动作。交付验收使用 `pf.from_fii()`、结构化 warning、密采样距离检查和 2D/3D 预览；有冲突风险时调整时间、速度、中间点和错峰，而不是只缩小动作范围。
 
 ---
 
@@ -126,7 +126,7 @@ pyfii 的 `drone_config` 已定义完整的合法范围。AI 脚本中额外的 
 1. **声明与执行分离**：设计意图在数据，执行逻辑在函数
 2. **数学优于枚举**：函数表达轨迹，不逐点硬编码
 3. **速度求解保证可执行**：步数分解确保飞得到，但需关注连贯度
-4. **信任 pyfii 边界**：不额外加安全常量，read_fii warning 是最终标准
+4. **验证分层**：PyFii 范围检查、读回 warning、密采样碰撞和观感检查分别负责不同问题
 5. **phrase 间留过渡**：模板/队形切换需要过渡段，避免硬跳
 
 ---
