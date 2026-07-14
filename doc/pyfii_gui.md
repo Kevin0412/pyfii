@@ -72,8 +72,8 @@ GUI 后端会把这些 warning 结构化成前端可展示的事件，例如 `ac
 - 点击安全日志跳转到对应时间。
 - 音乐文件播放和基础时间轴同步。
 - 第一次访问显示使用引导，顶部可随时重新打开。
-- `/guide`、`/docs`、`/docs/gui` 和 `/tutorial/*` 提供静态 Guide、PyFii 文档和教程。
-- `/doc` 兼容跳转到 `/docs`，`/gui` 兼容跳转到 `/studio`；旧 `#/...` 文档链接也会自动转换。
+- `/docs` 是统一文档中心；`/docs/guide`、`/docs/core`、`/docs/gui` 和 `/docs/tutorial/*` 分别提供 Guide、PyFii core 文档、GUI 部署说明和专题教程。
+- `/doc`、`/guide`、`/tutorial/*` 和旧 `#/...` 链接会转换到新的 `/docs/...` 层级，`/gui` 兼容跳转到 `/studio`。
 - 后端异步 MP4 导出，前端只负责创建任务、轮询状态、展示失败和下载。
 
 Canvas 内部虚拟画布固定为 `1200x600`，按容器缩放显示。渲染器位于 `frontend/src/renderer/`，不依赖 Vue，便于后续复用。
@@ -171,7 +171,7 @@ https://gui.example.com/api/  -> FastAPI backend
 
 这种方式不需要在前端写死 API 主机。
 
-无 hash 页面使用浏览器 History API。部署前端静态文件时，需要配置类似 Nginx `try_files $uri $uri/ /index.html` 的 SPA fallback，确保直接访问 `/guide`、`/docs`、`/tutorial` 和 `/studio` 仍返回前端入口。Vite 开发服务器已自动处理。
+无 hash 页面使用浏览器 History API。部署前端静态文件时，需要配置类似 Nginx `try_files $uri $uri/ /index.html` 的 SPA fallback，确保直接访问 `/docs/guide`、`/docs/tutorial` 和 `/studio` 仍返回前端入口。Vite 开发服务器已自动处理。
 
 ## 回归测试
 

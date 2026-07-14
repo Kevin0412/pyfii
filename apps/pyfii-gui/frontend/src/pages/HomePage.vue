@@ -10,7 +10,7 @@
           <p class="hero-summary">{{ tt("portalSummary") }}</p>
           <div class="hero-actions">
             <a class="primary-action" href="/studio">{{ tt("openStudio") }} →</a>
-            <a href="/guide">{{ tt("readGuide") }}</a>
+            <a href="/docs">{{ tt("browseResources") }}</a>
             <a href="https://github.com/Kevin0412/pyfii" target="_blank" rel="noopener noreferrer">
               GitHub ↗
             </a>
@@ -31,26 +31,14 @@
           <h2 id="start-heading">{{ tt("portalExplore") }}</h2>
         </div>
         <div class="entry-grid">
-          <a href="/guide">
-            <span class="entry-index">01</span>
-            <strong>{{ tt("guide") }}</strong>
-            <p>{{ tt("portalGuideText") }}</p>
-            <span class="entry-arrow">→</span>
-          </a>
           <a href="/docs">
-            <span class="entry-index">02</span>
-            <strong>{{ tt("docs") }}</strong>
-            <p>{{ tt("portalDocsText") }}</p>
-            <span class="entry-arrow">→</span>
-          </a>
-          <a href="/tutorial">
-            <span class="entry-index">03</span>
-            <strong>{{ tt("tutorials") }}</strong>
-            <p>{{ tt("portalTutorialText") }}</p>
+            <span class="entry-index">01</span>
+            <strong>{{ tt("resources") }}</strong>
+            <p>{{ tt("portalResourcesText") }}</p>
             <span class="entry-arrow">→</span>
           </a>
           <a href="/studio">
-            <span class="entry-index">04</span>
+            <span class="entry-index">02</span>
             <strong>{{ tt("studio") }}</strong>
             <p>{{ tt("portalStudioText") }}</p>
             <span class="entry-arrow">→</span>
@@ -249,7 +237,7 @@ h1 {
 
 .entry-grid {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   border-top: 1px solid var(--border-soft);
   border-left: 1px solid var(--border-soft);
 }

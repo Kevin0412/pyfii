@@ -8,7 +8,7 @@
 
 `apps/pyfii-gui/` 是 pyfii 的 Web GUI，已成功部署上线：**[pyfii.cn](https://pyfii.cn/)**
 
-首页是 PyFii 门户；使用引导、文档、教程和飞行工作台分别位于 `/guide`、`/docs`、`/tutorial` 和 `/studio`。
+首页是 PyFii 门户；统一文档与教程中心位于 `/docs`，飞行工作台位于 `/studio`。
 
 ![Pyfii GUI 截图](docs/images/pyfii-gui-screenshot.png)
 
@@ -50,12 +50,11 @@ FastAPI、Vue、Vite 等 GUI 依赖都放在 `apps/pyfii-gui/` 下，不放进 `
 如果你的目标不是简单使用 pyfii，而是想复刻整个项目，请优先阅读 [内部原理](doc/tutorial/principle.md)。
 
 - [安装说明](doc/tutorial/install.md)
+- [文档与教程中心](doc/pyfii_docs.md)
 - [教程目录](doc/tutorial/contents.md)
 - [编队飞行](doc/tutorial/group_flight.md)
-- [编程挑战](doc/tutorial/programme_challenge.md)
 - [脚本模式](doc/tutorial/script_mode.md)
 - [内部原理](doc/tutorial/principle.md)
-- [进阶用法](doc/tutorial/more.md)
 - [灯光编写](doc/tutorial/light.md)
 - [Pyfii GUI 原型](doc/pyfii_gui.md)
 - [Pyfii GUI 使用引导](doc/pyfii_gui_guide.md)

@@ -163,7 +163,7 @@ https://gui.example.com/api/  -> FastAPI backend
 - 前端：`VITE_API_BASE_URL=https://api.example.com`
 - 后端：`PYFII_GUI_CORS_ORIGINS=https://gui.example.com`
 
-前端使用 History API 路由。生产静态服务器必须把不存在的文件路径回退到 `index.html`，否则直接打开 `/guide`、`/docs` 或 `/studio` 会返回 404。Nginx 的前端 location 可使用：
+前端使用 History API 路由。生产静态服务器必须把不存在的文件路径回退到 `index.html`，否则直接打开 `/docs/guide`、`/docs/tutorial` 或 `/studio` 会返回 404。Nginx 的前端 location 可使用：
 
 ```nginx
 location / {
@@ -176,17 +176,18 @@ location / {
 
 当前项目和视频任务使用进程内缓存，生产环境应先使用单个 Uvicorn worker。多 worker 或多实例部署需要先增加共享项目存储和任务队列，否则同一项目的后续请求可能落到另一个进程。
 
-## Guide 与静态文档
+## 文档与教程中心
 
-站点首页 `/` 是门户页，包含项目简介、主要页面入口、GitHub 链接和 B 站视频教程。模拟器第一次打开会显示四步使用引导，之后仍可从工作台顶部“使用引导”按钮重新打开。主要入口为：
+站点首页 `/` 是门户页，包含项目简介、主要页面入口、GitHub 链接和 B 站视频教程。Guide、core 文档和专题教程共用 `/docs` 文档中心，不再作为三个并列的站点入口。模拟器第一次打开会显示四步使用引导，之后仍可从工作台顶部“使用引导”按钮重新打开。文档中心内部路径为：
 
-- `/guide`：完整 GUI 使用引导和常见问题。
-- `/docs`：直接打包仓库 `doc/doc_zh_CN.md`；`/doc` 是兼容入口。
+- `/docs`：文档与教程总览；`/doc` 是兼容入口。
+- `/docs/guide`：完整 GUI 使用引导和常见问题。
+- `/docs/core`：直接打包仓库 `doc/doc_zh_CN.md`。
 - `/docs/gui`：GUI 架构和部署说明。
-- `/tutorial`：教程目录；各子页直接打包 `doc/tutorial/*.md`。
+- `/docs/tutorial`：教程目录；各子页直接打包 `doc/tutorial/*.md`。
 - `/studio`：工程校验、飞行预览和视频导出工作台；`/gui` 是兼容入口。
 
-旧的 `#/guide`、`#/docs`、`#/tutorial/*` 链接会在浏览器中自动转换为无 hash 的新路径。
+旧的 `/guide`、`/tutorial/*` 和 `#/...` 链接会在浏览器中自动转换到 `/docs/...` 新路径。两个内容为空的旧教程入口“编程挑战”和“进阶用法”不再展示，旧地址回到教程目录。
 
 文档在构建时从原 Markdown 源导入，并按需加载为独立前端 chunk，避免维护一套复制内容，也不增加模拟器首次加载的文档体积。
 
@@ -197,7 +198,7 @@ location / {
 - 上传 Fii 项目 zip。
 - 项目门户页和跨页面一致的站点导航。
 - 未保存主题选择时，门户、Guide、文档和教程默认浅色，飞行工作台默认深色；支持手动切换并记住用户选择。默认中文界面，支持中文/英文切换。
-- 首次使用 Guide，以及可访问的 PyFii 文档和教程静态页。
+- 统一的文档与教程中心，内部包含 Guide、PyFii 文档和专题教程静态页。
 - 安全解压并调用 `read_fii()` 解析轨迹。
 - GUI 默认只把一半 CPU 核心分配给单次轨迹解析，为并发请求预留资源；可通过 `PYFII_GUI_TRAJECTORY_WORKERS` 调整。
 - 调用 `show(show=False)` 走 pyfii core 的无渲染距离检查。

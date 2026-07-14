@@ -1,14 +1,13 @@
 export type DocumentId =
+  | "overview"
   | "guide"
   | "core"
   | "gui"
   | "tutorial"
   | "install"
   | "group-flight"
-  | "programme-challenge"
   | "script-mode"
   | "principle"
-  | "more"
   | "light";
 
 export type AppRoute =
@@ -17,22 +16,24 @@ export type AppRoute =
   | { page: "document"; documentId: DocumentId };
 
 const routeDocuments: Record<string, DocumentId> = {
-  "/guide": "guide",
-  "/docs": "core",
+  "/docs": "overview",
+  "/docs/guide": "guide",
+  "/docs/core": "core",
   "/docs/gui": "gui",
-  "/tutorial": "tutorial",
-  "/tutorial/install": "install",
-  "/tutorial/group-flight": "group-flight",
-  "/tutorial/programme-challenge": "programme-challenge",
-  "/tutorial/script-mode": "script-mode",
-  "/tutorial/principle": "principle",
-  "/tutorial/more": "more",
-  "/tutorial/light": "light",
+  "/docs/tutorial": "tutorial",
+  "/docs/tutorial/install": "install",
+  "/docs/tutorial/group-flight": "group-flight",
+  "/docs/tutorial/script-mode": "script-mode",
+  "/docs/tutorial/principle": "principle",
+  "/docs/tutorial/light": "light",
 };
 
 const pathAliases: Record<string, string> = {
   "/doc": "/docs",
+  "/guide": "/docs/guide",
   "/gui": "/studio",
+  "/docs/tutorial/programme-challenge": "/docs/tutorial",
+  "/docs/tutorial/more": "/docs/tutorial",
 };
 
 export function normalizePath(pathname: string): string {
@@ -44,6 +45,9 @@ export function normalizePath(pathname: string): string {
 
 export function canonicalAppPath(pathname: string): string {
   const normalized = normalizePath(pathname);
+  if (normalized === "/tutorial" || normalized.startsWith("/tutorial/")) {
+    return pathAliases[`/docs${normalized}`] ?? `/docs${normalized}`;
+  }
   return pathAliases[normalized] ?? normalized;
 }
 

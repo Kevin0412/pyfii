@@ -1,6 +1,6 @@
 <template>
   <div class="docs-page" :class="`theme-${ui.theme}`">
-    <SiteHeader :active="activeSection" />
+    <SiteHeader active="docs" />
 
     <div class="docs-layout">
       <aside>
@@ -38,16 +38,10 @@ const ui = useUiStore();
 
 const html = computed(() => documentHtml(props.documentId));
 const navigation = documentNavigation();
-const activeSection = computed<"guide" | "docs" | "tutorial">(() => {
-  if (props.documentId === "guide") {
-    return "guide";
-  }
-  return props.documentId === "core" || props.documentId === "gui" ? "docs" : "tutorial";
-});
 const groups = computed(() => [
   {
     id: "start",
-    label: ui.locale === "zh" ? "开始" : "Start",
+    label: ui.locale === "zh" ? "文档中心" : "Documentation",
     items: navigation.filter((item) => item.source.group === "start"),
   },
   {

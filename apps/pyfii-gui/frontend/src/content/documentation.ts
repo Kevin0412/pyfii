@@ -1,15 +1,14 @@
 import { marked } from "marked";
 
 import coreDocs from "../../../../../doc/doc_zh_CN.md?raw";
+import docsOverview from "../../../../../doc/pyfii_docs.md?raw";
 import guiDocs from "../../../../../doc/pyfii_gui.md?raw";
 import guiGuide from "../../../../../doc/pyfii_gui_guide.md?raw";
 import tutorialContents from "../../../../../doc/tutorial/contents.md?raw";
 import tutorialGroupFlight from "../../../../../doc/tutorial/group_flight.md?raw";
 import tutorialInstall from "../../../../../doc/tutorial/install.md?raw";
 import tutorialLight from "../../../../../doc/tutorial/light.md?raw";
-import tutorialMore from "../../../../../doc/tutorial/more.md?raw";
 import tutorialPrinciple from "../../../../../doc/tutorial/principle.md?raw";
-import tutorialProgrammeChallenge from "../../../../../doc/tutorial/programme_challenge.md?raw";
 import tutorialScriptMode from "../../../../../doc/tutorial/script_mode.md?raw";
 import type { LocaleMode } from "../stores/ui";
 import type { DocumentId } from "./documentRoutes";
@@ -24,16 +23,22 @@ interface DocumentSource {
 }
 
 const documents: Record<DocumentId, DocumentSource> = {
+  overview: {
+    title: { zh: "文档与教程", en: "Docs & Tutorials" },
+    markdown: docsOverview,
+    route: "/docs",
+    group: "start",
+  },
   guide: {
     title: { zh: "使用引导", en: "Guide" },
     markdown: guiGuide,
-    route: "/guide",
+    route: "/docs/guide",
     group: "start",
   },
   core: {
     title: { zh: "PyFii 文档", en: "PyFii Docs" },
     markdown: coreDocs,
-    route: "/docs",
+    route: "/docs/core",
     group: "docs",
   },
   gui: {
@@ -45,65 +50,52 @@ const documents: Record<DocumentId, DocumentSource> = {
   tutorial: {
     title: { zh: "教程目录", en: "Tutorials" },
     markdown: tutorialContents,
-    route: "/tutorial",
+    route: "/docs/tutorial",
     group: "tutorial",
   },
   install: {
     title: { zh: "安装", en: "Install" },
     markdown: tutorialInstall,
-    route: "/tutorial/install",
+    route: "/docs/tutorial/install",
     group: "tutorial",
   },
   "group-flight": {
     title: { zh: "编队飞行", en: "Group Flight" },
     markdown: tutorialGroupFlight,
-    route: "/tutorial/group-flight",
-    group: "tutorial",
-  },
-  "programme-challenge": {
-    title: { zh: "编程挑战", en: "Programming Challenge" },
-    markdown: tutorialProgrammeChallenge,
-    route: "/tutorial/programme-challenge",
+    route: "/docs/tutorial/group-flight",
     group: "tutorial",
   },
   "script-mode": {
     title: { zh: "脚本模式", en: "Script Mode" },
     markdown: tutorialScriptMode,
-    route: "/tutorial/script-mode",
+    route: "/docs/tutorial/script-mode",
     group: "tutorial",
   },
   principle: {
     title: { zh: "内部原理", en: "Internals" },
     markdown: tutorialPrinciple,
-    route: "/tutorial/principle",
-    group: "tutorial",
-  },
-  more: {
-    title: { zh: "进阶用法", en: "Advanced Usage" },
-    markdown: tutorialMore,
-    route: "/tutorial/more",
+    route: "/docs/tutorial/principle",
     group: "tutorial",
   },
   light: {
     title: { zh: "灯光编写", en: "Lighting" },
     markdown: tutorialLight,
-    route: "/tutorial/light",
+    route: "/docs/tutorial/light",
     group: "tutorial",
   },
 };
 
 const markdownRoutes: Record<string, string> = {
+  "pyfii_docs.md": "/docs",
   "pyfii_gui.md": "/docs/gui",
-  "pyfii_gui_guide.md": "/guide",
-  "doc_zh_CN.md": "/docs",
-  "contents.md": "/tutorial",
-  "install.md": "/tutorial/install",
-  "group_flight.md": "/tutorial/group-flight",
-  "programme_challenge.md": "/tutorial/programme-challenge",
-  "script_mode.md": "/tutorial/script-mode",
-  "principle.md": "/tutorial/principle",
-  "more.md": "/tutorial/more",
-  "light.md": "/tutorial/light",
+  "pyfii_gui_guide.md": "/docs/guide",
+  "doc_zh_CN.md": "/docs/core",
+  "contents.md": "/docs/tutorial",
+  "install.md": "/docs/tutorial/install",
+  "group_flight.md": "/docs/tutorial/group-flight",
+  "script_mode.md": "/docs/tutorial/script-mode",
+  "principle.md": "/docs/tutorial/principle",
+  "light.md": "/docs/tutorial/light",
 };
 
 function rewriteMarkdownLinks(markdown: string): string {

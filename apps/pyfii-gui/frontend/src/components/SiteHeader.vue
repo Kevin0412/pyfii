@@ -6,9 +6,7 @@
     </a>
     <nav aria-label="Site navigation">
       <a href="/" :aria-current="active === 'home' ? 'page' : undefined">{{ tt("home") }}</a>
-      <a href="/guide" :aria-current="active === 'guide' ? 'page' : undefined">{{ tt("guide") }}</a>
-      <a href="/docs" :aria-current="active === 'docs' ? 'page' : undefined">{{ tt("docs") }}</a>
-      <a href="/tutorial" :aria-current="active === 'tutorial' ? 'page' : undefined">{{ tt("tutorials") }}</a>
+      <a href="/docs" :aria-current="active === 'docs' ? 'page' : undefined">{{ tt("resources") }}</a>
       <a href="/studio" :aria-current="active === 'studio' ? 'page' : undefined">{{ tt("studio") }}</a>
     </nav>
     <div class="site-actions">
@@ -24,7 +22,7 @@
 import { text, type MessageKey } from "../i18n";
 import { useUiStore } from "../stores/ui";
 
-defineProps<{ active: "home" | "guide" | "docs" | "tutorial" | "studio" }>();
+defineProps<{ active: "home" | "docs" | "studio" }>();
 
 const ui = useUiStore();
 
