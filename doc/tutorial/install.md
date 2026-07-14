@@ -23,7 +23,24 @@ python -m pip install -e .
 python -c "import pyfii; print(pyfii.__version__)"
 ```
 
-项目依赖由 `pyproject.toml` 声明，正常情况下不需要逐个手动安装 OpenCV、pygame、FFmpeg Python 封装等依赖。视频音乐封装还需要系统能够执行 FFmpeg。
+Python 依赖由 `pyproject.toml` 声明，正常情况下不需要逐个手动安装 OpenCV、Pygame 或 ffmpy。ffmpy 只是调用封装，不包含 `ffmpeg` 可执行文件；工程带音乐时，视频导出还要求系统能够执行 FFmpeg。Ubuntu 可以安装：
+
+```bash
+sudo apt update
+sudo apt install -y ffmpeg
+```
+
+GUI 后端只使用 OpenCV 绘图和视频写入能力，不需要桌面版接口。当前 core 包仍会安装完整版 `opencv-python`；如果最小化 Ubuntu 在 `import cv2` 时报告缺少 OpenGL 或 GLib 动态库，再安装兼容库：
+
+```bash
+# Ubuntu 24.04
+sudo apt install -y libgl1 libglib2.0-0t64
+
+# Ubuntu 22.04
+sudo apt install -y libgl1 libglib2.0-0
+```
+
+完整的 GUI 生产依赖、Node 版本、虚拟环境和 Nginx 配置见 [GUI 架构与部署](../pyfii_gui.md)。
 
 ## 启动 Web GUI
 

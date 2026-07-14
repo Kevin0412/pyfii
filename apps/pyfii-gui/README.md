@@ -70,6 +70,80 @@ Vite dev server 默认监听 `0.0.0.0:5173`，局域网设备可直接打开：
 http://<开发机局域网IP>:5173
 ```
 
+## 生产部署依赖
+
+生产部署由“Python 后端运行环境”和“已经构建好的前端静态文件”组成。依赖范围如下：
+
+| 依赖 | 实际要求 | 用途 |
+| --- | --- | --- |
+| Python | 3.9 或更高版本 | 运行 PyFii core、FastAPI 和视频渲染任务 |
+| Python 包 | 分别安装仓库根目录和 `apps/pyfii-gui/backend` 的 `pyproject.toml` | pip 自动安装下列直接依赖及其传递依赖 |
+| OpenCV | headless 能力已经足够 | 后端只使用图像绘制和 `VideoWriter`，不调用 `imshow`，不要求桌面或 GPU |
+| OpenGL / GLib 运行库 | 后端功能本身不需要 | 当前 core 的默认依赖仍是完整版 `opencv-python`；在最小化 Linux 上导入这个 wheel 时可能需要这些兼容库 |
+| FFmpeg 可执行文件 | 完整视频导出需要 | OpenCV 生成无声 MP4；工程包含音乐时，`ffmpy` 会调用系统 `ffmpeg` 把音频封装进最终 MP4。`ffmpy` 本身不包含 FFmpeg |
+| Node.js / npm | Node 18.x 或 Node 20 及以上，npm 8 及以上 | 只在构建 Vue 前端时使用；服务器若直接接收构建好的 `dist/`，运行时不需要 Node |
+| Nginx | 可选，可换成其他静态服务器或反向代理 | 提供 `dist/`、处理 SPA fallback，并把 `/api/` 转发给 Uvicorn |
+
+core 的直接依赖是 `opencv-python`、`PyQt5`、`tqdm`、`numpy`、`pygame`、`ffmpy` 和 `joblib`；GUI API 的直接依赖是 `fastapi`、`uvicorn[standard]`、`python-multipart`、`pydantic`、`orjson` 和 `pyfii`。前端的 Vue、Pinia、Three.js、Marked、Vite 和 TypeScript 依赖由 `package-lock.json` 锁定并通过 `npm ci` 安装，不需要逐项安装。
+
+仓库根目录的 `requirements.txt` 还包含音频分析、打包和终端工具等非 GUI 生产依赖。部署 GUI 时不要用它代替两个 `pyproject.toml`。
+
+这里需要区分代码需求和当前包元数据：GUI 后端可以使用 `opencv-python-headless`，但当前 `pyfii` 默认安装仍声明 `opencv-python`。不要在同一个虚拟环境中同时安装两者，因为它们都提供 `cv2`，文件会互相覆盖。在 core 提供互斥的 desktop/headless 安装入口前，按当前 `pyproject.toml` 安装会得到完整版 wheel。
+
+后端预览与视频渲染是 CPU 路径，不要求服务器 GPU、桌面会话或声卡；浏览器使用 3D 模式时由客户端提供 WebGL。当前实现也不依赖数据库、Redis 或独立任务队列，但这意味着项目与导出任务状态只存在单个后端进程中。
+
+Ubuntu 24.04 和 22.04 安装后端及完整视频功能的基础系统包相同：
+
+```bash
+sudo apt update
+sudo apt install -y python3 python3-venv python3-pip ffmpeg
+```
+
+完成 Python 安装后先执行 `.venv/bin/python -c "import cv2"`。如果当前完整版 OpenCV wheel 在最小化服务器上报告缺少 `libGL.so.1`、`libglib-2.0.so.0` 或 `libgthread-2.0.so.0`，再安装它实际需要的兼容库。Ubuntu 24.04 使用：
+
+```bash
+sudo apt install -y libgl1 libglib2.0-0t64
+```
+
+Ubuntu 22.04 使用：
+
+```bash
+sudo apt install -y libgl1 libglib2.0-0
+```
+
+如果使用 Nginx，再安装：
+
+```bash
+sudo apt install -y nginx
+```
+
+Node 只需要出现在执行前端构建的机器上。可以使用 Ubuntu 包或其他 Node 安装方式，但必须先检查版本；不满足当前 Vite lockfile 要求时不要继续构建。技术最低版本之外，部署时应选择仍处于安全维护期的 Node LTS：
+
+```bash
+node --version
+npm --version
+```
+
+Python 包建议安装到虚拟环境，避免 Ubuntu 的系统 Python 限制和包冲突：
+
+```bash
+cd /path/to/pyfii
+python3 -m venv .venv
+.venv/bin/python -m pip install --upgrade pip
+.venv/bin/python -m pip install .
+.venv/bin/python -m pip install apps/pyfii-gui/backend
+```
+
+使用 lockfile 构建前端；同源部署保持 API 地址为空：
+
+```bash
+cd /path/to/pyfii/apps/pyfii-gui/frontend
+npm ci
+VITE_API_BASE_URL= npm run build
+```
+
+构建完成后，生产服务器只需提供 `frontend/dist/`，不应使用 Vite dev server 或 `vite preview` 代替生产静态服务器。
+
 ## 配置
 
 后端通过环境变量配置，不需要改代码：
@@ -168,12 +242,19 @@ PYFII_GUI_GONGAN_URL=
 
 ## 服务器部署建议
 
+`PYFII_GUI_RUNTIME_DIR` 用来保存上传后解压的工程和导出视频，运行 Uvicorn 的系统用户必须能够创建、读取和删除其中的文件。生产环境应显式设置该目录；如果使用备案配置，也应给 `PYFII_GUI_DEPLOY_CONFIG` 传入绝对路径，避免安装位置改变默认路径。
+
 启动后端（生产环境**不要加 `--reload`**，否则上传项目后 WatchFiles 检测 `.runtime/` 下的文件变化会触发重载，内存缓存清空导致 tracks/safety/music/video exports 全部失效）：
 
 ```bash
-cd apps/pyfii-gui/backend
-PYTHONPATH=src:../../../src uvicorn pyfii_gui_api.main:app --host 0.0.0.0 --port 8000
+cd /path/to/pyfii
+PYFII_GUI_RUNTIME_DIR=/var/lib/pyfii-gui/projects \
+PYFII_GUI_DEPLOY_CONFIG=/absolute/path/to/deploy.json \
+.venv/bin/python -m uvicorn pyfii_gui_api.main:app \
+  --host 127.0.0.1 --port 8000 --workers 1
 ```
+
+如果不配置备案，可以省略 `PYFII_GUI_DEPLOY_CONFIG`。`/var/lib/pyfii-gui/projects` 需要提前创建，并把所有权交给实际运行 Uvicorn 的用户。后端只供同机反向代理访问时监听 `127.0.0.1`；只有明确需要局域网或外部直连时才使用 `0.0.0.0`。
 
 推荐同源反向代理：
 
@@ -187,18 +268,46 @@ https://gui.example.com/api/  -> FastAPI backend
 - 前端：`VITE_API_BASE_URL=https://api.example.com`
 - 后端：`PYFII_GUI_CORS_ORIGINS=https://gui.example.com`
 
-前端使用 History API 路由。生产静态服务器必须把不存在的文件路径回退到 `index.html`，否则直接打开 `/docs/guide`、`/docs/tutorial` 或 `/studio` 会返回 404。Nginx 的前端 location 可使用：
+前端使用 History API 路由。生产静态服务器必须把不存在的文件路径回退到 `index.html`，否则直接打开 `/docs/guide`、`/docs/tutorial` 或 `/studio` 会返回 404。下面的 Nginx 示例同时保留 `/api` 前缀，并把上传上限设置为与后端默认的 100 MiB 一致：
 
 ```nginx
-location / {
-    root /path/to/pyfii-gui/frontend/dist;
-    try_files $uri $uri/ /index.html;
+server {
+    listen 80;
+    server_name gui.example.com;
+
+    root /path/to/pyfii/apps/pyfii-gui/frontend/dist;
+    index index.html;
+    client_max_body_size 100m;
+
+    location /api/ {
+        proxy_pass http://127.0.0.1:8000;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_read_timeout 300s;
+    }
+
+    location / {
+        try_files $uri $uri/ /index.html;
+    }
 }
 ```
 
-`/api/` 仍应由更具体的 location 反向代理到 FastAPI。Vite 开发服务器已经提供该回退，不需要额外配置。
+如果修改 `PYFII_GUI_MAX_UPLOAD_BYTES`，还要同步调整 `client_max_body_size`。Vite 开发服务器已经提供 SPA 回退，不需要这段 Nginx 配置。
 
 当前项目和视频任务使用进程内缓存，生产环境应先使用单个 Uvicorn worker。多 worker 或多实例部署需要先增加共享项目存储和任务队列，否则同一项目的后续请求可能落到另一个进程。
+
+部署后可先做依赖和产物检查，再访问 `/api/health`：
+
+```bash
+cd /path/to/pyfii
+.venv/bin/python -c "import cv2, pyfii; from pyfii_gui_api.main import app; print(pyfii.__version__, app.title)"
+ffmpeg -version
+test -f apps/pyfii-gui/frontend/dist/index.html
+.venv/bin/python -c "from urllib.request import urlopen; print(urlopen('http://127.0.0.1:8000/api/health').read().decode())"
+```
 
 ## 文档与教程中心
 

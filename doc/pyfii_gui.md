@@ -144,6 +144,55 @@ http://<开发机局域网IP>:5173
 VITE_API_PROXY_TARGET=http://<后端局域网IP>:8000 npm run dev
 ```
 
+## 生产部署依赖
+
+GUI 的生产服务由 Python 后端和前端 `dist/` 静态文件组成：
+
+- Python 3.9 或更高版本运行 PyFii core 与 FastAPI。应分别安装仓库根目录和 `apps/pyfii-gui/backend` 的 `pyproject.toml`；根目录 `requirements.txt` 还包含 GUI 生产环境不需要的分析和打包工具。
+- 后端只使用 OpenCV 图像绘制和 `VideoWriter`，headless 能力已经足够，不调用 `imshow`，也不要求桌面或 GPU。当前 core 的默认包元数据仍声明完整版 `opencv-python`，所以按现有 `pyproject.toml` 安装时，最小化 Ubuntu 可能仍要提供该 wheel 导入时使用的 OpenGL / GLib 兼容库。
+- OpenCV 负责写入无声 MP4。工程包含音乐时，core 通过 `ffmpy` 调用系统中的 `ffmpeg` 做音频封装；只安装 Python 包 `ffmpy` 不够。
+- Node.js 和 npm 只负责构建 Vue 静态文件。当前 lockfile 要求 Node 18.x 或 Node 20 及以上、npm 8 及以上；部署已经构建好的 `dist/` 时不需要在服务器常驻 Node。
+- Nginx 是推荐但可替换的静态服务器和反向代理，不是 Python 后端依赖。
+
+core 的直接 Python 依赖是 `opencv-python`、`PyQt5`、`tqdm`、`numpy`、`pygame`、`ffmpy` 和 `joblib`；GUI API 的直接依赖是 `fastapi`、`uvicorn[standard]`、`python-multipart`、`pydantic`、`orjson` 和 `pyfii`。pip 会处理它们的传递依赖。前端的 Vue、Pinia、Three.js、Marked、Vite 和 TypeScript 依赖由 `package-lock.json` 锁定，使用 `npm ci` 安装。
+
+不要在同一个虚拟环境中同时安装 `opencv-python` 和 `opencv-python-headless`，两者都提供 `cv2`，会互相覆盖。GUI 后端在功能上适合 headless wheel，但当前 core 尚未提供与默认桌面依赖互斥的 headless 安装入口；本节的安装命令因此仍以当前包元数据为准。
+
+后端渲染不需要 GPU、桌面会话或声卡；3D 交互由客户端浏览器的 WebGL 完成。当前服务也不依赖数据库、Redis 或独立任务队列，项目和导出状态因此只存在单个后端进程中。Node 应选择仍处于安全维护期、且满足上述版本约束的 LTS 版本。
+
+Ubuntu 24.04 和 22.04 的基础系统包：
+
+```bash
+sudo apt update
+sudo apt install -y python3 python3-venv python3-pip ffmpeg
+```
+
+安装 Python 包后运行 `.venv/bin/python -c "import cv2"`。如果当前完整版 wheel 报告缺少 `libGL.so.1` 或 GLib / GThread，再按 Ubuntu 版本安装兼容库：
+
+```bash
+# Ubuntu 24.04
+sudo apt install -y libgl1 libglib2.0-0t64
+
+# Ubuntu 22.04
+sudo apt install -y libgl1 libglib2.0-0
+```
+
+需要 Nginx 时另行安装 `sudo apt install -y nginx`。Python 包和前端应分别安装、构建：
+
+```bash
+cd /path/to/pyfii
+python3 -m venv .venv
+.venv/bin/python -m pip install --upgrade pip
+.venv/bin/python -m pip install .
+.venv/bin/python -m pip install apps/pyfii-gui/backend
+
+cd apps/pyfii-gui/frontend
+npm ci
+VITE_API_BASE_URL= npm run build
+```
+
+运行前用 `node --version` 和 `npm --version` 检查构建环境。生产服务器只提供构建得到的 `frontend/dist/`，不使用 Vite dev server 或 `vite preview`。
+
 ## 配置
 
 后端常用环境变量：
@@ -186,7 +235,54 @@ https://gui.example.com/api/  -> FastAPI backend
 
 这种方式不需要在前端写死 API 主机。
 
-无 hash 页面使用浏览器 History API。部署前端静态文件时，需要配置类似 Nginx `try_files $uri $uri/ /index.html` 的 SPA fallback，确保直接访问 `/docs/guide`、`/docs/tutorial` 和 `/studio` 仍返回前端入口。Vite 开发服务器已自动处理。
+生产环境必须显式设置一个可写的 `PYFII_GUI_RUNTIME_DIR`，用于上传工程、解压目录和导出视频。若使用备案配置，`PYFII_GUI_DEPLOY_CONFIG` 应使用绝对路径。Uvicorn 不使用 `--reload`，并保持单 worker，因为项目缓存和视频任务状态当前都在进程内：
+
+```bash
+cd /path/to/pyfii
+PYFII_GUI_RUNTIME_DIR=/var/lib/pyfii-gui/projects \
+PYFII_GUI_DEPLOY_CONFIG=/absolute/path/to/deploy.json \
+.venv/bin/python -m uvicorn pyfii_gui_api.main:app \
+  --host 127.0.0.1 --port 8000 --workers 1
+```
+
+不使用备案时可以省略 `PYFII_GUI_DEPLOY_CONFIG`。运行 Uvicorn 的系统用户必须对 runtime 目录有读写和删除权限。
+
+无 hash 页面使用浏览器 History API。Nginx 需要同时配置 SPA fallback、API 反向代理和上传大小；`proxy_pass` 不带末尾 `/`，以保留后端需要的 `/api` 前缀：
+
+```nginx
+server {
+    listen 80;
+    server_name gui.example.com;
+
+    root /path/to/pyfii/apps/pyfii-gui/frontend/dist;
+    index index.html;
+    client_max_body_size 100m;
+
+    location /api/ {
+        proxy_pass http://127.0.0.1:8000;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_read_timeout 300s;
+    }
+
+    location / {
+        try_files $uri $uri/ /index.html;
+    }
+}
+```
+
+`client_max_body_size` 应与 `PYFII_GUI_MAX_UPLOAD_BYTES` 保持一致。部署后检查 Python 导入、FFmpeg、前端产物和健康接口：
+
+```bash
+cd /path/to/pyfii
+.venv/bin/python -c "import cv2, pyfii; from pyfii_gui_api.main import app; print(pyfii.__version__, app.title)"
+ffmpeg -version
+test -f apps/pyfii-gui/frontend/dist/index.html
+.venv/bin/python -c "from urllib.request import urlopen; print(urlopen('http://127.0.0.1:8000/api/health').read().decode())"
+```
 
 ## 回归测试
 
