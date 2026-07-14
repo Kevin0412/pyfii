@@ -1,5 +1,5 @@
 <template>
-  <section class="timeline">
+  <section class="timeline" data-guide="preview">
     <button :disabled="!project.hasProject" @click="togglePlayback">
       {{ player.playing ? tt("pause") : tt("play") }}
     </button>

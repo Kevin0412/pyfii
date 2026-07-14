@@ -1,5 +1,5 @@
 <template>
-  <form class="upload-bar" @submit.prevent="submit">
+  <form class="upload-bar" data-guide="upload" @submit.prevent="submit">
     <label class="file-control">
       <span>{{ tt("uploadProject") }}</span>
       <input type="file" accept=".zip,application/zip" @change="onFileChange" />

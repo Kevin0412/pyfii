@@ -12,7 +12,7 @@
           <option :value="4">4x</option>
         </select>
       </label>
-      <label class="scale-select">
+      <label class="scale-select" data-guide="render">
         {{ tt("render") }}
         <select v-model="player.renderMode">
           <option value="classic2d">{{ tt("classic2d") }}</option>
@@ -48,6 +48,7 @@
       <ProjectUpload />
       <button
         class="export-btn"
+        data-guide="export"
         :disabled="!project.hasProject"
         @click="simCanvasRef?.exportVideo()"
       >{{ tt("exportVideo") }}</button>
@@ -58,7 +59,7 @@
         <ProjectInfoPanel />
       </aside>
       <section ref="simColumnRef" class="simulation-column" :class="{ fullscreen: player.fullscreen }">
-        <SimulationCanvas ref="simCanvasRef" />
+        <SimulationCanvas ref="simCanvasRef" @toggle-fullscreen="toggleFullscreen" />
         <TimelineControl />
       </section>
     </main>
@@ -76,7 +77,7 @@ import SafetyLogPanel from "../components/SafetyLogPanel.vue";
 import SimulationCanvas from "../components/SimulationCanvas.vue";
 import SiteHeader from "../components/SiteHeader.vue";
 import TimelineControl from "../components/TimelineControl.vue";
-import { onMounted, onUnmounted, ref, watch } from "vue";
+import { nextTick, onMounted, onUnmounted, ref } from "vue";
 import { text, type MessageKey } from "../i18n";
 import { usePlayerStore } from "../stores/player";
 import { useProjectStore } from "../stores/project";
@@ -92,28 +93,46 @@ function tt(key: MessageKey): string {
   return text(ui.locale, key);
 }
 
-function onFullscreenChange(): void {
-  if (!document.fullscreenElement) {
+function refreshCanvasSize(): void {
+  void nextTick(() => {
+    window.requestAnimationFrame(() => simCanvasRef.value?.refreshSize());
+  });
+}
+
+function syncFullscreenState(): void {
+  player.setFullscreen(document.fullscreenElement === simColumnRef.value);
+  refreshCanvasSize();
+}
+
+async function toggleFullscreen(): Promise<void> {
+  const target = simColumnRef.value;
+  if (!target || !document.fullscreenEnabled) {
     player.setFullscreen(false);
+    return;
+  }
+
+  try {
+    if (document.fullscreenElement === target) {
+      await document.exitFullscreen();
+    } else {
+      await target.requestFullscreen();
+    }
+  } catch (error) {
+    console.warn("Unable to change fullscreen mode", error);
+    syncFullscreenState();
   }
 }
 
-watch(() => player.fullscreen, async (v) => {
-  if (v && !document.fullscreenElement) {
-    try {
-      await simColumnRef.value?.requestFullscreen();
-    } catch { /* user denied or unsupported */ }
-  } else if (!v && document.fullscreenElement) {
-    await document.exitFullscreen();
-  }
-});
-
 onMounted(() => {
-  document.addEventListener("fullscreenchange", onFullscreenChange);
+  document.addEventListener("fullscreenchange", syncFullscreenState);
+  document.addEventListener("fullscreenerror", syncFullscreenState);
+  syncFullscreenState();
 });
 
 onUnmounted(() => {
-  document.removeEventListener("fullscreenchange", onFullscreenChange);
+  document.removeEventListener("fullscreenchange", syncFullscreenState);
+  document.removeEventListener("fullscreenerror", syncFullscreenState);
+  player.setFullscreen(false);
 });
 </script>
 
@@ -261,6 +280,12 @@ onUnmounted(() => {
 }
 
 .simulation-column.fullscreen {
+  background: var(--fullscreen-bg);
+}
+
+.simulation-column:fullscreen {
+  width: 100vw;
+  height: 100vh;
   background: var(--fullscreen-bg);
 }
 

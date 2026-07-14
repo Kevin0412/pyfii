@@ -39,10 +39,24 @@
         </span>
       </div>
       <button
+        type="button"
         class="fullscreen-btn"
-        @click="player.setFullscreen(!player.fullscreen)"
+        data-guide="fullscreen"
+        :aria-label="player.fullscreen ? tt('exitFullscreen') : tt('fullscreen')"
         :title="player.fullscreen ? tt('exitFullscreen') : tt('fullscreen')"
-      >{{ player.fullscreen ? '⬚' : '⬙' }}</button>
+        @click="emit('toggleFullscreen')"
+      >
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path
+            v-if="player.fullscreen"
+            d="M9 4v5H4 M15 4v5h5 M9 20v-5H4 M15 20v-5h5"
+          />
+          <path
+            v-else
+            d="M9 4H4v5 M15 4h5v5 M9 20H4v-5 M15 20h5v-5"
+          />
+        </svg>
+      </button>
       <div v-if="exporting" class="export-overlay">
         <div class="export-progress-card">
           <span>{{ tt("exportingVideo") }}</span>
@@ -106,6 +120,7 @@ const project = useProjectStore();
 const player = usePlayerStore();
 const safety = useSafetyStore();
 const ui = useUiStore();
+const emit = defineEmits<{ toggleFullscreen: [] }>();
 
 function tt(key: MessageKey): string {
   return text(ui.locale, key);
@@ -215,10 +230,6 @@ function buildRenderInput(): RenderInput {
   };
 }
 
-function onFullscreenChange(): void {
-  player.setFullscreen(Boolean(document.fullscreenElement));
-}
-
 function onThreePointerDown(event: PointerEvent): void {
   if (player.renderMode !== "three3d") return;
   dragState = { pointerId: event.pointerId, x: event.clientX, y: event.clientY };
@@ -313,13 +324,12 @@ async function exportVideo(): Promise<void> {
   }
 }
 
-defineExpose({ exportVideo });
+defineExpose({ exportVideo, refreshSize: sizeFrame });
 
 onMounted(() => {
   if (canvas2dRef.value) canvasRenderer = new PyfiiCanvasRenderer(canvas2dRef.value, player.renderScale);
   if (canvas3dRef.value) threeRenderer = new PyfiiThreeRenderer(canvas3dRef.value);
   syncRendererSize();
-  document.addEventListener("fullscreenchange", onFullscreenChange);
   ro = new ResizeObserver(() => sizeFrame());
   if (shellRef.value) ro.observe(shellRef.value);
   sizeFrame();
@@ -343,7 +353,6 @@ watch(
 );
 
 onUnmounted(() => {
-  document.removeEventListener("fullscreenchange", onFullscreenChange);
   ro?.disconnect();
   cancelAnimationFrame(frameRequest);
   threeRenderer?.dispose();
@@ -414,15 +423,28 @@ onUnmounted(() => {
   top: 8px;
   right: 8px;
   z-index: 10;
-  opacity: 0.35;
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  opacity: 0.65;
   background: var(--control-bg);
   border: 1px solid var(--border-control);
   color: var(--text);
-  font-size: 16px;
-  padding: 4px 8px;
+  padding: 5px;
   cursor: pointer;
   transition: opacity 0.2s;
   line-height: 1;
+}
+
+.fullscreen-btn svg {
+  width: 19px;
+  height: 19px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: square;
+  stroke-linejoin: miter;
 }
 
 .canvas-frame:hover .fullscreen-btn,

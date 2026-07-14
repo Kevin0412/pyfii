@@ -1,5 +1,5 @@
 <template>
-  <section class="safety-panel">
+  <section class="safety-panel" data-guide="safety">
     <header>
       <h2>{{ tt("safetyLog") }}</h2>
       <template v-if="safety.summary">

@@ -12,7 +12,7 @@ interface DeploymentState {
 
 const THEME_STORAGE_KEY = "pyfii-gui-theme";
 const LOCALE_STORAGE_KEY = "pyfii-gui-locale-v2";
-const GUIDE_STORAGE_KEY = "pyfii-gui-guide-seen-v1";
+const GUIDE_STORAGE_KEY = "pyfii-gui-guide-seen-v2";
 
 function storedTheme(): ThemeMode | null {
   if (typeof window === "undefined") {
