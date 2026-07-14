@@ -18,6 +18,7 @@ import {
   legacyPathFromHash,
   type AppRoute,
 } from "./content/documentRoutes";
+import { updateDeviceLayout } from "./deviceLayout";
 import HomePage from "./pages/HomePage.vue";
 import { useUiStore } from "./stores/ui";
 
@@ -28,6 +29,7 @@ const route = ref<AppRoute>(
   appRouteFromPath(legacyPathFromHash(window.location.hash) ?? window.location.pathname),
 );
 ui.applyDefaultTheme(route.value.page === "studio" ? "dark" : "light");
+updateDeviceLayout();
 
 function syncRoute(): void {
   route.value = appRouteFromPath(window.location.pathname);
@@ -84,6 +86,8 @@ watchEffect(() => {
 onMounted(() => {
   normalizeInitialLocation();
   window.addEventListener("popstate", syncRoute);
+  window.addEventListener("resize", updateDeviceLayout);
+  window.addEventListener("orientationchange", updateDeviceLayout);
   document.addEventListener("click", handleInternalLink);
   fetchAppConfig()
     .then((config) => ui.setAppConfig(config))
@@ -94,6 +98,8 @@ onMounted(() => {
 
 onUnmounted(() => {
   window.removeEventListener("popstate", syncRoute);
+  window.removeEventListener("resize", updateDeviceLayout);
+  window.removeEventListener("orientationchange", updateDeviceLayout);
   document.removeEventListener("click", handleInternalLink);
 });
 </script>

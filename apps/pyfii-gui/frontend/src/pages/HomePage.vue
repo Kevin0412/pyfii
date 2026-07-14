@@ -57,6 +57,7 @@
           <iframe
             src="https://player.bilibili.com/player.html?isOutside=true&aid=955309609&bvid=BV1Ms4y1F7fM&cid=1178427157&p=1"
             title="PyFii Bilibili video tutorial"
+            loading="lazy"
             scrolling="no"
             frameborder="0"
             allow="autoplay; fullscreen; picture-in-picture"
@@ -357,44 +358,56 @@ h1 {
   object-fit: contain;
 }
 
-@media (max-width: 880px) {
-  .hero,
-  .video-section {
-    grid-template-columns: 1fr;
-  }
-
-  .hero {
-    min-height: auto;
-  }
-
-  .entry-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
+:global(body[data-device="tablet"][data-orientation="portrait"] .portal-page .hero),
+:global(body[data-device="tablet"][data-orientation="portrait"] .portal-page .video-section),
+:global(body[data-device="phone"] .portal-page .hero),
+:global(body[data-device="phone"] .portal-page .video-section) {
+  grid-template-columns: 1fr;
 }
 
-@media (max-width: 520px) {
-  main {
-    width: min(100% - 28px, 1180px);
-  }
+:global(body[data-device="tablet"][data-orientation="portrait"] .portal-page .hero),
+:global(body[data-device="phone"] .portal-page .hero) {
+  min-height: auto;
+}
 
-  .hero {
-    padding: 58px 0;
-  }
+:global(body[data-device="phone"] .portal-page main) {
+  width: min(100% - 28px, 1180px);
+}
 
-  .portal-section {
-    padding: 62px 0;
-  }
+:global(body[data-device="phone"] .portal-page .hero) {
+  padding: 52px 0;
+}
 
-  .entry-grid {
-    grid-template-columns: 1fr;
-  }
+:global(body[data-device="phone"] .portal-page h1) {
+  font-size: clamp(38px, 13vw, 58px);
+}
 
-  .entry-grid a {
-    min-height: 190px;
-  }
+:global(body[data-device="phone"] .portal-page .hero-actions a) {
+  min-height: 44px;
+}
 
-  .portal-footer {
-    grid-template-columns: 1fr;
-  }
+:global(body[data-device="phone"] .portal-page .portal-section) {
+  padding: 62px 0;
+}
+
+:global(body[data-device="phone"] .portal-page .entry-grid) {
+  grid-template-columns: 1fr;
+}
+
+:global(body[data-device="phone"] .portal-page .entry-grid a) {
+  min-height: 190px;
+}
+
+:global(body[data-device="phone"] .portal-page .portal-footer) {
+  grid-template-columns: 1fr;
+}
+
+:global(body[data-device="phone"] .portal-page .compliance-links) {
+  justify-content: flex-start;
+  flex-direction: column;
+}
+
+:global(body[data-device="phone"][data-orientation="landscape"] .portal-page .hero) {
+  grid-template-columns: minmax(0, 1.2fr) minmax(240px, 0.8fr);
 }
 </style>

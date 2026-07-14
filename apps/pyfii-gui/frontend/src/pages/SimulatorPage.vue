@@ -289,24 +289,63 @@ onUnmounted(() => {
   background: var(--fullscreen-bg);
 }
 
-@media (max-width: 900px) {
-  .sim-page {
-    grid-template-rows: auto auto auto minmax(180px, 34vh);
-  }
+/* Phones and portrait tablets put the full-width simulation before project details. */
+:global(body[data-device="phone"] .sim-page),
+:global(body[data-device="tablet"][data-orientation="portrait"] .sim-page) {
+  display: block;
+  min-height: 100dvh;
+}
 
-  .topbar {
-    align-items: flex-start;
-    flex-wrap: wrap;
-    overflow-x: visible;
-  }
+:global(body[data-device="phone"] .topbar),
+:global(body[data-device="tablet"][data-orientation="portrait"] .topbar) {
+  align-items: flex-start;
+  flex-wrap: wrap;
+  overflow-x: visible;
+}
 
-  .workspace {
-    grid-template-columns: 1fr;
-  }
+:global(body[data-device="phone"] .topbar button),
+:global(body[data-device="phone"] .topbar select),
+:global(body[data-device="phone"] .compact-input input),
+:global(body[data-device="tablet"][data-orientation="portrait"] .topbar button),
+:global(body[data-device="tablet"][data-orientation="portrait"] .topbar select),
+:global(body[data-device="tablet"][data-orientation="portrait"] .compact-input input) {
+  min-height: 36px;
+}
 
-  .project-column {
-    border-right: 0;
-    border-bottom: 1px solid var(--border-control);
-  }
+:global(body[data-device="phone"] .topbar .upload-bar),
+:global(body[data-device="tablet"][data-orientation="portrait"] .topbar .upload-bar) {
+  flex: 1 0 100%;
+  order: 10;
+}
+
+:global(body[data-device="phone"] .export-btn),
+:global(body[data-device="tablet"][data-orientation="portrait"] .export-btn) {
+  margin-left: auto;
+}
+
+:global(body[data-device="phone"] .workspace),
+:global(body[data-device="tablet"][data-orientation="portrait"] .workspace) {
+  display: flex;
+  flex-direction: column;
+}
+
+:global(body[data-device="phone"] .simulation-column:not(:fullscreen)),
+:global(body[data-device="tablet"][data-orientation="portrait"] .simulation-column:not(:fullscreen)) {
+  order: 1;
+  display: grid;
+  grid-template-rows: auto auto;
+}
+
+:global(body[data-device="phone"] .project-column),
+:global(body[data-device="tablet"][data-orientation="portrait"] .project-column) {
+  order: 2;
+  border-right: 0;
+  border-top: 1px solid var(--border-control);
+  overflow: visible;
+}
+
+:global(body[data-device="phone"][data-orientation="landscape"] .topbar) {
+  max-height: 45dvh;
+  overflow-y: auto;
 }
 </style>

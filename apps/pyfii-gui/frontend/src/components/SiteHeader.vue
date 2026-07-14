@@ -103,21 +103,31 @@ nav a[aria-current="page"] {
   font-size: 11px;
 }
 
-@media (max-width: 760px) {
-  .site-header {
-    position: relative;
-    flex-wrap: wrap;
-    gap: 8px 14px;
-  }
+:global(body[data-device="phone"] .site-header) {
+  position: relative;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+  padding: 8px 12px;
+}
 
-  nav {
-    order: 3;
-    width: 100%;
-    overflow-x: auto;
-  }
+:global(body[data-device="phone"] .site-header nav) {
+  flex: 1 0 100%;
+  order: 3;
+  width: 100%;
+  overflow-x: auto;
+}
 
-  .site-actions {
-    margin-left: auto;
-  }
+:global(body[data-device="phone"] .site-header nav a) {
+  min-height: 40px;
+  display: inline-flex;
+  align-items: center;
+}
+
+:global(body[data-device="phone"] .site-header .site-actions) {
+  margin-left: auto;
+}
+
+:global(body[data-device="phone"] .site-header .site-actions button) {
+  min-height: 38px;
 }
 </style>

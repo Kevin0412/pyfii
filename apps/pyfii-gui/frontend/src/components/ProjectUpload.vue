@@ -35,6 +35,15 @@
       </button>
     </template>
     <span v-if="project.error" class="upload-error">{{ project.error }}</span>
+    <div
+      v-if="project.loading"
+      class="loading-progress"
+      role="progressbar"
+      :aria-label="tt('parsing')"
+      :aria-valuetext="tt('parsing')"
+    >
+      <span />
+    </div>
   </form>
 </template>
 
@@ -179,5 +188,75 @@ async function loadProject(loader: () => Promise<ProjectCreateResponse>): Promis
   text-overflow: ellipsis;
   white-space: nowrap;
   font-size: 11px;
+}
+
+.loading-progress {
+  flex: 1 0 100%;
+  height: 4px;
+  overflow: hidden;
+  border: 1px solid var(--border-soft);
+  background: var(--panel-bg);
+}
+
+.loading-progress span {
+  display: block;
+  width: 35%;
+  height: 100%;
+  background: var(--text-strong);
+  animation: loading-progress-slide 1.1s ease-in-out infinite;
+}
+
+@keyframes loading-progress-slide {
+  from { transform: translateX(-110%); }
+  to { transform: translateX(315%); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .loading-progress span {
+    width: 100%;
+    opacity: 0.55;
+    animation: none;
+  }
+}
+
+:global(body[data-device="phone"] .upload-bar),
+:global(body[data-device="tablet"][data-orientation="portrait"] .upload-bar) {
+  width: 100%;
+  flex-basis: 100%;
+}
+
+:global(body[data-device="phone"] .file-control),
+:global(body[data-device="phone"] .local-path-control),
+:global(body[data-device="tablet"][data-orientation="portrait"] .file-control),
+:global(body[data-device="tablet"][data-orientation="portrait"] .local-path-control) {
+  flex: 1 0 100%;
+}
+
+:global(body[data-device="phone"] .file-control input),
+:global(body[data-device="phone"] .local-path-control input),
+:global(body[data-device="tablet"][data-orientation="portrait"] .file-control input),
+:global(body[data-device="tablet"][data-orientation="portrait"] .local-path-control input) {
+  width: auto;
+  min-width: 0;
+  max-width: none;
+  flex: 1;
+}
+
+:global(body[data-device="phone"] .upload-bar button),
+:global(body[data-device="phone"] .upload-bar select),
+:global(body[data-device="phone"] .file-control input),
+:global(body[data-device="tablet"][data-orientation="portrait"] .upload-bar button),
+:global(body[data-device="tablet"][data-orientation="portrait"] .upload-bar select),
+:global(body[data-device="tablet"][data-orientation="portrait"] .file-control input) {
+  min-height: 38px;
+}
+
+:global(body[data-device="phone"] .selected-file),
+:global(body[data-device="phone"] .upload-error),
+:global(body[data-device="tablet"][data-orientation="portrait"] .selected-file),
+:global(body[data-device="tablet"][data-orientation="portrait"] .upload-error) {
+  flex: 1 0 100%;
+  max-width: 100%;
+  white-space: normal;
 }
 </style>

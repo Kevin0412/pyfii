@@ -467,9 +467,30 @@ td:nth-child(3) {
   cursor: default;
 }
 
-@media (max-width: 980px) {
-  .summary-bar {
-    grid-template-columns: 1fr;
-  }
+:global(body[data-device="phone"] .safety-panel),
+:global(body[data-device="tablet"][data-orientation="portrait"] .safety-panel) {
+  min-height: 360px;
+}
+
+:global(body[data-device="phone"] .safety-panel header) {
+  flex-wrap: wrap;
+}
+
+:global(body[data-device="phone"] .safety-panel .summary-bar) {
+  grid-template-columns: 1fr auto;
+}
+
+:global(body[data-device="phone"] .safety-panel .summary-bar button) {
+  min-height: 38px;
+}
+
+:global(body[data-device="phone"] .safety-panel table) {
+  min-width: 660px;
+}
+
+:global(body[data-device="phone"] .safety-panel .filter-row select),
+:global(body[data-device="phone"] .safety-panel .filter-row input),
+:global(body[data-device="phone"] .safety-panel .multi-select summary) {
+  min-height: 38px;
 }
 </style>

@@ -142,4 +142,14 @@ code {
 .category-action_incomplete {
   color: var(--neutral);
 }
+
+:global(body[data-device="phone"] .info-list),
+:global(body[data-device="tablet"][data-orientation="portrait"] .info-list) {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+:global(body[data-device="phone"] .info-list > div),
+:global(body[data-device="tablet"][data-orientation="portrait"] .info-list > div) {
+  min-width: 0;
+}
 </style>

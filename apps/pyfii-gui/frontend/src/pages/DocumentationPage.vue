@@ -4,17 +4,26 @@
 
     <div class="docs-layout">
       <aside>
-        <section v-for="group in groups" :key="group.id">
-          <h2>{{ group.label }}</h2>
-          <a
-            v-for="item in group.items"
-            :key="item.id"
-            :href="item.source.route"
-            :class="{ active: item.id === documentId }"
-          >
-            {{ item.source.title[ui.locale] }}
-          </a>
-        </section>
+        <details ref="navigationRef" class="docs-navigation">
+          <summary>
+            <span>{{ ui.locale === "zh" ? "文档目录" : "Contents" }}</span>
+            <strong>{{ currentTitle }}</strong>
+          </summary>
+          <div class="docs-nav-groups">
+            <section v-for="group in groups" :key="group.id">
+              <h2>{{ group.label }}</h2>
+              <a
+                v-for="item in group.items"
+                :key="item.id"
+                :href="item.source.route"
+                :class="{ active: item.id === documentId }"
+                @click="closePhoneNavigation"
+              >
+                {{ item.source.title[ui.locale] }}
+              </a>
+            </section>
+          </div>
+        </details>
       </aside>
       <!-- Markdown is bundled from trusted repository documentation sources. -->
       <article class="markdown-body">
@@ -36,6 +45,7 @@ import SiteHeader from "../components/SiteHeader.vue";
 import {
   documentHtml,
   documentNavigation,
+  documentSource,
   type DocumentId,
 } from "../content/documentation";
 import { text, type MessageKey } from "../i18n";
@@ -45,6 +55,7 @@ const props = defineProps<{ documentId: DocumentId }>();
 const ui = useUiStore();
 
 const html = ref("");
+const navigationRef = ref<HTMLDetailsElement | null>(null);
 const loading = ref(true);
 const loadFailed = ref(false);
 const navigation = documentNavigation();
@@ -52,6 +63,12 @@ let loadVersion = 0;
 
 function tt(key: MessageKey): string {
   return text(ui.locale, key);
+}
+
+function closePhoneNavigation(): void {
+  if (document.body.dataset.device === "phone" && navigationRef.value) {
+    navigationRef.value.open = false;
+  }
 }
 
 watch(
@@ -99,6 +116,7 @@ const groups = computed(() => [
     items: navigation.filter((item) => item.source.group === "research"),
   },
 ]);
+const currentTitle = computed(() => documentSource(props.documentId).title[ui.locale]);
 </script>
 
 <style scoped>
@@ -147,7 +165,15 @@ aside {
   overflow: auto;
 }
 
-aside section + section {
+.docs-navigation > summary {
+  display: none;
+}
+
+.docs-navigation:not([open]) > .docs-nav-groups {
+  display: block;
+}
+
+.docs-nav-groups section + section {
   margin-top: 22px;
 }
 
@@ -260,18 +286,70 @@ aside a.active {
   border: 1px solid var(--border-soft);
 }
 
-@media (max-width: 820px) {
-  .docs-layout {
-    grid-template-columns: 1fr;
-    gap: 24px;
-    padding: 24px 18px 60px;
-  }
+:global(body[data-device="tablet"][data-orientation="portrait"] .docs-page .docs-layout),
+:global(body[data-device="phone"] .docs-page .docs-layout) {
+  grid-template-columns: 1fr;
+  gap: 24px;
+  padding: 24px 18px 60px;
+}
 
-  aside {
-    position: static;
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    max-height: none;
-  }
+:global(body[data-device="tablet"][data-orientation="portrait"] .docs-page aside),
+:global(body[data-device="phone"] .docs-page aside) {
+  position: static;
+  max-height: none;
+}
+
+:global(body[data-device="tablet"][data-orientation="portrait"] .docs-page .docs-nav-groups) {
+  display: grid !important;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0 28px;
+}
+
+:global(body[data-device="phone"] .docs-page .docs-navigation) {
+  border: 1px solid var(--border-soft);
+  background: var(--panel-bg);
+}
+
+:global(body[data-device="phone"] .docs-page .docs-navigation > summary) {
+  min-height: 48px;
+  display: grid;
+  gap: 3px;
+  padding: 9px 12px;
+  cursor: pointer;
+  list-style-position: inside;
+}
+
+:global(body[data-device="phone"] .docs-page .docs-navigation > summary span) {
+  color: var(--text-muted);
+  font-size: 10px;
+  text-transform: uppercase;
+}
+
+:global(body[data-device="phone"] .docs-page .docs-navigation > summary strong) {
+  color: var(--text);
+  font-size: 12px;
+}
+
+:global(body[data-device="phone"] .docs-page .docs-navigation:not([open]) > .docs-nav-groups) {
+  display: none;
+}
+
+:global(body[data-device="phone"] .docs-page .docs-nav-groups) {
+  padding: 4px 12px 14px;
+}
+
+:global(body[data-device="phone"] .docs-page aside a) {
+  min-height: 38px;
+  display: flex;
+  align-items: center;
+}
+
+:global(body[data-device="phone"] .docs-page .markdown-body h1) {
+  font-size: clamp(28px, 10vw, 42px);
+}
+
+:global(body[data-device="phone"] .docs-page .markdown-body pre) {
+  padding: 12px;
+  font-size: 12px;
 }
 </style>

@@ -591,4 +591,37 @@ onUnmounted(() => {
   cursor: pointer;
   font-size: 16px;
 }
+
+:global(body[data-device="phone"] .simulation-column:not(:fullscreen) .canvas-shell),
+:global(body[data-device="tablet"][data-orientation="portrait"] .simulation-column:not(:fullscreen) .canvas-shell) {
+  width: 100%;
+  aspect-ratio: 2 / 1;
+  contain: layout paint size;
+}
+
+:global(body[data-device="phone"] .simulation-column:not(:fullscreen) .canvas-frame),
+:global(body[data-device="tablet"][data-orientation="portrait"] .simulation-column:not(:fullscreen) .canvas-frame) {
+  max-width: 100%;
+}
+
+:global(body[data-device="phone"] .fullscreen-btn) {
+  width: 42px;
+  height: 42px;
+  opacity: 0.85;
+}
+
+:global(body[data-device="phone"] .three-hud) {
+  row-gap: 2px;
+  font-size: 10px;
+  line-height: 13px;
+}
+
+:global(body[data-device="phone"] .hud-drone) {
+  display: none;
+}
+
+:global(body[data-device="phone"] .export-progress-card) {
+  width: calc(100% - 28px);
+  padding: 18px;
+}
 </style>

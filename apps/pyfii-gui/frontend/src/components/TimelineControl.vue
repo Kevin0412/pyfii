@@ -354,15 +354,27 @@ label {
   font-size: 11.5px;
 }
 
-@media (max-width: 760px) {
-  .timeline {
-    grid-template-columns: 1fr 1fr;
-  }
+:global(body[data-device="phone"] .timeline),
+:global(body[data-device="tablet"][data-orientation="portrait"] .timeline) {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+}
 
-  .range-wrap,
-  .music-player,
-  .music-empty {
-    grid-column: 1 / -1;
-  }
+:global(body[data-device="phone"] .range-wrap),
+:global(body[data-device="phone"] .music-player),
+:global(body[data-device="phone"] .music-empty),
+:global(body[data-device="tablet"][data-orientation="portrait"] .range-wrap),
+:global(body[data-device="tablet"][data-orientation="portrait"] .music-player),
+:global(body[data-device="tablet"][data-orientation="portrait"] .music-empty) {
+  grid-column: 1 / -1;
+}
+
+:global(body[data-device="phone"] .timeline button),
+:global(body[data-device="phone"] .timeline select) {
+  min-height: 38px;
+}
+
+:global(body[data-device="phone"] .time-readout) {
+  min-width: 0;
+  text-align: right;
 }
 </style>

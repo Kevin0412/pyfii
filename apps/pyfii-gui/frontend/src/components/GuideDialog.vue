@@ -363,13 +363,23 @@ footer a {
   color: var(--panel-bg, #ffffff);
 }
 
-@media (max-width: 540px) {
-  footer {
-    align-items: flex-end;
-  }
+:global(body[data-device="phone"] .guide-card) {
+  width: calc(100vw - 20px);
+  max-height: calc(100dvh - 20px);
+  overflow: auto;
+}
 
-  footer a {
-    max-width: 90px;
-  }
+:global(body[data-device="phone"] .guide-card footer) {
+  align-items: flex-end;
+}
+
+:global(body[data-device="phone"] .guide-card footer a) {
+  max-width: 90px;
+}
+
+:global(body[data-device="phone"] .guide-card header button),
+:global(body[data-device="phone"] .guide-card .guide-actions button) {
+  min-width: 40px;
+  min-height: 40px;
 }
 </style>
