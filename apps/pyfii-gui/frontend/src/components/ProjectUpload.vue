@@ -21,7 +21,7 @@
     </label>
 
     <button type="submit" :disabled="!selectedFile || project.loading">
-      {{ project.loading ? tt("parsing") : tt("load") }}
+      {{ project.loading ? tt("loadingProject") : tt("load") }}
     </button>
 
     <span v-if="selectedFile" class="selected-file">{{ selectedFile.name }}</span>
@@ -31,18 +31,16 @@
         <input v-model.trim="localPath" type="text" :placeholder="tt('localProjectPlaceholder')" />
       </label>
       <button type="button" :disabled="!localPath || project.loading" @click="submitLocal">
-        {{ project.loading ? tt("parsing") : tt("openLocal") }}
+        {{ project.loading ? tt("loadingProject") : tt("openLocal") }}
       </button>
     </template>
     <span v-if="project.error" class="upload-error">{{ project.error }}</span>
-    <div
-      v-if="project.loading"
-      class="loading-progress"
-      role="progressbar"
-      :aria-label="tt('parsing')"
-      :aria-valuetext="tt('parsing')"
-    >
-      <span />
+    <div v-if="project.loading" class="loading-progress" aria-live="polite">
+      <div class="loading-progress-label">
+        <span>{{ tt(loadPhase) }}</span>
+        <strong>{{ Math.round(loadProgress) }}%</strong>
+      </div>
+      <progress :value="loadProgress" max="100">{{ Math.round(loadProgress) }}%</progress>
     </div>
   </form>
 </template>
@@ -67,6 +65,8 @@ const selectedFile = ref<File | null>(null);
 const localPath = ref("");
 const fps = ref(60);
 const ignoreAcc = ref(false);
+const loadProgress = ref(0);
+const loadPhase = ref<MessageKey>("uploadingProject");
 
 function tt(key: MessageKey): string {
   return text(ui.locale, key);
@@ -92,7 +92,15 @@ async function submit(): Promise<void> {
     return;
   }
 
-  await loadProject(() => uploadProjectZip(selectedFile.value as File, fps.value, ignoreAcc.value));
+  await loadProject(
+    (onUploadProgress) => uploadProjectZip(
+      selectedFile.value as File,
+      fps.value,
+      ignoreAcc.value,
+      onUploadProgress,
+    ),
+    true,
+  );
 }
 
 async function submitLocal(): Promise<void> {
@@ -100,26 +108,50 @@ async function submitLocal(): Promise<void> {
     return;
   }
 
-  await loadProject(() => importLocalProject(localPath.value, fps.value, ignoreAcc.value));
+  await loadProject(() => importLocalProject(localPath.value, fps.value, ignoreAcc.value), false);
 }
 
-async function loadProject(loader: () => Promise<ProjectCreateResponse>): Promise<void> {
+async function loadProject(
+  loader: (onUploadProgress: (fraction: number) => void) => Promise<ProjectCreateResponse>,
+  uploadsFile: boolean,
+): Promise<void> {
   project.beginLoading();
   safety.clear();
   player.pause();
   player.setCurrentTime(0);
+  loadProgress.value = 0;
+  loadPhase.value = uploadsFile ? "uploadingProject" : "parsingProject";
 
   try {
-    const meta = await loader();
+    const meta = await loader((fraction) => {
+      loadProgress.value = Math.round(Math.max(0, Math.min(1, fraction)) * 25);
+      if (fraction >= 1) loadPhase.value = "parsingProject";
+    });
+    loadProgress.value = 50;
+    loadPhase.value = "loadingProjectData";
     project.setMeta(meta, meta.warnings);
 
+    let loadedResponses = 0;
+    const markResponseLoaded = (): void => {
+      loadedResponses += 1;
+      loadProgress.value = 50 + loadedResponses * 25;
+      if (loadedResponses === 2) loadPhase.value = "projectLoaded";
+    };
     const [tracksResponse, safetyResponse] = await Promise.all([
-      fetchProjectTracks(meta.project_id, fps.value),
-      fetchProjectSafety(meta.project_id),
+      fetchProjectTracks(meta.project_id, fps.value).then((response) => {
+        markResponseLoaded();
+        return response;
+      }),
+      fetchProjectSafety(meta.project_id).then((response) => {
+        markResponseLoaded();
+        return response;
+      }),
     ]);
 
-    project.setTracks(tracksResponse.drones, tracksResponse.fps);
+    // Keep the completed bar visible briefly instead of removing it in the same render tick.
+    await new Promise((resolve) => window.setTimeout(resolve, 120));
     safety.setSafety(safetyResponse.summary, safetyResponse.events);
+    project.setTracks(tracksResponse.drones, tracksResponse.fps);
   } catch (error) {
     project.setError(errorMessage(error));
   }
@@ -192,31 +224,41 @@ async function loadProject(loader: () => Promise<ProjectCreateResponse>): Promis
 
 .loading-progress {
   flex: 1 0 100%;
-  height: 4px;
-  overflow: hidden;
+  display: grid;
+  gap: 4px;
+}
+
+.loading-progress-label {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  color: var(--text-muted);
+  font-size: 10px;
+}
+
+.loading-progress-label strong {
+  color: var(--text-strong);
+  font-variant-numeric: tabular-nums;
+}
+
+.loading-progress progress {
+  width: 100%;
+  height: 8px;
+  appearance: none;
   border: 1px solid var(--border-soft);
   background: var(--panel-bg);
 }
 
-.loading-progress span {
-  display: block;
-  width: 35%;
-  height: 100%;
+.loading-progress progress::-webkit-progress-bar {
+  background: var(--panel-bg);
+}
+
+.loading-progress progress::-webkit-progress-value {
   background: var(--text-strong);
-  animation: loading-progress-slide 1.1s ease-in-out infinite;
 }
 
-@keyframes loading-progress-slide {
-  from { transform: translateX(-110%); }
-  to { transform: translateX(315%); }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .loading-progress span {
-    width: 100%;
-    opacity: 0.55;
-    animation: none;
-  }
+.loading-progress progress::-moz-progress-bar {
+  background: var(--text-strong);
 }
 
 :global(body[data-device="phone"] .upload-bar),

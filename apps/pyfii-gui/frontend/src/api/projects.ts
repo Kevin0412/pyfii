@@ -1,4 +1,4 @@
-import { API_BASE_URL, requestJson } from "./client";
+import { API_BASE_URL, ApiError, type ApiErrorPayload, requestJson } from "./client";
 import type { ProjectMeta, SafetyResponse, TracksResponse } from "../renderer/types";
 
 export interface ProjectCreateResponse extends ProjectMeta {
@@ -27,15 +27,52 @@ export interface VideoExportResponse {
   error: string | null;
 }
 
-export async function uploadProjectZip(file: File, fps: number, ignoreAcc: boolean): Promise<ProjectCreateResponse> {
+export function uploadProjectZip(
+  file: File,
+  fps: number,
+  ignoreAcc: boolean,
+  onUploadProgress?: (fraction: number) => void,
+): Promise<ProjectCreateResponse> {
   const form = new FormData();
   form.append("file", file);
   form.append("fps", String(fps));
   form.append("ignore_acc", String(ignoreAcc));
 
-  return requestJson<ProjectCreateResponse>("/api/projects", {
-    method: "POST",
-    body: form,
+  return new Promise((resolve, reject) => {
+    const request = new XMLHttpRequest();
+    request.open("POST", `${API_BASE_URL}/api/projects`);
+    request.responseType = "json";
+
+    request.upload.addEventListener("progress", (event) => {
+      if (event.lengthComputable && event.total > 0) {
+        onUploadProgress?.(Math.min(1, event.loaded / event.total));
+      }
+    });
+    request.upload.addEventListener("load", () => onUploadProgress?.(1));
+
+    request.addEventListener("load", () => {
+      const payload = request.response as ProjectCreateResponse | ApiErrorPayload | null;
+      if (request.status >= 200 && request.status < 300 && payload) {
+        resolve(payload as ProjectCreateResponse);
+        return;
+      }
+
+      const error = (payload as ApiErrorPayload | null)?.error;
+      reject(new ApiError(
+        request.status,
+        error?.code || "request_failed",
+        error?.message || request.statusText || "Request failed",
+        error?.details || {},
+      ));
+    });
+    request.addEventListener("error", () => {
+      reject(new ApiError(0, "network_error", "Network request failed."));
+    });
+    request.addEventListener("abort", () => {
+      reject(new ApiError(0, "request_aborted", "Request was aborted."));
+    });
+
+    request.send(form);
   });
 }
 
