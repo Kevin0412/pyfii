@@ -373,6 +373,7 @@ cd <repo-root>
 PYTHONPATH=apps/pyfii-gui/backend/src:src pytest -q apps/pyfii-gui/backend/tests
 python -m compileall -q apps/pyfii-gui/backend/src apps/pyfii-gui/backend/tests
 cd apps/pyfii-gui/frontend
+npm run test:geometry
 npm run typecheck
 npm run build
 npm audit --omit=dev

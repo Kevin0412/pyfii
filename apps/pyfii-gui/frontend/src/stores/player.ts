@@ -1,5 +1,7 @@
 import { defineStore } from "pinia";
 
+import { wrapHorizontalAngle } from "../renderer/three/geometry";
+
 export type RenderMode = "classic2d" | "three3d";
 export type ThreeProjectionMode = "orthographic" | "perspective";
 
@@ -88,7 +90,7 @@ export const usePlayerStore = defineStore("player", {
       this.threeProjection = mode;
     },
     setViewAngleA(value: number) {
-      this.viewAngleA = Math.max(-180, Math.min(180, value));
+      this.viewAngleA = wrapHorizontalAngle(value);
     },
     setViewAngleB(value: number) {
       this.viewAngleB = Math.max(-90, Math.min(90, value));

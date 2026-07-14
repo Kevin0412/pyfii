@@ -29,7 +29,7 @@
         </label>
         <label class="compact-input">
           {{ tt("viewAngleA") }}
-          <input v-model.number="player.viewAngleA" type="number" min="-180" max="180" step="5" />
+          <input :value="player.viewAngleA" type="number" step="5" @input="setViewAngleAFromInput" />
         </label>
         <label class="compact-input">
           {{ tt("viewAngleB") }}
@@ -91,6 +91,11 @@ const ui = useUiStore();
 
 function tt(key: MessageKey): string {
   return text(ui.locale, key);
+}
+
+function setViewAngleAFromInput(event: Event): void {
+  const value = (event.target as HTMLInputElement).valueAsNumber;
+  if (Number.isFinite(value)) player.setViewAngleA(value);
 }
 
 function refreshCanvasSize(): void {

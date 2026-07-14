@@ -2,6 +2,7 @@ import * as THREE from "three";
 
 import { droneRgb } from "../palette";
 import type { DroneFrame, RenderInput, SafetyEvent, ThreeRenderSettings } from "../types";
+import { droneGeometrySpec, motorAxisOffset } from "./geometry";
 
 type DroneRenderParts = {
   device: string;
@@ -90,21 +91,6 @@ function materialColor(material: THREE.Material | THREE.Material[], color: THREE
   const colored = material as THREE.Material & { color?: THREE.Color; emissive?: THREE.Color };
   colored.color?.copy(color);
   colored.emissive?.copy(color);
-}
-
-function droneSpec(device: string | null | undefined): { motorOffset: number; rotorRadius: number; bodyRadius: number } {
-  if (device === "F600") {
-    return {
-      motorOffset: 12.6 / 2,
-      rotorRadius: 17.5 / 2 - (12.6 / 4) * Math.SQRT2,
-      bodyRadius: 6.7 / 2,
-    };
-  }
-  return {
-    motorOffset: 21 / 2,
-    rotorRadius: 14.9 - (21 / 4) * Math.SQRT2,
-    bodyRadius: 5,
-  };
 }
 
 function makeTextSprite(text: string, color = "#d8d8d8"): THREE.Sprite {
@@ -374,7 +360,8 @@ export class PyfiiThreeRenderer {
       this.droneParts.delete(id);
     }
 
-    const spec = droneSpec(device);
+    const spec = droneGeometrySpec(device);
+    const motorCoordinate = motorAxisOffset(spec);
     const group = new THREE.Group();
     const droneColor = colorFromRgb(droneRgb(id));
     const strokeScale = this.activeRenderScale;
@@ -390,14 +377,14 @@ export class PyfiiThreeRenderer {
 
     const arms = [
       this.cylinderBetween(
-        new THREE.Vector3(spec.motorOffset, 0, spec.motorOffset),
-        new THREE.Vector3(-spec.motorOffset, 0, -spec.motorOffset),
+        new THREE.Vector3(motorCoordinate, 0, motorCoordinate),
+        new THREE.Vector3(-motorCoordinate, 0, -motorCoordinate),
         droneColor,
         this.strokeRadius(0.45),
       ),
       this.cylinderBetween(
-        new THREE.Vector3(-spec.motorOffset, 0, spec.motorOffset),
-        new THREE.Vector3(spec.motorOffset, 0, -spec.motorOffset),
+        new THREE.Vector3(-motorCoordinate, 0, motorCoordinate),
+        new THREE.Vector3(motorCoordinate, 0, -motorCoordinate),
         droneColor,
         this.strokeRadius(0.45),
       ),
@@ -407,10 +394,10 @@ export class PyfiiThreeRenderer {
     const rotorGeometry = new THREE.TorusGeometry(spec.rotorRadius, rotorTube, 8, 28);
     rotorGeometry.rotateX(Math.PI / 2);
     for (const [x, z] of [
-      [spec.motorOffset, spec.motorOffset],
-      [-spec.motorOffset, spec.motorOffset],
-      [-spec.motorOffset, -spec.motorOffset],
-      [spec.motorOffset, -spec.motorOffset],
+      [motorCoordinate, motorCoordinate],
+      [-motorCoordinate, motorCoordinate],
+      [-motorCoordinate, -motorCoordinate],
+      [motorCoordinate, -motorCoordinate],
     ]) {
       const rotor = new THREE.Mesh(
         rotorGeometry,
@@ -420,7 +407,7 @@ export class PyfiiThreeRenderer {
       group.add(rotor);
     }
 
-    const markerGeometry = new THREE.TorusGeometry(spec.motorOffset + spec.rotorRadius + 5, 1.5 * strokeScale, 8, 48);
+    const markerGeometry = new THREE.TorusGeometry(spec.motorRadius + spec.rotorRadius + 5, 1.5 * strokeScale, 8, 48);
     markerGeometry.rotateX(Math.PI / 2);
     const marker = new THREE.Mesh(markerGeometry, new THREE.MeshBasicMaterial({ color: 0xff3333 }));
     marker.position.y = 2;
@@ -433,7 +420,7 @@ export class PyfiiThreeRenderer {
       this.strokeRadius(0.32),
       0.48,
     );
-    const shadowGeometry = new THREE.TorusGeometry(spec.motorOffset + spec.rotorRadius, 0.9 * strokeScale, 8, 42);
+    const shadowGeometry = new THREE.TorusGeometry(spec.motorRadius + spec.rotorRadius, 0.9 * strokeScale, 8, 42);
     shadowGeometry.rotateX(Math.PI / 2);
     const shadow = new THREE.Mesh(
       shadowGeometry,
