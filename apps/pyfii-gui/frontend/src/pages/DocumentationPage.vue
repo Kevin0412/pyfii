@@ -18,17 +18,19 @@
       </aside>
       <!-- Markdown is bundled from trusted repository documentation sources. -->
       <article class="markdown-body">
-        <p v-if="ui.locale === 'en'" class="language-note">
+        <p v-if="loading" class="document-status">{{ tt("loadingDocument") }}</p>
+        <p v-else-if="loadFailed" class="document-status error">{{ tt("documentLoadFailed") }}</p>
+        <p v-else-if="ui.locale === 'en'" class="language-note">
           The documentation body is currently maintained in Chinese.
         </p>
-        <div v-html="html" />
+        <div v-if="!loading && !loadFailed" v-html="html" />
       </article>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed } from "vue";
+import { computed, ref, watch } from "vue";
 
 import SiteHeader from "../components/SiteHeader.vue";
 import {
@@ -36,13 +38,40 @@ import {
   documentNavigation,
   type DocumentId,
 } from "../content/documentation";
+import { text, type MessageKey } from "../i18n";
 import { useUiStore } from "../stores/ui";
 
 const props = defineProps<{ documentId: DocumentId }>();
 const ui = useUiStore();
 
-const html = computed(() => documentHtml(props.documentId));
+const html = ref("");
+const loading = ref(true);
+const loadFailed = ref(false);
 const navigation = documentNavigation();
+let loadVersion = 0;
+
+function tt(key: MessageKey): string {
+  return text(ui.locale, key);
+}
+
+watch(
+  () => props.documentId,
+  async (documentId) => {
+    const version = ++loadVersion;
+    loading.value = true;
+    loadFailed.value = false;
+    try {
+      const nextHtml = await documentHtml(documentId);
+      if (version === loadVersion) html.value = nextHtml;
+    } catch {
+      if (version === loadVersion) loadFailed.value = true;
+    } finally {
+      if (version === loadVersion) loading.value = false;
+    }
+  },
+  { immediate: true },
+);
+
 const groups = computed(() => [
   {
     id: "start",
@@ -158,6 +187,16 @@ aside a.active {
   background: var(--docs-code);
   color: var(--text-muted);
   font-size: 13px;
+}
+
+.document-status {
+  margin: 60px 0;
+  color: var(--text-muted);
+  text-align: center;
+}
+
+.document-status.error {
+  color: #b90000;
 }
 
 .markdown-body :deep(h1) {

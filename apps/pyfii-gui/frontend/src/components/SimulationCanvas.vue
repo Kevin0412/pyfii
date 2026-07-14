@@ -38,6 +38,12 @@
           D{{ drone.id }}({{ drone.xCm.toFixed(0) }},{{ drone.yCm.toFixed(0) }},{{ drone.zCm.toFixed(0) }})
         </span>
       </div>
+      <div
+        v-if="player.renderMode === 'three3d' && (threeLoading || threeLoadFailed)"
+        class="render-loading"
+      >
+        {{ tt(threeLoadFailed ? "threeLoadFailed" : "loading3d") }}
+      </div>
       <button
         type="button"
         class="fullscreen-btn"
@@ -97,12 +103,12 @@ import {
 import { text, type MessageKey } from "../i18n";
 import { getFrameAtTime } from "../renderer/frame";
 import { PyfiiCanvasRenderer } from "../renderer/canvas2d/PyfiiCanvasRenderer";
-import { PyfiiThreeRenderer } from "../renderer/three/PyfiiThreeRenderer";
 import { droneColor } from "../renderer/palette";
 import { usePlayerStore } from "../stores/player";
 import { useProjectStore } from "../stores/project";
 import { useSafetyStore } from "../stores/safety";
 import { useUiStore } from "../stores/ui";
+import type { PyfiiThreeRenderer } from "../renderer/three/PyfiiThreeRenderer";
 import type { RenderInput, ThreeRenderSettings } from "../renderer/types";
 
 const canvas2dRef = ref<HTMLCanvasElement | null>(null);
@@ -116,6 +122,8 @@ const exportStatus = ref<"queued" | "running">("queued");
 const exportMessage = ref("");
 const exportFailed = ref(false);
 const renderFps = ref(0);
+const threeLoading = ref(false);
+const threeLoadFailed = ref(false);
 const project = useProjectStore();
 const player = usePlayerStore();
 const safety = useSafetyStore();
@@ -140,6 +148,8 @@ const exportPhaseText = computed(() => {
 
 let canvasRenderer: PyfiiCanvasRenderer | null = null;
 let threeRenderer: PyfiiThreeRenderer | null = null;
+let threeRendererLoad: Promise<void> | null = null;
+let mounted = false;
 let frameRequest = 0;
 let lastTimestamp = 0;
 let fpsWindowStart = 0;
@@ -191,6 +201,30 @@ function render(timestamp: number): void {
 function syncRendererSize(): void {
   canvasRenderer?.applyScale(player.renderScale);
   threeRenderer?.setSize(canvasWidth.value, canvasHeight.value);
+}
+
+function ensureThreeRenderer(): Promise<void> {
+  if (threeRenderer || !mounted || !canvas3dRef.value) return Promise.resolve();
+  if (threeRendererLoad) return threeRendererLoad;
+
+  threeLoading.value = true;
+  threeLoadFailed.value = false;
+  threeRendererLoad = import("../renderer/three/PyfiiThreeRenderer")
+    .then(({ PyfiiThreeRenderer: Renderer }) => {
+      if (!mounted || !canvas3dRef.value) return;
+      threeRenderer = new Renderer(canvas3dRef.value);
+      syncRendererSize();
+      drawActiveRenderer();
+    })
+    .catch((error: unknown) => {
+      threeLoadFailed.value = true;
+      console.error("Unable to load the 3D renderer", error);
+    })
+    .finally(() => {
+      threeLoading.value = false;
+      threeRendererLoad = null;
+    });
+  return threeRendererLoad;
 }
 
 function threeSettings(): ThreeRenderSettings {
@@ -327,8 +361,9 @@ async function exportVideo(): Promise<void> {
 defineExpose({ exportVideo, refreshSize: sizeFrame });
 
 onMounted(() => {
+  mounted = true;
   if (canvas2dRef.value) canvasRenderer = new PyfiiCanvasRenderer(canvas2dRef.value, player.renderScale);
-  if (canvas3dRef.value) threeRenderer = new PyfiiThreeRenderer(canvas3dRef.value);
+  if (player.renderMode === "three3d") void ensureThreeRenderer();
   syncRendererSize();
   ro = new ResizeObserver(() => sizeFrame());
   if (shellRef.value) ro.observe(shellRef.value);
@@ -347,15 +382,18 @@ watch(
     player.projectionDistance,
   ],
   () => {
+    if (player.renderMode === "three3d") void ensureThreeRenderer();
     syncRendererSize();
     drawActiveRenderer();
   },
 );
 
 onUnmounted(() => {
+  mounted = false;
   ro?.disconnect();
   cancelAnimationFrame(frameRequest);
   threeRenderer?.dispose();
+  threeRenderer = null;
 });
 </script>
 
@@ -415,6 +453,18 @@ onUnmounted(() => {
   font-size: 14px;
   font-weight: 400;
   line-height: 20px;
+  pointer-events: none;
+}
+
+.render-loading {
+  position: absolute;
+  inset: 0;
+  z-index: 9;
+  display: grid;
+  place-items: center;
+  color: #fff;
+  background: rgba(0, 0, 0, 0.72);
+  font-size: 13px;
   pointer-events: none;
 }
 

@@ -11,16 +11,32 @@ DOCUMENTATION_SOURCE = (
 DOCUMENT_ROUTE_SOURCE = (
     REPO_ROOT / "apps/pyfii-gui/frontend/src/content/documentRoutes.ts"
 )
+SIMULATION_CANVAS_SOURCE = (
+    REPO_ROOT / "apps/pyfii-gui/frontend/src/components/SimulationCanvas.vue"
+)
+
+
 def frontend_documents():
     source = DOCUMENTATION_SOURCE.read_text(encoding="utf-8")
-    imports = re.findall(r'from "([^"]+\.md)\?raw"', source)
-    return [(DOCUMENTATION_SOURCE.parent / item).resolve() for item in imports]
+    paths = re.findall(r'markdownPath: "([^"]+\.md)"', source)
+    return [(DOCUMENTATION_SOURCE.parent / item).resolve() for item in paths]
 
 
 class FrontendDocumentationTest(unittest.TestCase):
-    def test_all_repository_markdown_is_bundled(self):
+    def test_all_doc_tree_markdown_is_bundled(self):
         repository_documents = set((REPO_ROOT / "doc").rglob("*.md"))
         self.assertEqual(set(frontend_documents()), repository_documents)
+
+    def test_markdown_bodies_are_loaded_on_demand(self):
+        source = DOCUMENTATION_SOURCE.read_text(encoding="utf-8")
+        self.assertIn(
+            'import.meta.glob("../../../../../doc/**/*.md",',
+            source,
+        )
+        self.assertNotRegex(
+            source,
+            re.compile(r'^import .*\.md\?raw";', re.MULTILINE),
+        )
 
     def test_imported_documents_exist_and_are_unique(self):
         documents = frontend_documents()
@@ -95,6 +111,14 @@ class FrontendDocumentationTest(unittest.TestCase):
                 0,
                 f"{document.relative_to(REPO_ROOT)} has an unclosed code fence",
             )
+
+    def test_three_renderer_is_loaded_on_demand(self):
+        source = SIMULATION_CANVAS_SOURCE.read_text(encoding="utf-8")
+        self.assertIn('import("../renderer/three/PyfiiThreeRenderer")', source)
+        self.assertNotIn(
+            'import { PyfiiThreeRenderer } from "../renderer/three/PyfiiThreeRenderer";',
+            source,
+        )
 
 
 if __name__ == "__main__":

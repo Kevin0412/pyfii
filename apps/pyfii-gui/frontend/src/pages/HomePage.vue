@@ -5,11 +5,12 @@
     <main>
       <section class="hero">
         <div class="hero-copy">
-          <p class="eyebrow">OPEN SOURCE DRONE CHOREOGRAPHY</p>
+          <p class="eyebrow">OPEN-SOURCE PYTHON TOOLKIT FOR FII</p>
           <h1>{{ tt("portalTitle") }}</h1>
           <p class="hero-summary">{{ tt("portalSummary") }}</p>
           <div class="hero-actions">
-            <a class="primary-action" href="/studio">{{ tt("openStudio") }} →</a>
+            <a class="primary-action" href="/docs/tutorial/install">{{ tt("getStarted") }} →</a>
+            <a href="/studio">{{ tt("openStudio") }}</a>
             <a href="/docs">{{ tt("browseResources") }}</a>
             <a href="https://github.com/Kevin0412/pyfii" target="_blank" rel="noopener noreferrer">
               GitHub ↗
@@ -21,7 +22,7 @@
           <span class="terminal-muted">01 / {{ tt("portalStepCode") }}</span>
           <span class="terminal-muted">02 / {{ tt("portalStepValidate") }}</span>
           <span class="terminal-muted">03 / {{ tt("portalStepPreview") }}</span>
-          <strong>READY FOR TAKEOFF_</strong>
+          <strong>PROJECT READY FOR REVIEW_</strong>
         </div>
       </section>
 

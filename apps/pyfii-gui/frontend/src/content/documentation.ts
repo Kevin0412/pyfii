@@ -1,27 +1,5 @@
 import { marked } from "marked";
 
-import aiChoreography from "../../../../../doc/ai_choreography_exploration.md?raw";
-import aiGeneratedDistillation from "../../../../../doc/ai_generated_distillation.md?raw";
-import cannonDesignLessons from "../../../../../doc/cannon_design_lessons.md?raw";
-import choreoAgentLessons from "../../../../../doc/choreo_agent_lessons.md?raw";
-import choreoAgentRoadmap from "../../../../../doc/choreo_agent_roadmap.md?raw";
-import coreDocs from "../../../../../doc/doc_zh_CN.md?raw";
-import deepseekCannonReflection from "../../../../../doc/deepseek_cannon_reflection.md?raw";
-import docsOverview from "../../../../../doc/pyfii_docs.md?raw";
-import flightLogAnalysis from "../../../../../doc/flight_log_trajectory_analysis.md?raw";
-import fwfiiMergePlan from "../../../../../doc/fwfii_merge_plan.md?raw";
-import guiDocs from "../../../../../doc/pyfii_gui.md?raw";
-import guiGuide from "../../../../../doc/pyfii_gui_guide.md?raw";
-import humanChoreography from "../../../../../doc/human_choreography_distillation.md?raw";
-import repositoryIndex from "../../../../../doc/INDEX.md?raw";
-import aiScriptPatterns from "../../../../../doc/pyfii_script_patterns_ai.md?raw";
-import humanScriptPatterns from "../../../../../doc/pyfii_script_patterns_human.md?raw";
-import tutorialContents from "../../../../../doc/tutorial/contents.md?raw";
-import tutorialGroupFlight from "../../../../../doc/tutorial/group_flight.md?raw";
-import tutorialInstall from "../../../../../doc/tutorial/install.md?raw";
-import tutorialLight from "../../../../../doc/tutorial/light.md?raw";
-import tutorialPrinciple from "../../../../../doc/tutorial/principle.md?raw";
-import tutorialScriptMode from "../../../../../doc/tutorial/script_mode.md?raw";
 import type { LocaleMode } from "../stores/ui";
 import type { DocumentId } from "./documentRoutes";
 
@@ -29,141 +7,148 @@ export type { DocumentId } from "./documentRoutes";
 
 interface DocumentSource {
   title: Record<LocaleMode, string>;
-  markdown: string;
+  markdownPath: string;
   route: string;
   group: "start" | "docs" | "tutorial" | "choreo" | "research";
 }
 
+const markdownFiles = import.meta.glob("../../../../../doc/**/*.md", {
+  query: "?raw",
+  import: "default",
+}) as Record<string, () => Promise<string>>;
+
+const htmlCache = new Map<DocumentId, Promise<string>>();
+
 const documents: Record<DocumentId, DocumentSource> = {
   overview: {
     title: { zh: "文档与教程", en: "Docs & Tutorials" },
-    markdown: docsOverview,
+    markdownPath: "../../../../../doc/pyfii_docs.md",
     route: "/docs",
     group: "start",
   },
   index: {
     title: { zh: "全部文档索引", en: "All Documents" },
-    markdown: repositoryIndex,
+    markdownPath: "../../../../../doc/INDEX.md",
     route: "/docs/index",
     group: "start",
   },
   guide: {
     title: { zh: "使用引导", en: "Guide" },
-    markdown: guiGuide,
+    markdownPath: "../../../../../doc/pyfii_gui_guide.md",
     route: "/docs/guide",
     group: "start",
   },
   core: {
     title: { zh: "PyFii 文档", en: "PyFii Docs" },
-    markdown: coreDocs,
+    markdownPath: "../../../../../doc/doc_zh_CN.md",
     route: "/docs/core",
     group: "docs",
   },
   gui: {
     title: { zh: "GUI 架构与部署", en: "GUI Architecture" },
-    markdown: guiDocs,
+    markdownPath: "../../../../../doc/pyfii_gui.md",
     route: "/docs/gui",
     group: "docs",
   },
   tutorial: {
     title: { zh: "教程目录", en: "Tutorials" },
-    markdown: tutorialContents,
+    markdownPath: "../../../../../doc/tutorial/contents.md",
     route: "/docs/tutorial",
     group: "tutorial",
   },
   install: {
     title: { zh: "安装", en: "Install" },
-    markdown: tutorialInstall,
+    markdownPath: "../../../../../doc/tutorial/install.md",
     route: "/docs/tutorial/install",
     group: "tutorial",
   },
   "group-flight": {
     title: { zh: "编队飞行", en: "Group Flight" },
-    markdown: tutorialGroupFlight,
+    markdownPath: "../../../../../doc/tutorial/group_flight.md",
     route: "/docs/tutorial/group-flight",
     group: "tutorial",
   },
   "script-mode": {
     title: { zh: "脚本模式", en: "Script Mode" },
-    markdown: tutorialScriptMode,
+    markdownPath: "../../../../../doc/tutorial/script_mode.md",
     route: "/docs/tutorial/script-mode",
     group: "tutorial",
   },
   principle: {
     title: { zh: "内部原理", en: "Internals" },
-    markdown: tutorialPrinciple,
+    markdownPath: "../../../../../doc/tutorial/principle.md",
     route: "/docs/tutorial/principle",
     group: "tutorial",
   },
   light: {
     title: { zh: "灯光编写", en: "Lighting" },
-    markdown: tutorialLight,
+    markdownPath: "../../../../../doc/tutorial/light.md",
     route: "/docs/tutorial/light",
     group: "tutorial",
   },
   "human-choreography": {
     title: { zh: "人类编舞作品蒸馏", en: "Human Choreography" },
-    markdown: humanChoreography,
+    markdownPath: "../../../../../doc/human_choreography_distillation.md",
     route: "/docs/choreo/human-choreography",
     group: "choreo",
   },
   "human-script-patterns": {
     title: { zh: "人类作品编码模式", en: "Human Script Patterns" },
-    markdown: humanScriptPatterns,
+    markdownPath: "../../../../../doc/pyfii_script_patterns_human.md",
     route: "/docs/choreo/human-script-patterns",
     group: "choreo",
   },
   "choreo-agent-lessons": {
     title: { zh: "编舞 Agent 踩坑记录", en: "Choreo Agent Lessons" },
-    markdown: choreoAgentLessons,
+    markdownPath: "../../../../../doc/choreo_agent_lessons.md",
     route: "/docs/choreo/agent-lessons",
     group: "choreo",
   },
   "choreo-agent-roadmap": {
     title: { zh: "编舞 Agent 后续计划", en: "Choreo Agent Roadmap" },
-    markdown: choreoAgentRoadmap,
+    markdownPath: "../../../../../doc/choreo_agent_roadmap.md",
     route: "/docs/choreo/agent-roadmap",
     group: "choreo",
   },
   "flight-log-analysis": {
     title: { zh: "真实飞行轨迹分析", en: "Flight Log Analysis" },
-    markdown: flightLogAnalysis,
+    markdownPath: "../../../../../doc/flight_log_trajectory_analysis.md",
     route: "/docs/research/flight-log-analysis",
     group: "research",
   },
   "fwfii-merge-plan": {
     title: { zh: "fwfii 合并调研", en: "fwfii Merge Plan" },
-    markdown: fwfiiMergePlan,
+    markdownPath: "../../../../../doc/fwfii_merge_plan.md",
     route: "/docs/research/fwfii-merge-plan",
     group: "research",
   },
   "ai-choreography": {
     title: { zh: "AI 编舞探索", en: "AI Choreography" },
-    markdown: aiChoreography,
+    markdownPath: "../../../../../doc/ai_choreography_exploration.md",
     route: "/docs/choreo/ai-exploration",
     group: "choreo",
   },
   "ai-generated-distillation": {
     title: { zh: "AI 生成产物蒸馏", en: "AI Output Distillation" },
-    markdown: aiGeneratedDistillation,
+    markdownPath: "../../../../../doc/ai_generated_distillation.md",
     route: "/docs/choreo/ai-output-distillation",
     group: "choreo",
   },
   "cannon-design-lessons": {
     title: { zh: "Cannon 设计经验", en: "Cannon Design Lessons" },
-    markdown: cannonDesignLessons,
+    markdownPath: "../../../../../doc/cannon_design_lessons.md",
     route: "/docs/choreo/cannon-design-lessons",
     group: "choreo",
   },
   "deepseek-cannon-reflection": {
     title: { zh: "DeepSeek Cannon 反思", en: "DeepSeek Cannon Reflection" },
-    markdown: deepseekCannonReflection,
+    markdownPath: "../../../../../doc/deepseek_cannon_reflection.md",
     route: "/docs/choreo/deepseek-cannon-reflection",
     group: "choreo",
   },
   "ai-script-patterns": {
     title: { zh: "AI 编码模式", en: "AI Script Patterns" },
-    markdown: aiScriptPatterns,
+    markdownPath: "../../../../../doc/pyfii_script_patterns_ai.md",
     route: "/docs/choreo/ai-script-patterns",
     group: "choreo",
   },
@@ -224,11 +209,25 @@ export function documentSource(id: DocumentId): DocumentSource {
   return documents[id];
 }
 
-export function documentHtml(id: DocumentId): string {
-  return marked.parse(rewriteMarkdownLinks(documents[id].markdown), {
-    async: false,
-    gfm: true,
-  }) as string;
+export function documentHtml(id: DocumentId): Promise<string> {
+  const cached = htmlCache.get(id);
+  if (cached) return cached;
+
+  const source = documents[id];
+  const loader = markdownFiles[source.markdownPath];
+  if (!loader) return Promise.reject(new Error(`Missing document: ${source.markdownPath}`));
+
+  const html = loader()
+    .then((markdown) => marked.parse(rewriteMarkdownLinks(markdown), {
+      async: false,
+      gfm: true,
+    }) as string)
+    .catch((error: unknown) => {
+      htmlCache.delete(id);
+      throw error;
+    });
+  htmlCache.set(id, html);
+  return html;
 }
 
 export function documentNavigation(): Array<{ id: DocumentId; source: DocumentSource }> {
