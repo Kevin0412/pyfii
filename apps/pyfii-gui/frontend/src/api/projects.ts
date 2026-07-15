@@ -8,7 +8,7 @@ export interface ProjectCreateResponse extends ProjectMeta {
 export interface VideoExportRequest {
   render_mode: "classic2d" | "three3d";
   fps: number;
-  render_scale: 1 | 2;
+  ssaa: 1 | 2 | 4;
   projection: "orthographic" | "perspective";
   view_angle_a: number;
   view_angle_b: number;

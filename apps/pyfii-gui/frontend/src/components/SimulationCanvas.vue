@@ -7,7 +7,6 @@
         :class="{ active: player.renderMode === 'classic2d' }"
         :width="canvasWidth"
         :height="canvasHeight"
-        :style="{ imageRendering: canvasImageRendering }"
         aria-label="Pyfii 2D simulation canvas"
       />
       <canvas
@@ -138,9 +137,8 @@ function tt(key: MessageKey): string {
   return text(ui.locale, key);
 }
 
-const canvasWidth = computed(() => Math.max(1, Math.round(1200 * player.renderScale)));
-const canvasHeight = computed(() => Math.max(1, Math.round(600 * player.renderScale)));
-const canvasImageRendering = computed(() => player.renderScale >= 1 ? "auto" : "pixelated");
+const canvasWidth = computed(() => Math.max(1, Math.round(1200 * player.ssaa)));
+const canvasHeight = computed(() => Math.max(1, Math.round(600 * player.ssaa)));
 const hudFrame = computed(() => getFrameAtTime(project.tracks, player.currentTimeMs));
 const hudDrones = computed(() => [...hudFrame.value.drones].sort((a, b) => a.id - b.id));
 const renderFpsText = computed(() => renderFps.value > 0 ? renderFps.value.toFixed(1) : project.trackFps.toFixed(1));
@@ -203,7 +201,7 @@ function render(timestamp: number): void {
 }
 
 function syncRendererSize(): void {
-  canvasRenderer?.applyScale(player.renderScale);
+  canvasRenderer?.applySsaa(player.ssaa);
   threeRenderer?.setSize(canvasWidth.value, canvasHeight.value);
 }
 
@@ -234,7 +232,6 @@ function ensureThreeRenderer(): Promise<void> {
 function threeSettings(): ThreeRenderSettings {
   return {
     projection: player.threeProjection,
-    renderScale: player.renderScale,
     viewAngleA: player.viewAngleA,
     viewAngleB: player.viewAngleB,
     observerDistance: player.observerDistance,
@@ -319,10 +316,13 @@ async function exportVideo(): Promise<void> {
   exportFailed.value = false;
 
   try {
+    const exportSsaa = player.renderMode === "classic2d"
+      ? player.ssaa >= 4 ? 4 : player.ssaa >= 2 ? 2 : 1
+      : 1;
     const options: VideoExportRequest = {
       render_mode: player.renderMode,
       fps: Math.min(60, Math.max(1, Math.round(project.trackFps))),
-      render_scale: player.renderScale >= 2 ? 2 : 1,
+      ssaa: exportSsaa,
       projection: player.threeProjection,
       view_angle_a: player.viewAngleA,
       view_angle_b: player.viewAngleB,
@@ -366,7 +366,7 @@ defineExpose({ exportVideo, refreshSize: sizeFrame });
 
 onMounted(() => {
   mounted = true;
-  if (canvas2dRef.value) canvasRenderer = new PyfiiCanvasRenderer(canvas2dRef.value, player.renderScale);
+  if (canvas2dRef.value) canvasRenderer = new PyfiiCanvasRenderer(canvas2dRef.value, player.ssaa);
   if (player.renderMode === "three3d") void ensureThreeRenderer();
   syncRendererSize();
   ro = new ResizeObserver(() => sizeFrame());
@@ -377,7 +377,7 @@ onMounted(() => {
 
 watch(
   () => [
-    player.renderScale,
+    player.ssaa,
     player.renderMode,
     player.threeProjection,
     player.viewAngleA,

@@ -14,7 +14,7 @@ interface PlayerState {
   showSafetyMarkers: boolean;
   seeking: boolean;
   wasPlayingBeforeSeek: boolean;
-  renderScale: number;
+  ssaa: number;
   fullscreen: boolean;
   renderMode: RenderMode;
   threeProjection: ThreeProjectionMode;
@@ -34,7 +34,7 @@ export const usePlayerStore = defineStore("player", {
     showSafetyMarkers: true,
     seeking: false,
     wasPlayingBeforeSeek: false,
-    renderScale: 1,
+    ssaa: 1,
     fullscreen: false,
     renderMode: "classic2d",
     threeProjection: "perspective",
@@ -77,8 +77,8 @@ export const usePlayerStore = defineStore("player", {
         this.playing = true;
       }
     },
-    setRenderScale(scale: number) {
-      this.renderScale = scale;
+    setSsaa(ssaa: number) {
+      this.ssaa = ssaa;
     },
     setFullscreen(v: boolean) {
       this.fullscreen = v;

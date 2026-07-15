@@ -14,6 +14,12 @@ assert.equal(geometry.wrapHorizontalAngle(181), -179);
 assert.equal(geometry.wrapHorizontalAngle(-181), 179);
 assert.equal(geometry.wrapHorizontalAngle(540), -180);
 
+const rendererSource = await readFile(
+  new URL("../src/renderer/three/PyfiiThreeRenderer.ts", import.meta.url),
+  "utf8",
+);
+assert.doesNotMatch(rendererSource, /activeRenderScale|settings\.renderScale|strokeScale/);
+
 for (const device of ["F400", "F600"]) {
   const spec = geometry.droneGeometrySpec(device);
   const axisOffset = geometry.motorAxisOffset(spec);
@@ -24,4 +30,4 @@ for (const device of ["F400", "F600"]) {
   );
 }
 
-console.log("3D angle wrapping and motor geometry checks passed.");
+console.log("3D geometry and SSAA separation checks passed.");

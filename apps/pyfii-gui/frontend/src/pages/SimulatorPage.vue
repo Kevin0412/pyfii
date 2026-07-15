@@ -3,16 +3,15 @@
     <SiteHeader active="studio" />
     <header class="topbar">
       <button class="theme-toggle" type="button" @click="ui.openGuide()">{{ tt("guide") }}</button>
-      <label class="scale-select">
-        {{ tt("scale") }}
-        <select v-model.number="player.renderScale">
-          <option :value="0.5">0.5x</option>
+      <label class="toolbar-select">
+        {{ tt("ssaa") }}
+        <select v-model.number="player.ssaa">
           <option :value="1">1x</option>
           <option :value="2">2x</option>
           <option :value="4">4x</option>
         </select>
       </label>
-      <label class="scale-select" data-guide="render">
+      <label class="toolbar-select" data-guide="render">
         {{ tt("render") }}
         <select v-model="player.renderMode">
           <option value="classic2d">{{ tt("classic2d") }}</option>
@@ -20,7 +19,7 @@
         </select>
       </label>
       <template v-if="player.renderMode === 'three3d'">
-        <label class="scale-select">
+        <label class="toolbar-select">
           {{ tt("camera") }}
           <select v-model="player.threeProjection">
             <option value="orthographic">{{ tt("orthographic") }}</option>
@@ -219,7 +218,7 @@ onUnmounted(() => {
   min-width: 56px;
 }
 
-.scale-select,
+.toolbar-select,
 .compact-input {
   display: inline-flex;
   align-items: center;
@@ -230,7 +229,7 @@ onUnmounted(() => {
   white-space: nowrap;
 }
 
-.scale-select select {
+.toolbar-select select {
   max-width: 118px;
 }
 
@@ -255,7 +254,7 @@ onUnmounted(() => {
 }
 
 .locale-zh .topbar,
-.locale-zh .scale-select,
+.locale-zh .toolbar-select,
 .locale-zh .compact-input {
   font-size: 11px;
 }

@@ -6,7 +6,6 @@ import { droneGeometrySpec, motorAxisOffset } from "./geometry";
 
 type DroneRenderParts = {
   device: string;
-  renderScale: number;
   group: THREE.Group;
   body: THREE.Mesh;
   led: THREE.Mesh;
@@ -120,7 +119,6 @@ export class PyfiiThreeRenderer {
   private readonly fieldGroup = new THREE.Group();
   private readonly droneParts = new Map<number, DroneRenderParts>();
   private activeField: number | null = null;
-  private activeRenderScale = 1;
   private width = BASE_WIDTH;
   private height = BASE_HEIGHT;
 
@@ -160,10 +158,7 @@ export class PyfiiThreeRenderer {
 
   draw(input: RenderInput, settings: ThreeRenderSettings): void {
     const field = input.meta?.field ?? 6;
-    const renderScale = THREE.MathUtils.clamp(settings.renderScale || 1, 0.5, 4);
-    const scaleChanged = Math.abs(this.activeRenderScale - renderScale) > 0.001;
-    if (this.activeField !== field || scaleChanged) {
-      this.activeRenderScale = renderScale;
+    if (this.activeField !== field) {
       this.rebuildField(field);
       this.activeField = field;
     }
@@ -253,7 +248,7 @@ export class PyfiiThreeRenderer {
   }
 
   private strokeRadius(base: number): number {
-    return Math.max(0.25, base * this.activeRenderScale);
+    return Math.max(0.25, base);
   }
 
   private cylinderBetween(
@@ -348,11 +343,7 @@ export class PyfiiThreeRenderer {
 
   private ensureDrone(id: number, device: string): DroneRenderParts {
     const existing = this.droneParts.get(id);
-    if (
-      existing
-      && existing.device === device
-      && Math.abs(existing.renderScale - this.activeRenderScale) <= 0.001
-    ) {
+    if (existing && existing.device === device) {
       return existing;
     }
     if (existing) {
@@ -364,13 +355,12 @@ export class PyfiiThreeRenderer {
     const motorCoordinate = motorAxisOffset(spec);
     const group = new THREE.Group();
     const droneColor = colorFromRgb(droneRgb(id));
-    const strokeScale = this.activeRenderScale;
     const body = new THREE.Mesh(
-      new THREE.SphereGeometry(Math.max(1, strokeScale), 12, 8),
+      new THREE.SphereGeometry(1, 12, 8),
       new THREE.MeshBasicMaterial({ color: droneColor }),
     );
     const led = new THREE.Mesh(
-      new THREE.SphereGeometry(spec.bodyRadius * strokeScale, 18, 12),
+      new THREE.SphereGeometry(spec.bodyRadius, 18, 12),
       new THREE.MeshBasicMaterial({ color: droneColor }),
     );
     led.visible = false;
@@ -390,7 +380,7 @@ export class PyfiiThreeRenderer {
       ),
     ];
 
-    const rotorTube = Math.max(0.6, spec.rotorRadius * 0.12) * strokeScale;
+    const rotorTube = Math.max(0.6, spec.rotorRadius * 0.12);
     const rotorGeometry = new THREE.TorusGeometry(spec.rotorRadius, rotorTube, 8, 28);
     rotorGeometry.rotateX(Math.PI / 2);
     for (const [x, z] of [
@@ -407,7 +397,7 @@ export class PyfiiThreeRenderer {
       group.add(rotor);
     }
 
-    const markerGeometry = new THREE.TorusGeometry(spec.motorRadius + spec.rotorRadius + 5, 1.5 * strokeScale, 8, 48);
+    const markerGeometry = new THREE.TorusGeometry(spec.motorRadius + spec.rotorRadius + 5, 1.5, 8, 48);
     markerGeometry.rotateX(Math.PI / 2);
     const marker = new THREE.Mesh(markerGeometry, new THREE.MeshBasicMaterial({ color: 0xff3333 }));
     marker.position.y = 2;
@@ -420,7 +410,7 @@ export class PyfiiThreeRenderer {
       this.strokeRadius(0.32),
       0.48,
     );
-    const shadowGeometry = new THREE.TorusGeometry(spec.motorRadius + spec.rotorRadius, 0.9 * strokeScale, 8, 42);
+    const shadowGeometry = new THREE.TorusGeometry(spec.motorRadius + spec.rotorRadius, 0.9, 8, 42);
     shadowGeometry.rotateX(Math.PI / 2);
     const shadow = new THREE.Mesh(
       shadowGeometry,
@@ -431,7 +421,7 @@ export class PyfiiThreeRenderer {
     group.add(...arms, body, led, marker);
     this.world.add(group, projectionLine, shadow);
 
-    const parts = { device, renderScale: this.activeRenderScale, group, body, led, marker, projectionLine, shadow };
+    const parts = { device, group, body, led, marker, projectionLine, shadow };
     this.droneParts.set(id, parts);
     return parts;
   }

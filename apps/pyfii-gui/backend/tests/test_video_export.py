@@ -7,7 +7,7 @@ import unittest
 
 from pyfii_gui_api.schemas import VideoExportRequest
 from pyfii_gui_api.services.cache import ProjectRecord
-from pyfii_gui_api.services.video_export import VideoExportManager
+from pyfii_gui_api.services.video_export import VideoExportManager, render_project_video
 
 
 def project_record() -> ProjectRecord:
@@ -46,6 +46,34 @@ def wait_until_finished(manager: VideoExportManager, export_id: str):
 
 
 class VideoExportManagerTests(unittest.TestCase):
+    def test_maps_ssaa_to_core_supersampling(self):
+        with TemporaryDirectory() as temporary_dir:
+            output_path = Path(temporary_dir) / "render.mp4"
+
+            with (
+                patch("pyfii.fiiRead.DroneTrack"),
+                patch("pyfii.fiiRead.FiiRender2D") as render_class,
+                patch("pyfii.fiiRead.FiiRender3D"),
+            ):
+                renderer = render_class.return_value
+                renderer.save.side_effect = lambda stem: Path(stem + ".mp4").write_bytes(b"mp4")
+                render_project_video(
+                    project_record(),
+                    VideoExportRequest(ssaa=4),
+                    output_path,
+                    lambda _completed, _total: None,
+                )
+
+            config = render_class.call_args.args[1]
+            self.assertEqual(config["size"], 4)
+            self.assertEqual(config["ssaa"], 4)
+
+    def test_legacy_render_scale_is_accepted_as_ssaa(self):
+        options = VideoExportRequest.model_validate({"render_scale": 2})
+        self.assertEqual(options.ssaa, 2)
+        self.assertEqual(options.model_dump()["ssaa"], 2)
+        self.assertNotIn("render_scale", options.model_dump())
+
     def test_completes_export_and_exposes_download(self):
         with TemporaryDirectory() as temporary_dir:
             output_root = Path(temporary_dir)

@@ -78,11 +78,12 @@ def render_project_video(
         if options.projection == "orthographic"
         else (options.observer_distance, options.projection_distance)
     )
+    ssaa = options.ssaa if options.render_mode == "classic2d" else 1
     config = {
         "FPS": options.fps,
         "max_fps": project.source_fps,
-        "size": options.render_scale,
-        "ssaa": 1,
+        "size": ssaa,
+        "ssaa": ssaa,
         "imshow": [options.view_angle_a, options.view_angle_b],
         "d": projection,
         "progress": False,

@@ -9,19 +9,19 @@ export class PyfiiCanvasRenderer {
   private readonly canvas: HTMLCanvasElement;
   private readonly ctx: CanvasRenderingContext2D;
 
-  constructor(canvas: HTMLCanvasElement, scale: number = 1) {
+  constructor(canvas: HTMLCanvasElement, ssaa: number = 1) {
     const ctx = canvas.getContext("2d");
     if (!ctx) {
       throw new Error("2D canvas context is not available.");
     }
     this.canvas = canvas;
     this.ctx = ctx;
-    this.applyScale(scale);
+    this.applySsaa(ssaa);
   }
 
-  applyScale(scale: number): void {
-    const width = Math.max(1, Math.round(PYFII_CLASSIC_LAYOUT.canvasWidth * scale));
-    const height = Math.max(1, Math.round(PYFII_CLASSIC_LAYOUT.canvasHeight * scale));
+  applySsaa(ssaa: number): void {
+    const width = Math.max(1, Math.round(PYFII_CLASSIC_LAYOUT.canvasWidth * ssaa));
+    const height = Math.max(1, Math.round(PYFII_CLASSIC_LAYOUT.canvasHeight * ssaa));
     this.canvas.width = width;
     this.canvas.height = height;
   }

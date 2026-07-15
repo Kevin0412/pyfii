@@ -79,7 +79,7 @@ GUI 后端会把这些 warning 结构化成前端可展示的事件，例如 `ac
 
 移动布局按设备类型和屏幕方向处理，而不是只按浏览器窗口宽度处理。普通电脑缩窄窗口仍保持电脑端界面；手机和平板竖屏的工作台都把模拟画布放在项目信息之前，画布按 `2:1` 占满屏幕宽度；平板横屏保持电脑端工作台。手机文档页将完整目录折叠在当前文档标题下，桌面和平板目录默认展开，其中平板竖屏显示双列目录。
 
-Canvas 内部虚拟画布固定为 `1200x600`，按容器缩放显示。渲染器位于 `frontend/src/renderer/`，不依赖 Vue，便于后续复用。
+Canvas 的逻辑画布固定为 `1200x600`，显示尺寸只由容器决定；SSAA 只按倍率增加实际像素缓冲，不改变场地、机体、线条或文字的逻辑尺寸。渲染器位于 `frontend/src/renderer/`，不依赖 Vue，便于后续复用。
 
 Three.js 预览从轨迹帧读取加速度，并沿用 core 的 `wing_force = acceleration - (0, 0, -980)`：先把单位升力方向从 PyFii 坐标映射到 Three.js 坐标，再叠加航向角，因此机体会随加速度产生俯仰和横滚。地面投影仍保持水平，用来表示实际 XY 位置。
 
@@ -92,7 +92,7 @@ Three.js 预览从轨迹帧读取加速度，并沿用 core 的 `wing_force = ac
 `backend/src/pyfii_gui_api/services/video_export.py` 是 GUI 与 core 的边界：
 
 1. 把已解析的 `ProjectRecord` 数据装入 core `DroneTrack`。
-2. 把 GUI 的 2D/3D、FPS、缩放和相机参数转换为现有 renderer config。
+2. 把 GUI 的 2D/3D、FPS、SSAA 和相机参数转换为现有 renderer config；2D 导出将 core 的 `size` 与 `ssaa` 设为相同倍率，在保持输出尺寸不变的情况下完成超采样。
 3. 2D 选择 `FiiRender2D`，3D 选择 `FiiRender3D`，统一调用 `save()`。
 4. 单线程任务池控制同时导出的项目数；core renderer 内部仍可按 `PYFII_GUI_VIDEO_RENDER_WORKERS` 并行画帧。
 5. core 负责 OpenCV MP4 编码和现有 ffmpeg 音频封装，GUI 不复制逐帧渲染逻辑。

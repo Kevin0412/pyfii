@@ -1,6 +1,6 @@
 from typing import Any, Dict, List, Literal, Optional, Union
 
-from pydantic import BaseModel, Field
+from pydantic import AliasChoices, BaseModel, Field
 
 
 JsonNumber = Union[int, float]
@@ -113,7 +113,10 @@ class SafetyResponse(BaseModel):
 class VideoExportRequest(BaseModel):
     render_mode: Literal["classic2d", "three3d"] = "classic2d"
     fps: int = Field(default=30, ge=1, le=60)
-    render_scale: Literal[1, 2] = 1
+    ssaa: Literal[1, 2, 4] = Field(
+        default=1,
+        validation_alias=AliasChoices("ssaa", "render_scale"),
+    )
     projection: Literal["orthographic", "perspective"] = "perspective"
     view_angle_a: float = Field(default=90, ge=-180, le=180)
     view_angle_b: float = Field(default=3, ge=-90, le=90)
