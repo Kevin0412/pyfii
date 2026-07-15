@@ -80,7 +80,7 @@ http://<开发机局域网IP>:5173
 
 | 依赖 | 实际要求 | 用途 |
 | --- | --- | --- |
-| Python | 3.9 或更高版本 | 运行 PyFii core、FastAPI 和视频渲染任务 |
+| Python | 3.10 或更高版本 | 运行 PyFii core、FastAPI 和视频渲染任务；core 包本身仍兼容 Python 3.9，但 GUI 后端的安全依赖下界要求 3.10 |
 | Python 包 | 分别安装仓库根目录和 `apps/pyfii-gui/backend` 的 `pyproject.toml` | pip 自动安装下列直接依赖及其传递依赖 |
 | OpenCV | headless 能力已经足够 | 后端只使用图像绘制和 `VideoWriter`，不调用 `imshow`，不要求桌面或 GPU |
 | OpenGL / GLib 运行库 | 后端功能本身不需要 | 当前 core 的默认依赖仍是完整版 `opencv-python`；在最小化 Linux 上导入这个 wheel 时可能需要这些兼容库 |

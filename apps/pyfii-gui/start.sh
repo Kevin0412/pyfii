@@ -86,6 +86,10 @@ step "检查本地开发环境..."
 check_cmd "$PYTHON_BIN"
 check_cmd node
 check_cmd npm
+if ! "$PYTHON_BIN" -c 'import sys; raise SystemExit(sys.version_info < (3, 10))'; then
+  warn "PyFii GUI 后端需要 Python 3.10 或更高版本。"
+  exit 1
+fi
 check_optional_cmd ffmpeg \
   "未找到 ffmpeg：无声 MP4 仍可导出，但包含音乐的工程无法合并音频。Ubuntu/Debian 可运行 sudo apt install ffmpeg。"
 

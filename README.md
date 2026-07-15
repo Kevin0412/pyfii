@@ -149,7 +149,7 @@ core 中的重要入口：
 
 ## GUI 部署提示
 
-- 后端需要 Python 3.9 或更高版本；前端构建需要符合当前 lockfile 要求的 Node.js 和 npm。
+- GUI 后端需要 Python 3.10 或更高版本（PyFii core 本身仍兼容 Python 3.9）；前端构建需要符合当前 lockfile 要求的 Node.js 和 npm。
 - 导出无声 MP4 使用 OpenCV；工程包含音乐时还需要系统中的 `ffmpeg`。Ubuntu 可运行 `sudo apt install ffmpeg`。
 - 备案信息来自部署实例自己的 `deploy.json` 或环境变量，默认关闭且不显示，真实备案号不会提交到仓库。
 - 当前后端不依赖数据库或任务队列，上传工程和导出任务状态保存在单个后端进程内。

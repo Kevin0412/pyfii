@@ -154,7 +154,7 @@ VITE_API_PROXY_TARGET=http://<后端局域网IP>:8000 npm run dev
 
 GUI 的生产服务由 Python 后端和前端 `dist/` 静态文件组成：
 
-- Python 3.9 或更高版本运行 PyFii core 与 FastAPI。应分别安装仓库根目录和 `apps/pyfii-gui/backend` 的 `pyproject.toml`；根目录 `requirements.txt` 还包含 GUI 生产环境不需要的分析和打包工具。
+- GUI 后端使用 Python 3.10 或更高版本运行 PyFii core 与 FastAPI；core 包本身仍兼容 Python 3.9。应分别安装仓库根目录和 `apps/pyfii-gui/backend` 的 `pyproject.toml`；根目录 `requirements.txt` 还包含 GUI 生产环境不需要的分析和打包工具。
 - 后端只使用 OpenCV 图像绘制和 `VideoWriter`，headless 能力已经足够，不调用 `imshow`，也不要求桌面或 GPU。当前 core 的默认包元数据仍声明完整版 `opencv-python`，所以按现有 `pyproject.toml` 安装时，最小化 Ubuntu 可能仍要提供该 wheel 导入时使用的 OpenGL / GLib 兼容库。
 - OpenCV 负责写入无声 MP4。工程包含音乐时，core 通过 `ffmpy` 调用系统中的 `ffmpeg` 做音频封装；只安装 Python 包 `ffmpy` 不够。
 - Node.js 和 npm 只负责构建 Vue 静态文件。当前前端要求 Node `^20.19.0` 或 `>=22.12.0`；部署已经构建好的 `dist/` 时不需要在服务器常驻 Node。
