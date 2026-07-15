@@ -63,7 +63,7 @@ class Settings:
         self.cors_origin_regex = (
             default_cors_origin_regex if cors_origin_regex is None else cors_origin_regex or None
         )
-        self.cors_allow_credentials = _bool_env("PYFII_GUI_CORS_ALLOW_CREDENTIALS", True)
+        self.cors_allow_credentials = _bool_env("PYFII_GUI_CORS_ALLOW_CREDENTIALS", False)
         self.default_import_fps = _int_env("PYFII_GUI_DEFAULT_IMPORT_FPS", 60)
         self.trajectory_workers = max(
             1,
@@ -82,6 +82,14 @@ class Settings:
         self.video_render_workers = max(
             1,
             _int_env("PYFII_GUI_VIDEO_RENDER_WORKERS", max(1, (os.cpu_count() or 1) // 2)),
+        )
+        self.project_ttl_seconds = max(
+            0,
+            _int_env("PYFII_GUI_PROJECT_TTL_SECONDS", 6 * 60 * 60),
+        )
+        self.runtime_cleanup_interval_seconds = max(
+            1,
+            _int_env("PYFII_GUI_RUNTIME_CLEANUP_INTERVAL_SECONDS", 5 * 60),
         )
         self.max_upload_bytes = _int_env("PYFII_GUI_MAX_UPLOAD_BYTES", 100 * 1024 * 1024)
         self.max_uncompressed_bytes = _int_env(

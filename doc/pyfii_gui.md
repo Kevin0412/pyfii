@@ -38,6 +38,8 @@ apps/pyfii-gui/backend/.runtime/projects/
 
 也可以通过 `PYFII_GUI_RUNTIME_DIR` 覆盖。
 
+项目缓存和 runtime 文件默认使用 6 小时访问 TTL，后端每 5 分钟检查一次；启动时还会删除超过 TTL、但已不在内存缓存中的孤儿项目目录。视频仍在排队或渲染时不会清理对应项目，手动删除也会返回 `409 video_export_active`。`PYFII_GUI_PROJECT_TTL_SECONDS=0` 可关闭内置清理，但生产环境此时需要自行管理临时文件。
+
 ## 安全日志来源
 
 当前 GUI 不重新实现一套独立 Fii 解析器。安全日志主要来自 pyfii core：
@@ -206,7 +208,7 @@ PYFII_GUI_APP_TITLE="Pyfii GUI API"
 PYFII_GUI_RUNTIME_DIR=/var/lib/pyfii-gui/projects
 PYFII_GUI_CORS_ORIGINS=https://gui.example.com
 PYFII_GUI_CORS_ORIGIN_REGEX='^https://.*\.example\.com$'
-PYFII_GUI_CORS_ALLOW_CREDENTIALS=true
+PYFII_GUI_CORS_ALLOW_CREDENTIALS=false
 PYFII_GUI_DEFAULT_IMPORT_FPS=60
 PYFII_GUI_TRAJECTORY_WORKERS=4
 PYFII_GUI_PROJECT_IMPORT_JOBS=1
@@ -214,6 +216,8 @@ PYFII_GUI_PROJECT_IMPORT_QUEUE_SIZE=2
 PYFII_GUI_VIDEO_EXPORT_JOBS=1
 PYFII_GUI_VIDEO_EXPORT_QUEUE_SIZE=2
 PYFII_GUI_VIDEO_RENDER_WORKERS=4
+PYFII_GUI_PROJECT_TTL_SECONDS=21600
+PYFII_GUI_RUNTIME_CLEANUP_INTERVAL_SECONDS=300
 PYFII_GUI_MAX_UPLOAD_BYTES=104857600
 PYFII_GUI_MAX_UNCOMPRESSED_BYTES=524288000
 PYFII_GUI_MAX_ZIP_FILES=5000
@@ -222,6 +226,8 @@ PYFII_GUI_DEPLOY_CONFIG=/path/to/deploy.json
 ```
 
 工程解析和轨迹序列化共享有界项目工作队列，视频导出使用独立的有界队列。上述默认值分别允许 1 个任务运行、2 个任务等待；队列满时 API 返回结构化 429，不再把请求无限堆入进程内存。提高并发数前需要按单次解析或渲染的实际 CPU、内存占用评估服务器容量。
+
+TTL 从项目最近一次 API 访问开始计算。后端通过 FastAPI lifespan 在启动时扫描孤儿目录，并在服务运行期间定时清理；文件删除在线程中执行，不阻塞事件循环。当前实现仍以单进程为边界，多 worker 或多实例不能共享访问时间和视频活跃状态。
 
 ICP备案配置示例为 `apps/pyfii-gui/deploy.example.json`。复制得到的 `apps/pyfii-gui/deploy.json` 是被 git 忽略的云服务器实例配置；其中 `domain` 只填写主机名，Vite 开发服务器和 `vite preview` 会将其加入 `allowedHosts`。生产静态托管不经过 Vite，域名由 Caddy 等反向代理配置。示例中的备案字段为空，默认备案区域不存在。只有在该文件或 `PYFII_GUI_ICP_BEIAN` / `PYFII_GUI_GONGAN_BEIAN` 中明确填写后才在门户页 footer 显示，公安备案项同时显示标准备案图标。仓库不包含真实备案号，工作台和文档页也不显示备案信息。
 

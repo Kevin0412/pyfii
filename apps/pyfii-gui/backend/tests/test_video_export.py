@@ -178,6 +178,39 @@ class VideoExportManagerTests(unittest.TestCase):
                     "completed",
                 )
 
+    def test_rejects_project_deletion_while_export_is_running(self):
+        started = Event()
+        allow_completion = Event()
+
+        def render(_project, _options, output_path, _progress):
+            started.set()
+            allow_completion.wait(timeout=2)
+            output_path.parent.mkdir(parents=True, exist_ok=True)
+            output_path.write_bytes(b"mp4")
+            return output_path
+
+        with TemporaryDirectory() as temporary_dir:
+            manager = VideoExportManager(max_workers=1, render_video=render)
+            with patch(
+                "pyfii_gui_api.services.video_export.video_export_root",
+                return_value=Path(temporary_dir),
+            ):
+                export = manager.create(project_record(), VideoExportRequest())
+                self.assertTrue(started.wait(timeout=1))
+
+                try:
+                    with self.assertRaises(AppError) as raised:
+                        manager.delete_project("project-1")
+                    self.assertEqual(raised.exception.status_code, 409)
+                    self.assertEqual(raised.exception.code, "video_export_active")
+                finally:
+                    allow_completion.set()
+
+                self.assertEqual(
+                    wait_until_finished(manager, export.export_id).status,
+                    "completed",
+                )
+
 
 if __name__ == "__main__":
     unittest.main()

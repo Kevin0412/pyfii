@@ -6,9 +6,14 @@ from .config import settings
 from .errors import AppError
 from .routers.projects import router as projects_router
 from .schemas import AppConfigResponse
+from .services.runtime_cleanup import runtime_lifespan
 
 
-app = FastAPI(title=settings.app_title, default_response_class=ORJSONResponse)
+app = FastAPI(
+    title=settings.app_title,
+    default_response_class=ORJSONResponse,
+    lifespan=runtime_lifespan,
+)
 
 app.add_middleware(
     CORSMiddleware,

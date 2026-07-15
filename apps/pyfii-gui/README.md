@@ -157,7 +157,7 @@ PYFII_GUI_APP_TITLE="Pyfii GUI API"
 PYFII_GUI_RUNTIME_DIR=/var/lib/pyfii-gui/projects
 PYFII_GUI_CORS_ORIGINS=https://gui.example.com,https://admin.example.com
 PYFII_GUI_CORS_ORIGIN_REGEX='^https://.*\.example\.com$'
-PYFII_GUI_CORS_ALLOW_CREDENTIALS=true
+PYFII_GUI_CORS_ALLOW_CREDENTIALS=false
 PYFII_GUI_DEFAULT_IMPORT_FPS=60
 PYFII_GUI_TRAJECTORY_WORKERS=4
 PYFII_GUI_PROJECT_IMPORT_JOBS=1
@@ -165,6 +165,8 @@ PYFII_GUI_PROJECT_IMPORT_QUEUE_SIZE=2
 PYFII_GUI_VIDEO_EXPORT_JOBS=1
 PYFII_GUI_VIDEO_EXPORT_QUEUE_SIZE=2
 PYFII_GUI_VIDEO_RENDER_WORKERS=4
+PYFII_GUI_PROJECT_TTL_SECONDS=21600
+PYFII_GUI_RUNTIME_CLEANUP_INTERVAL_SECONDS=300
 PYFII_GUI_MAX_UPLOAD_BYTES=104857600
 PYFII_GUI_MAX_UNCOMPRESSED_BYTES=524288000
 PYFII_GUI_MAX_ZIP_FILES=5000
@@ -173,7 +175,7 @@ PYFII_GUI_LOCAL_PROJECT_ROOTS=/path/to/pyfii/tools/choreo_agent/agent_projects
 PYFII_GUI_DEPLOY_CONFIG=/path/to/deploy.json
 ```
 
-默认 CORS 允许 `http://localhost:5173` 和常见私有局域网 IP 的 `:5173` 开发源；生产部署建议显式设置 `PYFII_GUI_CORS_ORIGINS`。
+默认 CORS 允许 `http://localhost:5173` 和常见私有局域网 IP 的 `:5173` 开发源，但不允许携带浏览器凭据。生产同源部署应像 `deploy/backend.env.example` 一样把 origins 和 origin regex 都设为空；只有前后端确实分域部署时才显式放行所需来源。
 
 前端构建时通过环境变量配置 API 地址：
 
@@ -250,6 +252,8 @@ PYFII_GUI_GONGAN_URL=
 ## 服务器部署建议
 
 `PYFII_GUI_RUNTIME_DIR` 用来保存上传后解压的工程和导出视频，运行 Uvicorn 的系统用户必须能够创建、读取和删除其中的文件。生产环境应显式设置该目录；如果使用备案配置，也应给 `PYFII_GUI_DEPLOY_CONFIG` 传入绝对路径，避免安装位置改变默认路径。
+
+后端默认把连续 6 小时没有 API 访问的项目视为过期，每 5 分钟清理一次缓存、解压目录和导出文件；启动时也会清理超过同一 TTL 的孤儿目录。访问项目元信息、轨迹、安全日志、音乐或视频任务会延长项目寿命。正在排队或渲染视频的项目不会被自动或手动删除，手动删除会返回 `409 video_export_active`。可分别用 `PYFII_GUI_PROJECT_TTL_SECONDS` 和 `PYFII_GUI_RUNTIME_CLEANUP_INTERVAL_SECONDS` 调整；TTL 设为 `0` 会关闭内置清理，此时必须由部署环境负责 runtime 生命周期。
 
 启动后端（生产环境**不要加 `--reload`**，否则上传项目后 WatchFiles 检测 `.runtime/` 下的文件变化会触发重载，内存缓存清空导致 tracks/safety/music/video exports 全部失效）：
 
@@ -403,6 +407,7 @@ test -f apps/pyfii-gui/frontend/dist/index.html
 - 安全解压并调用 `read_fii()` 解析轨迹。
 - GUI 默认只把一半 CPU 核心分配给单次轨迹解析，为并发请求预留资源；可通过 `PYFII_GUI_TRAJECTORY_WORKERS` 调整。
 - 工程解析、轨迹序列化和视频导出使用有界工作队列；默认分别允许 1 个任务运行、2 个任务等待。容量已满时 API 返回带 `max_running` / `max_queued` 的 429，而不是无限占用内存排队。
+- 临时工程和导出文件有可配置的访问 TTL；默认 6 小时，启动及运行期间都会清理过期数据，并跳过正在导出视频的项目。
 - 将解析结果装入 `DroneTrack`，调用 `show(track, show=False)` 走 pyfii core 的无渲染距离检查。
 - 返回项目元信息、轨迹数据和由 core warnings 结构化得到的安全日志。
 - Canvas 2D 三视图预览：top / front / right。

@@ -71,6 +71,25 @@ class GuiApiTests(unittest.TestCase):
         self.assertEqual(response.json()["error"]["code"], "project_not_found")
         cleanup.assert_not_called()
 
+    def test_delete_rejects_project_with_active_video_export(self):
+        busy = AppError(
+            409,
+            "video_export_active",
+            "Wait for the active video export before deleting this project.",
+        )
+        with (
+            patch(
+                "pyfii_gui_api.routers.projects.video_export_manager.delete_project",
+                side_effect=busy,
+            ),
+            patch("pyfii_gui_api.routers.projects.cleanup_project") as cleanup,
+        ):
+            response = self.client.delete("/api/projects/api-project")
+
+        self.assertEqual(response.status_code, 409)
+        self.assertEqual(response.json()["error"]["code"], "video_export_active")
+        cleanup.assert_not_called()
+
     def test_creates_asynchronous_video_export(self):
         export = VideoExportRecord(
             export_id="export-1",

@@ -23,6 +23,7 @@ from ..services.archive_importer import safe_extract_zip
 from ..services.bounded_executor import BoundedExecutor, ExecutorBusy
 from ..services.cache import ProjectRecord, project_cache
 from ..services.pyfii_adapter import parse_fii_project
+from ..services.runtime_cleanup import project_lifecycle_lock
 from ..services.safety import analyze_safety
 from ..services.serializer import (
     compute_duration_ms,
@@ -93,6 +94,20 @@ def _find_music_file(record: ProjectRecord) -> Optional[Path]:
                 if path.name == name or path.stem == Path(name).stem:
                     return path
     return None
+
+
+def _create_video_export(project_id: str, request: VideoExportRequest):
+    with project_lifecycle_lock:
+        record = project_cache.require(project_id)
+        return video_export_manager.create(record, request)
+
+
+def _delete_project(project_id: str) -> None:
+    with project_lifecycle_lock:
+        project_cache.require(project_id)
+        video_export_manager.delete_project(project_id)
+        cleanup_project(project_id)
+        project_cache.delete(project_id)
 
 
 def _register_project_record(
@@ -379,8 +394,7 @@ async def create_video_export(
     project_id: str,
     request: VideoExportRequest,
 ) -> VideoExportResponse:
-    record = project_cache.require(project_id)
-    export = video_export_manager.create(record, request)
+    export = await asyncio.to_thread(_create_video_export, project_id, request)
     return VideoExportResponse(**export.as_response())
 
 
@@ -389,12 +403,14 @@ async def create_video_export(
     response_model=VideoExportResponse,
 )
 async def get_video_export(project_id: str, export_id: str) -> VideoExportResponse:
+    project_cache.require(project_id)
     export = video_export_manager.require(project_id, export_id)
     return VideoExportResponse(**export.as_response())
 
 
 @router.get("/{project_id}/video-exports/{export_id}/download")
 async def download_video_export(project_id: str, export_id: str) -> FileResponse:
+    project_cache.require(project_id)
     export = video_export_manager.require(project_id, export_id)
     if export.status != "completed":
         raise AppError(409, "video_export_not_ready", "Video export is not ready for download.")
@@ -409,8 +425,5 @@ async def download_video_export(project_id: str, export_id: str) -> FileResponse
 
 @router.delete("/{project_id}", response_model=DeleteResponse)
 async def delete_project(project_id: str) -> DeleteResponse:
-    project_cache.require(project_id)
-    video_export_manager.delete_project(project_id)
-    cleanup_project(project_id)
-    project_cache.delete(project_id)
+    await asyncio.to_thread(_delete_project, project_id)
     return DeleteResponse(ok=True)

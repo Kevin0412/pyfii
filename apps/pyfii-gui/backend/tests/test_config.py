@@ -48,12 +48,20 @@ class DeploymentConfigTests(unittest.TestCase):
 
 
 class SettingsTests(unittest.TestCase):
+    def test_cors_credentials_are_disabled_by_default(self):
+        with patch.dict(os.environ, {}, clear=True):
+            configured = Settings()
+
+        self.assertFalse(configured.cors_allow_credentials)
+
     def test_resource_limit_environment_variables(self):
         values = {
             "PYFII_GUI_PROJECT_IMPORT_JOBS": "3",
             "PYFII_GUI_PROJECT_IMPORT_QUEUE_SIZE": "4",
             "PYFII_GUI_VIDEO_EXPORT_JOBS": "2",
             "PYFII_GUI_VIDEO_EXPORT_QUEUE_SIZE": "5",
+            "PYFII_GUI_PROJECT_TTL_SECONDS": "7200",
+            "PYFII_GUI_RUNTIME_CLEANUP_INTERVAL_SECONDS": "120",
         }
         with patch.dict(os.environ, values):
             configured = Settings()
@@ -62,6 +70,8 @@ class SettingsTests(unittest.TestCase):
         self.assertEqual(configured.project_import_queue_size, 4)
         self.assertEqual(configured.video_export_jobs, 2)
         self.assertEqual(configured.video_export_queue_size, 5)
+        self.assertEqual(configured.project_ttl_seconds, 7200)
+        self.assertEqual(configured.runtime_cleanup_interval_seconds, 120)
 
     def test_resource_limits_cannot_be_negative(self):
         values = {
@@ -69,6 +79,8 @@ class SettingsTests(unittest.TestCase):
             "PYFII_GUI_PROJECT_IMPORT_QUEUE_SIZE": "-1",
             "PYFII_GUI_VIDEO_EXPORT_JOBS": "0",
             "PYFII_GUI_VIDEO_EXPORT_QUEUE_SIZE": "-1",
+            "PYFII_GUI_PROJECT_TTL_SECONDS": "-1",
+            "PYFII_GUI_RUNTIME_CLEANUP_INTERVAL_SECONDS": "0",
         }
         with patch.dict(os.environ, values):
             configured = Settings()
@@ -77,6 +89,8 @@ class SettingsTests(unittest.TestCase):
         self.assertEqual(configured.project_import_queue_size, 0)
         self.assertEqual(configured.video_export_jobs, 1)
         self.assertEqual(configured.video_export_queue_size, 0)
+        self.assertEqual(configured.project_ttl_seconds, 0)
+        self.assertEqual(configured.runtime_cleanup_interval_seconds, 1)
 
 
 if __name__ == "__main__":

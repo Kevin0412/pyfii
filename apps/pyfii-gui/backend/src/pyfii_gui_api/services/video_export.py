@@ -202,8 +202,24 @@ class VideoExportManager:
             raise AppError(404, "video_export_not_found", "Video export was not found or has expired.")
         return record
 
+    def has_active_project(self, project_id: str) -> bool:
+        with self._lock:
+            return any(
+                record.project_id == project_id and record.status in {"queued", "running"}
+                for record in self._records.values()
+            )
+
     def delete_project(self, project_id: str) -> None:
         with self._lock:
+            if any(
+                record.project_id == project_id and record.status in {"queued", "running"}
+                for record in self._records.values()
+            ):
+                raise AppError(
+                    409,
+                    "video_export_active",
+                    "Wait for the active video export before deleting this project.",
+                )
             export_ids = [
                 export_id
                 for export_id, record in self._records.items()
