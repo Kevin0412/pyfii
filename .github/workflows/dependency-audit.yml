@@ -1,0 +1,108 @@
+name: Dependency audit
+
+on:
+  pull_request:
+    paths:
+      - ".github/dependabot.yml"
+      - ".github/scripts/minimum-direct-dependencies.py"
+      - ".github/workflows/dependency-audit.yml"
+      - "pyproject.toml"
+      - "requirements.txt"
+      - "apps/pyfii-gui/backend/pyproject.toml"
+      - "apps/pyfii-gui/frontend/package.json"
+      - "apps/pyfii-gui/frontend/package-lock.json"
+  push:
+    paths:
+      - ".github/dependabot.yml"
+      - ".github/scripts/minimum-direct-dependencies.py"
+      - ".github/workflows/dependency-audit.yml"
+      - "pyproject.toml"
+      - "requirements.txt"
+      - "apps/pyfii-gui/backend/pyproject.toml"
+      - "apps/pyfii-gui/frontend/package.json"
+      - "apps/pyfii-gui/frontend/package-lock.json"
+  schedule:
+    - cron: "17 3 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: dependency-audit-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  frontend:
+    name: Frontend npm audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: apps/pyfii-gui/frontend
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "22.12.0"
+
+      - name: Audit frontend lockfile
+        run: npm audit --package-lock-only
+
+  python:
+    name: ${{ matrix.name }} pip-audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Core
+            project: .
+            requirements: requirements.txt
+            report: core-minimum.txt
+          - name: GUI backend
+            project: apps/pyfii-gui/backend
+            requirements: ""
+            report: gui-backend-minimum.txt
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
+        with:
+          python-version: "3.12"
+
+      - name: Install vulnerability scanner
+        run: python -m pip install "pip-audit==2.10.1"
+
+      - name: Audit resolved project dependencies
+        run: python -m pip_audit "${{ matrix.project }}" --progress-spinner=off
+
+      - name: Audit root requirements
+        if: matrix.requirements != ''
+        run: python -m pip_audit -r "${{ matrix.requirements }}" --progress-spinner=off
+
+      # Resolving a >= constraint normally selects the newest release and can hide
+      # a vulnerable lower bound that users are still allowed to install.
+      - name: Extract declared minimum direct dependencies
+        run: >-
+          python .github/scripts/minimum-direct-dependencies.py
+          "${{ matrix.project }}/pyproject.toml"
+          "$RUNNER_TEMP/${{ matrix.report }}"
+
+      - name: Audit declared minimum direct dependencies
+        run: >-
+          python -m pip_audit
+          -r "$RUNNER_TEMP/${{ matrix.report }}"
+          --no-deps
+          --disable-pip
+          --progress-spinner=off
