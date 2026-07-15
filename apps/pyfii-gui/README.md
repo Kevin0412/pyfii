@@ -20,6 +20,8 @@ GUI 后端是 `read_fii()`、无窗口校验和 `FiiRender2D/FiiRender3D` 的薄
 ./apps/pyfii-gui/start.sh
 ```
 
+`start.sh` 会运行带源码转换和调试接口的 Vite dev server，**只用于本地开发和局域网联调**，不能作为公网生产服务。生产部署使用后文的 `deploy/build-production.sh`、Caddy 和 systemd 示例。
+
 脚本会安装 core、GUI 后端和前端依赖，然后同时启动后端 `:8000` 与前端 `:5173`；按 `Ctrl+C` 会停止两个服务。依赖已经安装时可以跳过安装，也可以调整端口：
 
 ```bash
@@ -83,8 +85,8 @@ http://<开发机局域网IP>:5173
 | OpenCV | headless 能力已经足够 | 后端只使用图像绘制和 `VideoWriter`，不调用 `imshow`，不要求桌面或 GPU |
 | OpenGL / GLib 运行库 | 后端功能本身不需要 | 当前 core 的默认依赖仍是完整版 `opencv-python`；在最小化 Linux 上导入这个 wheel 时可能需要这些兼容库 |
 | FFmpeg 可执行文件 | 完整视频导出需要 | OpenCV 生成无声 MP4；工程包含音乐时，`ffmpy` 会调用系统 `ffmpeg` 把音频封装进最终 MP4。`ffmpy` 本身不包含 FFmpeg |
-| Node.js / npm | Node 18.x 或 Node 20 及以上，npm 8 及以上 | 只在构建 Vue 前端时使用；服务器若直接接收构建好的 `dist/`，运行时不需要 Node |
-| Nginx | 可选，可换成其他静态服务器或反向代理 | 提供 `dist/`、处理 SPA fallback，并把 `/api/` 转发给 Uvicorn |
+| Node.js / npm | Node `^20.19.0` 或 `>=22.12.0` | 只在构建 Vue 前端时使用；服务器若直接接收构建好的 `dist/`，运行时不需要 Node |
+| Caddy | 推荐使用当前受支持的稳定版 | 提供 HTTPS 和 `dist/`、处理 SPA fallback，并把 `/api` 原样转发给 Uvicorn；Nginx 等价配置也可以使用 |
 
 core 的直接依赖是 `opencv-python`、`PyQt5`、`tqdm`、`numpy`、`pygame`、`ffmpy` 和 `joblib`；GUI API 的直接依赖是 `fastapi`、`uvicorn[standard]`、`python-multipart`、`pydantic`、`orjson` 和 `pyfii`。前端的 Vue、Pinia、Three.js、Marked、Vite 和 TypeScript 依赖由 `package-lock.json` 锁定并通过 `npm ci` 安装，不需要逐项安装。
 
@@ -113,10 +115,10 @@ Ubuntu 22.04 使用：
 sudo apt install -y libgl1 libglib2.0-0
 ```
 
-如果使用 Nginx，再安装：
+生产反向代理推荐使用 Caddy 官方稳定仓库，而不是运行 Vite dev server。Ubuntu/Debian 的最新安装命令以 [Caddy 官方安装文档](https://caddyserver.com/docs/install#debian-ubuntu-raspbian) 为准；安装完成后确认版本：
 
 ```bash
-sudo apt install -y nginx
+caddy version
 ```
 
 Node 只需要出现在执行前端构建的机器上。可以使用 Ubuntu 包或其他 Node 安装方式，但必须先检查版本；不满足当前 Vite lockfile 要求时不要继续构建。技术最低版本之外，部署时应选择仍处于安全维护期的 Node LTS：
@@ -231,7 +233,7 @@ cp apps/pyfii-gui/deploy.example.json apps/pyfii-gui/deploy.json
 }
 ```
 
-`domain` 只填写主机名，不带 `https://`、端口或路径。Vite 开发服务器和 `vite preview` 会把非空值加入 `allowedHosts`；修改后需要重启前端进程。正式使用 Nginx 提供构建产物时，域名放行仍由 Nginx 配置负责。
+`domain` 只填写主机名，不带 `https://`、端口或路径。Vite 开发服务器和 `vite preview` 会把非空值加入 `allowedHosts`；修改后需要重启前端进程。正式静态托管构建产物时不经过 Vite，公网域名由 Caddy 或其他反向代理配置。
 
 `deploy.json` 是云服务器实例的本地配置，已被 `.gitignore` 忽略；后端和 Vite 默认读取该文件。也可以通过 `PYFII_GUI_DEPLOY_CONFIG` 指向服务器上的其他路径，或通过环境变量逐项覆盖备案字段：
 
@@ -270,6 +272,62 @@ https://gui.example.com/api/  -> FastAPI backend
 - 前端：`VITE_API_BASE_URL=https://api.example.com`
 - 后端：`PYFII_GUI_CORS_ORIGINS=https://gui.example.com`
 
+### Caddy + systemd 生产示例
+
+仓库的 [`deploy/`](deploy/) 目录提供可直接检查和安装的示例：
+
+- `Caddyfile.example`：静态托管 `dist/`，保留 `/api` 前缀反代后端，为 History API 提供 SPA fallback；`/assets/*` 使用一年 immutable 缓存，HTML 和其他入口使用 `no-cache`；API 请求体默认限制为 100 MiB，与后端默认上传上限一致。
+- `caddy.env.example` 与 `caddy.service.d.example.conf`：通过 systemd 环境文件传入域名、静态目录和后端地址，不在 Caddyfile 中写死部署实例。
+- `pyfii-gui.service.example` 与 `backend.env.example`：以独立低权限用户运行单 worker Uvicorn，并只给 `/var/lib/pyfii-gui` 写权限。
+- `build-production.sh` 与 `check-production.sh`：使用 lockfile 构建前端，并检查构建产物不是 Vite 开发入口；安装了 Caddy 时还会校验 Caddyfile，服务启动后会检查 `/api/health`。
+
+先构建并检查静态产物：
+
+```bash
+./apps/pyfii-gui/deploy/build-production.sh
+```
+
+把 `frontend/dist/` 的**内容**复制到仅包含站点静态文件的部署目录。不要让 Caddy 直接托管仓库根目录，也不要把 `.git`、源代码、环境文件或上传工程放进静态目录：
+
+```bash
+sudo install -d -o root -g caddy -m 0755 /srv/pyfii-gui/frontend
+sudo rsync -a --delete apps/pyfii-gui/frontend/dist/ /srv/pyfii-gui/frontend/
+```
+
+安装 Caddy 配置。先把 `caddy.env` 中的 `localhost` 换成实际域名；域名、备案号和服务器路径均不提交到仓库：
+
+```bash
+sudo install -d -o root -g root -m 0755 /etc/pyfii-gui
+sudo install -m 0644 apps/pyfii-gui/deploy/Caddyfile.example /etc/caddy/Caddyfile
+sudo install -m 0644 apps/pyfii-gui/deploy/caddy.env.example /etc/pyfii-gui/caddy.env
+sudo install -d -m 0755 /etc/systemd/system/caddy.service.d
+sudo install -m 0644 apps/pyfii-gui/deploy/caddy.service.d.example.conf \
+  /etc/systemd/system/caddy.service.d/pyfii-gui.conf
+sudo systemctl daemon-reload
+sudo caddy validate --envfile /etc/pyfii-gui/caddy.env --config /etc/caddy/Caddyfile
+sudo systemctl restart caddy
+```
+
+后端 unit 中的 `@REPOSITORY_ROOT@` 是故意保留的占位符，安装前必须替换成服务器上的绝对仓库路径。源码与虚拟环境应位于 `/srv` 或 `/opt` 等服务目录，不要依赖某个登录用户的 home：
+
+```bash
+REPOSITORY_ROOT=/absolute/path/to/pyfii
+id -u pyfii-gui >/dev/null 2>&1 || \
+  sudo useradd --system --user-group --home /nonexistent --shell /usr/sbin/nologin pyfii-gui
+sudo install -o root -g pyfii-gui -m 0640 \
+  apps/pyfii-gui/deploy/backend.env.example /etc/pyfii-gui/backend.env
+sed "s|@REPOSITORY_ROOT@|$REPOSITORY_ROOT|g" \
+  apps/pyfii-gui/deploy/pyfii-gui.service.example | \
+  sudo tee /etc/systemd/system/pyfii-gui.service >/dev/null
+sudo systemctl daemon-reload
+sudo systemctl enable --now pyfii-gui
+./apps/pyfii-gui/deploy/check-production.sh
+# 部署后再确认公网没有误用 Vite dev server：
+./apps/pyfii-gui/deploy/check-production.sh --site-url https://your-domain.example
+```
+
+未使用备案配置时，从 `/etc/pyfii-gui/backend.env` 删除 `PYFII_GUI_DEPLOY_CONFIG` 即可。修改 runtime 目录时，还必须同步调整 unit 的 `StateDirectory`/可写目录约束。后端只监听 `127.0.0.1:8000`，公网只开放 Caddy 的 80/443 端口。
+
 前端使用 History API 路由。生产静态服务器必须把不存在的文件路径回退到 `index.html`，否则直接打开 `/docs/guide`、`/docs/tutorial` 或 `/studio` 会返回 404。下面的 Nginx 示例同时保留 `/api` 前缀，并把上传上限设置为与后端默认的 100 MiB 一致：
 
 ```nginx
@@ -297,7 +355,7 @@ server {
 }
 ```
 
-如果修改 `PYFII_GUI_MAX_UPLOAD_BYTES`，还要同步调整 `client_max_body_size`。Vite 开发服务器已经提供 SPA 回退，不需要这段 Nginx 配置。
+Nginx 是 Caddy 示例的替代方案。如果修改 `PYFII_GUI_MAX_UPLOAD_BYTES`，还要同步调整 `client_max_body_size`。Vite dev server 的 SPA 回退仅供开发使用，不能代替上述生产静态服务器。
 
 当前项目和视频任务使用进程内缓存，生产环境应先使用单个 Uvicorn worker。多 worker 或多实例部署需要先增加共享项目存储和任务队列，否则同一项目的后续请求可能落到另一个进程。
 
@@ -308,7 +366,7 @@ cd /path/to/pyfii
 .venv/bin/python -c "import cv2, pyfii; from pyfii_gui_api.main import app; print(pyfii.__version__, app.title)"
 ffmpeg -version
 test -f apps/pyfii-gui/frontend/dist/index.html
-.venv/bin/python -c "from urllib.request import urlopen; print(urlopen('http://127.0.0.1:8000/api/health').read().decode())"
+./apps/pyfii-gui/deploy/check-production.sh
 ```
 
 ## 文档与教程中心

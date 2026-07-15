@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 #
-# pyfii-gui 一键启动脚本
+# pyfii-gui 本地开发一键启动脚本
+#
+# 本脚本会启动 Vite dev server，仅用于开发和局域网联调。生产环境请构建
+# frontend/dist，并使用 deploy/ 下的 Caddy + systemd 示例。
 #
 # 用法:
 #   ./start.sh              # 默认: backend :8000 + frontend :5173
@@ -45,6 +48,7 @@ while [[ $# -gt 0 ]]; do
     --no-install) SKIP_INSTALL=true; shift ;;
     -h|--help)
       echo "用法: $0 [选项]"
+      echo "仅用于本地开发；生产部署请参阅 apps/pyfii-gui/deploy/。"
       echo ""
       echo "选项:"
       echo "  --port PORT      后端端口 (默认 8000)"
@@ -78,7 +82,7 @@ check_optional_cmd() {
   fi
 }
 
-step "检查运行环境..."
+step "检查本地开发环境..."
 check_cmd "$PYTHON_BIN"
 check_cmd node
 check_cmd npm

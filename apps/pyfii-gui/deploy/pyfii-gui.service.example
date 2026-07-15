@@ -1,0 +1,34 @@
+[Unit]
+Description=PyFii GUI API
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=exec
+User=pyfii-gui
+Group=pyfii-gui
+WorkingDirectory=@REPOSITORY_ROOT@
+EnvironmentFile=/etc/pyfii-gui/backend.env
+ExecStart=@REPOSITORY_ROOT@/.venv/bin/python -m uvicorn pyfii_gui_api.main:app --host 127.0.0.1 --port 8000 --workers 1
+Restart=on-failure
+RestartSec=5s
+TimeoutStopSec=30s
+KillSignal=SIGINT
+UMask=0027
+
+# Creates the writable state directory without making the source tree writable.
+StateDirectory=pyfii-gui
+StateDirectoryMode=0750
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+LockPersonality=true
+
+[Install]
+WantedBy=multi-user.target

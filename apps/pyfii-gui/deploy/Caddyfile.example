@@ -1,0 +1,38 @@
+# Required environment variables are loaded by the systemd drop-in in
+# caddy.service.d.example.conf. Keep the API prefix: FastAPI routes include
+# /api, so this uses handle rather than handle_path.
+{$PYFII_GUI_DOMAIN} {
+	encode zstd gzip
+
+	@api path /api /api/*
+	handle @api {
+		# Keep the proxy limit aligned with the backend's default upload limit.
+		# Change both values together when PYFII_GUI_MAX_UPLOAD_BYTES changes.
+		request_body {
+			max_size 104857600
+		}
+		reverse_proxy {$PYFII_GUI_BACKEND:127.0.0.1:8000}
+	}
+
+	# Vite names production assets with content hashes. Missing asset paths
+	# must remain 404 instead of falling back to index.html.
+	handle /assets/* {
+		root * {$PYFII_GUI_DIST_ROOT}
+		header Cache-Control "public, max-age=31536000, immutable"
+		file_server
+	}
+
+	# Vue Router uses the History API. Routes such as /docs and /studio need
+	# index.html, while real files are served directly.
+	handle {
+		root * {$PYFII_GUI_DIST_ROOT}
+		header Cache-Control "no-cache"
+		try_files {path} /index.html
+		file_server
+	}
+
+	header {
+		X-Content-Type-Options nosniff
+		Referrer-Policy strict-origin-when-cross-origin
+	}
+}

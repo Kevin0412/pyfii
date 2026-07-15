@@ -107,6 +107,8 @@ Three.js 预览从轨迹帧读取加速度，并沿用 core 的 `wing_force = ac
 ./apps/pyfii-gui/start.sh
 ```
 
+这个脚本会运行 Vite dev server，只用于本地开发和局域网联调。公网部署必须先构建 `frontend/dist/`，再由 Caddy、Nginx 等生产静态服务器提供文件。
+
 脚本会同时启动前后端，并在 `apps/pyfii-gui/logs/<启动时间>-<进程号>/` 中分别保存两端日志；文件中的每一行带本地时间和时区，终端仍会实时显示服务原始输出。日志根目录可通过 `PYFII_GUI_LOG_DIR` 覆盖。
 
 脚本会检查 Python、Node.js 和 npm，缺少这些必需命令时停止。FFmpeg 只用于把工程音乐封装进导出视频，因此缺少时只显示 warning 并继续启动；无声 MP4 导出仍可使用。
@@ -153,8 +155,8 @@ GUI 的生产服务由 Python 后端和前端 `dist/` 静态文件组成：
 - Python 3.9 或更高版本运行 PyFii core 与 FastAPI。应分别安装仓库根目录和 `apps/pyfii-gui/backend` 的 `pyproject.toml`；根目录 `requirements.txt` 还包含 GUI 生产环境不需要的分析和打包工具。
 - 后端只使用 OpenCV 图像绘制和 `VideoWriter`，headless 能力已经足够，不调用 `imshow`，也不要求桌面或 GPU。当前 core 的默认包元数据仍声明完整版 `opencv-python`，所以按现有 `pyproject.toml` 安装时，最小化 Ubuntu 可能仍要提供该 wheel 导入时使用的 OpenGL / GLib 兼容库。
 - OpenCV 负责写入无声 MP4。工程包含音乐时，core 通过 `ffmpy` 调用系统中的 `ffmpeg` 做音频封装；只安装 Python 包 `ffmpy` 不够。
-- Node.js 和 npm 只负责构建 Vue 静态文件。当前 lockfile 要求 Node 18.x 或 Node 20 及以上、npm 8 及以上；部署已经构建好的 `dist/` 时不需要在服务器常驻 Node。
-- Nginx 是推荐但可替换的静态服务器和反向代理，不是 Python 后端依赖。
+- Node.js 和 npm 只负责构建 Vue 静态文件。当前前端要求 Node `^20.19.0` 或 `>=22.12.0`；部署已经构建好的 `dist/` 时不需要在服务器常驻 Node。
+- Caddy 是推荐但可替换的静态服务器和反向代理，不是 Python 后端依赖；仓库也保留 Nginx 等价配置。
 
 core 的直接 Python 依赖是 `opencv-python`、`PyQt5`、`tqdm`、`numpy`、`pygame`、`ffmpy` 和 `joblib`；GUI API 的直接依赖是 `fastapi`、`uvicorn[standard]`、`python-multipart`、`pydantic`、`orjson` 和 `pyfii`。pip 会处理它们的传递依赖。前端的 Vue、Pinia、Three.js、Marked、Vite 和 TypeScript 依赖由 `package-lock.json` 锁定，使用 `npm ci` 安装。
 
@@ -179,7 +181,7 @@ sudo apt install -y libgl1 libglib2.0-0t64
 sudo apt install -y libgl1 libglib2.0-0
 ```
 
-需要 Nginx 时另行安装 `sudo apt install -y nginx`。Python 包和前端应分别安装、构建：
+Caddy 应按[官方 Ubuntu/Debian 安装说明](https://caddyserver.com/docs/install#debian-ubuntu-raspbian)安装稳定版；选择 Nginx 时可另行安装 `sudo apt install -y nginx`。Python 包和前端应分别安装、构建：
 
 ```bash
 cd /path/to/pyfii
@@ -216,7 +218,7 @@ PYFII_GUI_ENABLE_LOCAL_PROJECT_IMPORT=false
 PYFII_GUI_DEPLOY_CONFIG=/path/to/deploy.json
 ```
 
-ICP备案配置示例为 `apps/pyfii-gui/deploy.example.json`。复制得到的 `apps/pyfii-gui/deploy.json` 是被 git 忽略的云服务器实例配置；其中 `domain` 只填写主机名，Vite 开发服务器和 `vite preview` 会将其加入 `allowedHosts`。示例中的备案字段为空，默认备案区域不存在。只有在该文件或 `PYFII_GUI_ICP_BEIAN` / `PYFII_GUI_GONGAN_BEIAN` 中明确填写后才在门户页 footer 显示，公安备案项同时显示标准备案图标。仓库不包含真实备案号，工作台和文档页也不显示备案信息。
+ICP备案配置示例为 `apps/pyfii-gui/deploy.example.json`。复制得到的 `apps/pyfii-gui/deploy.json` 是被 git 忽略的云服务器实例配置；其中 `domain` 只填写主机名，Vite 开发服务器和 `vite preview` 会将其加入 `allowedHosts`。生产静态托管不经过 Vite，域名由 Caddy 等反向代理配置。示例中的备案字段为空，默认备案区域不存在。只有在该文件或 `PYFII_GUI_ICP_BEIAN` / `PYFII_GUI_GONGAN_BEIAN` 中明确填写后才在门户页 footer 显示，公安备案项同时显示标准备案图标。仓库不包含真实备案号，工作台和文档页也不显示备案信息。
 
 前端构建环境变量：
 
@@ -237,6 +239,28 @@ https://gui.example.com/api/  -> FastAPI backend
 
 这种方式不需要在前端写死 API 主机。
 
+仓库在 `apps/pyfii-gui/deploy/` 提供 Caddy 和 systemd 生产模板：
+
+- `Caddyfile.example` 使用环境变量接收域名、静态目录和后端地址，只把 `/api` 原样反代到 Uvicorn；API 请求体默认限制为 100 MiB，与后端默认上传上限一致；普通页面使用 `index.html` 做 SPA fallback，缺失的 `/assets/*` 保持 404。
+- Vite 的 content-hash 资源使用 `Cache-Control: public, max-age=31536000, immutable`；HTML 和路由入口使用 `no-cache`，发布新版本后不会继续引用旧 chunk。
+- `pyfii-gui.service.example` 以低权限 `pyfii-gui` 用户运行后端，启用 systemd 文件系统保护，并保持单 worker。
+- `build-production.sh` 按 lockfile 构建同源前端；`check-production.sh` 会拒绝含 `/@vite/client` 或 `/src/` 入口的产物，并按环境检查 Caddyfile 与后端健康接口。
+
+最小部署顺序如下；完整的文件安装和 systemd 命令见 `apps/pyfii-gui/README.md`：
+
+```bash
+./apps/pyfii-gui/deploy/build-production.sh
+sudo rsync -a --delete apps/pyfii-gui/frontend/dist/ /srv/pyfii-gui/frontend/
+# 填写 /etc/pyfii-gui/caddy.env，并替换 backend unit 的 @REPOSITORY_ROOT@
+sudo caddy validate --envfile /etc/pyfii-gui/caddy.env --config /etc/caddy/Caddyfile
+sudo systemctl restart pyfii-gui caddy
+./apps/pyfii-gui/deploy/check-production.sh
+# 部署后确认公网入口不含 Vite dev client：
+./apps/pyfii-gui/deploy/check-production.sh --site-url https://your-domain.example
+```
+
+Caddy 应从其[官方稳定软件源](https://caddyserver.com/docs/install#debian-ubuntu-raspbian)安装并持续更新。公网环境不运行 `start.sh`、`vite` 或 `vite preview`；Caddy 读取的目录只放 `dist/` 内容，不包含仓库、配置、上传工程或日志。
+
 生产环境必须显式设置一个可写的 `PYFII_GUI_RUNTIME_DIR`，用于上传工程、解压目录和导出视频。若使用备案配置，`PYFII_GUI_DEPLOY_CONFIG` 应使用绝对路径。Uvicorn 不使用 `--reload`，并保持单 worker，因为项目缓存和视频任务状态当前都在进程内：
 
 ```bash
@@ -249,7 +273,7 @@ PYFII_GUI_DEPLOY_CONFIG=/absolute/path/to/deploy.json \
 
 不使用备案时可以省略 `PYFII_GUI_DEPLOY_CONFIG`。运行 Uvicorn 的系统用户必须对 runtime 目录有读写和删除权限。
 
-无 hash 页面使用浏览器 History API。Nginx 需要同时配置 SPA fallback、API 反向代理和上传大小；`proxy_pass` 不带末尾 `/`，以保留后端需要的 `/api` 前缀：
+无 hash 页面使用浏览器 History API。若不用仓库提供的 Caddy 示例，Nginx 也需要同时配置 SPA fallback、API 反向代理和上传大小；`proxy_pass` 不带末尾 `/`，以保留后端需要的 `/api` 前缀：
 
 ```nginx
 server {
@@ -282,8 +306,7 @@ server {
 cd /path/to/pyfii
 .venv/bin/python -c "import cv2, pyfii; from pyfii_gui_api.main import app; print(pyfii.__version__, app.title)"
 ffmpeg -version
-test -f apps/pyfii-gui/frontend/dist/index.html
-.venv/bin/python -c "from urllib.request import urlopen; print(urlopen('http://127.0.0.1:8000/api/health').read().decode())"
+./apps/pyfii-gui/deploy/check-production.sh
 ```
 
 ## 回归测试
