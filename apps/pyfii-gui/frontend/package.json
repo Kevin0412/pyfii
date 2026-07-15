@@ -9,6 +9,7 @@
   "scripts": {
     "dev": "vite",
     "test:geometry": "node scripts/check-three-geometry.mjs",
+    "test:state": "node scripts/check-project-state.mjs",
     "typecheck": "vue-tsc --noEmit",
     "build": "vite build",
     "preview": "vite preview"

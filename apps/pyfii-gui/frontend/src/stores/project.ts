@@ -34,14 +34,12 @@ export const useProjectStore = defineStore("project", {
       this.error = message;
       this.loading = false;
     },
-    setMeta(meta: ProjectMeta, warnings: string[] = []) {
+    setLoadedProject(meta: ProjectMeta, warnings: string[], tracks: DroneTrack[], fps: number) {
       this.projectId = meta.project_id;
       this.meta = meta;
-      this.uploadWarnings = warnings;
-    },
-    setTracks(tracks: DroneTrack[], fps: number) {
       this.tracks = tracks;
       this.trackFps = fps;
+      this.uploadWarnings = warnings;
       this.loading = false;
     },
     clear() {

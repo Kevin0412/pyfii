@@ -2,7 +2,7 @@
   <form class="upload-bar" data-guide="upload" @submit.prevent="submit">
     <label class="file-control">
       <span>{{ tt("uploadProject") }}</span>
-      <input type="file" accept=".zip,application/zip" @change="onFileChange" />
+      <input type="file" accept=".zip,application/zip" :disabled="project.loading" @change="onFileChange" />
     </label>
 
     <label>
@@ -115,10 +115,8 @@ async function loadProject(
   loader: (onUploadProgress: (fraction: number) => void) => Promise<ProjectCreateResponse>,
   uploadsFile: boolean,
 ): Promise<void> {
+  if (project.loading) return;
   project.beginLoading();
-  safety.clear();
-  player.pause();
-  player.setCurrentTime(0);
   loadProgress.value = 0;
   loadPhase.value = uploadsFile ? "uploadingProject" : "parsingProject";
 
@@ -129,7 +127,6 @@ async function loadProject(
     });
     loadProgress.value = 50;
     loadPhase.value = "loadingProjectData";
-    project.setMeta(meta, meta.warnings);
 
     let loadedResponses = 0;
     const markResponseLoaded = (): void => {
@@ -150,8 +147,11 @@ async function loadProject(
 
     // Keep the completed bar visible briefly instead of removing it in the same render tick.
     await new Promise((resolve) => window.setTimeout(resolve, 120));
+    player.pause();
+    player.setCurrentTime(0);
+    // Both synchronous writes are rendered in the same Vue update tick.
     safety.setSafety(safetyResponse.summary, safetyResponse.events);
-    project.setTracks(tracksResponse.drones, tracksResponse.fps);
+    project.setLoadedProject(meta, meta.warnings, tracksResponse.drones, tracksResponse.fps);
   } catch (error) {
     project.setError(errorMessage(error));
   }

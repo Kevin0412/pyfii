@@ -307,7 +307,8 @@ function downloadFile(url: string, filename: string): void {
 }
 
 async function exportVideo(): Promise<void> {
-  if (!project.meta || !project.projectId || project.durationMs <= 0 || exporting.value) return;
+  const projectId = project.projectId;
+  if (!project.meta || !projectId || project.durationMs <= 0 || exporting.value) return;
 
   exporting.value = true;
   exportProgress.value = 0;
@@ -329,13 +330,13 @@ async function exportVideo(): Promise<void> {
       observer_distance: player.observerDistance,
       projection_distance: player.projectionDistance,
     };
-    let job = await createVideoExport(project.projectId, options);
+    let job = await createVideoExport(projectId, options);
     exportProgress.value = job.progress_percent;
     exportStatus.value = job.status === "queued" ? "queued" : "running";
 
     while (job.status === "queued" || job.status === "running") {
       await waitMs(750);
-      job = await fetchVideoExport(project.projectId, job.export_id);
+      job = await fetchVideoExport(projectId, job.export_id);
       exportProgress.value = job.progress_percent;
       if (job.status === "queued" || job.status === "running") {
         exportStatus.value = job.status;
@@ -346,7 +347,7 @@ async function exportVideo(): Promise<void> {
       throw new Error(job.error || tt("videoExportFailed"));
     }
 
-    downloadFile(videoExportDownloadUrl(project.projectId, job.export_id), job.filename);
+    downloadFile(videoExportDownloadUrl(projectId, job.export_id), job.filename);
     exportMessage.value = job.warnings.length
       ? `${tt("videoExportCompleteWithWarnings")} (${job.warnings.length})`
       : tt("videoExportComplete");
@@ -438,6 +439,7 @@ onUnmounted(() => {
 
 .sim-canvas[aria-label="Pyfii 3D simulation canvas"].active {
   cursor: grab;
+  touch-action: none;
 }
 
 .sim-canvas[aria-label="Pyfii 3D simulation canvas"].active:active {
