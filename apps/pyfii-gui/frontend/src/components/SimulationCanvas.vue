@@ -202,7 +202,7 @@ function render(timestamp: number): void {
 
 function syncRendererSize(): void {
   canvasRenderer?.applySsaa(player.ssaa);
-  threeRenderer?.setSize(canvasWidth.value, canvasHeight.value);
+  threeRenderer?.setSize(canvasWidth.value, canvasHeight.value, player.ssaa);
 }
 
 function ensureThreeRenderer(): Promise<void> {

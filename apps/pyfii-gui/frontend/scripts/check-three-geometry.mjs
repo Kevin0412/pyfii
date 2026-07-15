@@ -14,11 +14,25 @@ assert.equal(geometry.wrapHorizontalAngle(181), -179);
 assert.equal(geometry.wrapHorizontalAngle(-181), 179);
 assert.equal(geometry.wrapHorizontalAngle(540), -180);
 
+const viewport1x = geometry.logicalViewportSize(1200, 600, 1);
+const viewport4x = geometry.logicalViewportSize(4800, 2400, 4);
+assert.deepEqual(viewport4x, viewport1x, "SSAA must not change the logical 3D viewport");
+assert.equal(
+  geometry.perspectiveFovDegrees(viewport4x.height, 450),
+  geometry.perspectiveFovDegrees(viewport1x.height, 450),
+  "1x and 4x SSAA must keep the same perspective composition",
+);
+
 const rendererSource = await readFile(
   new URL("../src/renderer/three/PyfiiThreeRenderer.ts", import.meta.url),
   "utf8",
 );
 assert.doesNotMatch(rendererSource, /activeRenderScale|settings\.renderScale|strokeScale/);
+assert.doesNotMatch(
+  rendererSource,
+  /perspectiveFovDegrees\((?:this\.)?(?:height|backingHeight)/,
+  "perspective FOV must not use backing-buffer height",
+);
 
 for (const device of ["F400", "F600"]) {
   const spec = geometry.droneGeometrySpec(device);

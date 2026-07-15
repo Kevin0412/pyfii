@@ -4,6 +4,30 @@ export interface DroneGeometrySpec {
   bodyRadius: number;
 }
 
+export interface ViewportSize {
+  width: number;
+  height: number;
+}
+
+// SSAA only enlarges the backing buffer. Camera projection continues to use
+// the logical viewport so changing sample density cannot change composition.
+export function logicalViewportSize(
+  backingWidth: number,
+  backingHeight: number,
+  ssaa: number,
+): ViewportSize {
+  const sampleScale = Number.isFinite(ssaa) && ssaa > 0 ? ssaa : 1;
+  return {
+    width: Math.max(1, backingWidth / sampleScale),
+    height: Math.max(1, backingHeight / sampleScale),
+  };
+}
+
+export function perspectiveFovDegrees(viewportHeight: number, projectionDistance: number): number {
+  const radians = 2 * Math.atan(viewportHeight / (2 * projectionDistance));
+  return Math.min(82, Math.max(18, radians * 180 / Math.PI));
+}
+
 // Match the OpenCV viewer: crossing either horizontal boundary continues
 // from the equivalent angle on the other side.
 export function wrapHorizontalAngle(value: number): number {

@@ -2,7 +2,12 @@ import * as THREE from "three";
 
 import { droneRgb } from "../palette";
 import type { DroneFrame, RenderInput, SafetyEvent, ThreeRenderSettings } from "../types";
-import { droneGeometrySpec, motorAxisOffset } from "./geometry";
+import {
+  droneGeometrySpec,
+  logicalViewportSize,
+  motorAxisOffset,
+  perspectiveFovDegrees,
+} from "./geometry";
 
 type DroneRenderParts = {
   device: string;
@@ -119,8 +124,8 @@ export class PyfiiThreeRenderer {
   private readonly fieldGroup = new THREE.Group();
   private readonly droneParts = new Map<number, DroneRenderParts>();
   private activeField: number | null = null;
-  private width = BASE_WIDTH;
-  private height = BASE_HEIGHT;
+  private viewportWidth = BASE_WIDTH;
+  private viewportHeight = BASE_HEIGHT;
 
   constructor(canvas: HTMLCanvasElement) {
     this.renderer = new THREE.WebGLRenderer({
@@ -147,11 +152,14 @@ export class PyfiiThreeRenderer {
     this.renderer.dispose();
   }
 
-  setSize(width: number, height: number): void {
-    this.width = Math.max(1, width);
-    this.height = Math.max(1, height);
-    this.renderer.setSize(this.width, this.height, false);
-    this.perspectiveCamera.aspect = this.width / this.height;
+  setSize(backingWidth: number, backingHeight: number, ssaa: number): void {
+    const width = Math.max(1, backingWidth);
+    const height = Math.max(1, backingHeight);
+    const viewport = logicalViewportSize(width, height, ssaa);
+    this.viewportWidth = viewport.width;
+    this.viewportHeight = viewport.height;
+    this.renderer.setSize(width, height, false);
+    this.perspectiveCamera.aspect = this.viewportWidth / this.viewportHeight;
     this.perspectiveCamera.updateProjectionMatrix();
     this.updateOrthographicFrustum(1);
   }
@@ -181,9 +189,8 @@ export class PyfiiThreeRenderer {
     const camera = settings.projection === "perspective" ? this.perspectiveCamera : this.orthographicCamera;
 
     if (camera instanceof THREE.PerspectiveCamera) {
-      const fov = 2 * Math.atan(this.height / (2 * settings.projectionDistance)) * THREE.MathUtils.RAD2DEG;
-      camera.fov = THREE.MathUtils.clamp(fov, 18, 82);
-      camera.aspect = this.width / this.height;
+      camera.fov = perspectiveFovDegrees(this.viewportHeight, settings.projectionDistance);
+      camera.aspect = this.viewportWidth / this.viewportHeight;
       camera.updateProjectionMatrix();
     } else {
       this.updateOrthographicFrustum(settings.observerDistance / 600);
