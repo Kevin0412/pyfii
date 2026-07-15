@@ -51,6 +51,22 @@ class GuiApiTests(unittest.TestCase):
         self.assertEqual(response.status_code, 400)
         self.assertEqual(response.json()["error"]["code"], "invalid_archive")
 
+    def test_delete_requires_an_existing_project(self):
+        with patch("pyfii_gui_api.routers.projects.cleanup_project") as cleanup:
+            response = self.client.delete("/api/projects/not-a-project")
+
+        self.assertEqual(response.status_code, 404)
+        self.assertEqual(response.json()["error"]["code"], "project_not_found")
+        cleanup.assert_not_called()
+
+    def test_delete_rejects_encoded_parent_path(self):
+        with patch("pyfii_gui_api.routers.projects.cleanup_project") as cleanup:
+            response = self.client.delete("/api/projects/%2e%2e")
+
+        self.assertEqual(response.status_code, 404)
+        self.assertEqual(response.json()["error"]["code"], "project_not_found")
+        cleanup.assert_not_called()
+
     def test_creates_asynchronous_video_export(self):
         export = VideoExportRecord(
             export_id="export-1",

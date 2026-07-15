@@ -342,7 +342,8 @@ async def download_video_export(project_id: str, export_id: str) -> FileResponse
 
 @router.delete("/{project_id}", response_model=DeleteResponse)
 async def delete_project(project_id: str) -> DeleteResponse:
-    project_cache.delete(project_id)
+    project_cache.require(project_id)
     video_export_manager.delete_project(project_id)
     cleanup_project(project_id)
+    project_cache.delete(project_id)
     return DeleteResponse(ok=True)

@@ -12,12 +12,22 @@ class ProjectWorkspace:
     extract_dir: Path
 
 
+def _runtime_child(root: Path, name: str) -> Path:
+    """Return a direct child of a runtime directory, never an escaped path."""
+
+    resolved_root = root.resolve()
+    child = (resolved_root / name).resolve()
+    if child.parent != resolved_root:
+        raise ValueError("Runtime path must be a direct child of its configured root.")
+    return child
+
+
 def project_root(project_id: str) -> Path:
-    return settings.runtime_dir / project_id
+    return _runtime_child(settings.runtime_dir, project_id)
 
 
 def video_export_root(project_id: str) -> Path:
-    return settings.runtime_dir / "_video_exports" / project_id
+    return _runtime_child(settings.runtime_dir / "_video_exports", project_id)
 
 
 def create_project_workspace(project_id: str) -> ProjectWorkspace:
