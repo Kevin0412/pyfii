@@ -47,5 +47,37 @@ class DeploymentConfigTests(unittest.TestCase):
         self.assertEqual(settings.gongan_beian, "示例公安备案")
 
 
+class SettingsTests(unittest.TestCase):
+    def test_resource_limit_environment_variables(self):
+        values = {
+            "PYFII_GUI_PROJECT_IMPORT_JOBS": "3",
+            "PYFII_GUI_PROJECT_IMPORT_QUEUE_SIZE": "4",
+            "PYFII_GUI_VIDEO_EXPORT_JOBS": "2",
+            "PYFII_GUI_VIDEO_EXPORT_QUEUE_SIZE": "5",
+        }
+        with patch.dict(os.environ, values):
+            configured = Settings()
+
+        self.assertEqual(configured.project_import_jobs, 3)
+        self.assertEqual(configured.project_import_queue_size, 4)
+        self.assertEqual(configured.video_export_jobs, 2)
+        self.assertEqual(configured.video_export_queue_size, 5)
+
+    def test_resource_limits_cannot_be_negative(self):
+        values = {
+            "PYFII_GUI_PROJECT_IMPORT_JOBS": "0",
+            "PYFII_GUI_PROJECT_IMPORT_QUEUE_SIZE": "-1",
+            "PYFII_GUI_VIDEO_EXPORT_JOBS": "0",
+            "PYFII_GUI_VIDEO_EXPORT_QUEUE_SIZE": "-1",
+        }
+        with patch.dict(os.environ, values):
+            configured = Settings()
+
+        self.assertEqual(configured.project_import_jobs, 1)
+        self.assertEqual(configured.project_import_queue_size, 0)
+        self.assertEqual(configured.video_export_jobs, 1)
+        self.assertEqual(configured.video_export_queue_size, 0)
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -69,7 +69,16 @@ class Settings:
             1,
             _int_env("PYFII_GUI_TRAJECTORY_WORKERS", max(1, (os.cpu_count() or 1) // 2)),
         )
+        self.project_import_jobs = max(1, _int_env("PYFII_GUI_PROJECT_IMPORT_JOBS", 1))
+        self.project_import_queue_size = max(
+            0,
+            _int_env("PYFII_GUI_PROJECT_IMPORT_QUEUE_SIZE", 2),
+        )
         self.video_export_jobs = max(1, _int_env("PYFII_GUI_VIDEO_EXPORT_JOBS", 1))
+        self.video_export_queue_size = max(
+            0,
+            _int_env("PYFII_GUI_VIDEO_EXPORT_QUEUE_SIZE", 2),
+        )
         self.video_render_workers = max(
             1,
             _int_env("PYFII_GUI_VIDEO_RENDER_WORKERS", max(1, (os.cpu_count() or 1) // 2)),

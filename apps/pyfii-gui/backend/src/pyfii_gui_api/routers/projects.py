@@ -1,7 +1,8 @@
-from pathlib import Path
-from typing import Any, Iterable, List, Optional
+import asyncio
 import mimetypes
 import uuid
+from pathlib import Path
+from typing import Any, Callable, Iterable, List, Optional
 
 from fastapi import APIRouter, File, Form, Query, UploadFile
 from fastapi.responses import FileResponse
@@ -19,6 +20,7 @@ from ..schemas import (
     VideoExportResponse,
 )
 from ..services.archive_importer import safe_extract_zip
+from ..services.bounded_executor import BoundedExecutor, ExecutorBusy
 from ..services.cache import ProjectRecord, project_cache
 from ..services.pyfii_adapter import parse_fii_project
 from ..services.safety import analyze_safety
@@ -36,6 +38,11 @@ router = APIRouter()
 
 ALLOWED_TRACK_FPS = {30, 60, 100, 200}
 AUDIO_EXTENSIONS = {".mp3", ".wav", ".ogg", ".m4a", ".aac", ".flac"}
+project_executor = BoundedExecutor(
+    max_workers=settings.project_import_jobs,
+    max_queue_size=settings.project_import_queue_size,
+    thread_name_prefix="pyfii-import",
+)
 
 
 def _is_relative_to(path: Path, parent: Path) -> bool:
@@ -147,6 +154,63 @@ def _register_project_record(
     return record
 
 
+def _extract_and_register_project(
+    *,
+    project_id: str,
+    name: str,
+    workspace_dir: Path,
+    upload_path: Path,
+    extract_dir: Path,
+    fps: int,
+    ignore_acc: bool,
+) -> ProjectRecord:
+    project_dir = safe_extract_zip(upload_path, extract_dir)
+    return _register_project_record(
+        project_id=project_id,
+        name=name,
+        workspace_dir=workspace_dir,
+        upload_path=upload_path,
+        extract_dir=extract_dir,
+        project_dir=project_dir,
+        fps=fps,
+        ignore_acc=ignore_acc,
+    )
+
+
+async def _run_project_task(
+    function: Callable[..., Any],
+    *,
+    busy_code: str,
+    busy_message: str,
+    **kwargs: Any,
+) -> Any:
+    try:
+        future = project_executor.submit(function, **kwargs)
+    except ExecutorBusy as exc:
+        raise AppError(
+            429,
+            busy_code,
+            busy_message,
+            {
+                "max_running": project_executor.max_workers,
+                "max_queued": project_executor.max_queue_size,
+            },
+        ) from exc
+    return await asyncio.wrap_future(future)
+
+
+async def _run_project_import(
+    function: Callable[..., ProjectRecord],
+    **kwargs: Any,
+) -> ProjectRecord:
+    return await _run_project_task(
+        function,
+        busy_code="project_import_busy",
+        busy_message="Project import capacity is full. Try again later.",
+        **kwargs,
+    )
+
+
 def _resolve_local_project_dir(raw_path: str) -> Path:
     if not settings.enable_local_project_import:
         raise AppError(403, "local_import_disabled", "Local project import is disabled.")
@@ -211,14 +275,13 @@ async def create_project(
                     )
                 target.write(chunk)
 
-        project_dir = safe_extract_zip(upload_path, extract_dir)
-        record = _register_project_record(
+        record = await _run_project_import(
+            _extract_and_register_project,
             project_id=project_id,
             name=Path(file.filename).stem,
             workspace_dir=workspace.root,
             upload_path=upload_path,
             extract_dir=extract_dir,
-            project_dir=project_dir,
             fps=fps,
             ignore_acc=ignore_acc,
         )
@@ -243,7 +306,8 @@ async def create_local_project(request: LocalProjectCreateRequest) -> ProjectCre
     display_name = project_dir.parent.name if project_dir.name == "output" else project_dir.name
 
     try:
-        record = _register_project_record(
+        record = await _run_project_import(
+            _register_project_record,
             project_id=project_id,
             name=display_name,
             workspace_dir=project_dir,
@@ -274,8 +338,11 @@ async def get_tracks(
     if fps not in ALLOWED_TRACK_FPS:
         raise AppError(400, "invalid_track_fps", "fps must be one of 30, 60, 100, or 200.")
     record = project_cache.require(project_id)
-    payload = serialize_tracks(
-        record.data,
+    payload = await _run_project_task(
+        serialize_tracks,
+        busy_code="project_processing_busy",
+        busy_message="Project processing capacity is full. Try again later.",
+        data=record.data,
         project_id=project_id,
         fps=fps,
         source_fps=record.source_fps,

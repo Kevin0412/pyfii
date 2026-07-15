@@ -160,7 +160,10 @@ PYFII_GUI_CORS_ORIGIN_REGEX='^https://.*\.example\.com$'
 PYFII_GUI_CORS_ALLOW_CREDENTIALS=true
 PYFII_GUI_DEFAULT_IMPORT_FPS=60
 PYFII_GUI_TRAJECTORY_WORKERS=4
+PYFII_GUI_PROJECT_IMPORT_JOBS=1
+PYFII_GUI_PROJECT_IMPORT_QUEUE_SIZE=2
 PYFII_GUI_VIDEO_EXPORT_JOBS=1
+PYFII_GUI_VIDEO_EXPORT_QUEUE_SIZE=2
 PYFII_GUI_VIDEO_RENDER_WORKERS=4
 PYFII_GUI_MAX_UPLOAD_BYTES=104857600
 PYFII_GUI_MAX_UNCOMPRESSED_BYTES=524288000
@@ -399,6 +402,7 @@ test -f apps/pyfii-gui/frontend/dist/index.html
 - 统一的文档与教程中心，内部包含 Guide、PyFii 文档、专题教程、编舞与 Agent、工程研究静态页。
 - 安全解压并调用 `read_fii()` 解析轨迹。
 - GUI 默认只把一半 CPU 核心分配给单次轨迹解析，为并发请求预留资源；可通过 `PYFII_GUI_TRAJECTORY_WORKERS` 调整。
+- 工程解析、轨迹序列化和视频导出使用有界工作队列；默认分别允许 1 个任务运行、2 个任务等待。容量已满时 API 返回带 `max_running` / `max_queued` 的 429，而不是无限占用内存排队。
 - 将解析结果装入 `DroneTrack`，调用 `show(track, show=False)` 走 pyfii core 的无渲染距离检查。
 - 返回项目元信息、轨迹数据和由 core warnings 结构化得到的安全日志。
 - Canvas 2D 三视图预览：top / front / right。

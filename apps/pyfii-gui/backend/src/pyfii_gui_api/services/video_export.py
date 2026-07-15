@@ -1,4 +1,3 @@
-from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from pathlib import Path
 from threading import RLock
@@ -12,6 +11,7 @@ import warnings
 from ..config import settings
 from ..errors import AppError
 from ..schemas import VideoExportRequest
+from .bounded_executor import BoundedExecutor, ExecutorBusy
 from .cache import ProjectRecord
 from .storage import video_export_root
 
@@ -107,12 +107,14 @@ class VideoExportManager:
     def __init__(
         self,
         max_workers: int,
+        max_queue_size: int = 2,
         render_video: RenderVideo = render_project_video,
     ) -> None:
         self._records: Dict[str, VideoExportRecord] = {}
         self._lock = RLock()
-        self._executor = ThreadPoolExecutor(
+        self._executor = BoundedExecutor(
             max_workers=max_workers,
+            max_queue_size=max_queue_size,
             thread_name_prefix="pyfii-video",
         )
         self._render_video = render_video
@@ -133,7 +135,24 @@ class VideoExportManager:
         )
         with self._lock:
             self._records[export_id] = record
-        self._executor.submit(self._run, export_id, project, options)
+        try:
+            self._executor.submit(self._run, export_id, project, options)
+        except ExecutorBusy as exc:
+            with self._lock:
+                self._records.pop(export_id, None)
+            raise AppError(
+                429,
+                "video_export_busy",
+                "Video export capacity is full. Try again later.",
+                {
+                    "max_running": self._executor.max_workers,
+                    "max_queued": self._executor.max_queue_size,
+                },
+            ) from exc
+        except BaseException:
+            with self._lock:
+                self._records.pop(export_id, None)
+            raise
         return record
 
     def _run(
@@ -194,4 +213,7 @@ class VideoExportManager:
                 self._records.pop(export_id, None)
 
 
-video_export_manager = VideoExportManager(settings.video_export_jobs)
+video_export_manager = VideoExportManager(
+    settings.video_export_jobs,
+    settings.video_export_queue_size,
+)
