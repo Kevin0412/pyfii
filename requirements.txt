@@ -9,4 +9,4 @@ librosa >= 0.11
 soundfile >= 0.14.0
 pyautogui
 pyinstaller
-textual >= 8
+textual >= 8.2.8
