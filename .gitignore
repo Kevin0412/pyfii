@@ -32,6 +32,8 @@ apps/pyfii-gui/backend/.runtime/
 apps/pyfii-gui/logs/
 apps/pyfii-gui/deploy.json
 apps/pyfii-gui/deploy.local.json
+# 仓库根目录没有 package.json，但某些环境下 npm 会在 CWD 生成空的 lock 文件
+/package-lock.json
 apps/pyfii-gui/frontend/dist/
 apps/pyfii-gui/frontend/node_modules/
 tools/tmp*/
