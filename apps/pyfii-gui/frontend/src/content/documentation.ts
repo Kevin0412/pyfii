@@ -218,10 +218,15 @@ export function documentHtml(id: DocumentId): Promise<string> {
   if (!loader) return Promise.reject(new Error(`Missing document: ${source.markdownPath}`));
 
   const html = loader()
-    .then((markdown) => marked.parse(rewriteMarkdownLinks(markdown), {
-      async: false,
-      gfm: true,
-    }) as string)
+    .then((raw) => {
+      // Support both eager (string) and lazy ({ default: string }) return shapes
+      // produced by different Vite / rolldown import.meta.glob implementations.
+      const markdown: string = typeof raw === "string" ? raw : (raw as { default: string }).default;
+      return marked.parse(rewriteMarkdownLinks(markdown), {
+        async: false,
+        gfm: true,
+      }) as string;
+    })
     .catch((error: unknown) => {
       htmlCache.delete(id);
       throw error;

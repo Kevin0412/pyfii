@@ -37,6 +37,12 @@ export default defineConfig(({ mode }) => {
       host: env.VITE_DEV_HOST || "0.0.0.0",
       port: Number.isNaN(devPort) ? 5173 : devPort,
       allowedHosts: allowedDomain ? [allowedDomain] : [],
+      fs: {
+        // Allow the dev server to serve markdown & image assets from the
+        // repository root (e.g. doc/**).  Vite 8 tightened the default
+        // allow-list to the project root only.
+        allow: [envDir, repoRoot],
+      },
       proxy: {
         "/api": {
           target: apiProxyTarget,
