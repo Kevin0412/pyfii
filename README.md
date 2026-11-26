@@ -48,7 +48,7 @@ GUI 的本地开发、生产依赖和部署配置见 [apps/pyfii-gui/README.md](
 
 GitHub Actions 自动生成大闹天宫七机编队和基础四机工程的 OpenCV 2D/3D、浏览器 Canvas/Three.js 及完整工作台截图。
 
-**[大闹天宫编舞讲解与渲染截图](doc/pyfii_script_patterns_human.md)** · [四机渲染测试](docs/render-gallery.md) · [截图 CI](https://github.com/Kevin0412/pyfii/actions/workflows/render-screenshots.yml) · [最近发布的源码版本](https://github.com/Kevin0412/pyfii/tree/render-gallery)
+**[大闹天宫编舞讲解与渲染截图](doc/pyfii_script_patterns_human.md)** · [渲染回归与截图 CI](doc/rendering_ci.md) · [截图 CI](https://github.com/Kevin0412/pyfii/actions/workflows/render-screenshots.yml) · [最近发布的源码版本](https://github.com/Kevin0412/pyfii/tree/render-gallery)
 
 ## 主要能力
 
@@ -122,16 +122,17 @@ Linux 下可从仓库根目录一键安装依赖并启动前后端：
 
 ## 文档目录
 
-- [文档与教程中心](doc/pyfii_docs.md)：普通用户的阅读入口。
-- [安装教程](doc/tutorial/install.md)：Python、编辑器与 PyFii 安装。
-- [脚本模式教程](doc/tutorial/script_mode.md)：从动作脚本到 Fii 工程。
-- [PyFii core 文档](doc/doc_zh_CN.md)：动作、灯光、工程、读取与渲染 API。
-- [GUI 使用引导](doc/pyfii_gui_guide.md)：上传、warning、预览和视频导出。
-- [GUI 架构与部署](doc/pyfii_gui.md)：开发、配置、依赖和生产部署。
-- [内部原理](doc/tutorial/principle.md)：面向维护者的格式与实现说明。
-- [完整文档索引](doc/INDEX.md)：编舞、Choreo Agent、工程研究和其他专题资料。
+从 **[文档中心](doc/pyfii_docs.md)** 或 **[全部文档索引](doc/INDEX.md)** 开始：
 
-线上 [文档与教程](https://pyfii.cn/docs) 直接使用仓库中的文档源；文档修改随 GUI 新版本一起发布，避免维护另一份内容副本。
+| 分类 | 阅读入口 |
+| --- | --- |
+| 入门与使用教程 | [安装](doc/tutorial/install.md) · [GUI 使用引导](doc/pyfii_gui_guide.md) · [编队飞行](doc/tutorial/group_flight.md) · [教程目录](doc/tutorial/contents.md) |
+| API 参考 | [Core API](doc/doc_zh_CN.md) |
+| 编舞设计与作品 | [大闹天宫（DNTG）](doc/pyfii_script_patterns_human.md) · [人类作品比较](doc/human_choreography_distillation.md) |
+| AI 编舞与 Agent | [Agent 经验](doc/choreo_agent_lessons.md) · [实验索引](doc/INDEX.md#ai) |
+| 开发维护与工程研究 | [GUI 架构与部署](doc/pyfii_gui.md) · [内部原理](doc/tutorial/principle.md) · [截图 CI](doc/rendering_ci.md) |
+
+线上 [文档中心](https://pyfii.cn/docs) 直接使用 `doc/` 中的正文，不维护另一份副本。
 
 ## 仓库结构
 

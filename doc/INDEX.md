@@ -1,45 +1,76 @@
-# 文档索引
+# 全部文档索引
 
-这里是仓库文档的总索引。项目文档完全公开，`doc/` 下的全部 Markdown 都直接进入 GUI 文档中心，并按基础使用与维护、编舞与 Agent、工程研究分组。分组表示主题，不表示公开级别或文档价值。
+`doc/` 是用户文档与专题研究的正文来源。GitHub 和 Web 文档中心使用同一份 Markdown；分类按照阅读目的，而不是文件创建时间。实验记录保留原始数据口径及日期，不等同于当前实现状态。
 
-## 基础使用与维护文档
-
-| 文档 | 用途 |
-|------|------|
-| [pyfii_docs.md](pyfii_docs.md) | 前端文档中心总览 |
-| [pyfii_gui_guide.md](pyfii_gui_guide.md) | GUI 使用引导与常见问题 |
-| [doc_zh_CN.md](doc_zh_CN.md) | PyFii core 使用文档 |
-| [pyfii_gui.md](pyfii_gui.md) | GUI 架构、配置、部署与限制 |
-| [tutorial/contents.md](tutorial/contents.md) | 教程目录 |
-| [tutorial/install.md](tutorial/install.md) | 安装与开发启动 |
-| [tutorial/group_flight.md](tutorial/group_flight.md) | 编队飞行示例 |
-| [tutorial/script_mode.md](tutorial/script_mode.md) | 脚本模式 |
-| [tutorial/light.md](tutorial/light.md) | 灯光编写 |
-| [tutorial/principle.md](tutorial/principle.md) | 内部实现原理 |
-
-这些文件由 GUI 在构建时直接读取，不要在前端复制第二份正文。网站中的总索引入口是 `/docs/index`。
-
-## 编舞与 Agent
+## 文档入口
 
 | 文档 | 用途 |
-|------|------|
-| [human_choreography_distillation.md](human_choreography_distillation.md) | 人类编舞作品蒸馏 |
-| [大闹天宫（DNTG）：人类作品编码模式](pyfii_script_patterns_human.md) | 原始七机编舞、数学轨迹、角色映射与渲染截图 |
-| [choreo_agent_lessons.md](choreo_agent_lessons.md) | 编舞 agent 开发经验 |
-| [choreo_agent_roadmap.md](choreo_agent_roadmap.md) | 编舞 agent 后续计划 |
-| [ai_choreography_exploration.md](ai_choreography_exploration.md) | AI 编舞路线、知识库和 Agent 演进 |
-| [ai_generated_distillation.md](ai_generated_distillation.md) | AI 产物指标、退化样本与对照结论 |
-| [pyfii_script_patterns_ai.md](pyfii_script_patterns_ai.md) | AI 编码模式和反例 |
-| [cannon_design_lessons.md](cannon_design_lessons.md) | Cannon 编舞设计与验证经验 |
-| [deepseek_cannon_reflection.md](deepseek_cannon_reflection.md) | Cannon 开发复盘和 Agent 启示 |
+| --- | --- |
+| [文档中心](pyfii_docs.md) | 按任务选择阅读路径 |
+| [全部文档索引](INDEX.md) | 当前页，完整导航与维护规则 |
 
-这些资料包含不同阶段的实验数据，但共同构成当前 Choreo Agent 的知识来源、反例库和设计依据。阶段性数据会注明时间与口径，不因此归入“历史归档”。
+<a id="tutorial"></a>
 
-## 工程研究
+## 一、入门与使用教程
 
 | 文档 | 用途 |
-|------|------|
-| [flight_log_trajectory_analysis.md](flight_log_trajectory_analysis.md) | 真实飞行与模拟轨迹分析 |
-| [fwfii_merge_plan.md](fwfii_merge_plan.md) | fwfii 集成调研，尚未实操 |
+| --- | --- |
+| [教程目录](tutorial/contents.md) | 学习顺序 |
+| [安装](tutorial/install.md) | Python 环境、安装与本地开发 |
+| [GUI 使用引导](pyfii_gui_guide.md) | 上传、warning、预览与导出 |
+| [编队飞行](tutorial/group_flight.md) | 多机项目示例 |
+| [脚本模式](tutorial/script_mode.md) | 脚本组织与工程生成 |
+| [灯光编写](tutorial/light.md) | F400/F600 灯光 |
 
-工程研究可能包含实验性结论或尚未实施的方案，使用前应结合当前代码和数据复核。
+<a id="api"></a>
+
+## 二、API 参考
+
+| 文档 | 用途 |
+| --- | --- |
+| [Core API 参考](doc_zh_CN.md) | 无人机、动作、灯光、工程、轨迹、渲染接口索引 |
+
+<a id="choreo"></a>
+
+## 三、编舞设计与作品
+
+| 文档 | 用途 |
+| --- | --- |
+| [大闹天宫（DNTG）](pyfii_script_patterns_human.md) | 原始七机作品、数学轨迹、角色映射与渲染截图 |
+| [人类作品比较与蒸馏](human_choreography_distillation.md) | 跨作品分析、音乐对齐、双模式验证及设计经验 |
+
+<a id="ai"></a>
+
+## 四、AI 编舞与 Agent
+
+| 文档 | 类型与用途 |
+| --- | --- |
+| [Agent 设计与经验](choreo_agent_lessons.md) | 设计总结：产品、验证层和生成修复 |
+| [Agent 路线图](choreo_agent_roadmap.md) | 带日期的计划与进度 |
+| [AI 编舞探索](ai_choreography_exploration.md) | 实验演进与方法来源 |
+| [AI 编码模式](pyfii_script_patterns_ai.md) | 生成脚本设计模式与反例 |
+| [AI 产物比较与蒸馏](ai_generated_distillation.md) | 实验样本指标、退化和对照 |
+| [Cannon 设计经验](cannon_design_lessons.md) | 案例：完整设计过程与验证方法 |
+| [DeepSeek Cannon 复盘](deepseek_cannon_reflection.md) | 案例：迭代记录与 Agent 启示 |
+
+Agent 最新实现、配置与开发进度以 [tools/choreo_agent/PLAN.md](https://github.com/Kevin0412/pyfii/blob/pyfii-dev/tools/choreo_agent/PLAN.md) 和对应代码为准。历史实验和当前设计总结相互链接，不将旧实验指标当作当前系统指标。
+
+<a id="maintenance"></a>
+
+## 五、开发维护与工程研究
+
+| 文档 | 用途 |
+| --- | --- |
+| [GUI 架构与部署](pyfii_gui.md) | 架构、配置、部署与限制 |
+| [内部原理](tutorial/principle.md) | Fii/Blockly 格式、轨迹与渲染 |
+| [渲染回归与截图 CI](rendering_ci.md) | 截图生成、自动发布与复现 |
+| [真实飞行轨迹分析](flight_log_trajectory_analysis.md) | 真实飞行与模拟轨迹比较 |
+| [fwfii 集成调研](fwfii_merge_plan.md) | 集成研究，尚未实操 |
+
+## 维护规则
+
+- 正文统一维护在 `doc/`，`docs/` 中旧链接保留跳转说明，已有静态资产不因整理而迁移。
+- 新文档加入此索引和 Web 文档导航；已有关联文件尽量交叉引用，不重复复制正文。
+- 文档用途分清使用说明、设计案例、现行方案与带日期的实验记录。研究资料不因旧而删除。
+- 现有 Markdown 文件名和 Web URL 保持兼容；生成截图通过独立分支更新，不提交到源码文档目录。
+- 修改文档后运行 `python -m unittest discover -s tests -p test_frontend_docs.py`，涉及 Web 文档中心时另运行前端 typecheck 与 build。

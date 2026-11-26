@@ -75,7 +75,7 @@ GUI 后端会把这些 warning 结构化成前端可展示的事件，例如 `ac
 - 点击安全日志跳转到对应时间。
 - 音乐文件播放和基础时间轴同步。
 - 第一次访问显示逐控件聚焦的六步使用引导，顶部可随时重新打开；其中会明确指出模拟区域右上角的全屏按钮。
-- `/docs` 是统一文档中心；`/docs/index` 提供全部文档索引，`/docs/guide`、`/docs/core`、`/docs/gui` 和 `/docs/tutorial/*` 分别提供 Guide、PyFii core 文档、GUI 部署说明和专题教程，`/docs/choreo/*` 收录编舞与 Agent 资料，`/docs/research/*` 收录工程研究。
+- `/docs` 是统一文档中心；`/docs/index` 提供全部文档索引，`/docs/guide`、`/docs/core`、`/docs/gui` 和 `/docs/tutorial/*` 分别提供 Guide、PyFii core 文档、GUI 部署说明和专题教程，`/docs/choreo/*` 收录编舞作品和 AI Agent 资料（导航分别归类），`/docs/research/*` 收录工程研究，`/docs/maintenance/rendering-ci` 收录截图 CI 与渲染回归。
 - `/doc`、`/guide`、`/tutorial/*` 和旧 `#/...` 链接会转换到新的 `/docs/...` 层级，`/gui` 兼容跳转到 `/studio`。
 - 后端异步 MP4 导出，前端只负责创建任务、轮询状态、展示失败和下载。
 

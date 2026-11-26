@@ -30,6 +30,20 @@ class FrontendDocumentationTest(unittest.TestCase):
         repository_documents = set((REPO_ROOT / "doc").rglob("*.md"))
         self.assertEqual(set(frontend_documents()), repository_documents)
 
+    def test_document_index_covers_all_bundled_documents(self):
+        index = REPO_ROOT / "doc/INDEX.md"
+        links = re.findall(r"\]\(([^)#]+\.md)\)", index.read_text(encoding="utf-8"))
+        local = {(index.parent / link).resolve() for link in links if "://" not in link}
+        self.assertEqual(local, set(frontend_documents()))
+
+    def test_navigation_groups_cover_all_documents(self):
+        source = DOCUMENTATION_SOURCE.read_text(encoding="utf-8")
+        page = DOCUMENTATION_PAGE_SOURCE.read_text(encoding="utf-8")
+        assigned = set(re.findall(r'group: "([^"]+)",', source))
+        rendered = set(re.findall(r'item\.source\.group === "([^"]+)"', page))
+        self.assertEqual(assigned, rendered)
+        self.assertEqual(assigned, {"start", "tutorial", "api", "choreo", "ai", "maintenance"})
+
     def test_markdown_bodies_are_loaded_on_demand(self):
         source = DOCUMENTATION_SOURCE.read_text(encoding="utf-8")
         self.assertIn(

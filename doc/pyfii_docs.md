@@ -1,21 +1,34 @@
-# PyFii 文档与教程
+# PyFii 文档中心
 
-这里集中收录面向用户和部署者的 GUI 使用说明、PyFii core 接口和专题教程。按当前目标选择入口即可，不需要依次阅读全部内容。
+PyFii 提供 Python 无人机编队编程库、Fii 工程读写与模拟、Web 飞行工作台，以及编舞研究资料。按任务选择阅读路径，不必从头读完全部文档。
 
-## 使用 GUI
+## 入门与使用教程
 
-- [GUI 使用引导](pyfii_gui_guide.md)：准备工程、校验 warning、二维/三维预览和 MP4 导出。
-- [GUI 架构与部署](pyfii_gui.md)：前后端边界、配置、部署和测试方式。
+- [GUI 使用引导](pyfii_gui_guide.md)：不编程，直接上传工程、校验、预览、导出视频。
+- [安装](tutorial/install.md) → [编队飞行](tutorial/group_flight.md) → [脚本模式](tutorial/script_mode.md) → [灯光编写](tutorial/light.md)：从 Python 编排第一个项目。
+- [教程目录](tutorial/contents.md)：完整学习顺序。
 
-## 使用 PyFii 编程
+## API 参考
 
-- [PyFii core 文档](doc_zh_CN.md)：常用无人机动作、工程保存、模拟和视频生成接口。
-- [安装](tutorial/install.md)：Python 环境、PyFii 安装和 GUI 开发环境。
-- [编队飞行](tutorial/group_flight.md)：多机编队的基本写法和示例。
-- [脚本模式](tutorial/script_mode.md)：贴近原版动作组的脚本组织方式。
-- [灯光编写](tutorial/light.md)：单灯、全灯、闪烁和其他灯光动作。
-- [内部原理](tutorial/principle.md)：需要理解或维护项目内部实现时再阅读。
+- [Core API 参考](doc_zh_CN.md)：按无人机、动作、灯光、工程、轨迹和渲染查找接口。
 
-第一次使用网页工具建议先看“GUI 使用引导”；准备编写飞行动作时，再查阅 core 文档和对应专题教程。
+## 编舞设计与作品
 
-编舞方法、Agent 实验、真实飞行分析和集成调研也收录在文档中心，并按“编舞与 Agent”和“工程研究”分组。完整列表见 [全部文档索引](INDEX.md)；实验日期表示数据口径，不表示文档被隐藏或失去参考价值。
+- [大闹天宫（DNTG）](pyfii_script_patterns_human.md)：原始七机作品的数学轨迹、角色映射、灯光和逐段渲染截图。
+- [人类作品比较与蒸馏](human_choreography_distillation.md)：多作品对比、音乐动作关系及历史视觉和现代验证的差异。
+
+## AI 编舞与 Agent
+
+- [Agent 设计与经验](choreo_agent_lessons.md)：产品主线、生成和验证闭环。
+- [Agent 路线图](choreo_agent_roadmap.md)：带日期的计划与进度。
+- [AI 编舞探索](ai_choreography_exploration.md)：实验演进和方法来源。
+- [全部 AI 实验与案例](INDEX.md#ai)：产物分析、编码模式、Cannon 设计及复盘。
+
+## 开发维护与工程研究
+
+- [GUI 架构与部署](pyfii_gui.md)：前后端边界、部署与维护。
+- [内部原理](tutorial/principle.md)：Fii 格式、解析、轨迹与渲染。
+- [渲染回归与截图 CI](rendering_ci.md)：自动截图、基础测试及生成图发布。
+- [真实飞行轨迹分析](flight_log_trajectory_analysis.md) 与 [fwfii 集成调研](fwfii_merge_plan.md)：工程研究。
+
+完整目录、资料用途和维护规则见 [全部文档索引](INDEX.md)。
