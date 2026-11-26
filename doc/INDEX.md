@@ -24,7 +24,7 @@
 | 文档 | 用途 |
 |------|------|
 | [human_choreography_distillation.md](human_choreography_distillation.md) | 人类编舞作品蒸馏 |
-| [pyfii_script_patterns_human.md](pyfii_script_patterns_human.md) | 人类作品编码模式 |
+| [大闹天宫（DNTG）：人类作品编码模式](pyfii_script_patterns_human.md) | 原始七机编舞、数学轨迹、角色映射与渲染截图 |
 | [choreo_agent_lessons.md](choreo_agent_lessons.md) | 编舞 agent 开发经验 |
 | [choreo_agent_roadmap.md](choreo_agent_roadmap.md) | 编舞 agent 后续计划 |
 | [ai_choreography_exploration.md](ai_choreography_exploration.md) | AI 编舞路线、知识库和 Agent 演进 |

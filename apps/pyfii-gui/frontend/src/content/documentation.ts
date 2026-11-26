@@ -93,7 +93,7 @@ const documents: Record<DocumentId, DocumentSource> = {
     group: "choreo",
   },
   "human-script-patterns": {
-    title: { zh: "人类作品编码模式", en: "Human Script Patterns" },
+    title: { zh: "大闹天宫（DNTG）", en: "DNTG Choreography" },
     markdownPath: "../../../../../doc/pyfii_script_patterns_human.md",
     route: "/docs/choreo/human-script-patterns",
     group: "choreo",

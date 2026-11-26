@@ -138,6 +138,8 @@ conda run -n pyfii env PYTHONPATH=src python tools/analyze_music_motion_alignmen
 
 ### 大闹天宫
 
+完整代码讲解与逐段 OpenCV / 浏览器渲染对照见 [大闹天宫（DNTG）编码模式](pyfii_script_patterns_human.md)。
+
 - 来源：`output/大闹天宫/大闹天宫.fii`
 - 音乐：`output/大闹天宫/动作组/云宫迅音_缩混3.mp3`，约 122 BPM，onset 密度 1.14/s；音乐全长 174.5s，编舞仅用前 64s（音乐前 1/3），64s 后音乐仍有内容但编舞已结束。
 - 视频：`output/大闹天宫.mp4`（2D）、`output/大闹天宫_3D.mp4`、`output/大闹天宫_3D2.mp4`（3D）

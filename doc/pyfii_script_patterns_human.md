@@ -1,8 +1,10 @@
-# 人类设计的 pyfii 编码模式
+# 大闹天宫（DNTG）：人类设计的 PyFii 编码模式
 
 > 状态：研究资料，2026-07-14 复核。动作片段保留 `tests/dntg20220730_v3.py` 当时的写法，用于分析编舞结构；新项目的读取和渲染示例已改为 `DroneTrack` 入口。
 
-分析 `tests/dntg20220730_v3.py` 的代码组织方式。这是人工设计的优秀作品，展示了成熟编舞的 pyfii 编码方法。
+本文分析原始七机编舞 [tests/dntg20220730_v3.py](https://github.com/Kevin0412/pyfii/blob/pyfii-dev/tests/dntg20220730_v3.py) 的代码组织方式，并在对应设计方法下展示真实渲染结果。
+
+> 截图由 [GitHub Actions](https://github.com/Kevin0412/pyfii/actions/workflows/render-screenshots.yml) 自动生成，使用同一 Fii 工程、60 FPS 采样、默认加速度模型（`ignore_acc=False`），不含音乐。OpenCV 与浏览器采用不同绘制后端；现代模拟截图不等同于历史无加速度模式的原始观感，也不代表飞行安全验收。每次成功发布的源码版本可在 [render-gallery 分支](https://github.com/Kevin0412/pyfii/tree/render-gallery) 核对。
 
 ## 一、直接式 pyfii 调用模式
 
@@ -17,6 +19,18 @@ d1.Y = d1.y = 280
 d1.takeoff(1, 120)       # 起飞到 120cm
 d1.intime(4)             # 4s 开始主段
 ```
+
+#### 6s · 六边形扩张与灯光
+
+| OpenCV 2D | 浏览器 Canvas 2D |
+| --- | --- |
+| ![6s OpenCV 2D](https://raw.githubusercontent.com/Kevin0412/pyfii/render-gallery/dntg/006000ms-opencv-2d.png) | ![6s Canvas 2D](https://raw.githubusercontent.com/Kevin0412/pyfii/render-gallery/dntg/006000ms-browser-2d.png) |
+
+| OpenCV 3D | 浏览器 Three.js 3D |
+| --- | --- |
+| ![6s OpenCV 3D](https://raw.githubusercontent.com/Kevin0412/pyfii/render-gallery/dntg/006000ms-opencv-3d.png) | ![6s Three.js 3D](https://raw.githubusercontent.com/Kevin0412/pyfii/render-gallery/dntg/006000ms-browser-3d.png) |
+
+完整工作台：[2D](https://raw.githubusercontent.com/Kevin0412/pyfii/render-gallery/dntg/006000ms-browser-2d-studio.png) · [3D](https://raw.githubusercontent.com/Kevin0412/pyfii/render-gallery/dntg/006000ms-browser-3d-studio.png)
 
 ## 二、数学轨迹表达
 
@@ -53,6 +67,18 @@ for a in range(24):
 
 预计算轨迹点表，按索引分配。不同频率正弦波叠加形成复杂可控的空间曲线。
 
+#### 13s · 利萨如轨迹
+
+| OpenCV 2D | 浏览器 Canvas 2D |
+| --- | --- |
+| ![13s OpenCV 2D](https://raw.githubusercontent.com/Kevin0412/pyfii/render-gallery/dntg/013000ms-opencv-2d.png) | ![13s Canvas 2D](https://raw.githubusercontent.com/Kevin0412/pyfii/render-gallery/dntg/013000ms-browser-2d.png) |
+
+| OpenCV 3D | 浏览器 Three.js 3D |
+| --- | --- |
+| ![13s OpenCV 3D](https://raw.githubusercontent.com/Kevin0412/pyfii/render-gallery/dntg/013000ms-opencv-3d.png) | ![13s Three.js 3D](https://raw.githubusercontent.com/Kevin0412/pyfii/render-gallery/dntg/013000ms-browser-3d.png) |
+
+完整工作台：[2D](https://raw.githubusercontent.com/Kevin0412/pyfii/render-gallery/dntg/013000ms-browser-2d-studio.png) · [3D](https://raw.githubusercontent.com/Kevin0412/pyfii/render-gallery/dntg/013000ms-browser-3d-studio.png)
+
 ## 三、角色映射与分组
 
 每段用字典重新分配角色，同一架机在不同段承担不同职责。
@@ -73,6 +99,18 @@ for d, n in zip(ds, range(7)):
 ```
 
 角色映射避免"固定中心/固定外圈"退化。
+
+#### 49s · 三维旋转中的角色映射与高度相位
+
+| OpenCV 2D | 浏览器 Canvas 2D |
+| --- | --- |
+| ![49s OpenCV 2D](https://raw.githubusercontent.com/Kevin0412/pyfii/render-gallery/dntg/049000ms-opencv-2d.png) | ![49s Canvas 2D](https://raw.githubusercontent.com/Kevin0412/pyfii/render-gallery/dntg/049000ms-browser-2d.png) |
+
+| OpenCV 3D | 浏览器 Three.js 3D |
+| --- | --- |
+| ![49s OpenCV 3D](https://raw.githubusercontent.com/Kevin0412/pyfii/render-gallery/dntg/049000ms-opencv-3d.png) | ![49s Three.js 3D](https://raw.githubusercontent.com/Kevin0412/pyfii/render-gallery/dntg/049000ms-browser-3d.png) |
+
+完整工作台：[2D](https://raw.githubusercontent.com/Kevin0412/pyfii/render-gallery/dntg/049000ms-browser-2d-studio.png) · [3D](https://raw.githubusercontent.com/Kevin0412/pyfii/render-gallery/dntg/049000ms-browser-3d-studio.png)
 
 ## 四、分组差异与错峰
 
@@ -103,6 +141,30 @@ else:                                         # 其余机
 
 先动/后动/长路径/短路径 = 错峰编排。
 
+#### 25s · 斜对称
+
+| OpenCV 2D | 浏览器 Canvas 2D |
+| --- | --- |
+| ![25s OpenCV 2D](https://raw.githubusercontent.com/Kevin0412/pyfii/render-gallery/dntg/025000ms-opencv-2d.png) | ![25s Canvas 2D](https://raw.githubusercontent.com/Kevin0412/pyfii/render-gallery/dntg/025000ms-browser-2d.png) |
+
+| OpenCV 3D | 浏览器 Three.js 3D |
+| --- | --- |
+| ![25s OpenCV 3D](https://raw.githubusercontent.com/Kevin0412/pyfii/render-gallery/dntg/025000ms-opencv-3d.png) | ![25s Three.js 3D](https://raw.githubusercontent.com/Kevin0412/pyfii/render-gallery/dntg/025000ms-browser-3d.png) |
+
+完整工作台：[2D](https://raw.githubusercontent.com/Kevin0412/pyfii/render-gallery/dntg/025000ms-browser-2d-studio.png) · [3D](https://raw.githubusercontent.com/Kevin0412/pyfii/render-gallery/dntg/025000ms-browser-3d-studio.png)
+
+#### 33s · 平移旋转
+
+| OpenCV 2D | 浏览器 Canvas 2D |
+| --- | --- |
+| ![33s OpenCV 2D](https://raw.githubusercontent.com/Kevin0412/pyfii/render-gallery/dntg/033000ms-opencv-2d.png) | ![33s Canvas 2D](https://raw.githubusercontent.com/Kevin0412/pyfii/render-gallery/dntg/033000ms-browser-2d.png) |
+
+| OpenCV 3D | 浏览器 Three.js 3D |
+| --- | --- |
+| ![33s OpenCV 3D](https://raw.githubusercontent.com/Kevin0412/pyfii/render-gallery/dntg/033000ms-opencv-3d.png) | ![33s Three.js 3D](https://raw.githubusercontent.com/Kevin0412/pyfii/render-gallery/dntg/033000ms-browser-3d.png) |
+
+完整工作台：[2D](https://raw.githubusercontent.com/Kevin0412/pyfii/render-gallery/dntg/033000ms-browser-2d-studio.png) · [3D](https://raw.githubusercontent.com/Kevin0412/pyfii/render-gallery/dntg/033000ms-browser-3d-studio.png)
+
 ## 五、数学驱动的灯光
 
 用三角函数生成连续变化的颜色序列：
@@ -119,7 +181,35 @@ for a in range(20):
 
 RGB 三通道用不同频率正弦波驱动，20 步 100ms = 2s 颜色周期。不是静态颜色序列而是连续函数。
 
-## 六、验证验收
+## 六、最终图案与收束
+
+原脚本在 54s 和 59s 切换到两个符号组，通过 `n2sg` 将机号映射到目标点，再用 `move2autoz()` 将平面图案映射到高度。下面分别取 56s 和 61s 的现代模拟结果。
+
+#### 56s · 镰刀
+
+| OpenCV 2D | 浏览器 Canvas 2D |
+| --- | --- |
+| ![56s OpenCV 2D](https://raw.githubusercontent.com/Kevin0412/pyfii/render-gallery/dntg/056000ms-opencv-2d.png) | ![56s Canvas 2D](https://raw.githubusercontent.com/Kevin0412/pyfii/render-gallery/dntg/056000ms-browser-2d.png) |
+
+| OpenCV 3D | 浏览器 Three.js 3D |
+| --- | --- |
+| ![56s OpenCV 3D](https://raw.githubusercontent.com/Kevin0412/pyfii/render-gallery/dntg/056000ms-opencv-3d.png) | ![56s Three.js 3D](https://raw.githubusercontent.com/Kevin0412/pyfii/render-gallery/dntg/056000ms-browser-3d.png) |
+
+完整工作台：[2D](https://raw.githubusercontent.com/Kevin0412/pyfii/render-gallery/dntg/056000ms-browser-2d-studio.png) · [3D](https://raw.githubusercontent.com/Kevin0412/pyfii/render-gallery/dntg/056000ms-browser-3d-studio.png)
+
+#### 61s · 锤子
+
+| OpenCV 2D | 浏览器 Canvas 2D |
+| --- | --- |
+| ![61s OpenCV 2D](https://raw.githubusercontent.com/Kevin0412/pyfii/render-gallery/dntg/061000ms-opencv-2d.png) | ![61s Canvas 2D](https://raw.githubusercontent.com/Kevin0412/pyfii/render-gallery/dntg/061000ms-browser-2d.png) |
+
+| OpenCV 3D | 浏览器 Three.js 3D |
+| --- | --- |
+| ![61s OpenCV 3D](https://raw.githubusercontent.com/Kevin0412/pyfii/render-gallery/dntg/061000ms-opencv-3d.png) | ![61s Three.js 3D](https://raw.githubusercontent.com/Kevin0412/pyfii/render-gallery/dntg/061000ms-browser-3d.png) |
+
+完整工作台：[2D](https://raw.githubusercontent.com/Kevin0412/pyfii/render-gallery/dntg/061000ms-browser-2d-studio.png) · [3D](https://raw.githubusercontent.com/Kevin0412/pyfii/render-gallery/dntg/061000ms-browser-3d-studio.png)
+
+## 七、验证验收
 
 ```python
 for d in ds:
@@ -134,7 +224,7 @@ pf.show(track, save='大闹天宫', FPS=25)
 
 当前闭环是 `Fii.save()` → `from_fii()` → `show(track)`。原脚本中的 `show(data, t0, music, ...)` 多参数调用仍保留兼容，但新封装和 GUI 应传 `DroneTrack`。
 
-## 七、编码原则
+## 八、编码原则
 
 1. **数学优于枚举**：用函数表达轨迹，不逐点写坐标
 2. **角色可变化**：每段重新分配角色映射

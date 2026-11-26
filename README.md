@@ -48,7 +48,7 @@ GUI 的本地开发、生产依赖和部署配置见 [apps/pyfii-gui/README.md](
 
 GitHub Actions 自动生成大闹天宫七机编队和基础四机工程的 OpenCV 2D/3D、浏览器 Canvas/Three.js 及完整工作台截图。
 
-**[查看完整渲染截图对比（48 张）](docs/render-gallery.md)** · [截图 CI](https://github.com/Kevin0412/pyfii/actions/workflows/render-screenshots.yml) · [最近发布的源码版本](https://github.com/Kevin0412/pyfii/tree/render-gallery)
+**[大闹天宫编舞讲解与渲染截图](doc/pyfii_script_patterns_human.md)** · [四机渲染测试](docs/render-gallery.md) · [截图 CI](https://github.com/Kevin0412/pyfii/actions/workflows/render-screenshots.yml) · [最近发布的源码版本](https://github.com/Kevin0412/pyfii/tree/render-gallery)
 
 ## 主要能力
 
