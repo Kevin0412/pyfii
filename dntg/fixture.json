@@ -1,5 +1,6 @@
 {
   "sample": "dntg",
+  "project_name": "dntg20220730",
   "fps": 60,
   "drone_count": 7,
   "frames": [
@@ -31,5 +32,6 @@
       "time_ms": 61000,
       "core_sample_index": 3660
     }
-  ]
+  ],
+  "readme_time_ms": 55220
 }
