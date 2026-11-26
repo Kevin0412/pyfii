@@ -97,3 +97,61 @@ jobs:
             render-artifacts/*.log
           if-no-files-found: error
           retention-days: 14
+
+  publish-gallery:
+    name: Publish screenshot gallery
+    needs: screenshots
+    if: github.ref == 'refs/heads/pyfii-dev' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          pattern: render-screenshots-*
+          path: ${{ runner.temp }}/gallery-artifacts
+      - name: Publish PNGs to generated branch
+        env:
+          ARTIFACT_DIR: ${{ runner.temp }}/gallery-artifacts
+          SOURCE_SHA: ${{ github.sha }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          for sample in dntg smoke; do
+            source_dir="$ARTIFACT_DIR/render-screenshots-$sample"
+            test -f "$source_dir/fixture.json"
+            expected=6
+            if [ "$sample" = dntg ]; then expected=42; fi
+            actual=$(find "$source_dir" -maxdepth 1 -name '*.png' -type f | wc -l)
+            test "$actual" -eq "$expected"
+          done
+          branch=render-gallery
+          if git ls-remote --exit-code --heads origin "refs/heads/$branch" >/dev/null; then
+            git fetch --depth=1 origin "refs/heads/$branch:refs/remotes/origin/$branch"
+            git switch -c "$branch" --track "origin/$branch"
+          else
+            git switch --orphan "$branch"
+          fi
+          git rm -r --ignore-unmatch -- dntg smoke
+          for sample in dntg smoke; do
+            mkdir -p "$sample"
+            source_dir="$ARTIFACT_DIR/render-screenshots-$sample"
+            cp "$source_dir"/*.png "$source_dir/fixture.json" "$sample/"
+          done
+          {
+            echo '# PyFii generated rendering screenshots'
+            echo
+            echo 'This branch is maintained by the Render screenshots workflow.'
+            echo
+            echo "Source commit: [$SOURCE_SHA](https://github.com/$GITHUB_REPOSITORY/commit/$SOURCE_SHA)"
+            echo
+            echo "Workflow run: $RUN_URL"
+            echo
+            echo "[Visual gallery](https://github.com/$GITHUB_REPOSITORY/blob/pyfii-dev/docs/render-gallery.md)"
+          } > README.md
+          git add README.md dntg smoke
+          if git diff --cached --quiet; then exit 0; fi
+          git -c user.name='github-actions[bot]' -c user.email='41898282+github-actions[bot]@users.noreply.github.com' commit -m "docs: publish renders for $SOURCE_SHA"
+          git push origin "HEAD:refs/heads/$branch"

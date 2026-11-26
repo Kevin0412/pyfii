@@ -13,7 +13,7 @@ Download the `render-screenshots-smoke` and `render-screenshots-dntg` artifacts 
 - `browser-2d.png`, `browser-3d.png`: browser canvas screenshots.
 - `browser-2d-studio.png`, `browser-3d-studio.png`: full studio screenshots.
 
-Each artifact also includes `fixture.zip`, `fixture.json` and service logs. Both renderers use the same project at 60 FPS, with the default judge camera. Chromium uses software WebGL and a fixed desktop viewport. Missing/blank screenshots fail the job; pixel equality is not required. Artifacts are retained for 14 days, not committed to Git.
+Each artifact also includes `fixture.zip`, `fixture.json` and service logs. Both renderers use the same project at 60 FPS, with the default judge camera. Chromium uses software WebGL and a fixed desktop viewport. Missing/blank screenshots fail the job; pixel equality is not required. Artifacts are retained for 14 days. After both jobs pass on the default branch, a separate publish job updates the generated `render-gallery` branch with PNGs and sampling metadata only. The source branch does not accumulate generated PNGs; the gallery branch retains normal Git history. Pull requests and non-default branches never publish. See the [visual gallery](render-gallery.md).
 
 Run locally with core, GUI backend, frontend dependencies and Playwright Chromium installed and the GUI running on port 5173:
 

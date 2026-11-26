@@ -10,6 +10,7 @@ PyFii 是一个用 Python 编排、生成和检查 Fii 无人机编队工程的�
 ## 目录
 
 - [在线使用](#在线使用)
+- [渲染效果对比](#渲染效果对比)
 - [主要能力](#主要能力)
 - [快速开始](#快速开始)
   - [安装 core](#安装-core)
@@ -42,6 +43,12 @@ PyFii 是一个用 Python 编排、生成和检查 Fii 无人机编队工程的�
 ![PyFii GUI 截图](docs/images/pyfii-gui-screenshot.png)
 
 GUI 的本地开发、生产依赖和部署配置见 [apps/pyfii-gui/README.md](apps/pyfii-gui/README.md)。
+
+## 渲染效果对比
+
+GitHub Actions 自动生成大闹天宫七机编队和基础四机工程的 OpenCV 2D/3D、浏览器 Canvas/Three.js 及完整工作台截图。
+
+**[查看完整渲染截图对比（48 张）](docs/render-gallery.md)** · [截图 CI](https://github.com/Kevin0412/pyfii/actions/workflows/render-screenshots.yml) · [最近发布的源码版本](https://github.com/Kevin0412/pyfii/tree/render-gallery)
 
 ## 主要能力
 
