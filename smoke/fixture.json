@@ -1,0 +1,11 @@
+{
+  "sample": "smoke",
+  "fps": 60,
+  "drone_count": 4,
+  "frames": [
+    {
+      "time_ms": 5000,
+      "core_sample_index": 300
+    }
+  ]
+}

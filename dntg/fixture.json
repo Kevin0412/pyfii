@@ -1,0 +1,35 @@
+{
+  "sample": "dntg",
+  "fps": 60,
+  "drone_count": 7,
+  "frames": [
+    {
+      "time_ms": 6000,
+      "core_sample_index": 360
+    },
+    {
+      "time_ms": 13000,
+      "core_sample_index": 780
+    },
+    {
+      "time_ms": 25000,
+      "core_sample_index": 1500
+    },
+    {
+      "time_ms": 33000,
+      "core_sample_index": 1980
+    },
+    {
+      "time_ms": 49000,
+      "core_sample_index": 2940
+    },
+    {
+      "time_ms": 56000,
+      "core_sample_index": 3360
+    },
+    {
+      "time_ms": 61000,
+      "core_sample_index": 3660
+    }
+  ]
+}
