@@ -7,6 +7,8 @@ on:
       - "src/pyfii/**"
       - "apps/pyfii-gui/**"
       - "pyproject.toml"
+      - "tests/dntg20220730_v3.py"
+      - "tests/function.py"
       - ".github/scripts/render-screenshots.py"
       - ".github/workflows/render-screenshots.yml"
   pull_request:
@@ -14,6 +16,8 @@ on:
       - "src/pyfii/**"
       - "apps/pyfii-gui/**"
       - "pyproject.toml"
+      - "tests/dntg20220730_v3.py"
+      - "tests/function.py"
       - ".github/scripts/render-screenshots.py"
       - ".github/workflows/render-screenshots.yml"
 
@@ -26,6 +30,11 @@ concurrency:
 
 jobs:
   screenshots:
+    name: Screenshots (${{ matrix.sample }})
+    strategy:
+      fail-fast: false
+      matrix:
+        sample: [smoke, dntg]
     runs-on: ubuntu-latest
     timeout-minutes: 20
     env:
@@ -51,7 +60,7 @@ jobs:
           sudo apt-get install -y libgl1 fonts-noto-cjk
           python -m pip install -e . -e apps/pyfii-gui/backend playwright
       - name: Generate OpenCV screenshots and shared project
-        run: python .github/scripts/render-screenshots.py core
+        run: python .github/scripts/render-screenshots.py core --sample ${{ matrix.sample }}
       - name: Install frontend dependencies
         working-directory: apps/pyfii-gui/frontend
         run: npm ci
@@ -80,7 +89,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
-          name: render-screenshots
+          name: render-screenshots-${{ matrix.sample }}
           path: |
             render-artifacts/*.png
             render-artifacts/fixture.zip
