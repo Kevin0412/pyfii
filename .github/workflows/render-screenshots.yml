@@ -33,7 +33,6 @@ jobs:
       SDL_AUDIODRIVER: dummy
       PYGAME_HIDE_SUPPORT_PROMPT: "1"
       PYFII_GUI_TRAJECTORY_WORKERS: "1"
-      PYFII_GUI_RUNTIME_DIR: ${{ runner.temp }}/pyfii-runtime
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
@@ -61,6 +60,7 @@ jobs:
       - name: Capture browser screenshots
         env:
           VITE_API_PROXY_TARGET: http://127.0.0.1:8000
+          PYFII_GUI_RUNTIME_DIR: ${{ runner.temp }}/pyfii-runtime
         run: |
           mkdir -p render-artifacts
           python -m uvicorn pyfii_gui_api.main:app --host 127.0.0.1 --port 8000 > render-artifacts/backend.log 2>&1 &
@@ -78,7 +78,7 @@ jobs:
           python .github/scripts/render-screenshots.py browser
       - name: Upload screenshots and diagnostics
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: render-screenshots
           path: |
