@@ -40,7 +40,9 @@ PyFii 是一个用 Python 编排、生成和检查 Fii 无人机编队工程的�
 - 区分会阻止操作的 error 与不阻止预览的 warning；未拼接积木等 core warning 会直接展示。
 - 在浏览器中完成交互预览，由后端复用 core 渲染器导出 MP4；工程包含音乐时使用 FFmpeg 合并音频。
 
-![PyFii GUI 截图](docs/images/pyfii-gui-screenshot.png)
+![PyFii GUI 截图](https://raw.githubusercontent.com/Kevin0412/pyfii/render-gallery/dntg/readme-studio.png)
+
+截图由 GitHub Actions 自动生成，使用大闹天宫原始七机编舞。
 
 GUI 的本地开发、生产依赖和部署配置见 [apps/pyfii-gui/README.md](apps/pyfii-gui/README.md)。
 

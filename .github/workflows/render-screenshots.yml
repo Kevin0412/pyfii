@@ -123,7 +123,10 @@ jobs:
             source_dir="$ARTIFACT_DIR/render-screenshots-$sample"
             test -f "$source_dir/fixture.json"
             expected=6
-            if [ "$sample" = dntg ]; then expected=42; fi
+            if [ "$sample" = dntg ]; then
+              expected=43
+              test -f "$source_dir/readme-studio.png"
+            fi
             actual=$(find "$source_dir" -maxdepth 1 -name '*.png' -type f | wc -l)
             test "$actual" -eq "$expected"
           done

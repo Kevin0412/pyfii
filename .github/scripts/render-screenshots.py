@@ -12,6 +12,7 @@ import cv2
 import numpy as np
 
 FPS = 60
+README_TIME_MS = 55220
 SAMPLE_TIMES = {
     "smoke": (5000,),
     "dntg": (6000, 13000, 25000, 33000, 49000, 56000, 61000),
@@ -30,7 +31,7 @@ def core(output, sample):
     from pyfii.fiiRead import FiiRender2D, FiiRender3D, from_fii
 
     output.mkdir(parents=True, exist_ok=True)
-    project = output / "fixture"
+    project = output / ("dntg20220730" if sample == "dntg" else "fixture")
     if sample == "dntg":
         # Make the original script's sibling function.py importable.
         # Its __main__ block is deliberately skipped: no audio or GUI window.
@@ -81,7 +82,9 @@ def core(output, sample):
             check_image(path)
         frames.append({"time_ms": time_ms, "core_sample_index": index})
     (output / "fixture.json").write_text(json.dumps({
-        "sample": sample, "fps": FPS, "drone_count": len(drones), "frames": frames,
+        "sample": sample, "project_name": project.name, "fps": FPS,
+        "drone_count": len(drones), "frames": frames,
+        "readme_time_ms": README_TIME_MS if sample == "dntg" else None,
     }, indent=2) + "\n", encoding="utf-8")
 
 
@@ -100,10 +103,16 @@ def browser(output, url):
             )
             page.add_init_script("""
                 localStorage.setItem('pyfii-gui-guide-seen-v2', '1');
+                localStorage.setItem('pyfii-gui-theme', 'dark');
                 localStorage.setItem('pyfii-gui-locale-v2', 'zh');
             """)
             page.goto(f"{url.rstrip('/')}/studio", wait_until="networkidle")
-            page.locator('input[type="file"]').set_input_files(str(output / "fixture.zip"))
+            expect(page.locator("body")).to_have_attribute("data-theme", "dark")
+            page.locator('input[type="file"]').set_input_files({
+                "name": fixture["project_name"] + ".zip",
+                "mimeType": "application/zip",
+                "buffer": (output / "fixture.zip").read_bytes(),
+            })
             page.locator('form[data-guide="upload"] button[type="submit"]').click()
             expect(page.locator('[data-guide="export"]')).to_be_enabled(timeout=120_000)
             expect(page.locator(".loading-progress")).to_have_count(0, timeout=120_000)
@@ -111,8 +120,7 @@ def browser(output, url):
             timeline = page.locator('[data-guide="preview"] input[type="range"]')
             expect(timeline).to_be_enabled()
             mode = page.locator('[data-guide="render"] select')
-            for frame in fixture["frames"]:
-                time_ms = frame["time_ms"]
+            def seek(time_ms):
                 if float(timeline.get_attribute("max")) < time_ms:
                     raise RuntimeError("Browser fixture duration is too short")
                 timeline.evaluate("""(input, value) => {
@@ -121,6 +129,10 @@ def browser(output, url):
                     input.dispatchEvent(new Event('change', {bubbles: true}));
                 }""", time_ms)
                 expect(timeline).to_have_value(str(time_ms))
+
+            for frame in fixture["frames"]:
+                time_ms = frame["time_ms"]
+                seek(time_ms)
                 for name, value, label in [
                     ("browser-2d", "classic2d", "Pyfii 2D simulation canvas"),
                     ("browser-3d", "three3d", "Pyfii 3D simulation canvas"),
@@ -137,6 +149,19 @@ def browser(output, url):
                     page.screenshot(path=str(output / f"{prefix}-studio.png"), animations="disabled")
                     check_image(output / f"{prefix}.png")
                     check_image(output / f"{prefix}-studio.png")
+
+            # Preserve the original README's single full-studio 3D view.
+            if fixture["readme_time_ms"] is not None:
+                mode.select_option("three3d")
+                seek(fixture["readme_time_ms"])
+                canvas = page.locator('canvas.active[aria-label="Pyfii 3D simulation canvas"]')
+                expect(canvas).to_be_visible()
+                expect(page.locator(".render-loading")).to_have_count(0, timeout=60_000)
+                expect(page.locator(".hud-drone")).to_have_count(fixture["drone_count"])
+                page.evaluate("() => new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)))")
+                path = output / "readme-studio.png"
+                page.screenshot(path=str(path), animations="disabled")
+                check_image(path)
         finally:
             chromium.close()
 

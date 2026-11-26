@@ -11,7 +11,7 @@ DNTG 复用原始编舞脚本，跳过交互播放入口和音乐。两套渲染
 
 ## 产物与发布
 
-每个时刻生成 OpenCV 2D/3D、浏览器 Canvas 2D/Three.js 3D、完整 2D/3D 工作台共六张 PNG。文件名以毫秒时间戳为前缀。Actions 的 `render-screenshots-smoke` 和 `render-screenshots-dntg` Artifact 另含工程 ZIP、采样元数据与服务日志，保留 14 天。
+每个时刻生成 OpenCV 2D/3D、浏览器 Canvas 2D/Three.js 3D、完整 2D/3D 工作台共六张 PNG。文件名以毫秒时间戳为前缀。DNTG 另在 55.22s 生成 `readme-studio.png`，沿用旧 README 的深色完整 3D 工作台、透视相机（水平 90°、俯仰 3°、观察距离 600、投影距离 450）。README 直接引用生成分支中的这张图，成功发布后自动更新；原始音乐未纳入仓库，因此截图如实显示无音乐。Actions 的 `render-screenshots-smoke` 和 `render-screenshots-dntg` Artifact 另含工程 ZIP、采样元数据与服务日志，保留 14 天。
 
 缺失或空白截图会导致任务失败；不同绘制后端不要求逐像素一致。仅默认分支的两个任务全部通过时，发布任务才更新 [render-gallery 分支](https://github.com/Kevin0412/pyfii/tree/render-gallery) 中的 PNG 与元数据；PR 与其他分支不发布。源码分支不积累生成图，生成分支保留正常 Git 历史。
 
