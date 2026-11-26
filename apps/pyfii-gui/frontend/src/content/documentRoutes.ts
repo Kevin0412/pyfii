@@ -20,7 +20,8 @@ export type DocumentId =
   | "ai-generated-distillation"
   | "cannon-design-lessons"
   | "deepseek-cannon-reflection"
-  | "ai-script-patterns";
+  | "ai-script-patterns"
+  | "rendering-ci";
 
 export type AppRoute =
   | { page: "home" }
@@ -50,6 +51,7 @@ const routeDocuments: Record<string, DocumentId> = {
   "/docs/choreo/ai-script-patterns": "ai-script-patterns",
   "/docs/research/flight-log-analysis": "flight-log-analysis",
   "/docs/research/fwfii-merge-plan": "fwfii-merge-plan",
+  "/docs/maintenance/rendering-ci": "rendering-ci",
 };
 
 const pathAliases: Record<string, string> = {

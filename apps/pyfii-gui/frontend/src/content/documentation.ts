@@ -9,7 +9,7 @@ interface DocumentSource {
   title: Record<LocaleMode, string>;
   markdownPath: string;
   route: string;
-  group: "start" | "docs" | "tutorial" | "choreo" | "research";
+  group: "start" | "tutorial" | "api" | "choreo" | "ai" | "maintenance";
 }
 
 const markdownFiles = import.meta.glob("../../../../../doc/**/*.md", {
@@ -32,24 +32,6 @@ const documents: Record<DocumentId, DocumentSource> = {
     route: "/docs/index",
     group: "start",
   },
-  guide: {
-    title: { zh: "使用引导", en: "Guide" },
-    markdownPath: "../../../../../doc/pyfii_gui_guide.md",
-    route: "/docs/guide",
-    group: "start",
-  },
-  core: {
-    title: { zh: "PyFii 文档", en: "PyFii Docs" },
-    markdownPath: "../../../../../doc/doc_zh_CN.md",
-    route: "/docs/core",
-    group: "docs",
-  },
-  gui: {
-    title: { zh: "GUI 架构与部署", en: "GUI Architecture" },
-    markdownPath: "../../../../../doc/pyfii_gui.md",
-    route: "/docs/gui",
-    group: "docs",
-  },
   tutorial: {
     title: { zh: "教程目录", en: "Tutorials" },
     markdownPath: "../../../../../doc/tutorial/contents.md",
@@ -60,6 +42,12 @@ const documents: Record<DocumentId, DocumentSource> = {
     title: { zh: "安装", en: "Install" },
     markdownPath: "../../../../../doc/tutorial/install.md",
     route: "/docs/tutorial/install",
+    group: "tutorial",
+  },
+  guide: {
+    title: { zh: "使用引导", en: "Guide" },
+    markdownPath: "../../../../../doc/pyfii_gui_guide.md",
+    route: "/docs/guide",
     group: "tutorial",
   },
   "group-flight": {
@@ -74,23 +62,17 @@ const documents: Record<DocumentId, DocumentSource> = {
     route: "/docs/tutorial/script-mode",
     group: "tutorial",
   },
-  principle: {
-    title: { zh: "内部原理", en: "Internals" },
-    markdownPath: "../../../../../doc/tutorial/principle.md",
-    route: "/docs/tutorial/principle",
-    group: "tutorial",
-  },
   light: {
     title: { zh: "灯光编写", en: "Lighting" },
     markdownPath: "../../../../../doc/tutorial/light.md",
     route: "/docs/tutorial/light",
     group: "tutorial",
   },
-  "human-choreography": {
-    title: { zh: "人类编舞作品蒸馏", en: "Human Choreography" },
-    markdownPath: "../../../../../doc/human_choreography_distillation.md",
-    route: "/docs/choreo/human-choreography",
-    group: "choreo",
+  core: {
+    title: { zh: "Core API 参考", en: "Core API Reference" },
+    markdownPath: "../../../../../doc/doc_zh_CN.md",
+    route: "/docs/core",
+    group: "api",
   },
   "human-script-patterns": {
     title: { zh: "大闹天宫（DNTG）", en: "DNTG Choreography" },
@@ -98,64 +80,89 @@ const documents: Record<DocumentId, DocumentSource> = {
     route: "/docs/choreo/human-script-patterns",
     group: "choreo",
   },
+  "human-choreography": {
+    title: { zh: "人类作品比较与蒸馏", en: "Human Choreography Analysis" },
+    markdownPath: "../../../../../doc/human_choreography_distillation.md",
+    route: "/docs/choreo/human-choreography",
+    group: "choreo",
+  },
   "choreo-agent-lessons": {
     title: { zh: "编舞 Agent 踩坑记录", en: "Choreo Agent Lessons" },
     markdownPath: "../../../../../doc/choreo_agent_lessons.md",
     route: "/docs/choreo/agent-lessons",
-    group: "choreo",
+    group: "ai",
   },
   "choreo-agent-roadmap": {
     title: { zh: "编舞 Agent 后续计划", en: "Choreo Agent Roadmap" },
     markdownPath: "../../../../../doc/choreo_agent_roadmap.md",
     route: "/docs/choreo/agent-roadmap",
-    group: "choreo",
-  },
-  "flight-log-analysis": {
-    title: { zh: "真实飞行轨迹分析", en: "Flight Log Analysis" },
-    markdownPath: "../../../../../doc/flight_log_trajectory_analysis.md",
-    route: "/docs/research/flight-log-analysis",
-    group: "research",
-  },
-  "fwfii-merge-plan": {
-    title: { zh: "fwfii 合并调研", en: "fwfii Merge Plan" },
-    markdownPath: "../../../../../doc/fwfii_merge_plan.md",
-    route: "/docs/research/fwfii-merge-plan",
-    group: "research",
+    group: "ai",
   },
   "ai-choreography": {
     title: { zh: "AI 编舞探索", en: "AI Choreography" },
     markdownPath: "../../../../../doc/ai_choreography_exploration.md",
     route: "/docs/choreo/ai-exploration",
-    group: "choreo",
-  },
-  "ai-generated-distillation": {
-    title: { zh: "AI 生成产物蒸馏", en: "AI Output Distillation" },
-    markdownPath: "../../../../../doc/ai_generated_distillation.md",
-    route: "/docs/choreo/ai-output-distillation",
-    group: "choreo",
-  },
-  "cannon-design-lessons": {
-    title: { zh: "Cannon 设计经验", en: "Cannon Design Lessons" },
-    markdownPath: "../../../../../doc/cannon_design_lessons.md",
-    route: "/docs/choreo/cannon-design-lessons",
-    group: "choreo",
-  },
-  "deepseek-cannon-reflection": {
-    title: { zh: "DeepSeek Cannon 反思", en: "DeepSeek Cannon Reflection" },
-    markdownPath: "../../../../../doc/deepseek_cannon_reflection.md",
-    route: "/docs/choreo/deepseek-cannon-reflection",
-    group: "choreo",
+    group: "ai",
   },
   "ai-script-patterns": {
     title: { zh: "AI 编码模式", en: "AI Script Patterns" },
     markdownPath: "../../../../../doc/pyfii_script_patterns_ai.md",
     route: "/docs/choreo/ai-script-patterns",
-    group: "choreo",
+    group: "ai",
+  },
+  "ai-generated-distillation": {
+    title: { zh: "AI 生成产物蒸馏", en: "AI Output Distillation" },
+    markdownPath: "../../../../../doc/ai_generated_distillation.md",
+    route: "/docs/choreo/ai-output-distillation",
+    group: "ai",
+  },
+  "cannon-design-lessons": {
+    title: { zh: "Cannon 设计经验", en: "Cannon Design Lessons" },
+    markdownPath: "../../../../../doc/cannon_design_lessons.md",
+    route: "/docs/choreo/cannon-design-lessons",
+    group: "ai",
+  },
+  "deepseek-cannon-reflection": {
+    title: { zh: "DeepSeek Cannon 反思", en: "DeepSeek Cannon Reflection" },
+    markdownPath: "../../../../../doc/deepseek_cannon_reflection.md",
+    route: "/docs/choreo/deepseek-cannon-reflection",
+    group: "ai",
+  },
+  gui: {
+    title: { zh: "GUI 架构与部署", en: "GUI Architecture" },
+    markdownPath: "../../../../../doc/pyfii_gui.md",
+    route: "/docs/gui",
+    group: "maintenance",
+  },
+  principle: {
+    title: { zh: "内部原理", en: "Internals" },
+    markdownPath: "../../../../../doc/tutorial/principle.md",
+    route: "/docs/tutorial/principle",
+    group: "maintenance",
+  },
+  "rendering-ci": {
+    title: { zh: "渲染回归与截图 CI", en: "Rendering Regression & CI" },
+    markdownPath: "../../../../../doc/rendering_ci.md",
+    route: "/docs/maintenance/rendering-ci",
+    group: "maintenance",
+  },
+  "flight-log-analysis": {
+    title: { zh: "真实飞行轨迹分析", en: "Flight Log Analysis" },
+    markdownPath: "../../../../../doc/flight_log_trajectory_analysis.md",
+    route: "/docs/research/flight-log-analysis",
+    group: "maintenance",
+  },
+  "fwfii-merge-plan": {
+    title: { zh: "fwfii 合并调研", en: "fwfii Merge Plan" },
+    markdownPath: "../../../../../doc/fwfii_merge_plan.md",
+    route: "/docs/research/fwfii-merge-plan",
+    group: "maintenance",
   },
 };
 
 const markdownRoutes: Record<string, string> = {
   "INDEX.md": "/docs/index",
+  "rendering_ci.md": "/docs/maintenance/rendering-ci",
   "ai_choreography_exploration.md": "/docs/choreo/ai-exploration",
   "ai_generated_distillation.md": "/docs/choreo/ai-output-distillation",
   "cannon_design_lessons.md": "/docs/choreo/cannon-design-lessons",

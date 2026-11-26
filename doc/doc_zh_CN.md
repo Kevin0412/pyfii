@@ -1,6 +1,20 @@
-# PyFii 使用文档
+# PyFii Core API 参考
 
 PyFii 可以用 Python 编排 Fii 无人机动作、生成 `.fii` 工程、读取轨迹并预览或导出视频。网页工具的使用方法见 [GUI 使用引导](pyfii_gui_guide.md)。
+
+## 接口索引
+
+| 分类 | 常用接口 |
+| --- | --- |
+| [1. 创建无人机](#drone) | `Drone` / `Drone6`、场地配置 |
+| [2. 编排动作](#motion) | `takeoff`、`inittime`、`VelXY`、`VelZ`、`move2`、`Yaw`、`delay`、`end` |
+| [3. 编写灯光](#lighting) | F400/F600 灯光与颜色 |
+| [4. 保存 Fii 工程](#project) | `Fii`、`save` |
+| [5. 读取与预览](#track) | `from_fii`、`DroneTrack`、`read_fii`、无窗口检查 |
+| [6. 二维、三维与视频](#render) | `show`、`FiiRender2D`、`FiiRender3D`、MP4 导出 |
+| [7. 脚本模式与专题教程](#tutorials) | 相关教程与 GUI |
+
+<a id="drone"></a>
 
 ## 1. 创建无人机
 
@@ -22,6 +36,8 @@ d2 = pf.Drone(100, 100, config=pf.drone_config_4m)
 ```
 
 `drone_config_6m` 和 `drone_config_4m` 分别对应 6 米、4 米场地。一个工程中的无人机型号必须一致。
+
+<a id="motion"></a>
 
 ## 2. 编排动作
 
@@ -54,6 +70,8 @@ d1.RoundInAir(startpos, centerpos, height, velocity)
 
 模拟结果不能替代真机安全检查。不要通过修改配置范围绕过设备、场地或比赛规则的限制。
 
+<a id="lighting"></a>
+
 ## 3. 编写灯光
 
 F400 常用灯光方法：
@@ -80,6 +98,8 @@ d1.TurnOnAll(["#ff0000", "#00ff00", "#0000ff"])
 
 F600 的灯光接口不同，例如 `AllOn()`、`AllOff()`、`BodyOn()` 和 `MotorOn()`。完整写法见 [灯光编写](tutorial/light.md)。
 
+<a id="project"></a>
+
 ## 4. 保存 Fii 工程
 
 所有无人机调用 `end()` 后，再创建并保存工程：
@@ -91,6 +111,8 @@ project.save()
 ```
 
 PyFii 1.6.0 会根据无人机型号和 `drone_config_4m` / `drone_config_6m` 自动写入机型与场地。旧的 `field=` 参数仍被接受，但会被忽略并产生兼容性 warning，新代码不要再传它。
+
+<a id="track"></a>
 
 ## 5. 读取与预览
 
@@ -130,6 +152,8 @@ pf.show(track, show=False)
 ```
 
 warning 表示需要检查，但不会自动中止预览；解析失败、缺少 `.fii` 或动作组文件等异常会中止当前操作。
+
+<a id="render"></a>
 
 ## 6. 二维、三维与视频
 
@@ -182,6 +206,8 @@ renderer3d.save("demo_3d")
 `show(track, ...)` 是日常使用入口；直接实例化渲染类更适合 GUI、批处理或需要逐帧进度回调的封装。
 
 实时预览快捷键：空格暂停，`q` 后退，`e` 前进，`Esc` 退出。三维预览暂停后可使用 `w/a/s/d` 调整视角。
+
+<a id="tutorials"></a>
 
 ## 7. 脚本模式与专题教程
 

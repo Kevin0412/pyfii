@@ -71,6 +71,11 @@ function handleInternalLink(event: MouseEvent): void {
     return;
   }
 
+  // Let the browser handle anchors within the current document.
+  if (url.hash && url.pathname === window.location.pathname && url.search === window.location.search) {
+    return;
+  }
+
   event.preventDefault();
   const path = canonicalAppPath(url.pathname);
   window.history.pushState({}, "", `${path}${url.search}${url.hash}`);

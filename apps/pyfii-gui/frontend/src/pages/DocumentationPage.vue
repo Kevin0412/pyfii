@@ -43,7 +43,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref, watch } from "vue";
+import { computed, nextTick, ref, watch } from "vue";
 
 import SiteHeader from "../components/SiteHeader.vue";
 import {
@@ -88,7 +88,12 @@ watch(
     } catch {
       if (version === loadVersion) loadFailed.value = true;
     } finally {
-      if (version === loadVersion) loading.value = false;
+      if (version === loadVersion) {
+        loading.value = false;
+        await nextTick();
+        const hash = window.location.hash.slice(1);
+        if (version === loadVersion && hash) document.getElementById(hash)?.scrollIntoView();
+      }
     }
   },
   { immediate: true },
@@ -101,24 +106,29 @@ const groups = computed(() => [
     items: navigation.filter((item) => item.source.group === "start"),
   },
   {
-    id: "docs",
-    label: ui.locale === "zh" ? "文档" : "Docs",
-    items: navigation.filter((item) => item.source.group === "docs"),
-  },
-  {
     id: "tutorial",
-    label: ui.locale === "zh" ? "教程" : "Tutorials",
+    label: ui.locale === "zh" ? "入门与使用教程" : "Getting Started & Tutorials",
     items: navigation.filter((item) => item.source.group === "tutorial"),
   },
   {
+    id: "api",
+    label: ui.locale === "zh" ? "API 参考" : "API Reference",
+    items: navigation.filter((item) => item.source.group === "api"),
+  },
+  {
     id: "choreo",
-    label: ui.locale === "zh" ? "编舞与 Agent" : "Choreography & Agent",
+    label: ui.locale === "zh" ? "编舞设计与作品" : "Choreography & Works",
     items: navigation.filter((item) => item.source.group === "choreo"),
   },
   {
-    id: "research",
-    label: ui.locale === "zh" ? "工程研究" : "Engineering Research",
-    items: navigation.filter((item) => item.source.group === "research"),
+    id: "ai",
+    label: ui.locale === "zh" ? "AI 编舞与 Agent" : "AI Choreography & Agent",
+    items: navigation.filter((item) => item.source.group === "ai"),
+  },
+  {
+    id: "maintenance",
+    label: ui.locale === "zh" ? "开发维护与工程研究" : "Development & Research",
+    items: navigation.filter((item) => item.source.group === "maintenance"),
   },
 ]);
 const currentTitle = computed(() => documentSource(props.documentId).title[ui.locale]);

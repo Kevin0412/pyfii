@@ -6,6 +6,19 @@
 
 > 截图由 [GitHub Actions](https://github.com/Kevin0412/pyfii/actions/workflows/render-screenshots.yml) 自动生成，使用同一 Fii 工程、60 FPS 采样、默认加速度模型（`ignore_acc=False`），不含音乐。OpenCV 与浏览器采用不同绘制后端；现代模拟截图不等同于历史无加速度模式的原始观感，也不代表飞行安全验收。每次成功发布的源码版本可在 [render-gallery 分支](https://github.com/Kevin0412/pyfii/tree/render-gallery) 核对。
 
+## 阅读索引
+
+- [一、直接式 pyfii 调用模式](#section-1)
+- [二、数学轨迹表达](#section-2)
+- [三、角色映射与分组](#section-3)
+- [四、分组差异与错峰](#section-4)
+- [五、数学驱动的灯光](#section-5)
+- [六、最终图案与收束](#section-6)
+- [七、验证验收](#section-7)
+- [八、编码原则](#section-8)
+
+<a id="section-1"></a>
+
 ## 一、直接式 pyfii 调用模式
 
 `dntg20220730_v3.py` 不经过声明层，直接用 PyFii API 编排动作。每段有明确的 `startTime/endTime` 注释。下面的 `intime()` 和直接修改 `X/Y` 是历史样本原写法，不是新教程模板；新代码优先使用 `inittime()` 和构造函数起飞坐标。
@@ -31,6 +44,8 @@ d1.intime(4)             # 4s 开始主段
 | ![6s OpenCV 3D](https://raw.githubusercontent.com/Kevin0412/pyfii/render-gallery/dntg/006000ms-opencv-3d.png) | ![6s Three.js 3D](https://raw.githubusercontent.com/Kevin0412/pyfii/render-gallery/dntg/006000ms-browser-3d.png) |
 
 完整工作台：[2D](https://raw.githubusercontent.com/Kevin0412/pyfii/render-gallery/dntg/006000ms-browser-2d-studio.png) · [3D](https://raw.githubusercontent.com/Kevin0412/pyfii/render-gallery/dntg/006000ms-browser-3d-studio.png)
+
+<a id="section-2"></a>
 
 ## 二、数学轨迹表达
 
@@ -79,6 +94,8 @@ for a in range(24):
 
 完整工作台：[2D](https://raw.githubusercontent.com/Kevin0412/pyfii/render-gallery/dntg/013000ms-browser-2d-studio.png) · [3D](https://raw.githubusercontent.com/Kevin0412/pyfii/render-gallery/dntg/013000ms-browser-3d-studio.png)
 
+<a id="section-3"></a>
+
 ## 三、角色映射与分组
 
 每段用字典重新分配角色，同一架机在不同段承担不同职责。
@@ -111,6 +128,8 @@ for d, n in zip(ds, range(7)):
 | ![49s OpenCV 3D](https://raw.githubusercontent.com/Kevin0412/pyfii/render-gallery/dntg/049000ms-opencv-3d.png) | ![49s Three.js 3D](https://raw.githubusercontent.com/Kevin0412/pyfii/render-gallery/dntg/049000ms-browser-3d.png) |
 
 完整工作台：[2D](https://raw.githubusercontent.com/Kevin0412/pyfii/render-gallery/dntg/049000ms-browser-2d-studio.png) · [3D](https://raw.githubusercontent.com/Kevin0412/pyfii/render-gallery/dntg/049000ms-browser-3d-studio.png)
+
+<a id="section-4"></a>
 
 ## 四、分组差异与错峰
 
@@ -165,6 +184,8 @@ else:                                         # 其余机
 
 完整工作台：[2D](https://raw.githubusercontent.com/Kevin0412/pyfii/render-gallery/dntg/033000ms-browser-2d-studio.png) · [3D](https://raw.githubusercontent.com/Kevin0412/pyfii/render-gallery/dntg/033000ms-browser-3d-studio.png)
 
+<a id="section-5"></a>
+
 ## 五、数学驱动的灯光
 
 用三角函数生成连续变化的颜色序列：
@@ -180,6 +201,8 @@ for a in range(20):
 ```
 
 RGB 三通道用不同频率正弦波驱动，20 步 100ms = 2s 颜色周期。不是静态颜色序列而是连续函数。
+
+<a id="section-6"></a>
 
 ## 六、最终图案与收束
 
@@ -209,6 +232,8 @@ RGB 三通道用不同频率正弦波驱动，20 步 100ms = 2s 颜色周期。�
 
 完整工作台：[2D](https://raw.githubusercontent.com/Kevin0412/pyfii/render-gallery/dntg/061000ms-browser-2d-studio.png) · [3D](https://raw.githubusercontent.com/Kevin0412/pyfii/render-gallery/dntg/061000ms-browser-3d-studio.png)
 
+<a id="section-7"></a>
+
 ## 七、验证验收
 
 ```python
@@ -223,6 +248,8 @@ pf.show(track, save='大闹天宫', FPS=25)
 ```
 
 当前闭环是 `Fii.save()` → `from_fii()` → `show(track)`。原脚本中的 `show(data, t0, music, ...)` 多参数调用仍保留兼容，但新封装和 GUI 应传 `DroneTrack`。
+
+<a id="section-8"></a>
 
 ## 八、编码原则
 
