@@ -1,0 +1,90 @@
+name: Render screenshots
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - "src/pyfii/**"
+      - "apps/pyfii-gui/**"
+      - "pyproject.toml"
+      - ".github/scripts/render-screenshots.py"
+      - ".github/workflows/render-screenshots.yml"
+  pull_request:
+    paths:
+      - "src/pyfii/**"
+      - "apps/pyfii-gui/**"
+      - "pyproject.toml"
+      - ".github/scripts/render-screenshots.py"
+      - ".github/workflows/render-screenshots.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: render-screenshots-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  screenshots:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      QT_QPA_PLATFORM: offscreen
+      SDL_AUDIODRIVER: dummy
+      PYGAME_HIDE_SUPPORT_PROMPT: "1"
+      PYFII_GUI_TRAJECTORY_WORKERS: "1"
+      PYFII_GUI_RUNTIME_DIR: ${{ runner.temp }}/pyfii-runtime
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "22.12.0"
+          cache: npm
+          cache-dependency-path: apps/pyfii-gui/frontend/package-lock.json
+      - name: Install core and GUI backend
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libgl1 fonts-noto-cjk
+          python -m pip install -e . -e apps/pyfii-gui/backend playwright
+      - name: Generate OpenCV screenshots and shared project
+        run: python .github/scripts/render-screenshots.py core
+      - name: Install frontend dependencies
+        working-directory: apps/pyfii-gui/frontend
+        run: npm ci
+      - name: Install headless Chromium
+        run: python -m playwright install --with-deps chromium
+      - name: Capture browser screenshots
+        env:
+          VITE_API_PROXY_TARGET: http://127.0.0.1:8000
+        run: |
+          mkdir -p render-artifacts
+          python -m uvicorn pyfii_gui_api.main:app --host 127.0.0.1 --port 8000 > render-artifacts/backend.log 2>&1 &
+          backend_pid=$!
+          npm --prefix apps/pyfii-gui/frontend run dev -- --host 127.0.0.1 --strictPort > render-artifacts/frontend.log 2>&1 &
+          frontend_pid=$!
+          trap 'kill "$backend_pid" "$frontend_pid" 2>/dev/null || true' EXIT
+          for url in http://127.0.0.1:8000/api/health http://127.0.0.1:5173/studio; do
+            for attempt in $(seq 1 60); do
+              if curl --fail --silent "$url" >/dev/null; then break; fi
+              sleep 1
+            done
+            curl --fail --silent --show-error "$url" >/dev/null
+          done
+          python .github/scripts/render-screenshots.py browser
+      - name: Upload screenshots and diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: render-screenshots
+          path: |
+            render-artifacts/*.png
+            render-artifacts/fixture.zip
+            render-artifacts/fixture.json
+            render-artifacts/*.log
+          if-no-files-found: error
+          retention-days: 14
