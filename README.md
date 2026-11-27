@@ -6,6 +6,7 @@ PyFii 是一个用 Python 编排、生成和检查 Fii 无人机编队工程的�
 
 - `src/pyfii/`：可单独安装和使用的 Python core。
 - `apps/pyfii-gui/`：建立在 core 之上的 Web GUI，不把 FastAPI、Vue 等依赖引入 core。
+
 ![PyFii GUI 截图](https://raw.githubusercontent.com/Kevin0412/pyfii/render-gallery/dntg/readme-studio.png)
 
 截图由 GitHub Actions 自动生成，使用大闹天宫原始七机编舞。
